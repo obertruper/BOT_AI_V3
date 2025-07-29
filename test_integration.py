@@ -1,5 +1,6 @@
 """
 Тестовый файл для проверки Claude Code интеграции
+Обновлено для проверки GitHub Actions с добавленными ключами
 """
 
 def calculate_profit(buy_price, sell_price, amount):
