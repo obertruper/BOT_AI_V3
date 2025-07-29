@@ -1,0 +1,208 @@
+# Конфигурация веб-интерфейса BOT_Trading v3.0
+
+web_server:
+  host: "0.0.0.0"
+  port: 8080
+  debug: false
+  reload: false
+  
+  # SSL/TLS настройки (для продакшена)
+  ssl:
+    enabled: false
+    cert_file: null
+    key_file: null
+
+  # CORS настройки
+  cors:
+    allowed_origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+      - "http://127.0.0.1:3000"
+      - "http://127.0.0.1:5173"
+    allow_credentials: true
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allowed_headers: ["*"]
+
+  # Безопасность
+  security:
+    trusted_hosts: ["localhost", "127.0.0.1", "*"]
+    max_request_size: 16777216  # 16MB
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 100
+      burst: 20
+
+# WebSocket настройки
+websocket:
+  enabled: true
+  heartbeat_interval: 30  # секунды
+  max_connections: 100
+  message_queue_size: 1000
+  
+  # Каналы событий
+  channels:
+    system_updates:
+      enabled: true
+      buffer_size: 50
+    price_updates:
+      enabled: true
+      buffer_size: 100
+    trader_updates:
+      enabled: true
+      buffer_size: 100
+    order_updates:
+      enabled: true
+      buffer_size: 100
+
+# API настройки
+api:
+  prefix: "/api"
+  version: "v1"
+  title: "BOT_Trading v3.0 Web API"
+  description: "Comprehensive trading bot management and monitoring API"
+  
+  # Документация
+  docs:
+    enabled: true
+    url: "/api/docs"
+    redoc_url: "/api/redoc"
+    openapi_url: "/api/openapi.json"
+  
+  # Пагинация
+  pagination:
+    default_page_size: 20
+    max_page_size: 100
+  
+  # Кеширование
+  cache:
+    enabled: true
+    default_ttl: 300  # 5 минут
+    redis_url: null  # Если null, используется in-memory кеш
+
+# Аутентификация и авторизация
+auth:
+  enabled: false  # Пока отключено для разработки
+  jwt:
+    secret_key: "your-secret-key-change-in-production"
+    algorithm: "HS256"
+    access_token_expire_minutes: 30
+    refresh_token_expire_days: 7
+  
+  # Роли пользователей
+  roles:
+    admin:
+      permissions: ["*"]
+    trader:
+      permissions: ["read:traders", "write:traders", "read:positions", "read:orders"]
+    viewer:
+      permissions: ["read:*"]
+
+# Логирование веб-сервера
+logging:
+  level: "INFO"
+  format: "detailed"
+  
+  # Файлы логов
+  files:
+    access_log: "logs/web_access.log"
+    error_log: "logs/web_error.log"
+    websocket_log: "logs/websocket.log"
+  
+  # Ротация логов
+  rotation:
+    enabled: true
+    max_size: "10MB"
+    backup_count: 5
+
+# Мониторинг и метрики
+monitoring:
+  enabled: true
+  endpoint: "/metrics"
+  
+  # Prometheus метрики
+  prometheus:
+    enabled: false
+    port: 9090
+  
+  # Health check
+  health_check:
+    endpoint: "/health"
+    detailed_endpoint: "/health/detailed"
+
+# Frontend настройки
+frontend:
+  # Служебные пути
+  static_files:
+    enabled: true
+    directory: "web/frontend/dist"
+    mount_path: "/"
+  
+  # SPA режим (Single Page Application)
+  spa:
+    enabled: true
+    fallback_file: "index.html"
+  
+  # Кеширование статики
+  static_cache:
+    enabled: true
+    max_age: 3600  # 1 час
+
+# Интеграция с торговой системой
+trading_integration:
+  # Автоматический запуск веб-сервера с системой
+  auto_start: true
+  
+  # Синхронизация данных
+  sync:
+    traders_interval: 5  # секунды
+    positions_interval: 2  # секунды
+    orders_interval: 3  # секунды
+    system_status_interval: 10  # секунды
+  
+  # События для WebSocket
+  events:
+    broadcast_trader_updates: true
+    broadcast_position_updates: true
+    broadcast_order_updates: true
+    broadcast_system_updates: true
+
+# Разработческие настройки
+development:
+  enabled: true
+  
+  # Hot reload для API (только в разработке)
+  api_reload: true
+  
+  # Подробные ошибки
+  detailed_errors: true
+  
+  # Mock данные
+  use_mock_data: false
+  
+  # Профилирование
+  profiling:
+    enabled: false
+    output_dir: "profiling/"
+
+# Продакшн настройки
+production:
+  # Оптимизации
+  optimizations:
+    gzip_compression: true
+    static_compression: true
+    keep_alive: true
+  
+  # Безопасность
+  security_headers:
+    enabled: true
+    hsts: true
+    content_type_options: true
+    frame_options: "DENY"
+    xss_protection: true
+  
+  # Лимиты
+  limits:
+    max_connections: 1000
+    connection_timeout: 30
+    read_timeout: 30
+    write_timeout: 30

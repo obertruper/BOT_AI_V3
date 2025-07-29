@@ -1,0 +1,131 @@
+# Конфигурация автоматизированной системы кросс-верификации
+# BOT Trading v3 - AI Agents
+
+workflow:
+  max_iterations: 5              # Максимальное количество итераций feedback
+  auto_save_sessions: true       # Автоматическое сохранение сессий
+  screenshot_on_error: true      # Скриншоты при ошибках
+  parallel_processing: true      # Параллельная обработка AI систем
+  
+ai_systems:
+  - chatgpt
+  - grok  
+  - claude
+
+# Таймауты (в секундах)
+timeouts:
+  page_load: 30                 # Ожидание загрузки страницы
+  response_wait: 120            # Ожидание ответа от AI
+  click_wait: 5                 # Ожидание после кликов
+  typing_speed: 50              # Скорость набора (мс между символами)
+
+# Настройки отчетов
+reports:
+  auto_generate: true           # Автоматическая генерация отчетов
+  include_screenshots: true     # Включать скриншоты
+  format: markdown              # Формат отчетов (markdown/html/json)
+  save_raw_responses: true      # Сохранять сырые ответы AI
+
+# Системы AI и их конфигурация
+chatgpt:
+  name: "ChatGPT o3-pro"
+  url: "https://chatgpt.com"
+  prompt_prefix: "Ты эксперт в разработке торговых ботов и криптотрейдинге. "
+  selectors:
+    new_chat_button: "[data-testid='new-chat-button']"
+    message_input: "textarea[placeholder*='Message']"
+    send_button: "[data-testid='send-button']"
+    response_container: "[data-message-id]"
+  features:
+    supports_code: true
+    supports_files: true
+    max_message_length: 32000
+
+grok:
+  name: "Grok v4" 
+  url: "https://grok.com"
+  prompt_prefix: "Ты AI-консультант по алготрейдингу и финтех разработке. "
+  selectors:
+    new_chat_button: "button[aria-label='New chat']"
+    message_input: "textarea"
+    send_button: "button[type='submit']"
+    response_container: "[data-testid='conversation']"
+  features:
+    supports_code: true
+    supports_files: false
+    max_message_length: 25000
+
+claude:
+  name: "Claude Opus 4"
+  url: "https://claude.ai"
+  prompt_prefix: "Ты архитектор торговых систем и эксперт по Python разработке. "
+  selectors:
+    new_chat_button: "[data-testid='new-conversation-button']"
+    message_input: "div[contenteditable='true']"
+    send_button: "button[aria-label='Send Message']"
+    response_container: "[data-testid='message']"
+  features:
+    supports_code: true
+    supports_files: true
+    max_message_length: 100000
+
+# Критерии остановки итераций
+stop_criteria:
+  max_iterations: 5             # Жесткий лимит
+  convergence_threshold: 0.8    # Порог сходимости ответов
+  min_response_length: 300      # Минимальная длина ответа для продолжения
+  consensus_keywords:           # Ключевые слова консенсуса
+    - "согласен"
+    - "подтверждаю"
+    - "аналогично"
+    - "соответствует"
+    - "правильно"
+
+# Обработка ошибок
+error_handling:
+  retry_attempts: 3             # Количество попыток при ошибках
+  retry_delay: 10               # Задержка между попытками (сек)
+  fallback_to_manual: false    # Переход в ручной режим при ошибках
+  save_error_logs: true        # Сохранение логов ошибок
+
+# Безопасность
+security:
+  validate_responses: true      # Валидация ответов AI
+  sanitize_prompts: true       # Очистка промптов
+  max_prompt_length: 50000     # Максимальная длина промпта
+  blocked_keywords:            # Заблокированные ключевые слова
+    - "password"
+    - "token"
+    - "secret"
+    - "private_key"
+
+# Интеграция с MCP
+mcp:
+  servers:
+    playwright:
+      enabled: true
+      config_path: "ai_agents/configs/mcp_servers.yaml"
+    filesystem:
+      enabled: true
+      allowed_directories:
+        - "/Users/ruslan/PycharmProjects/BOT_Trading_v3"
+    github:
+      enabled: false
+
+# Логирование
+logging:
+  level: INFO                   # DEBUG, INFO, WARNING, ERROR
+  file: "logs/cross_verification.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  max_file_size: "10MB"
+  backup_count: 5
+
+# Уведомления
+notifications:
+  enabled: false
+  slack_webhook: null
+  discord_webhook: null
+  email:
+    enabled: false
+    smtp_server: null
+    recipients: []

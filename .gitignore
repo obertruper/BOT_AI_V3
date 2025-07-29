@@ -1,0 +1,162 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.postgresql
+
+# Logs
+logs/
+*.log
+data/logs/
+data/cache/
+data/temp/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Frontend build
+web/frontend/dist/
+web/frontend/.vite/
+web/frontend/node_modules/
+
+# Testing
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+htmlcov/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# Local data
+data/historical/*.csv
+data/historical/*.json
+data/backups/
+data/*.pkl
+data/*.pickle
+
+# API Keys and secrets
+config/api_keys.json
+config/secrets.yaml
+*.key
+*.pem
+*.crt
+
+# Model files
+models/*.pkl
+models/*.h5
+models/*.pt
+models/*.pth
+ml/models/saved/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Documentation build
+docs/_build/
+docs/api/generated/
+
+# Package files
+*.tar.gz
+*.zip
+*.7z
+*.rar
+
+# Monitoring
+prometheus_data/
+grafana_data/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Backups
+backup/
+backups/
+*.bak
+*.backup
+
+# Custom
+.claude/
+mcp_servers.json
+.mcp.json

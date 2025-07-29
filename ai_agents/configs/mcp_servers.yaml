@@ -1,0 +1,180 @@
+# Конфигурация MCP серверов для AI агентов
+# Model Context Protocol серверы расширяют возможности Claude
+
+mcp_servers:
+  # Файловая система - работа с локальными файлами
+  filesystem:
+    name: "filesystem"
+    enabled: true
+    config:
+      allowed_directories:
+        - "/Users/ruslan/PycharmProjects/BOT_Trading_v3"
+      max_file_size: 10485760  # 10MB
+      excluded_patterns:
+        - "*.pyc"
+        - "__pycache__"
+        - ".git"
+        - "node_modules"
+        - "*.log"
+        - "*.tmp"
+    
+  # GitHub интеграция - работа с репозиторием
+  github:
+    name: "github"
+    enabled: true
+    config:
+      # API токен устанавливается через переменную окружения GITHUB_TOKEN
+      default_branch: "main"
+      allowed_operations:
+        - "read_file"
+        - "create_pr"
+        - "create_issue"
+        - "review_pr"
+        - "merge_pr"
+      auto_commit: false
+      commit_message_template: |
+        feat: {title}
+        
+        {description}
+        
+        Co-authored-by: Claude AI Agent <ai@bot-trading.com>
+        
+  # Memory - управление контекстом и знаниями
+  memory:
+    name: "memory"
+    enabled: true
+    config:
+      knowledge_graph:
+        max_entities: 1000
+        max_relations: 5000
+        auto_cleanup: true
+        cleanup_threshold: 0.8
+      context_window:
+        max_tokens: 100000
+        compression_enabled: true
+        compression_ratio: 0.5
+        
+  # Sequential Thinking - для сложных задач
+  sequential_thinking:
+    name: "sequential-thinking"
+    enabled: true
+    config:
+      max_thoughts: 50
+      allow_revision: true
+      allow_branching: true
+      auto_hypothesis: true
+      verification_required: true
+      
+  # Puppeteer - браузерная автоматизация (ОТКЛЮЧЕН - дублирует Playwright)
+  puppeteer:
+    name: "puppeteer"
+    enabled: false  # Используем Playwright вместо Puppeteer
+    config:
+      headless: true
+      timeout: 30000
+      viewport:
+        width: 1920
+        height: 1080
+      allowed_sites:
+        - "chatgpt.com"
+        - "claude.ai"
+        - "github.com"
+        - "stackoverflow.com"
+        
+  # Playwright - продвинутая браузерная автоматизация для AI коллаборации
+  playwright:
+    name: "playwright"
+    enabled: true
+    config:
+      browser: "chrome"  # Использует установленный Google Chrome
+      channel: "chrome"  # Канал браузера - системный Chrome
+      headless: false    # Показываем браузер для взаимодействия с AI
+      timeout: 60000
+      record_video: false
+      screenshot_on_failure: true
+      # Используем системный Chrome без дополнительных установок
+      use_system_browser: true
+      allowed_sites:
+        - "chatgpt.com"
+        - "chat.openai.com"
+        - "grok.com"
+        - "claude.ai"
+        - "perplexity.ai"
+        - "github.com"
+        - "tradingview.com"
+        - "coinmarketcap.com"
+        - "google.com"
+        - "coingecko.com"
+      
+  # Context7 - доступ к документации библиотек
+  context7:
+    name: "context7"
+    enabled: true
+    config:
+      default_tokens: 10000
+      libraries:
+        - "/python/python"
+        - "/fastapi/fastapi"
+        - "/pandas/pandas"
+        - "/numpy/numpy"
+        - "/sqlalchemy/sqlalchemy"
+        - "/pytest/pytest"
+        
+# Профили для различных агентов
+agent_profiles:
+  code_reviewer:
+    mcp_servers:
+      - filesystem
+      - github
+      - memory
+    priority: "quality"
+    
+  test_generator:
+    mcp_servers:
+      - filesystem
+      - memory
+      - context7
+    priority: "coverage"
+    
+  autonomous_developer:
+    mcp_servers:
+      - filesystem
+      - github
+      - memory
+      - sequential_thinking
+      - context7
+    priority: "completion"
+    
+  performance_optimizer:
+    mcp_servers:
+      - filesystem
+      - memory
+      - sequential_thinking
+    priority: "speed"
+    
+  market_analyst:
+    mcp_servers:
+      - filesystem
+      - memory
+      - playwright  # Только Playwright для браузерной автоматизации
+    priority: "accuracy"
+    
+  documentation_agent:
+    mcp_servers:
+      - filesystem
+      - github
+      - memory
+      - context7
+    priority: "clarity"
+
+# Глобальные настройки
+global_settings:
+  log_level: "INFO"
+  telemetry_enabled: true
+  error_reporting: true
+  cache_enabled: true
+  cache_ttl: 3600  # 1 час
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+    burst_size: 10
