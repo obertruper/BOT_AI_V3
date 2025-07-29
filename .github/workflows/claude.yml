@@ -32,6 +32,20 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          mcp_config: |
+            {
+              "mcpServers": {
+                "sequential-thinking": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+                },
+                "memory": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-memory"]
+                }
+              }
+            }
+          allowed_tools: "sequential_thinking_*,memory_*"
           
   claude-review:
     runs-on: ubuntu-latest
@@ -49,3 +63,17 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           mode: review
+          mcp_config: |
+            {
+              "mcpServers": {
+                "sequential-thinking": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+                },
+                "memory": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-memory"]
+                }
+              }
+            }
+          allowed_tools: "sequential_thinking_*,memory_*"
