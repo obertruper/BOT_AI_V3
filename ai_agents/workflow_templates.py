@@ -6,12 +6,13 @@
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 from enum import Enum
+from typing import Dict, List
 
 
 class TaskType(Enum):
     """Типы задач для кросс-верификации"""
+
     STRATEGY_DEVELOPMENT = "strategy_development"
     ARCHITECTURE_REVIEW = "architecture_review"
     CODE_REVIEW = "code_review"
@@ -25,6 +26,7 @@ class TaskType(Enum):
 @dataclass
 class WorkflowTemplate:
     """Шаблон workflow для определенного типа задач"""
+
     name: str
     task_type: TaskType
     description: str
@@ -37,7 +39,7 @@ class WorkflowTemplate:
 
 class WorkflowTemplates:
     """Коллекция шаблонов workflow"""
-    
+
     @staticmethod
     def get_strategy_development_template() -> WorkflowTemplate:
         """Шаблон для разработки торговых стратегий"""
@@ -53,13 +55,13 @@ class WorkflowTemplates:
 Контекст:
 - Торговый бот BOT Trading v3
 - Целевой рынок: Криптовалюты (Bitcoin, Ethereum, основные альткоины)
-- Горизонт торговли: {timeframe} 
+- Горизонт торговли: {timeframe}
 - Целевая доходность: {target_return}% в месяц
 - Максимальная просадка: {max_drawdown}%
 
 Требуется разработать:
 1. **Архитектуру стратегии** - структура классов и модулей
-2. **Торговые сигналы** - логика входа и выхода  
+2. **Торговые сигналы** - логика входа и выхода
 3. **Управление рисками** - stop-loss, take-profit, размер позиций
 4. **Параметры и настройки** - оптимальные значения для индикаторов
 5. **Бэктестинг** - структура для валидации стратегии
@@ -74,16 +76,16 @@ class WorkflowTemplates:
             specific_config={
                 "include_backtesting": True,
                 "include_code_examples": True,
-                "focus_on_crypto": True
+                "focus_on_crypto": True,
             },
             follow_up_questions=[
                 "Какие риски не учтены в этой стратегии?",
                 "Как адаптировать стратегию для разных рыночных условий?",
                 "Какие дополнительные индикаторы улучшат производительность?",
-                "Как оптимизировать параметры для разных криптовалют?"
-            ]
+                "Как оптимизировать параметры для разных криптовалют?",
+            ],
         )
-    
+
     @staticmethod
     def get_architecture_review_template() -> WorkflowTemplate:
         """Шаблон для ревью архитектуры"""
@@ -97,7 +99,7 @@ class WorkflowTemplates:
 ЗАДАЧА: {task_description}
 
 Контекст системы:
-- Проект: BOT Trading v3 
+- Проект: BOT Trading v3
 - Технологии: Python 3.11+, asyncio, PostgreSQL, Redis
 - Архитектура: Модульная, микросервисная
 - Нагрузка: {expected_load} запросов/сек
@@ -106,7 +108,7 @@ class WorkflowTemplates:
 Требуется проанализировать:
 1. **Масштабируемость** - способность выдерживать нагрузку
 2. **Надежность** - отказоустойчивость и восстановление
-3. **Производительность** - латентность и пропускная способность  
+3. **Производительность** - латентность и пропускная способность
 4. **Безопасность** - защита API ключей и данных
 5. **Maintainability** - простота поддержки и развития
 
@@ -120,16 +122,16 @@ class WorkflowTemplates:
             specific_config={
                 "focus_on_performance": True,
                 "include_diagrams": True,
-                "consider_scalability": True
+                "consider_scalability": True,
             },
             follow_up_questions=[
                 "Какие узкие места могут возникнуть при росте нагрузки?",
                 "Как обеспечить zero-downtime deployment?",
                 "Какие метрики важно мониторить?",
-                "Как оптимизировать для низкой латентности?"
-            ]
+                "Как оптимизировать для низкой латентности?",
+            ],
         )
-    
+
     @staticmethod
     def get_risk_management_template() -> WorkflowTemplate:
         """Шаблон для системы управления рисками"""
@@ -166,16 +168,16 @@ class WorkflowTemplates:
             specific_config={
                 "include_formulas": True,
                 "focus_on_crypto_specifics": True,
-                "include_backtesting_metrics": True
+                "include_backtesting_metrics": True,
             },
             follow_up_questions=[
                 "Как адаптировать риск-менеджмент для разных волатильностей?",
-                "Какие дополнительные риски специфичны для крипто?", 
+                "Какие дополнительные риски специфичны для крипто?",
                 "Как оптимизировать risk-reward соотношения?",
-                "Какие early warning системы нужны?"
-            ]
+                "Какие early warning системы нужны?",
+            ],
         )
-    
+
     @staticmethod
     def get_code_review_template() -> WorkflowTemplate:
         """Шаблон для ревью кода"""
@@ -198,7 +200,7 @@ class WorkflowTemplates:
 Критерии ревью:
 1. **Качество кода** - читаемость, структура, naming conventions
 2. **Производительность** - оптимизация алгоритмов, memory usage
-3. **Безопасность** - уязвимости, валидация данных  
+3. **Безопасность** - уязвимости, валидация данных
 4. **Тестируемость** - покрытие тестами, mock-friendly design
 5. **Maintainability** - модульность, documentation, SOLID principles
 
@@ -212,17 +214,17 @@ class WorkflowTemplates:
             specific_config={
                 "include_performance_tips": True,
                 "check_security": True,
-                "suggest_tests": True
+                "suggest_tests": True,
             },
             follow_up_questions=[
                 "Какие потенциальные баги могут возникнуть?",
                 "Как улучшить производительность этого кода?",
                 "Какие тесты нужно добавить?",
-                "Как сделать код более maintainable?"
-            ]
+                "Как сделать код более maintainable?",
+            ],
         )
-    
-    @staticmethod  
+
+    @staticmethod
     def get_performance_optimization_template() -> WorkflowTemplate:
         """Шаблон для оптимизации производительности"""
         return WorkflowTemplate(
@@ -235,7 +237,7 @@ class WorkflowTemplates:
 ЗАДАЧА: {task_description}
 
 Контекст системы:
-- Требования: Latency <{target_latency}ms, Throughput >{target_throughput} ops/sec  
+- Требования: Latency <{target_latency}ms, Throughput >{target_throughput} ops/sec
 - Профилирование: {profiling_data}
 - Bottlenecks: {current_bottlenecks}
 - Hardware: {hardware_specs}
@@ -252,21 +254,21 @@ class WorkflowTemplates:
 
 Предложи конкретные техники оптимизации с примерами кода.
             """,
-            ai_systems=["chatgpt", "grok", "claude"], 
+            ai_systems=["chatgpt", "grok", "claude"],
             max_iterations=3,
             specific_config={
                 "include_benchmarks": True,
                 "focus_on_python": True,
-                "include_profiling": True
+                "include_profiling": True,
             },
             follow_up_questions=[
                 "Какие инструменты лучше использовать для профилирования?",
                 "Как измерить эффективность оптимизаций?",
                 "Какие trade-offs между скоростью и памятью?",
-                "Как оптимизировать для конкретного hardware?"
-            ]
+                "Как оптимизировать для конкретного hardware?",
+            ],
         )
-    
+
     @staticmethod
     def get_all_templates() -> Dict[TaskType, WorkflowTemplate]:
         """Получить все доступные шаблоны"""
@@ -277,7 +279,7 @@ class WorkflowTemplates:
             TaskType.CODE_REVIEW: WorkflowTemplates.get_code_review_template(),
             TaskType.PERFORMANCE_OPTIMIZATION: WorkflowTemplates.get_performance_optimization_template(),
         }
-    
+
     @staticmethod
     def format_prompt(template: WorkflowTemplate, **kwargs) -> str:
         """Форматирование промпта с параметрами"""
@@ -294,12 +296,12 @@ class WorkflowTemplates:
             "target_throughput": "1000",
             "profiling_data": "CPU: 80%, Memory: 60%, I/O wait: 15%",
             "current_bottlenecks": "Database queries, API rate limits",
-            "hardware_specs": "8 CPU cores, 16GB RAM, SSD storage"
+            "hardware_specs": "8 CPU cores, 16GB RAM, SSD storage",
         }
-        
+
         # Объединяем с переданными параметрами
         format_kwargs = {**defaults, **kwargs}
-        
+
         return template.prompt_template.format(**format_kwargs)
 
 
@@ -311,44 +313,31 @@ QUICK_WORKFLOWS = {
         "params": {
             "timeframe": "1-15 минут",
             "target_return": "5",
-            "max_drawdown": "3"
-        }
+            "max_drawdown": "3",
+        },
     },
-    
     "arbitrage_strategy": {
-        "description": "Арбитражная стратегия между биржами", 
+        "description": "Арбитражная стратегия между биржами",
         "template_type": TaskType.STRATEGY_DEVELOPMENT,
         "params": {
             "timeframe": "Секунды-минуты",
             "target_return": "20",
-            "max_drawdown": "5"
-        }
+            "max_drawdown": "5",
+        },
     },
-    
     "hft_architecture": {
         "description": "Архитектура для высокочастотной торговли",
         "template_type": TaskType.ARCHITECTURE_REVIEW,
-        "params": {
-            "expected_load": "10000",
-            "target_latency": "1"
-        }
+        "params": {"expected_load": "10000", "target_latency": "1"},
     },
-    
     "risk_system": {
         "description": "Comprehensive система управления рисками",
         "template_type": TaskType.RISK_MANAGEMENT,
-        "params": {
-            "capital_size": "$50,000",
-            "max_risk_per_trade": "1"
-        }
+        "params": {"capital_size": "$50,000", "max_risk_per_trade": "1"},
     },
-    
     "trading_engine_optimization": {
         "description": "Оптимизация торгового движка",
         "template_type": TaskType.PERFORMANCE_OPTIMIZATION,
-        "params": {
-            "target_latency": "5",
-            "target_throughput": "5000"
-        }
-    }
+        "params": {"target_latency": "5", "target_throughput": "5000"},
+    },
 }

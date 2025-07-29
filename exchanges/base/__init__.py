@@ -4,55 +4,67 @@
 Содержит унифицированные интерфейсы для работы с различными криптовалютными биржами.
 """
 
+from .exceptions import (
+    APIError,
+    AuthenticationError,
+    ConnectionError,
+    ExchangeError,
+    InsufficientBalanceError,
+    RateLimitError,
+)
 from .exchange_interface import BaseExchangeInterface, ExchangeCapabilities
 from .models import (
-    Position, Order, Balance, Instrument, Ticker, OrderBook, 
-    Kline, AccountInfo, ExchangeInfo
+    AccountInfo,
+    Balance,
+    ExchangeInfo,
+    Instrument,
+    Kline,
+    Order,
+    OrderBook,
+    Position,
+    Ticker,
 )
 from .order_types import (
-    OrderType, OrderSide, OrderStatus, TimeInForce, 
-    PositionSide, OrderRequest, OrderResponse
-)
-from .exceptions import (
-    ExchangeError, ConnectionError, AuthenticationError, 
-    APIError, RateLimitError, InsufficientBalanceError
+    OrderRequest,
+    OrderResponse,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    PositionSide,
+    TimeInForce,
 )
 from .websocket_base import BaseWebSocketClient, WebSocketMessage
 
 __all__ = [
     # Interfaces
-    'BaseExchangeInterface',
-    'ExchangeCapabilities',
-    
+    "BaseExchangeInterface",
+    "ExchangeCapabilities",
     # Models
-    'Position',
-    'Order', 
-    'Balance',
-    'Instrument',
-    'Ticker',
-    'OrderBook',
-    'Kline',
-    'AccountInfo',
-    'ExchangeInfo',
-    
+    "Position",
+    "Order",
+    "Balance",
+    "Instrument",
+    "Ticker",
+    "OrderBook",
+    "Kline",
+    "AccountInfo",
+    "ExchangeInfo",
     # Order Types
-    'OrderType',
-    'OrderSide', 
-    'OrderStatus',
-    'TimeInForce',
-    'PositionSide',
-    'OrderRequest',
-    'OrderResponse',
-    
+    "OrderType",
+    "OrderSide",
+    "OrderStatus",
+    "TimeInForce",
+    "PositionSide",
+    "OrderRequest",
+    "OrderResponse",
     # Exceptions
-    'ExchangeError',
-    'ConnectionError',
-    'AuthenticationError',
-    'APIError', 
-    'RateLimitError',
-    'InsufficientBalanceError',
-    
+    "ExchangeError",
+    "ConnectionError",
+    "AuthenticationError",
+    "APIError",
+    "RateLimitError",
+    "InsufficientBalanceError",
     # WebSocket
-    'BaseWebSocketClient',
-    'WebSocketMessage'
+    "BaseWebSocketClient",
+    "WebSocketMessage",
 ]

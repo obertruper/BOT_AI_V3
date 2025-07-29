@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-filesystem", "/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3"],
+      "transport": "stdio",
+      "env": {}
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["mcp-postgres-server"],
+      "transport": "stdio",
+      "env": {
+        "PGHOST": "${PGHOST:-localhost}",
+        "PGPORT": "${PGPORT:-5432}",
+        "PGUSER": "${PGUSER:-postgres}",
+        "PGPASSWORD": "${PGPASSWORD}",
+        "PGDATABASE": "${PGDATABASE:-bot_trading_v3}"
+      }
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-puppeteer"],
+      "transport": "stdio",
+      "env": {}
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-sequential-thinking"],
+      "transport": "stdio",
+      "env": {}
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-memory"],
+      "transport": "stdio",
+      "env": {}
+    },
+    "github": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-github"],
+      "transport": "stdio",
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}

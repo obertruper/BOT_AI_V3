@@ -1,21 +1,21 @@
-import React from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { useTradingStore } from '@/store/tradingStore'
-import { formatCurrency, formatPercentage } from '@/lib/utils'
+import React from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useTradingStore } from '@/store/tradingStore';
+import { formatCurrency, formatPercentage } from '@/lib/utils';
 
 const Dashboard: React.FC = () => {
-  const { 
-    systemStatus, 
-    traders, 
-    positions, 
+  const {
+    systemStatus,
+    traders,
+    positions,
     wsConnected,
-    isLoading 
-  } = useTradingStore()
+    isLoading,
+  } = useTradingStore();
 
-  const activeTraders = traders.filter(t => t.status === 'active')
-  const totalPnL = positions.reduce((sum, p) => sum + p.unrealized_pnl, 0)
-  const totalEquity = traders.reduce((sum, t) => sum + t.equity, 0)
+  const activeTraders = traders.filter(t => t.status === 'active');
+  const totalPnL = positions.reduce((sum, p) => sum + p.unrealized_pnl, 0);
+  const totalEquity = traders.reduce((sum, t) => sum + t.equity, 0);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -187,7 +187,7 @@ const Dashboard: React.FC = () => {
         </Card>
       )}
     </div>
-  )
-}
+  );
+};
 
-export default Dashboard
+export default Dashboard;

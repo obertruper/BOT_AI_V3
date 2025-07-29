@@ -1,7 +1,7 @@
-import { create } from 'zustand'
-import { subscribeWithSelector } from 'zustand/middleware'
-import { Trader, Position, Order, SystemStatus, TradingStats } from '@/types/trading'
-import apiClient from '@/api/client'
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import { Trader, Position, Order, SystemStatus, TradingStats } from '@/types/trading';
+import apiClient from '@/api/client';
 
 interface TradingState {
   // Состояние системы
@@ -95,16 +95,16 @@ export const useTradingStore = create<TradingStore>()(
 
     // Системные действия
     fetchSystemStatus: async () => {
-      set({ isLoading: true, error: null })
+      set({ isLoading: true, error: null });
       try {
-        const response = await apiClient.getSystemStatus()
+        const response = await apiClient.getSystemStatus();
         if (response.success && response.data) {
-          set({ systemStatus: response.data })
+          set({ systemStatus: response.data });
         }
       } catch (error) {
-        set({ error: `Ошибка получения статуса системы: ${error}` })
+        set({ error: `Ошибка получения статуса системы: ${error}` });
       } finally {
-        set({ isLoading: false })
+        set({ isLoading: false });
       }
     },
 
@@ -113,205 +113,205 @@ export const useTradingStore = create<TradingStore>()(
 
     // Действия с трейдерами
     fetchTraders: async () => {
-      set({ isLoading: true, error: null })
+      set({ isLoading: true, error: null });
       try {
-        const response = await apiClient.getTraders()
+        const response = await apiClient.getTraders();
         if (response.success && response.data) {
-          set({ traders: response.data })
-          
+          set({ traders: response.data });
+
           // Обновляем выбранного трейдера если он есть
-          const selectedTraderId = get().selectedTraderId
+          const selectedTraderId = get().selectedTraderId;
           if (selectedTraderId) {
-            const selectedTrader = response.data.find(t => t.id === selectedTraderId)
-            set({ selectedTrader })
+            const selectedTrader = response.data.find(t => t.id === selectedTraderId);
+            set({ selectedTrader });
           }
         }
       } catch (error) {
-        set({ error: `Ошибка получения списка трейдеров: ${error}` })
+        set({ error: `Ошибка получения списка трейдеров: ${error}` });
       } finally {
-        set({ isLoading: false })
+        set({ isLoading: false });
       }
     },
 
     selectTrader: (traderId) => {
-      const traders = get().traders
-      const selectedTrader = traderId ? traders.find(t => t.id === traderId) || null : null
-      set({ selectedTraderId: traderId, selectedTrader })
+      const traders = get().traders;
+      const selectedTrader = traderId ? traders.find(t => t.id === traderId) || null : null;
+      set({ selectedTraderId: traderId, selectedTrader });
     },
 
     createTrader: async (config) => {
-      set({ isLoading: true, error: null })
+      set({ isLoading: true, error: null });
       try {
-        const response = await apiClient.createTrader(config)
+        const response = await apiClient.createTrader(config);
         if (response.success && response.data) {
-          const traders = [...get().traders, response.data]
-          set({ traders })
+          const traders = [...get().traders, response.data];
+          set({ traders });
         }
       } catch (error) {
-        set({ error: `Ошибка создания трейдера: ${error}` })
+        set({ error: `Ошибка создания трейдера: ${error}` });
       } finally {
-        set({ isLoading: false })
+        set({ isLoading: false });
       }
     },
 
     updateTrader: async (traderId, config) => {
-      set({ isLoading: true, error: null })
+      set({ isLoading: true, error: null });
       try {
-        const response = await apiClient.updateTrader(traderId, config)
+        const response = await apiClient.updateTrader(traderId, config);
         if (response.success && response.data) {
-          const traders = get().traders.map(t => 
-            t.id === traderId ? response.data! : t
-          )
-          set({ traders })
-          
+          const traders = get().traders.map(t =>
+            t.id === traderId ? response.data! : t,
+          );
+          set({ traders });
+
           // Обновляем выбранного трейдера если это он
           if (get().selectedTraderId === traderId) {
-            set({ selectedTrader: response.data })
+            set({ selectedTrader: response.data });
           }
         }
       } catch (error) {
-        set({ error: `Ошибка обновления трейдера: ${error}` })
+        set({ error: `Ошибка обновления трейдера: ${error}` });
       } finally {
-        set({ isLoading: false })
+        set({ isLoading: false });
       }
     },
 
     deleteTrader: async (traderId) => {
-      set({ isLoading: true, error: null })
+      set({ isLoading: true, error: null });
       try {
-        const response = await apiClient.deleteTrader(traderId)
+        const response = await apiClient.deleteTrader(traderId);
         if (response.success) {
-          const traders = get().traders.filter(t => t.id !== traderId)
-          set({ traders })
-          
+          const traders = get().traders.filter(t => t.id !== traderId);
+          set({ traders });
+
           // Сбрасываем выбор если удаляем выбранного трейдера
           if (get().selectedTraderId === traderId) {
-            set({ selectedTraderId: null, selectedTrader: null })
+            set({ selectedTraderId: null, selectedTrader: null });
           }
         }
       } catch (error) {
-        set({ error: `Ошибка удаления трейдера: ${error}` })
+        set({ error: `Ошибка удаления трейдера: ${error}` });
       } finally {
-        set({ isLoading: false })
+        set({ isLoading: false });
       }
     },
 
     startTrader: async (traderId) => {
       try {
-        await apiClient.startTrader(traderId)
+        await apiClient.startTrader(traderId);
         // Обновляем список трейдеров
-        get().fetchTraders()
+        get().fetchTraders();
       } catch (error) {
-        set({ error: `Ошибка запуска трейдера: ${error}` })
+        set({ error: `Ошибка запуска трейдера: ${error}` });
       }
     },
 
     stopTrader: async (traderId) => {
       try {
-        await apiClient.stopTrader(traderId)
-        get().fetchTraders()
+        await apiClient.stopTrader(traderId);
+        get().fetchTraders();
       } catch (error) {
-        set({ error: `Ошибка остановки трейдера: ${error}` })
+        set({ error: `Ошибка остановки трейдера: ${error}` });
       }
     },
 
     pauseTrader: async (traderId) => {
       try {
-        await apiClient.pauseTrader(traderId)
-        get().fetchTraders()
+        await apiClient.pauseTrader(traderId);
+        get().fetchTraders();
       } catch (error) {
-        set({ error: `Ошибка паузы трейдера: ${error}` })
+        set({ error: `Ошибка паузы трейдера: ${error}` });
       }
     },
 
     // Действия с позициями
     fetchPositions: async (traderId) => {
-      set({ isLoading: true, error: null })
+      set({ isLoading: true, error: null });
       try {
-        const response = await apiClient.getPositions(traderId)
+        const response = await apiClient.getPositions(traderId);
         if (response.success && response.data) {
-          set({ positions: response.data })
+          set({ positions: response.data });
         }
       } catch (error) {
-        set({ error: `Ошибка получения позиций: ${error}` })
+        set({ error: `Ошибка получения позиций: ${error}` });
       } finally {
-        set({ isLoading: false })
+        set({ isLoading: false });
       }
     },
 
     closePosition: async (positionId, percentage) => {
       try {
-        await apiClient.closePosition(positionId, percentage)
-        get().fetchPositions()
+        await apiClient.closePosition(positionId, percentage);
+        get().fetchPositions();
       } catch (error) {
-        set({ error: `Ошибка закрытия позиции: ${error}` })
+        set({ error: `Ошибка закрытия позиции: ${error}` });
       }
     },
 
     updateStopLoss: async (positionId, stopLoss) => {
       try {
-        const response = await apiClient.updateStopLoss(positionId, stopLoss)
+        const response = await apiClient.updateStopLoss(positionId, stopLoss);
         if (response.success && response.data) {
-          const positions = get().positions.map(p => 
-            p.id === positionId ? response.data! : p
-          )
-          set({ positions })
+          const positions = get().positions.map(p =>
+            p.id === positionId ? response.data! : p,
+          );
+          set({ positions });
         }
       } catch (error) {
-        set({ error: `Ошибка обновления стоп-лосса: ${error}` })
+        set({ error: `Ошибка обновления стоп-лосса: ${error}` });
       }
     },
 
     updateTakeProfit: async (positionId, takeProfit) => {
       try {
-        const response = await apiClient.updateTakeProfit(positionId, takeProfit)
+        const response = await apiClient.updateTakeProfit(positionId, takeProfit);
         if (response.success && response.data) {
-          const positions = get().positions.map(p => 
-            p.id === positionId ? response.data! : p
-          )
-          set({ positions })
+          const positions = get().positions.map(p =>
+            p.id === positionId ? response.data! : p,
+          );
+          set({ positions });
         }
       } catch (error) {
-        set({ error: `Ошибка обновления тейк-профита: ${error}` })
+        set({ error: `Ошибка обновления тейк-профита: ${error}` });
       }
     },
 
     // Действия с ордерами
     fetchOrders: async (traderId) => {
-      set({ isLoading: true, error: null })
+      set({ isLoading: true, error: null });
       try {
-        const response = await apiClient.getOrders(traderId)
+        const response = await apiClient.getOrders(traderId);
         if (response.success && response.data) {
-          set({ orders: response.data.items })
+          set({ orders: response.data.items });
         }
       } catch (error) {
-        set({ error: `Ошибка получения ордеров: ${error}` })
+        set({ error: `Ошибка получения ордеров: ${error}` });
       } finally {
-        set({ isLoading: false })
+        set({ isLoading: false });
       }
     },
 
     cancelOrder: async (orderId) => {
       try {
-        await apiClient.cancelOrder(orderId)
-        get().fetchOrders()
+        await apiClient.cancelOrder(orderId);
+        get().fetchOrders();
       } catch (error) {
-        set({ error: `Ошибка отмены ордера: ${error}` })
+        set({ error: `Ошибка отмены ордера: ${error}` });
       }
     },
 
     // Действия со статистикой
     fetchTradingStats: async (traderId, period) => {
-      set({ isLoading: true, error: null })
+      set({ isLoading: true, error: null });
       try {
-        const response = await apiClient.getTradingStats(traderId, period)
+        const response = await apiClient.getTradingStats(traderId, period);
         if (response.success && response.data) {
-          set({ tradingStats: response.data })
+          set({ tradingStats: response.data });
         }
       } catch (error) {
-        set({ error: `Ошибка получения статистики: ${error}` })
+        set({ error: `Ошибка получения статистики: ${error}` });
       } finally {
-        set({ isLoading: false })
+        set({ isLoading: false });
       }
     },
 
@@ -325,46 +325,46 @@ export const useTradingStore = create<TradingStore>()(
 
     // Обновления в реальном времени
     updateTraderFromWS: (trader) => {
-      const traders = get().traders.map(t => t.id === trader.id ? trader : t)
-      set({ traders })
-      
+      const traders = get().traders.map(t => t.id === trader.id ? trader : t);
+      set({ traders });
+
       if (get().selectedTraderId === trader.id) {
-        set({ selectedTrader: trader })
+        set({ selectedTrader: trader });
       }
     },
 
     updatePositionFromWS: (position) => {
-      const positions = get().positions.map(p => p.id === position.id ? position : p)
-      set({ positions })
+      const positions = get().positions.map(p => p.id === position.id ? position : p);
+      set({ positions });
     },
 
     updateOrderFromWS: (order) => {
-      const orders = get().orders.map(o => o.id === order.id ? order : o)
-      set({ orders })
+      const orders = get().orders.map(o => o.id === order.id ? order : o);
+      set({ orders });
     },
 
     updateSystemStatusFromWS: (status) => {
-      set({ systemStatus: status })
+      set({ systemStatus: status });
     },
-  }))
-)
+  })),
+);
 
 // Селекторы для производных данных
-export const useActiveTraders = () => 
-  useTradingStore(state => state.traders.filter(t => t.status === 'active'))
+export const useActiveTraders = () =>
+  useTradingStore(state => state.traders.filter(t => t.status === 'active'));
 
 export const useSelectedTraderPositions = () =>
   useTradingStore(state => {
-    const selectedTraderId = state.selectedTraderId
-    return selectedTraderId 
+    const selectedTraderId = state.selectedTraderId;
+    return selectedTraderId
       ? state.positions.filter(p => p.trader_id === selectedTraderId)
-      : []
-  })
+      : [];
+  });
 
 export const useSelectedTraderOrders = () =>
   useTradingStore(state => {
-    const selectedTraderId = state.selectedTraderId
-    return selectedTraderId 
+    const selectedTraderId = state.selectedTraderId;
+    return selectedTraderId
       ? state.orders.filter(o => o.trader_id === selectedTraderId)
-      : []
-  })
+      : [];
+  });

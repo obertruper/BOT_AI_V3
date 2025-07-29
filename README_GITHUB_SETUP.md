@@ -3,6 +3,7 @@
 ## Статус настройки
 
 ✅ **Git репозиторий инициализирован**
+
 - Создан локальный Git репозиторий
 - Настроен .gitignore файл
 - Сделан initial commit
@@ -12,7 +13,7 @@
 
 ### 1. Создайте репозиторий на GitHub
 
-1. Перейдите на https://github.com/new
+1. Перейдите на <https://github.com/new>
 2. Создайте новый репозиторий с именем `BOT_AI_V3` или `BOT_Trading_v3`
 3. **НЕ** инициализируйте с README, .gitignore или лицензией (они уже есть)
 
@@ -44,12 +45,13 @@ git push -u origin main
 ### 5. Установите Claude Code GitHub App
 
 После создания репозитория на GitHub, выполните команду:
+
 ```bash
 /install-github-app
 ```
 
 Или настройте вручную по инструкции:
-https://github.com/anthropics/claude-code-action/#manual-setup-direct-api
+<https://github.com/anthropics/claude-code-action/#manual-setup-direct-api>
 
 ## Структура GitHub Actions
 

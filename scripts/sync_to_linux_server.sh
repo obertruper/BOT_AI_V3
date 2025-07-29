@@ -22,9 +22,9 @@ check_connection() {
     local method=$1
     local host=$2
     local port=$3
-    
+
     echo -e "${YELLOW}Проверка подключения через $method...${NC}"
-    
+
     if sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p "$port" "$REMOTE_USER@$host" "echo 'OK'" > /dev/null 2>&1; then
         echo -e "${GREEN}✓ Подключение через $method успешно${NC}"
         return 0
@@ -118,7 +118,7 @@ sshpass -p "$PASSWORD" rsync -avz --progress \
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Синхронизация завершена успешно${NC}"
-    
+
     # Показать статистику
     echo -e "${YELLOW}Проверка результата...${NC}"
     sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$REMOTE_USER@$SSH_HOST" \

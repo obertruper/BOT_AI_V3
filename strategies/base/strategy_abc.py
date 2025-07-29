@@ -2,18 +2,20 @@
 Абстрактный базовый класс для всех торговых стратегий
 Определяет интерфейс, который должны реализовать все стратегии
 """
-from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
-from dataclasses import dataclass
-from enum import Enum
+
 import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 class SignalType(Enum):
     """Типы торговых сигналов"""
+
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
@@ -23,14 +25,16 @@ class SignalType(Enum):
 
 class SignalStrength(Enum):
     """Сила сигнала"""
-    WEAK = "WEAK"           # 20-50
-    MODERATE = "MODERATE"   # 50-70
-    STRONG = "STRONG"       # 70-100
+
+    WEAK = "WEAK"  # 20-50
+    MODERATE = "MODERATE"  # 50-70
+    STRONG = "STRONG"  # 70-100
 
 
 @dataclass
 class MarketData:
     """Рыночные данные для анализа"""
+
     symbol: str
     timestamp: datetime
     open: float
@@ -39,34 +43,35 @@ class MarketData:
     close: float
     volume: float
     timeframe: str
-    
+
     # Дополнительные поля для криптовалют
     quote_volume: Optional[float] = None
     trades_count: Optional[int] = None
     buy_volume: Optional[float] = None
     sell_volume: Optional[float] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Преобразование в словарь"""
         return {
-            'symbol': self.symbol,
-            'timestamp': self.timestamp.isoformat(),
-            'open': self.open,
-            'high': self.high,
-            'low': self.low,
-            'close': self.close,
-            'volume': self.volume,
-            'timeframe': self.timeframe,
-            'quote_volume': self.quote_volume,
-            'trades_count': self.trades_count,
-            'buy_volume': self.buy_volume,
-            'sell_volume': self.sell_volume
+            "symbol": self.symbol,
+            "timestamp": self.timestamp.isoformat(),
+            "open": self.open,
+            "high": self.high,
+            "low": self.low,
+            "close": self.close,
+            "volume": self.volume,
+            "timeframe": self.timeframe,
+            "quote_volume": self.quote_volume,
+            "trades_count": self.trades_count,
+            "buy_volume": self.buy_volume,
+            "sell_volume": self.sell_volume,
         }
 
 
 @dataclass
 class TradingSignal:
     """Торговый сигнал от стратегии"""
+
     timestamp: datetime
     symbol: str
     signal_type: SignalType
@@ -75,18 +80,18 @@ class TradingSignal:
     stop_loss: float
     take_profit: float
     position_size: float
-    
+
     # Метаданные
     strategy_name: str
     timeframe: str
     indicators_used: List[str]
     reasoning: str
-    
+
     # Опциональные поля
     risk_reward_ratio: Optional[float] = None
     expected_duration_hours: Optional[float] = None
     metadata: Optional[Dict[str, Any]] = None
-    
+
     @property
     def signal_strength(self) -> SignalStrength:
         """Определение силы сигнала на основе confidence"""
@@ -96,44 +101,47 @@ class TradingSignal:
             return SignalStrength.MODERATE
         else:
             return SignalStrength.WEAK
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Преобразование в словарь для сериализации"""
         return {
-            'timestamp': self.timestamp.isoformat(),
-            'symbol': self.symbol,
-            'signal_type': self.signal_type.value,
-            'confidence': self.confidence,
-            'entry_price': self.entry_price,
-            'stop_loss': self.stop_loss,
-            'take_profit': self.take_profit,
-            'position_size': self.position_size,
-            'strategy_name': self.strategy_name,
-            'timeframe': self.timeframe,
-            'indicators_used': self.indicators_used,
-            'reasoning': self.reasoning,
-            'risk_reward_ratio': self.risk_reward_ratio,
-            'expected_duration_hours': self.expected_duration_hours,
-            'metadata': self.metadata
+            "timestamp": self.timestamp.isoformat(),
+            "symbol": self.symbol,
+            "signal_type": self.signal_type.value,
+            "confidence": self.confidence,
+            "entry_price": self.entry_price,
+            "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit,
+            "position_size": self.position_size,
+            "strategy_name": self.strategy_name,
+            "timeframe": self.timeframe,
+            "indicators_used": self.indicators_used,
+            "reasoning": self.reasoning,
+            "risk_reward_ratio": self.risk_reward_ratio,
+            "expected_duration_hours": self.expected_duration_hours,
+            "metadata": self.metadata,
         }
 
 
 @dataclass
 class RiskParameters:
     """Параметры управления рисками для стратегии"""
+
     max_position_size_pct: float  # Максимальный размер позиции в % от депозита
     max_risk_per_trade_pct: float  # Максимальный риск на сделку в %
     stop_loss_type: str  # 'fixed', 'atr', 'trailing'
     stop_loss_value: float
     take_profit_type: str  # 'fixed', 'atr', 'multi_level'
     take_profit_value: float
-    
+
     # Дополнительные параметры
     use_trailing_stop: bool = False
     trailing_activation_pct: float = 2.0
     trailing_distance_pct: float = 1.0
-    partial_close_levels: Optional[List[Tuple[float, float]]] = None  # [(уровень, процент)]
-    
+    partial_close_levels: Optional[List[Tuple[float, float]]] = (
+        None  # [(уровень, процент)]
+    )
+
     def validate(self) -> bool:
         """Валидация параметров"""
         if self.max_position_size_pct <= 0 or self.max_position_size_pct > 100:
@@ -149,96 +157,98 @@ class RiskParameters:
 
 class StrategyABC(ABC):
     """Абстрактный базовый класс для всех торговых стратегий"""
-    
+
     def __init__(self, config: Dict[str, Any]):
         """
         Инициализация стратегии
-        
+
         Args:
             config: Конфигурация стратегии
         """
         self.config = config
-        self.name = config.get('name', self.__class__.__name__)
-        self.enabled = config.get('enabled', True)
-        self.symbols = config.get('symbols', [])
-        self.timeframes = config.get('timeframes', ['1h'])
+        self.name = config.get("name", self.__class__.__name__)
+        self.enabled = config.get("enabled", True)
+        self.symbols = config.get("symbols", [])
+        self.timeframes = config.get("timeframes", ["1h"])
         self._is_initialized = False
-        
+
     @abstractmethod
     async def initialize(self) -> None:
         """Асинхронная инициализация стратегии"""
         pass
-        
+
     @abstractmethod
     async def analyze(self, market_data: MarketData) -> Optional[TradingSignal]:
         """
         Анализ рыночных данных и генерация сигнала
-        
+
         Args:
             market_data: Данные для анализа
-            
+
         Returns:
             TradingSignal или None если сигнала нет
         """
         pass
-        
+
     @abstractmethod
-    async def generate_signals(self, 
-                             market_data_batch: List[MarketData]) -> List[TradingSignal]:
+    async def generate_signals(
+        self, market_data_batch: List[MarketData]
+    ) -> List[TradingSignal]:
         """
         Генерация сигналов для пакета данных
-        
+
         Args:
             market_data_batch: Список рыночных данных
-            
+
         Returns:
             Список торговых сигналов
         """
         pass
-        
+
     @abstractmethod
     def get_risk_parameters(self) -> RiskParameters:
         """Получение параметров управления рисками"""
         pass
-        
+
     @abstractmethod
     def get_required_history_length(self) -> int:
         """Получение необходимой длины истории для анализа"""
         pass
-        
+
     @abstractmethod
     def validate_config(self) -> Tuple[bool, Optional[str]]:
         """
         Валидация конфигурации стратегии
-        
+
         Returns:
             (is_valid, error_message)
         """
         pass
-        
+
     async def on_position_opened(self, position: Dict[str, Any]) -> None:
         """Колбэк при открытии позиции"""
         logger.info(f"[{self.name}] Position opened: {position}")
-        
+
     async def on_position_closed(self, position: Dict[str, Any]) -> None:
         """Колбэк при закрытии позиции"""
         logger.info(f"[{self.name}] Position closed: {position}")
-        
-    async def on_signal_executed(self, signal: TradingSignal, 
-                               execution_result: Dict[str, Any]) -> None:
+
+    async def on_signal_executed(
+        self, signal: TradingSignal, execution_result: Dict[str, Any]
+    ) -> None:
         """Колбэк при исполнении сигнала"""
         logger.info(f"[{self.name}] Signal executed: {signal.signal_type.value}")
-        
+
     def get_status(self) -> Dict[str, Any]:
         """Получение статуса стратегии"""
         return {
-            'name': self.name,
-            'enabled': self.enabled,
-            'initialized': self._is_initialized,
-            'symbols': self.symbols,
-            'timeframes': self.timeframes,
-            'risk_parameters': self.get_risk_parameters().__dict__
+            "name": self.name,
+            "enabled": self.enabled,
+            "initialized": self._is_initialized,
+            "symbols": self.symbols,
+            "timeframes": self.timeframes,
+            "risk_parameters": self.get_risk_parameters().__dict__,
         }
-        
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name}, enabled={self.enabled})"

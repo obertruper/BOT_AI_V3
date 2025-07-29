@@ -17,7 +17,7 @@ mcp_servers:
         - "node_modules"
         - "*.log"
         - "*.tmp"
-    
+
   # GitHub интеграция - работа с репозиторием
   github:
     name: "github"
@@ -34,11 +34,11 @@ mcp_servers:
       auto_commit: false
       commit_message_template: |
         feat: {title}
-        
+
         {description}
-        
+
         Co-authored-by: Claude AI Agent <ai@bot-trading.com>
-        
+
   # Memory - управление контекстом и знаниями
   memory:
     name: "memory"
@@ -53,7 +53,7 @@ mcp_servers:
         max_tokens: 100000
         compression_enabled: true
         compression_ratio: 0.5
-        
+
   # Sequential Thinking - для сложных задач
   sequential_thinking:
     name: "sequential-thinking"
@@ -64,7 +64,7 @@ mcp_servers:
       allow_branching: true
       auto_hypothesis: true
       verification_required: true
-      
+
   # Puppeteer - браузерная автоматизация (ОТКЛЮЧЕН - дублирует Playwright)
   puppeteer:
     name: "puppeteer"
@@ -80,7 +80,7 @@ mcp_servers:
         - "claude.ai"
         - "github.com"
         - "stackoverflow.com"
-        
+
   # Playwright - продвинутая браузерная автоматизация для AI коллаборации
   playwright:
     name: "playwright"
@@ -105,7 +105,7 @@ mcp_servers:
         - "coinmarketcap.com"
         - "google.com"
         - "coingecko.com"
-      
+
   # Context7 - доступ к документации библиотек
   context7:
     name: "context7"
@@ -119,7 +119,7 @@ mcp_servers:
         - "/numpy/numpy"
         - "/sqlalchemy/sqlalchemy"
         - "/pytest/pytest"
-        
+
 # Профили для различных агентов
 agent_profiles:
   code_reviewer:
@@ -128,14 +128,14 @@ agent_profiles:
       - github
       - memory
     priority: "quality"
-    
+
   test_generator:
     mcp_servers:
       - filesystem
       - memory
       - context7
     priority: "coverage"
-    
+
   autonomous_developer:
     mcp_servers:
       - filesystem
@@ -144,21 +144,21 @@ agent_profiles:
       - sequential_thinking
       - context7
     priority: "completion"
-    
+
   performance_optimizer:
     mcp_servers:
       - filesystem
       - memory
       - sequential_thinking
     priority: "speed"
-    
+
   market_analyst:
     mcp_servers:
       - filesystem
       - memory
       - playwright  # Только Playwright для браузерной автоматизации
     priority: "accuracy"
-    
+
   documentation_agent:
     mcp_servers:
       - filesystem

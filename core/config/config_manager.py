@@ -13,21 +13,22 @@ Configuration Manager для BOT_Trading v3.0
 Мигрировано из core/config.py с расширением функциональности.
 """
 
-import os
-import yaml
 import asyncio
-from typing import Dict, Any, Optional, List, Union
-from pathlib import Path
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from core.exceptions import ConfigurationError, ConfigValidationError
-from utils.helpers import safe_float, safe_int
+import yaml
+
+from core.exceptions import ConfigurationError
+from utils.helpers import safe_float
 
 
 @dataclass
 class ConfigInfo:
     """Информация о загруженной конфигурации"""
+
     path: str
     loaded_at: datetime
     is_valid: bool
@@ -37,7 +38,7 @@ class ConfigInfo:
 class ConfigManager:
     """
     Менеджер конфигурации для мульти-трейдер системы BOT_Trading v3.0
-    
+
     Обеспечивает:
     - Загрузку и кеширование конфигураций
     - Поддержку мульти-трейдер архитектуры
@@ -45,7 +46,7 @@ class ConfigManager:
     - Fallback механизмы
     - Обратную совместимость с v1.0/v2.0
     """
-    
+
     def __init__(self, config_path: Optional[str] = None):
         self._config: Dict[str, Any] = {}
         self._config_path: Optional[str] = config_path
@@ -53,7 +54,7 @@ class ConfigManager:
         self._trader_configs: Dict[str, Dict[str, Any]] = {}
         self._config_info: Optional[ConfigInfo] = None
         self._is_initialized = False
-        
+
         # Пути поиска конфигураций (совместимость с v1.0/v2.0)
         self._default_config_paths = [
             "config.yaml",  # Корень проекта
@@ -61,42 +62,44 @@ class ConfigManager:
             "/root/trading/config.yaml",  # Стандартное расположение на сервере
             os.path.join(os.getcwd(), "config.yaml"),  # Текущая директория
         ]
-        
+
         # Путь к PostgreSQL конфигурации
         self._postgres_config_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-            "config", 
-            "postgres_config.yaml"
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "config",
+            "postgres_config.yaml",
         )
-    
+
     async def initialize(self) -> None:
         """Асинхронная инициализация менеджера конфигурации"""
         if self._is_initialized:
             return
-            
+
         try:
             await self._load_system_config()
             await self._load_trader_configs()
             self._is_initialized = True
         except Exception as e:
-            raise ConfigurationError(f"Не удалось инициализировать конфигурацию: {e}") from e
-    
+            raise ConfigurationError(
+                f"Не удалось инициализировать конфигурацию: {e}"
+            ) from e
+
     async def _load_system_config(self) -> None:
         """Загрузка основной системной конфигурации"""
         config_loaded = False
         errors = []
-        
+
         # Определяем пути для поиска конфигурации
         search_paths = []
         if self._config_path:
             search_paths.append(self._config_path)
         search_paths.extend(self._default_config_paths)
-        
+
         # Поиск и загрузка конфигурации
         for config_path in search_paths:
             if not config_path:
                 continue
-                
+
             try:
                 if os.path.exists(config_path):
                     self._config = await self._load_yaml_file(config_path)
@@ -106,109 +109,116 @@ class ConfigManager:
                         break
             except Exception as e:
                 errors.append(f"Ошибка загрузки {config_path}: {e}")
-        
+
         # Загрузка PostgreSQL конфигурации
         await self._load_postgres_config()
-        
+
         # Создание информации о конфигурации
         self._config_info = ConfigInfo(
             path=self._config_path or "not_found",
             loaded_at=datetime.now(),
             is_valid=config_loaded,
-            errors=errors
+            errors=errors,
         )
-        
+
         if not config_loaded:
             print(f"ВНИМАНИЕ: Конфигурация не загружена. Ошибки: {errors}")
-    
+
     async def _load_postgres_config(self) -> None:
         """Загрузка конфигурации PostgreSQL"""
         if os.path.exists(self._postgres_config_path):
             try:
                 postgres_config = await self._load_yaml_file(self._postgres_config_path)
-                if 'postgres' in postgres_config:
-                    self._config['postgres'] = postgres_config['postgres']
+                if "postgres" in postgres_config:
+                    self._config["postgres"] = postgres_config["postgres"]
             except Exception as e:
                 print(f"Ошибка загрузки PostgreSQL конфигурации: {e}")
-    
+
     async def _load_trader_configs(self) -> None:
         """Загрузка конфигураций отдельных трейдеров"""
         # Поиск конфигураций трейдеров
-        traders_config_dir = os.path.join(os.path.dirname(self._config_path or ""), "traders")
-        
+        traders_config_dir = os.path.join(
+            os.path.dirname(self._config_path or ""), "traders"
+        )
+
         if os.path.exists(traders_config_dir):
             for config_file in os.listdir(traders_config_dir):
                 if config_file.endswith(".yaml"):
                     trader_id = config_file[:-5]  # Убираем .yaml
                     config_path = os.path.join(traders_config_dir, config_file)
-                    
+
                     try:
                         trader_config = await self._load_yaml_file(config_path)
                         self._trader_configs[trader_id] = trader_config
                     except Exception as e:
                         print(f"Ошибка загрузки конфигурации трейдера {trader_id}: {e}")
-        
+
         # Загрузка трейдеров из системной конфигурации
-        system_traders = self._config.get('traders', [])
+        system_traders = self._config.get("traders", [])
         for trader_config in system_traders:
-            trader_id = trader_config.get('id')
+            trader_id = trader_config.get("id")
             if trader_id:
                 self._trader_configs[trader_id] = trader_config
-    
+
     async def _load_yaml_file(self, file_path: str) -> Dict[str, Any]:
         """Асинхронная загрузка YAML файла"""
+
         def _load_sync():
             with open(file_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
-        
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _load_sync)
-    
-    def get_config(self, key: str = None, default: Any = None, force_reload: bool = False) -> Any:
+
+    def get_config(
+        self, key: str = None, default: Any = None, force_reload: bool = False
+    ) -> Any:
         """
         Получение значения из конфигурации (совместимость с v1.0/v2.0)
-        
+
         Args:
             key: Ключ для получения значения (например, 'trading.leverage')
             default: Значение по умолчанию
             force_reload: Принудительная перезагрузка
-            
+
         Returns:
             Значение из конфигурации
         """
         if force_reload or not self._is_initialized:
             # Синхронная загрузка для обратной совместимости
             asyncio.create_task(self.initialize())
-        
+
         if key is None:
             return self._config.copy()
-        
+
         # Поддержка вложенных ключей (например, 'trading.leverage')
-        keys = key.split('.')
+        keys = key.split(".")
         value = self._config
-        
+
         for k in keys:
             if isinstance(value, dict) and k in value:
                 value = value[k]
             else:
                 return default
-        
+
         return value
-    
-    def get_leverage(self, model_score: Optional[int] = None, default: Optional[float] = None) -> float:
+
+    def get_leverage(
+        self, model_score: Optional[int] = None, default: Optional[float] = None
+    ) -> float:
         """
         Получение leverage с учетом приоритетов (совместимость с v1.0/v2.0)
-        
+
         Приоритет:
         1. score_configs.TradingModel.{model_score}.leverage
         2. trading.leverage
         3. default значение
         4. 5.0 (финальное значение по умолчанию)
-        
+
         Args:
             model_score: Скор модели для поиска в score_configs
             default: Значение по умолчанию
-            
+
         Returns:
             Значение leverage
         """
@@ -216,141 +226,144 @@ class ConfigManager:
         if model_score is not None:
             score_configs = self.get_config("score_configs", {})
             trading_model_configs = score_configs.get("TradingModel", {})
-            
+
             # Пробуем integer ключ, затем string ключ
             model_config = trading_model_configs.get(model_score, {})
             if not model_config:
                 model_config = trading_model_configs.get(str(model_score), {})
-            
+
             if model_config and "leverage" in model_config:
                 return safe_float(model_config.get("leverage"))
-        
+
         # Проверяем trading.leverage
         trading_leverage = self.get_config("trading.leverage")
         if trading_leverage is not None:
             return safe_float(trading_leverage)
-        
+
         # Используем default или финальное значение по умолчанию
         return default if default is not None else 5.0
-    
-    def get_trader_config(self, trader_id: str, key: str = None, default: Any = None) -> Any:
+
+    def get_trader_config(
+        self, trader_id: str, key: str = None, default: Any = None
+    ) -> Any:
         """
         Получение конфигурации конкретного трейдера
-        
+
         Args:
             trader_id: Идентификатор трейдера
             key: Ключ в конфигурации трейдера
             default: Значение по умолчанию
-            
+
         Returns:
             Конфигурация трейдера или значение по ключу
         """
         trader_config = self._trader_configs.get(trader_id, {})
-        
+
         if key is None:
             return trader_config
-        
+
         # Поддержка вложенных ключей
-        keys = key.split('.')
+        keys = key.split(".")
         value = trader_config
-        
+
         for k in keys:
             if isinstance(value, dict) and k in value:
                 value = value[k]
             else:
                 return default
-        
+
         return value
-    
+
     def get_all_trader_ids(self) -> List[str]:
         """Получение списка всех идентификаторов трейдеров"""
         return list(self._trader_configs.keys())
-    
+
     def get_system_config(self) -> Dict[str, Any]:
         """Получение системной конфигурации"""
-        return self._config.get('system', {})
-    
+        return self._config.get("system", {})
+
     def get_database_config(self) -> Dict[str, Any]:
         """Получение конфигурации базы данных"""
         # Приоритет: database > postgres (обратная совместимость)
-        db_config = self._config.get('database')
+        db_config = self._config.get("database")
         if db_config:
             return db_config
-        
-        return self._config.get('postgres', {})
-    
+
+        return self._config.get("postgres", {})
+
     def get_logging_config(self) -> Dict[str, Any]:
         """Получение конфигурации логирования"""
-        return self._config.get('logging', {})
-    
+        return self._config.get("logging", {})
+
     def set_db_path(self, db_path: str) -> None:
         """Установка пути к БД (совместимость с v1.0/v2.0)"""
         self._db_path = db_path
-    
+
     def get_db_path(self) -> str:
         """
         Получение информации о подключении к БД (совместимость с v1.0/v2.0)
-        
+
         Returns:
             Строка вида "dbname on host:port"
         """
         if self._db_path:
             return self._db_path
-        
+
         # Получаем параметры из конфигурации
         db_config = self.get_database_config()
-        host = db_config.get('host', '')
-        port = db_config.get('port', '')
-        dbname = db_config.get('name') or db_config.get('dbname', '')
-        
+        host = db_config.get("host", "")
+        port = db_config.get("port", "")
+        dbname = db_config.get("name") or db_config.get("dbname", "")
+
         return f"{dbname} on {host}:{port}"
-    
+
     def is_trader_enabled(self, trader_id: str) -> bool:
         """Проверка, включен ли трейдер"""
         trader_config = self.get_trader_config(trader_id)
-        return trader_config.get('enabled', False)
-    
+        return trader_config.get("enabled", False)
+
     def get_config_info(self) -> Optional[ConfigInfo]:
         """Получение информации о состоянии конфигурации"""
         return self._config_info
-    
+
     async def reload_config(self) -> None:
         """Перезагрузка всех конфигураций"""
         self._is_initialized = False
         await self.initialize()
-    
+
     def validate_config(self) -> List[str]:
         """
         Валидация конфигурации
-        
+
         Returns:
             Список ошибок валидации
         """
         errors = []
-        
+
         # Проверка системной конфигурации
         if not self._config:
             errors.append("Системная конфигурация пуста")
-        
+
         # Проверка конфигурации БД
         db_config = self.get_database_config()
         if not db_config:
             errors.append("Конфигурация базы данных не найдена")
-        elif not all(key in db_config for key in ['host', 'port', 'name']):
+        elif not all(key in db_config for key in ["host", "port", "name"]):
             errors.append("Неполная конфигурация базы данных")
-        
+
         # Проверка конфигураций трейдеров
         for trader_id, trader_config in self._trader_configs.items():
-            if not trader_config.get('exchange'):
+            if not trader_config.get("exchange"):
                 errors.append(f"Трейдер {trader_id}: не указана биржа")
-            if not trader_config.get('strategy'):
+            if not trader_config.get("strategy"):
                 errors.append(f"Трейдер {trader_id}: не указана стратегия")
-        
+
         return errors
 
 
 # Глобальный экземпляр для обратной совместимости
 _global_config_manager: Optional[ConfigManager] = None
+
 
 def get_global_config_manager() -> ConfigManager:
     """Получение глобального экземпляра ConfigManager"""
@@ -359,6 +372,7 @@ def get_global_config_manager() -> ConfigManager:
         _global_config_manager = ConfigManager()
     return _global_config_manager
 
+
 # Функции обратной совместимости с v1.0/v2.0
 def load_config(config_path: str) -> Dict[str, Any]:
     """Загрузка конфигурации (совместимость с v1.0/v2.0)"""
@@ -366,20 +380,26 @@ def load_config(config_path: str) -> Dict[str, Any]:
     asyncio.create_task(manager.initialize())
     return manager.get_config()
 
+
 def get_config(key: str = None, default: Any = None, force_reload: bool = False) -> Any:
     """Получение конфигурации (совместимость с v1.0/v2.0)"""
     manager = get_global_config_manager()
     return manager.get_config(key, default, force_reload)
 
-def get_leverage(model_score: Optional[int] = None, default: Optional[float] = None) -> float:
+
+def get_leverage(
+    model_score: Optional[int] = None, default: Optional[float] = None
+) -> float:
     """Получение leverage (совместимость с v1.0/v2.0)"""
     manager = get_global_config_manager()
     return manager.get_leverage(model_score, default)
+
 
 def set_db_path(db_path: str) -> None:
     """Установка пути к БД (совместимость с v1.0/v2.0)"""
     manager = get_global_config_manager()
     manager.set_db_path(db_path)
+
 
 def get_db_path() -> str:
     """Получение пути к БД (совместимость с v1.0/v2.0)"""

@@ -39,7 +39,7 @@ sshpass -p "$PASSWORD" rsync -avz --progress \
 # Проверка статуса
 if [ $? -eq 0 ]; then
     echo "✅ Синхронизация завершена успешно!"
-    
+
     # Показать информацию о проекте на сервере
     echo "📊 Информация о проекте на сервере:"
     sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no $SERVER_HOST "cd $SERVER_PATH && ls -la | head -20"

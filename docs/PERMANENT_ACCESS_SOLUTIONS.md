@@ -1,16 +1,19 @@
 # Решения для постоянного доступа между Mac и Linux
 
 ## 1. Tailscale (Рекомендуется) ⭐
+
 **Mesh VPN сеть с автоматической настройкой**
 
-### Преимущества:
+### Преимущества
+
 - ✅ Работает через любой NAT/firewall
 - ✅ Автоматическое подключение
 - ✅ Шифрование WireGuard
 - ✅ Бесплатно для личного использования
 - ✅ Не требует публичного IP
 
-### Установка на Mac:
+### Установка на Mac
+
 ```bash
 # Через Homebrew
 brew install --cask tailscale
@@ -19,7 +22,8 @@ brew install --cask tailscale
 open https://tailscale.com/download/mac
 ```
 
-### Установка на Linux:
+### Установка на Linux
+
 ```bash
 # Ubuntu/Debian
 curl -fsSL https://tailscale.com/install.sh | sh
@@ -31,7 +35,8 @@ sudo mv tailscale_*/tailscaled /usr/sbin/
 sudo mv tailscale_*/tailscale /usr/bin/
 ```
 
-### Настройка:
+### Настройка
+
 ```bash
 # На обеих машинах
 sudo tailscale up
@@ -44,19 +49,23 @@ ssh obertruper@<tailscale-ip>
 ```
 
 ## 2. ZeroTier
+
 **P2P VPN с виртуальной сетью**
 
-### Установка на Mac:
+### Установка на Mac
+
 ```bash
 brew install --cask zerotier-one
 ```
 
-### Установка на Linux:
+### Установка на Linux
+
 ```bash
 curl -s https://install.zerotier.com | sudo bash
 ```
 
-### Настройка:
+### Настройка
+
 ```bash
 # Создать сеть на https://my.zerotier.com
 # Присоединиться к сети
@@ -67,9 +76,11 @@ sudo zerotier-cli status
 ```
 
 ## 3. Cloudflare Tunnel (Постоянный)
+
 **Туннель с фиксированным доменом**
 
-### Установка на Linux:
+### Установка на Linux
+
 ```bash
 # Скачать cloudflared
 wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
@@ -94,7 +105,8 @@ sudo cloudflared service install
 sudo systemctl start cloudflared
 ```
 
-### Подключение с Mac:
+### Подключение с Mac
+
 ```bash
 # Установить cloudflared
 brew install cloudflare/tap/cloudflared
@@ -104,9 +116,11 @@ ssh -o ProxyCommand="cloudflared access ssh --hostname <your-domain>.trycloudfla
 ```
 
 ## 4. WireGuard VPN
+
 **Быстрый и безопасный VPN**
 
-### На Linux (сервер):
+### На Linux (сервер)
+
 ```bash
 # Установка
 sudo apt install wireguard
@@ -131,7 +145,8 @@ sudo systemctl enable wg-quick@wg0
 sudo systemctl start wg-quick@wg0
 ```
 
-### На Mac (клиент):
+### На Mac (клиент)
+
 ```bash
 # Установка
 brew install wireguard-tools
@@ -141,9 +156,11 @@ open https://apps.apple.com/us/app/wireguard/id1451685025
 ```
 
 ## 5. ngrok (Для временного доступа)
+
 **Простой туннель для разработки**
 
-### На Linux:
+### На Linux
+
 ```bash
 # Скачать
 wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
@@ -169,6 +186,7 @@ tar xvf ngrok-v3-stable-linux-amd64.tgz
 ## Рекомендация
 
 Для вашего случая рекомендую **Tailscale**:
+
 1. Простая установка за 5 минут
 2. Работает без настройки роутера
 3. Автоматически переподключается

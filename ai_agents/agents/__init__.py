@@ -1,16 +1,17 @@
 """
 Специализированные AI агенты для различных задач
 """
+
 from .architect_agent import (
     ArchitectAgent,
     ArchitectureAnalysis,
     analyze_project_architecture,
-    generate_architecture_report
+    generate_architecture_report,
 )
 
 __all__ = [
     "ArchitectAgent",
-    "ArchitectureAnalysis", 
+    "ArchitectureAnalysis",
     "analyze_project_architecture",
-    "generate_architecture_report"
+    "generate_architecture_report",
 ]

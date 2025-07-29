@@ -7,13 +7,8 @@ Real-time WebSocket соединения для торгового интерф�
 - events: Типы и обработка событий
 """
 
+from .events import EventType, WebSocketEvent
 from .manager import WebSocketManager
 from .streams import StreamManager
-from .events import WebSocketEvent, EventType
 
-__all__ = [
-    'WebSocketManager',
-    'StreamManager',
-    'WebSocketEvent',
-    'EventType'
-]
+__all__ = ["WebSocketManager", "StreamManager", "WebSocketEvent", "EventType"]

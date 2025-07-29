@@ -6,10 +6,10 @@ workflow:
   auto_save_sessions: true       # Автоматическое сохранение сессий
   screenshot_on_error: true      # Скриншоты при ошибках
   parallel_processing: true      # Параллельная обработка AI систем
-  
+
 ai_systems:
   - chatgpt
-  - grok  
+  - grok
   - claude
 
 # Таймауты (в секундах)
@@ -42,7 +42,7 @@ chatgpt:
     max_message_length: 32000
 
 grok:
-  name: "Grok v4" 
+  name: "Grok v4"
   url: "https://grok.com"
   prompt_prefix: "Ты AI-консультант по алготрейдингу и финтех разработке. "
   selectors:

@@ -33,6 +33,7 @@ AIVerificationSystem
 ### 2. Ключевые улучшения
 
 #### Параллельная обработка
+
 ```python
 # Старый подход (последовательный)
 await send_to_chatgpt(query)  # 2 минуты
@@ -50,13 +51,14 @@ await asyncio.gather(
 ```
 
 #### Единое ожидание
+
 ```python
 # Вместо отдельных wait_for для каждой системы
 async def wait_for_all_responses(timeout=120):
     """Ожидаем все ответы одновременно"""
     check_interval = 5
     elapsed = 0
-    
+
     while elapsed < timeout:
         if all_responses_ready():
             break
@@ -65,6 +67,7 @@ async def wait_for_all_responses(timeout=120):
 ```
 
 #### Кэширование ответов
+
 ```python
 @dataclass
 class AIResponse:
@@ -94,7 +97,7 @@ async def deep_analysis(responses):
         thoughtNumber=1,
         totalThoughts=5
     )
-    
+
     # Шаг 2: Выявление противоречий
     # Шаг 3: Синтез лучших практик
     # Шаг 4: Создание плана внедрения
@@ -115,15 +118,18 @@ docs/AI_VERIFICATION_REPORTS/
 ## Преимущества нового подхода
 
 ### Скорость
+
 - **Старый подход**: ~10 минут на полный цикл
 - **Новый подход**: ~3 минуты (ускорение в 3.3 раза)
 
 ### Качество
+
 - Единая структура отчетов
 - Полное сохранение контекста
 - Автоматический сравнительный анализ
 
 ### Масштабируемость
+
 - Легко добавить новые AI системы
 - Параллельная обработка любого количества запросов
 - Кэширование для повторных анализов
@@ -131,6 +137,7 @@ docs/AI_VERIFICATION_REPORTS/
 ## Практическое использование
 
 ### 1. Простой запрос
+
 ```python
 verifier = AIVerificationSystem()
 report = await verifier.cross_verify_task(
@@ -139,6 +146,7 @@ report = await verifier.cross_verify_task(
 ```
 
 ### 2. Запрос с контекстом
+
 ```python
 report = await verifier.cross_verify_task(
     task="Как оптимизировать latency для HFT?",
@@ -147,6 +155,7 @@ report = await verifier.cross_verify_task(
 ```
 
 ### 3. Batch обработка
+
 ```python
 tasks = [
     "Стратегия скальпинга",
@@ -160,6 +169,7 @@ reports = await verifier.batch_verify(tasks)
 ## Интеграция с BOT_Trading_v3
 
 ### 1. Добавление в конфигурацию
+
 ```yaml
 ai_verification:
   enabled: true
@@ -170,6 +180,7 @@ ai_verification:
 ```
 
 ### 2. Использование в стратегиях
+
 ```python
 class TradingStrategy:
     async def validate_with_ai(self):
@@ -182,6 +193,7 @@ class TradingStrategy:
 ```
 
 ### 3. Автоматические проверки
+
 ```python
 @scheduled_task(hour=6)  # Каждое утро
 async def daily_strategy_review():

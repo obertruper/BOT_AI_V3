@@ -67,12 +67,12 @@ sshpass -p "$PASSWORD" rsync -avz --progress \
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Синхронизация завершена${NC}"
-    
+
     # Статистика
     echo -e "${YELLOW}Статистика на сервере:${NC}"
     sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$TAILSCALE_IP" \
         "echo 'Размер: ' && du -sh '$REMOTE_PATH' && echo 'Файлов: ' && find '$REMOTE_PATH' -type f | wc -l"
-    
+
     echo -e "${GREEN}Готово! Проект синхронизирован через Tailscale${NC}"
 else
     echo -e "${RED}✗ Ошибка синхронизации${NC}"

@@ -5,7 +5,7 @@ web_server:
   port: 8080
   debug: false
   reload: false
-  
+
   # SSL/TLS настройки (для продакшена)
   ssl:
     enabled: false
@@ -38,7 +38,7 @@ websocket:
   heartbeat_interval: 30  # секунды
   max_connections: 100
   message_queue_size: 1000
-  
+
   # Каналы событий
   channels:
     system_updates:
@@ -60,19 +60,19 @@ api:
   version: "v1"
   title: "BOT_Trading v3.0 Web API"
   description: "Comprehensive trading bot management and monitoring API"
-  
+
   # Документация
   docs:
     enabled: true
     url: "/api/docs"
     redoc_url: "/api/redoc"
     openapi_url: "/api/openapi.json"
-  
+
   # Пагинация
   pagination:
     default_page_size: 20
     max_page_size: 100
-  
+
   # Кеширование
   cache:
     enabled: true
@@ -87,7 +87,7 @@ auth:
     algorithm: "HS256"
     access_token_expire_minutes: 30
     refresh_token_expire_days: 7
-  
+
   # Роли пользователей
   roles:
     admin:
@@ -101,13 +101,13 @@ auth:
 logging:
   level: "INFO"
   format: "detailed"
-  
+
   # Файлы логов
   files:
     access_log: "logs/web_access.log"
     error_log: "logs/web_error.log"
     websocket_log: "logs/websocket.log"
-  
+
   # Ротация логов
   rotation:
     enabled: true
@@ -118,12 +118,12 @@ logging:
 monitoring:
   enabled: true
   endpoint: "/metrics"
-  
+
   # Prometheus метрики
   prometheus:
     enabled: false
     port: 9090
-  
+
   # Health check
   health_check:
     endpoint: "/health"
@@ -136,12 +136,12 @@ frontend:
     enabled: true
     directory: "web/frontend/dist"
     mount_path: "/"
-  
+
   # SPA режим (Single Page Application)
   spa:
     enabled: true
     fallback_file: "index.html"
-  
+
   # Кеширование статики
   static_cache:
     enabled: true
@@ -151,14 +151,14 @@ frontend:
 trading_integration:
   # Автоматический запуск веб-сервера с системой
   auto_start: true
-  
+
   # Синхронизация данных
   sync:
     traders_interval: 5  # секунды
     positions_interval: 2  # секунды
     orders_interval: 3  # секунды
     system_status_interval: 10  # секунды
-  
+
   # События для WebSocket
   events:
     broadcast_trader_updates: true
@@ -169,16 +169,16 @@ trading_integration:
 # Разработческие настройки
 development:
   enabled: true
-  
+
   # Hot reload для API (только в разработке)
   api_reload: true
-  
+
   # Подробные ошибки
   detailed_errors: true
-  
+
   # Mock данные
   use_mock_data: false
-  
+
   # Профилирование
   profiling:
     enabled: false
@@ -191,7 +191,7 @@ production:
     gzip_compression: true
     static_compression: true
     keep_alive: true
-  
+
   # Безопасность
   security_headers:
     enabled: true
@@ -199,7 +199,7 @@ production:
     content_type_options: true
     frame_options: "DENY"
     xss_protection: true
-  
+
   # Лимиты
   limits:
     max_connections: 1000

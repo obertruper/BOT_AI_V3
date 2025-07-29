@@ -16,7 +16,7 @@ python-jose[cryptography]>=3.3.0  # ✅ JWT tokens
 
 # Криптобиржи (проверено январь 2025)
 ccxt>=4.2.50           # ✅ 100+ exchanges, active updates
-python-binance>=1.0.17 # ✅ Official Binance connector  
+python-binance>=1.0.17 # ✅ Official Binance connector
 bybit>=3.2.0           # ✅ Official Bybit SDK
 
 # База данных (проверено январь 2025)

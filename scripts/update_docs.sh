@@ -85,17 +85,17 @@ exit_code=$?
 
 if [ $exit_code -eq 0 ]; then
     echo -e "${GREEN}✅ Обновление документации завершено успешно${NC}"
-    
+
     # Показать краткий статус после обновления
     echo -e "\n${BLUE}Текущий статус:${NC}"
     python scripts/docs_downloader.py --status
-    
+
     # Обновить информацию в git (если есть изменения)
     if [ -n "$(git status --porcelain lib/)" ]; then
         echo -e "\n${YELLOW}Обнаружены изменения в документации${NC}"
         echo "Файлы для коммита:"
         git status --porcelain lib/
-        
+
         # Автоматический коммит (если установлена переменная окружения)
         if [ "$AUTO_COMMIT_DOCS" = "true" ]; then
             echo -e "${GREEN}Автоматический коммит изменений...${NC}"
@@ -108,7 +108,7 @@ if [ $exit_code -eq 0 ]; then
     else
         echo -e "${GREEN}Изменений в документации не обнаружено${NC}"
     fi
-    
+
 else
     echo -e "${RED}❌ Ошибка при обновлении документации (код: $exit_code)${NC}"
     exit $exit_code

@@ -9,16 +9,16 @@ API Endpoints для BOT_Trading v3.0 Web Interface
 - auth: Аутентификация и авторизация
 """
 
-from .traders import router as traders_router
-from .monitoring import router as monitoring_router
-from .exchanges import router as exchanges_router
-from .strategies import router as strategies_router
 from .auth import router as auth_router
+from .exchanges import router as exchanges_router
+from .monitoring import router as monitoring_router
+from .strategies import router as strategies_router
+from .traders import router as traders_router
 
 __all__ = [
-    'traders_router',
-    'monitoring_router', 
-    'exchanges_router',
-    'strategies_router',
-    'auth_router'
+    "traders_router",
+    "monitoring_router",
+    "exchanges_router",
+    "strategies_router",
+    "auth_router",
 ]

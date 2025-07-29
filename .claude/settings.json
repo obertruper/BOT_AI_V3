@@ -1,0 +1,105 @@
+{
+  "editor": {
+    "defaultLanguage": "python",
+    "tabSize": 4,
+    "insertSpaces": true,
+    "formatOnSave": true,
+    "rulers": [100, 120]
+  },
+  "aiAssistant": {
+    "autoSuggest": true,
+    "contextAware": true,
+    "preferredModel": "claude-3-opus",
+    "temperature": 0.7,
+    "maxTokens": 4096
+  },
+  "codeGeneration": {
+    "preferAsyncAwait": true,
+    "preferTypeHints": true,
+    "docstringStyle": "google",
+    "includeExamples": true
+  },
+  "testing": {
+    "framework": "pytest",
+    "coverageThreshold": 80,
+    "autoGenerateTests": true,
+    "testFilePattern": "test_*.py"
+  },
+  "linting": {
+    "enabled": true,
+    "tools": ["black", "ruff", "mypy"],
+    "autoFix": true,
+    "severity": "warning"
+  },
+  "hooks": {
+    "preCommit": {
+      "enabled": true,
+      "runTests": true,
+      "runLinters": true,
+      "checkSecrets": true
+    },
+    "postMerge": {
+      "updateDependencies": true,
+      "runMigrations": true
+    }
+  },
+  "projectSpecific": {
+    "tradingBot": {
+      "riskChecks": true,
+      "backtestBeforeDeploy": true,
+      "requireApprovalForProduction": true,
+      "monitorPerformance": true
+    },
+    "aiAgents": {
+      "crossVerification": {
+        "enabled": true,
+        "threshold": 0.8,
+        "providers": ["claude", "gpt-4", "grok"]
+      },
+      "autoDocumentation": true
+    }
+  },
+  "security": {
+    "scanForSecrets": true,
+    "checkDependencies": true,
+    "auditCode": true,
+    "requireSignedCommits": false
+  },
+  "collaboration": {
+    "shareContext": true,
+    "syncSettings": true,
+    "teamPresets": "trading-team"
+  },
+  "performance": {
+    "enableCaching": true,
+    "parallelProcessing": true,
+    "optimizationLevel": "balanced"
+  },
+  "integrations": {
+    "github": {
+      "autoCreatePR": false,
+      "prTemplate": ".github/pull_request_template.md",
+      "issueLabels": ["ai-generated", "needs-review"]
+    },
+    "slack": {
+      "notifications": false,
+      "channel": "#bot-trading-dev"
+    }
+  },
+  "customCommands": {
+    "analyze": "python -m ai_agents.code_analyzer",
+    "optimize": "python -m scripts.optimize_strategy",
+    "backtest": "python -m backtesting.run_backtest",
+    "deploy": "bash scripts/deploy_to_production.sh"
+  },
+  "workflowAutomation": {
+    "onFileChange": {
+      "*.py": ["format", "lint", "test"],
+      "strategies/*.py": ["backtest", "validate"]
+    },
+    "scheduled": {
+      "daily": ["update-dependencies", "security-scan"],
+      "weekly": ["performance-report", "code-metrics"]
+    }
+  }
+}

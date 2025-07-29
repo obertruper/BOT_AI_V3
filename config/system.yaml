@@ -5,14 +5,14 @@ system:
   name: "BOT_Trading_v3"
   version: "3.0.0"
   environment: "development"  # development, staging, production
-  
+
   # Системные ограничения
   limits:
     max_traders: 10
     max_concurrent_trades: 50
     max_memory_usage_mb: 2048
     max_cpu_usage_percent: 80
-  
+
   # Настройки производительности
   performance:
     worker_threads: 4
@@ -28,14 +28,14 @@ database:
   name: "bot_trading_v3"
   user: "postgres"
   password: "${DB_PASSWORD}"
-  
+
   # Настройки пула подключений
   pool:
     min_connections: 5
     max_connections: 25
     connection_timeout: 30
     idle_timeout: 300
-    
+
   # Настройки миграций
   migrations:
     auto_migrate: true
@@ -46,19 +46,19 @@ monitoring:
   enabled: true
   health_check_interval: 30  # секунды
   metrics_collection_interval: 10  # секунды
-  
+
   # Prometheus метрики
   prometheus:
     enabled: true
     port: 9090
     path: "/metrics"
-  
+
   # Алерты
   alerts:
     enabled: true
     telegram_enabled: false
     email_enabled: false
-    
+
     # Пороги для алертов
     thresholds:
       memory_usage_percent: 85
@@ -70,18 +70,18 @@ monitoring:
 logging:
   level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
   format: "structured"  # simple, structured, json
-  
+
   # Файлы логов
   files:
     main: "logs/system.log"
     trades: "logs/trades.log"
     errors: "logs/errors.log"
-    
+
   # Ротация логов
   rotation:
     max_size_mb: 100
     backup_count: 10
-    
+
   # Внешние системы
   external:
     sentry:
@@ -94,12 +94,12 @@ security:
   encryption:
     enabled: true
     key_rotation_days: 30
-    
+
   # Ограничения доступа
   access:
     max_login_attempts: 5
     lockout_duration_minutes: 30
-    
+
   # Аудит
   audit:
     enabled: true
@@ -116,13 +116,13 @@ api:
     rate_limiting:
       enabled: true
       requests_per_minute: 100
-      
+
   websocket:
     enabled: true
     port: 8081
     max_connections: 100
     heartbeat_interval: 30
-    
+
   webhook:
     enabled: true
     port: 8082
@@ -135,14 +135,14 @@ notifications:
     enabled: false
     bot_token: "${TELEGRAM_BOT_TOKEN}"
     chat_id: "${TELEGRAM_CHAT_ID}"
-    
+
   email:
     enabled: false
     smtp_server: "smtp.gmail.com"
     smtp_port: 587
     username: "${EMAIL_USERNAME}"
     password: "${EMAIL_PASSWORD}"
-    
+
   discord:
     enabled: false
     webhook_url: "${DISCORD_WEBHOOK_URL}"
@@ -152,14 +152,14 @@ backup:
   enabled: true
   interval_hours: 6
   retention_days: 30
-  
+
   # Типы данных для бэкапа
   include:
     - database
     - configurations
     - models
     - logs
-    
+
   # Местоположение бэкапов
   storage:
     local:
@@ -176,7 +176,7 @@ development:
   hot_reload: true
   mock_exchanges: false
   test_mode: false
-  
+
   # Тестовые данные
   test_data:
     enabled: true

@@ -11,9 +11,8 @@ Dependency Injection для Web API
 - MetricsCollector (из monitoring)
 """
 
-from typing import Optional, Any
-import asyncio
 from contextlib import asynccontextmanager
+from typing import Any, Optional
 
 # Условные импорты для разработки
 try:
@@ -62,6 +61,7 @@ if get_global_logger_factory:
     logger = logger_factory.get_logger("web_dependencies")
 else:
     import logging
+
     logger = logging.getLogger("web_dependencies")
 
 # Глобальные переменные для хранения компонентов системы
@@ -84,28 +84,29 @@ _strategy_manager: Optional[Any] = None
 _backtest_engine: Optional[Any] = None
 _performance_service: Optional[Any] = None
 
+
 class DependencyContainer:
     """
     Контейнер зависимостей для веб-интерфейса
-    
+
     Обеспечивает централизованное управление всеми компонентами
     системы и их внедрение в веб API endpoints.
     """
-    
+
     def __init__(self, orchestrator: SystemOrchestrator):
         self.orchestrator = orchestrator
         self._initialized = False
-        
+
     async def initialize(self):
         """Инициализация всех зависимостей"""
         if self._initialized:
             return
-            
+
         logger.info("Инициализация контейнера зависимостей веб-интерфейса")
-        
+
         global _orchestrator, _trader_manager, _exchange_factory, _exchange_registry
         global _config_manager, _metrics_collector, _health_checker
-        
+
         try:
             # Основные компоненты системы
             _orchestrator = self.orchestrator
@@ -114,35 +115,41 @@ class DependencyContainer:
             _exchange_registry = self.orchestrator.exchange_registry
             _config_manager = self.orchestrator.config_manager
             _health_checker = self.orchestrator.health_checker
-            
+
             # Метрики
-            if hasattr(self.orchestrator, 'metrics_collector'):
+            if hasattr(self.orchestrator, "metrics_collector"):
                 _metrics_collector = self.orchestrator.metrics_collector
-            
+
             # Инициализируем дополнительные сервисы
             await self._initialize_additional_services()
-            
+
             self._initialized = True
             logger.info("Контейнер зависимостей успешно инициализирован")
-            
+
         except Exception as e:
             logger.error(f"Ошибка инициализации контейнера зависимостей: {e}")
             raise
-    
+
     async def _initialize_additional_services(self):
         """Инициализация дополнительных сервисов"""
         global _user_manager, _session_manager, _stats_service, _alerts_service
         global _logs_service, _strategy_registry, _strategy_manager
         global _backtest_engine, _performance_service
-        
+
         try:
             # Заглушки для сервисов, которые будут реализованы позже
             from .mock_services import (
-                MockUserManager, MockSessionManager, MockStatsService,
-                MockAlertsService, MockLogsService, MockStrategyRegistry,
-                MockStrategyManager, MockBacktestEngine, MockPerformanceService
+                MockAlertsService,
+                MockBacktestEngine,
+                MockLogsService,
+                MockPerformanceService,
+                MockSessionManager,
+                MockStatsService,
+                MockStrategyManager,
+                MockStrategyRegistry,
+                MockUserManager,
             )
-            
+
             _user_manager = MockUserManager()
             _session_manager = MockSessionManager()
             _stats_service = MockStatsService()
@@ -152,9 +159,9 @@ class DependencyContainer:
             _strategy_manager = MockStrategyManager()
             _backtest_engine = MockBacktestEngine()
             _performance_service = MockPerformanceService()
-            
+
             logger.info("Дополнительные сервисы инициализированы (mock)")
-            
+
         except ImportError:
             logger.warning("Mock сервисы не найдены, используем заглушки")
             # Создаем простые заглушки
@@ -167,105 +174,138 @@ class DependencyContainer:
             _strategy_manager = None
             _backtest_engine = None
             _performance_service = None
-    
+
     async def cleanup(self):
         """Очистка ресурсов"""
         logger.info("Очистка контейнера зависимостей")
         self._initialized = False
 
+
 # =================== CORE DEPENDENCIES ===================
+
 
 def get_orchestrator_dependency() -> SystemOrchestrator:
     """Получить orchestrator"""
     if _orchestrator is None:
-        raise RuntimeError("Orchestrator не инициализирован. Вызовите initialize_dependencies() сначала.")
+        raise RuntimeError(
+            "Orchestrator не инициализирован. Вызовите initialize_dependencies() сначала."
+        )
     return _orchestrator
+
 
 def get_trader_manager_dependency() -> TraderManager:
     """Получить trader_manager"""
     if _trader_manager is None:
-        raise RuntimeError("TraderManager не инициализирован. Вызовите initialize_dependencies() сначала.")
+        raise RuntimeError(
+            "TraderManager не инициализирован. Вызовите initialize_dependencies() сначала."
+        )
     return _trader_manager
+
 
 def get_exchange_factory_dependency() -> ExchangeFactory:
     """Получить exchange_factory"""
     if _exchange_factory is None:
-        raise RuntimeError("ExchangeFactory не инициализирован. Вызовите initialize_dependencies() сначала.")
+        raise RuntimeError(
+            "ExchangeFactory не инициализирован. Вызовите initialize_dependencies() сначала."
+        )
     return _exchange_factory
+
 
 def get_exchange_registry_dependency() -> ExchangeRegistry:
     """Получить exchange_registry"""
     if _exchange_registry is None:
-        raise RuntimeError("ExchangeRegistry не инициализирован. Вызовите initialize_dependencies() сначала.")
+        raise RuntimeError(
+            "ExchangeRegistry не инициализирован. Вызовите initialize_dependencies() сначала."
+        )
     return _exchange_registry
+
 
 def get_config_manager_dependency() -> ConfigManager:
     """Получить config_manager"""
     if _config_manager is None:
-        raise RuntimeError("ConfigManager не инициализирован. Вызовите initialize_dependencies() сначала.")
+        raise RuntimeError(
+            "ConfigManager не инициализирован. Вызовите initialize_dependencies() сначала."
+        )
     return _config_manager
+
 
 def get_metrics_collector_dependency() -> Optional[MetricsCollector]:
     """Получить metrics_collector"""
     return _metrics_collector
 
+
 def get_health_checker_dependency() -> HealthChecker:
     """Получить health_checker"""
     if _health_checker is None:
-        raise RuntimeError("HealthChecker не инициализирован. Вызовите initialize_dependencies() сначала.")
+        raise RuntimeError(
+            "HealthChecker не инициализирован. Вызовите initialize_dependencies() сначала."
+        )
     return _health_checker
 
+
 # =================== ADDITIONAL SERVICES DEPENDENCIES ===================
+
 
 def get_user_manager_dependency():
     """Получить user_manager"""
     return _user_manager
 
+
 def get_session_manager_dependency():
     """Получить session_manager"""
     return _session_manager
+
 
 def get_stats_service_dependency():
     """Получить stats_service"""
     return _stats_service
 
+
 def get_alerts_service_dependency():
     """Получить alerts_service"""
     return _alerts_service
+
 
 def get_logs_service_dependency():
     """Получить logs_service"""
     return _logs_service
 
+
 def get_strategy_registry_dependency():
     """Получить strategy_registry"""
     return _strategy_registry
+
 
 def get_strategy_manager_dependency():
     """Получить strategy_manager"""
     return _strategy_manager
 
+
 def get_backtest_engine_dependency():
     """Получить backtest_engine"""
     return _backtest_engine
+
 
 def get_performance_service_dependency():
     """Получить performance_service"""
     return _performance_service
 
+
 # =================== INITIALIZATION FUNCTIONS ===================
+
 
 async def initialize_dependencies(orchestrator: SystemOrchestrator):
     """
     Инициализация всех зависимостей для веб-интерфейса
-    
+
     Args:
         orchestrator: Главный оркестратор системы
     """
     container = DependencyContainer(orchestrator)
     await container.initialize()
-    
+
     logger.info("Зависимости веб-интерфейса инициализированы")
+
 
 async def cleanup_dependencies():
     """Очистка всех зависимостей"""
@@ -274,9 +314,9 @@ async def cleanup_dependencies():
     global _user_manager, _session_manager, _stats_service, _alerts_service
     global _logs_service, _strategy_registry, _strategy_manager
     global _backtest_engine, _performance_service
-    
+
     logger.info("Очистка зависимостей веб-интерфейса")
-    
+
     # Сбрасываем все глобальные переменные
     _orchestrator = None
     _trader_manager = None
@@ -295,13 +335,15 @@ async def cleanup_dependencies():
     _backtest_engine = None
     _performance_service = None
 
+
 # =================== DEPENDENCY CONTEXT MANAGER ===================
+
 
 @asynccontextmanager
 async def dependency_context(orchestrator: SystemOrchestrator):
     """
     Контекстный менеджер для управления жизненным циклом зависимостей
-    
+
     Использование:
     async with dependency_context(orchestrator):
         # Веб-сервер работает с инициализированными зависимостями
@@ -313,7 +355,9 @@ async def dependency_context(orchestrator: SystemOrchestrator):
     finally:
         await cleanup_dependencies()
 
+
 # =================== HEALTH CHECK ===================
+
 
 def check_dependencies_health() -> dict:
     """Проверка здоровья всех зависимостей"""
@@ -333,37 +377,39 @@ def check_dependencies_health() -> dict:
         "strategy_registry": _strategy_registry is not None,
         "strategy_manager": _strategy_manager is not None,
         "backtest_engine": _backtest_engine is not None,
-        "performance_service": _performance_service is not None
+        "performance_service": _performance_service is not None,
     }
-    
+
     all_healthy = all(health_status.values())
-    
+
     return {
         "status": "healthy" if all_healthy else "unhealthy",
         "components": health_status,
         "initialized_count": sum(health_status.values()),
-        "total_count": len(health_status)
+        "total_count": len(health_status),
     }
 
+
 # =================== UTILITY FUNCTIONS ===================
+
 
 def get_dependency_info() -> dict:
     """Получить информацию о текущих зависимостях"""
     return {
         "orchestrator": {
             "class": type(_orchestrator).__name__ if _orchestrator else None,
-            "initialized": _orchestrator is not None
+            "initialized": _orchestrator is not None,
         },
         "trader_manager": {
             "class": type(_trader_manager).__name__ if _trader_manager else None,
-            "initialized": _trader_manager is not None
+            "initialized": _trader_manager is not None,
         },
         "exchange_factory": {
             "class": type(_exchange_factory).__name__ if _exchange_factory else None,
-            "initialized": _exchange_factory is not None
+            "initialized": _exchange_factory is not None,
         },
         "config_manager": {
             "class": type(_config_manager).__name__ if _config_manager else None,
-            "initialized": _config_manager is not None
-        }
+            "initialized": _config_manager is not None,
+        },
     }

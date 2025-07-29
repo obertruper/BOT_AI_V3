@@ -28,9 +28,9 @@ const queryClient = new QueryClient({
 })
 
 function App() {
-  const { 
-    fetchSystemStatus, 
-    fetchTraders, 
+  const {
+    fetchSystemStatus,
+    fetchTraders,
     setWsConnected,
     updateTraderFromWS,
     updatePositionFromWS,

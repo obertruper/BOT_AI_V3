@@ -13,7 +13,7 @@ graph TB
         MCP[MCP Servers]
         CV[Cross Verification]
     end
-    
+
     subgraph "Agents"
         CR[Code Reviewer]
         TG[Test Generator]
@@ -24,20 +24,20 @@ graph TB
         AR[Architect]
         DM[Doc Maintainer]
     end
-    
+
     subgraph "Trading Core"
         TE[Trading Engine]
         SM[Strategy Manager]
         RM[Risk Manager]
         EX[Exchanges]
     end
-    
+
     SDK --> Agents
     MCP --> SDK
     CV --> Agents
-    
+
     Agents --> Trading Core
-    
+
     CR --> TE
     TG --> SM
     AD --> TE
@@ -47,41 +47,50 @@ graph TB
 ## 🔧 Компоненты системы
 
 ### 1. Claude Code SDK
+
 **Путь**: `/ai_agents/claude_code_sdk.py`
+
 - Python обертка для Claude CLI
 - Поддержка всех thinking modes
 - Token management и кеширование
 - Session management для контекста
 
 ### 2. MCP Серверы (7 активных)
+
 **Конфигурация**: `/ai_agents/configs/mcp_servers.yaml`
 
 #### 📁 Filesystem
+
 - Чтение/запись файлов
 - Поиск по паттернам
 - Управление директориями
 
 #### 🐙 GitHub
+
 - Создание PR и issues
 - Code review
 - Автоматические коммиты
 
 #### 🧠 Memory
+
 - Knowledge graph
 - Контекст между сессиями
 - Связи между entities
 
 #### 🔮 Sequential Thinking
+
 - Пошаговое решение задач
 - Ревизия предыдущих мыслей
 - Проверка гипотез
 
 #### 🌐 Browser Automation
+
 - Puppeteer для простых задач
 - Playwright для сложных сценариев
 - Сбор рыночных данных
 
 #### 📚 Context7
+
 - Доступ к документации библиотек
 - Актуальные примеры кода
 - Best practices
@@ -89,6 +98,7 @@ graph TB
 ### 3. AI Агенты (8 специализированных)
 
 #### 🔍 Code Reviewer
+
 ```python
 from ai_agents import review_code
 
@@ -98,6 +108,7 @@ review = await review_code("path/to/file.py")
 ```
 
 #### 🧪 Test Generator
+
 ```python
 from ai_agents import generate_tests
 
@@ -107,6 +118,7 @@ tests = await generate_tests("module.py")
 ```
 
 #### 🚀 Autonomous Developer
+
 ```python
 from ai_agents import autonomous_development
 
@@ -118,6 +130,7 @@ result = await autonomous_development("""
 ```
 
 #### ⚡ Performance Optimizer
+
 ```python
 from ai_agents import optimize_performance
 
@@ -127,6 +140,7 @@ optimized = await optimize_performance("slow_function.py")
 ```
 
 #### 🔐 Security Auditor
+
 ```python
 from ai_agents import security_audit
 
@@ -136,6 +150,7 @@ audit = await security_audit("sensitive_module.py")
 ```
 
 #### 📈 Market Analyst
+
 ```python
 from ai_agents import analyze_market
 
@@ -145,6 +160,7 @@ analysis = await analyze_market("BTC/USDT")
 ```
 
 #### 🏛️ Architecture Agent
+
 ```python
 from ai_agents import analyze_project_architecture
 
@@ -154,6 +170,7 @@ arch = await analyze_project_architecture()
 ```
 
 #### 📝 Documentation Agent
+
 ```python
 from ai_agents import update_documentation
 
@@ -165,6 +182,7 @@ docs = await update_documentation()
 ## 🔄 Рабочие процессы (Workflows)
 
 ### 1. Разработка новой стратегии
+
 ```python
 # 1. Архитектор проектирует
 design = await architect.design_strategy("Momentum based strategy")
@@ -183,6 +201,7 @@ secure = await auditor.audit(optimized)
 ```
 
 ### 2. Continuous Integration
+
 ```yaml
 # .github/workflows/ai-review.yml
 on: [pull_request]
@@ -196,12 +215,13 @@ jobs:
 ```
 
 ### 3. Автоматическая оптимизация
+
 ```python
 # Запускается по расписанию
 async def daily_optimization():
     # Анализ производительности
     slow_functions = await find_slow_functions()
-    
+
     # Оптимизация каждой
     for func in slow_functions:
         optimized = await optimize_performance(func)
@@ -212,11 +232,13 @@ async def daily_optimization():
 ## 💡 Лучшие практики
 
 ### 1. Выбор модели
+
 - **Haiku**: Простые задачи, быстрые ответы
 - **Sonnet**: Баланс скорости и качества (default)
 - **Opus**: Сложные задачи, глубокий анализ
 
 ### 2. Thinking Modes
+
 ```python
 # Простая задача
 options = ClaudeCodeOptions(thinking_mode=ThinkingMode.NORMAL)
@@ -229,6 +251,7 @@ options = ClaudeCodeOptions(thinking_mode=ThinkingMode.ULTRATHINK)
 ```
 
 ### 3. Permission Modes
+
 ```python
 # Для code review (безопасно)
 permission_mode=PermissionMode.DEFAULT
@@ -241,6 +264,7 @@ permission_mode=PermissionMode.PLAN
 ```
 
 ### 4. Token Management
+
 ```python
 # Проверка перед дорогой операцией
 manager = get_token_manager()
@@ -254,6 +278,7 @@ if not can_afford:
 ## 📊 Метрики и мониторинг
 
 ### Token Usage Dashboard
+
 ```python
 # Ежедневный отчет
 report = sdk.get_token_usage('daily')
@@ -263,6 +288,7 @@ print(f"Кеш хиты: {report['cache_hits']}%")
 ```
 
 ### Производительность агентов
+
 ```python
 # Метрики по агентам
 metrics = await get_agent_metrics()
@@ -276,18 +302,21 @@ for agent, stats in metrics.items():
 ## 🚀 Roadmap
 
 ### Phase 1 (Текущая) ✅
+
 - [x] Claude Code SDK интеграция
 - [x] Базовые AI агенты
 - [x] MCP серверы настроены
 - [x] Token management
 
 ### Phase 2 (В разработке) 🔄
+
 - [ ] Multi-model orchestration (GPT-4, Groq)
 - [ ] Advanced cross-verification
 - [ ] Real-time collaboration между агентами
 - [ ] Visual debugging tools
 
 ### Phase 3 (Планируется) 📅
+
 - [ ] Self-improving agents
 - [ ] Automated A/B testing
 - [ ] AI-driven architecture evolution
@@ -296,16 +325,19 @@ for agent, stats in metrics.items():
 ## 🎯 Результаты интеграции
 
 ### Производительность разработки
+
 - **2-5x** ускорение разработки новых features
 - **90%+** покрытие тестами автоматически
 - **60%** экономия на ревью кода
 
 ### Качество кода
+
 - **0** критических уязвимостей (security audit)
 - **30%** меньше багов в production
 - **Консистентный** стиль кода
 
 ### Экономия ресурсов
+
 - **$500+** экономия в месяц за счет кеширования
 - **80%** задач выполняются автономно
 - **24/7** доступность AI помощников

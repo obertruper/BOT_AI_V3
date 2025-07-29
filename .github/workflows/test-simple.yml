@@ -10,11 +10,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Test secret exists
       env:
         CLAUDE_KEY: ${{ secrets.CLAUDE_API_KEY }}
@@ -27,13 +27,13 @@ jobs:
           echo "✅ CLAUDE_API_KEY secret is configured"
           echo "Key length: ${#CLAUDE_KEY} characters"
         fi
-    
+
     - name: Test Python environment
       run: |
         python --version
         pip --version
         echo "✅ Python environment is working"
-    
+
     - name: Simple Claude API test
       env:
         CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
@@ -41,22 +41,22 @@ jobs:
         cat > test_claude.py << 'EOF'
         import os
         import sys
-        
+
         api_key = os.environ.get('CLAUDE_API_KEY', '')
         if not api_key:
             print("❌ CLAUDE_API_KEY not found in environment")
             sys.exit(1)
-        
+
         if api_key.startswith('sk-ant-'):
             print("✅ API key format looks correct")
         else:
             print("⚠️ API key format might be incorrect")
-        
+
         print(f"✅ Claude API key is available ({len(api_key)} chars)")
         EOF
-        
+
         python test_claude.py
-    
+
     - name: Summary
       if: always()
       run: |

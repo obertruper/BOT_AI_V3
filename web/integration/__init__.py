@@ -9,16 +9,16 @@ Web Integration Layer для BOT_Trading v3.0
 - permissions: Система прав доступа
 """
 
-from .web_integration import WebIntegration
-from .event_bridge import EventBridge
 from .data_adapters import DataAdapters
 from .dependencies import Dependencies
+from .event_bridge import EventBridge
 from .permissions import PermissionManager
+from .web_integration import WebIntegration
 
 __all__ = [
-    'WebIntegration',
-    'EventBridge', 
-    'DataAdapters',
-    'Dependencies',
-    'PermissionManager'
+    "WebIntegration",
+    "EventBridge",
+    "DataAdapters",
+    "Dependencies",
+    "PermissionManager",
 ]

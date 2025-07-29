@@ -3,39 +3,44 @@ BOT_Trading v3.0 Setup Script
 Установка и настройка мульти-трейдер торговой системы
 """
 
-from setuptools import setup, find_packages
 import os
+
+from setuptools import find_packages, setup
+
 
 # Получение версии из файла версии
 def get_version():
     """Получение версии из файла VERSION"""
-    version_file = os.path.join(os.path.dirname(__file__), 'VERSION')
+    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
     if os.path.exists(version_file):
-        with open(version_file, 'r') as f:
+        with open(version_file, "r") as f:
             return f.read().strip()
-    return '3.0.0'
+    return "3.0.0"
+
 
 # Чтение README файла
 def get_long_description():
     """Получение длинного описания из README"""
-    readme_file = os.path.join(os.path.dirname(__file__), 'README.md')
+    readme_file = os.path.join(os.path.dirname(__file__), "README.md")
     if os.path.exists(readme_file):
-        with open(readme_file, 'r', encoding='utf-8') as f:
+        with open(readme_file, "r", encoding="utf-8") as f:
             return f.read()
     return "BOT_Trading v3.0 - Мульти-трейдер система автоматизированной торговли"
+
 
 # Чтение зависимостей
 def get_requirements():
     """Получение зависимостей из requirements.txt"""
     requirements = []
-    req_file = os.path.join(os.path.dirname(__file__), 'requirements.txt')
+    req_file = os.path.join(os.path.dirname(__file__), "requirements.txt")
     if os.path.exists(req_file):
-        with open(req_file, 'r') as f:
+        with open(req_file, "r") as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#'):
+                if line and not line.startswith("#"):
                     requirements.append(line)
     return requirements
+
 
 setup(
     name="bot-trading-v3",
