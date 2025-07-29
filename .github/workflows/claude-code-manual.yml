@@ -1,0 +1,78 @@
+name: Claude Code Review (Manual)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          separator: ","
+
+      - name: Claude Code Review
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Установка Claude CLI
+          pip install anthropic
+
+          # Создание Python скрипта для ревью
+          cat > claude_review.py << 'EOF'
+          import os
+          import sys
+          from anthropic import Anthropic
+          import json
+
+          client = Anthropic(api_key=os.environ['CLAUDE_API_KEY'])
+          
+          changed_files = sys.argv[1].split(',') if len(sys.argv) > 1 else []
+          
+          for file in changed_files:
+              if not os.path.exists(file):
+                  continue
+                  
+              if file.endswith(('.py', '.js', '.ts', '.jsx', '.tsx')):
+                  try:
+                      with open(file, 'r') as f:
+                          content = f.read()
+                      
+                      response = client.messages.create(
+                          model="claude-3-opus-20240229",
+                          max_tokens=1000,
+                          messages=[{
+                              "role": "user",
+                              "content": f"Please review this code file and provide feedback on:\n1. Code quality\n2. Potential bugs\n3. Security issues\n4. Performance optimizations\n\nFile: {file}\n\n{content[:3000]}"
+                          }]
+                      )
+                      
+                      print(f"\n## Review for {file}\n")
+                      print(response.content[0].text)
+                      
+                  except Exception as e:
+                      print(f"Error reviewing {file}: {e}")
+          EOF
+
+          python claude_review.py "${{ steps.changed-files.outputs.all_changed_files }}" > review_output.md
+
+          # Публикация комментария в PR
+          if [ -s review_output.md ]; then
+            gh pr comment ${{ github.event.pull_request.number }} -F review_output.md
+          fi
