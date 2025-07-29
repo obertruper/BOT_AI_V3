@@ -7,7 +7,7 @@ default_language_version:
 repos:
   # Общие проверки
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -25,7 +25,7 @@ repos:
 
   # Black - форматирование кода
   - repo: https://github.com/psf/black
-    rev: 24.3.0
+    rev: 25.1.0
     hooks:
       - id: black
         language_version: python3.12
@@ -33,7 +33,7 @@ repos:
 
   # Ruff - быстрый линтер Python
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.4
+    rev: v0.12.5
     hooks:
       - id: ruff
         args: ['--fix', '--exit-non-zero-on-fix']
@@ -41,7 +41,7 @@ repos:
 
   # MyPy - проверка типов
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.9.0
+    rev: v1.17.0
     hooks:
       - id: mypy
         additional_dependencies:
@@ -53,7 +53,7 @@ repos:
 
   # Проверка секретов
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
@@ -66,28 +66,28 @@ repos:
 
   # Bandit - проверка безопасности
   - repo: https://github.com/PyCQA/bandit
-    rev: '1.7.8'
+    rev: '1.8.6'
     hooks:
       - id: bandit
         args: ['-r', '--skip', 'B101,B601']
 
   # Проверка markdown файлов
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.39.0
+    rev: v0.45.0
     hooks:
       - id: markdownlint
         args: ['--fix']
 
   # Проверка SQL файлов
   - repo: https://github.com/sqlfluff/sqlfluff
-    rev: 3.0.4
+    rev: 3.4.2
     hooks:
       - id: sqlfluff-lint
       - id: sqlfluff-fix
 
   # Проверка JavaScript/TypeScript файлов
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v9.0.0
+    rev: v9.32.0
     hooks:
       - id: eslint
         files: \.(js|jsx|ts|tsx)$
@@ -104,21 +104,21 @@ repos:
 
   # Проверка YAML файлов
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.35.1
+    rev: v1.37.1
     hooks:
       - id: yamllint
         args: ['-d', 'relaxed']
 
   # Isort - сортировка импортов
   - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
+    rev: 6.0.1
     hooks:
       - id: isort
         args: ['--profile', 'black', '--line-length', '100']
 
   # Проверка commit message
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v3.20.0
+    rev: v4.8.3
     hooks:
       - id: commitizen
         stages: [commit-msg]
