@@ -32,16 +32,56 @@
     "severity": "warning"
   },
   "hooks": {
-    "preCommit": {
-      "enabled": true,
-      "runTests": true,
-      "runLinters": true,
-      "checkSecrets": true
-    },
-    "postMerge": {
-      "updateDependencies": true,
-      "runMigrations": true
-    }
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/pre_tool_use.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/post_tool_use.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/user_prompt_submit.py"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/notification.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/stop.py"
+          }
+        ]
+      }
+    ]
   },
   "projectSpecific": {
     "tradingBot": {
