@@ -299,6 +299,19 @@ class ConfigManager:
         """Получение конфигурации Redis"""
         return self._config.get("redis", {})
 
+    def get_ml_config(self) -> Dict[str, Any]:
+        """Получение конфигурации ML системы"""
+        return self._config.get("ml", {})
+
+    def get_exchange_config(
+        self, exchange_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Получение конфигурации биржи"""
+        exchanges = self._config.get("exchanges", {})
+        if exchange_name:
+            return exchanges.get(exchange_name, {})
+        return exchanges
+
     def set_db_path(self, db_path: str) -> None:
         """Установка пути к БД (совместимость с v1.0/v2.0)"""
         self._db_path = db_path

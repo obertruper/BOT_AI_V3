@@ -9,6 +9,7 @@
 """
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -64,6 +65,7 @@ class SystemOrchestrator:
         self.exchange_registry = None  # Для проверки бирж
         self.telegram_service = None  # Telegram уведомления
         self.ai_signal_generator = None  # AI генератор сигналов
+        self.signal_scheduler = None  # ML Signal Scheduler для real-time генерации
 
         # TODO: Эти компоненты будут добавлены в следующих этапах
         self.system_monitor = None  # Инициализируем как None
@@ -171,10 +173,18 @@ class SystemOrchestrator:
             # Инициализация AI Signal Generator
             await self._initialize_ai_signal_generator()
 
+            # Инициализация Data Maintenance Service
+            await self._initialize_data_maintenance()
+
+            # Инициализация ML Signal Scheduler
+            await self._initialize_signal_scheduler()
+
+            # Инициализация API серверов
+            await self._initialize_api_servers()
+
             # TODO: Эти компоненты будут добавлены в следующих этапах
             # await self._initialize_database()
             # await self._initialize_monitoring()
-            # await self._initialize_api_servers()
 
             # Запуск фоновых задач
             await self._start_background_tasks()
@@ -208,10 +218,26 @@ class SystemOrchestrator:
                 await self.ai_signal_generator.start()
                 self.logger.info("🤖 AI Signal Generator запущен")
 
+            # Запуск ML Signal Scheduler если инициализирован
+            if self.signal_scheduler:
+                await self.signal_scheduler.start()
+                self.logger.info(
+                    "🤖 ML Signal Scheduler запущен - генерация сигналов каждую минуту"
+                )
+
+            # Запуск Data Maintenance Service если инициализирован
+            if hasattr(self, "data_maintenance") and self.data_maintenance:
+                await self.data_maintenance.start()
+                self.logger.info(
+                    "🔄 Data Maintenance Service запущен - автоматическое обновление данных"
+                )
+
+            # Запуск API серверов
+            await self._start_api_servers()
+
             # TODO: Эти компоненты будут добавлены в следующих этапах
             # await self.system_monitor.start()
             # self.active_components.add("system_monitor")
-            # await self._start_api_servers()
 
             self.is_running = True
             self.logger.info("🟢 Система запущена и работает")
@@ -239,6 +265,16 @@ class SystemOrchestrator:
             if self.telegram_service:
                 await self.telegram_service.stop()
                 self.active_components.discard("telegram_service")
+
+            # Остановка ML Signal Scheduler
+            if self.signal_scheduler:
+                await self.signal_scheduler.stop()
+                self.active_components.discard("signal_scheduler")
+
+            # Остановка Data Maintenance Service
+            if hasattr(self, "data_maintenance") and self.data_maintenance:
+                await self.data_maintenance.stop()
+                self.active_components.discard("data_maintenance")
 
             # TODO: Остановка мониторинга будет добавлена позже
             # if self.system_monitor:
@@ -531,6 +567,93 @@ class SystemOrchestrator:
             self.logger.warning(f"⚠️ AI Signal Generator не инициализирован: {e}")
             # Не прерываем инициализацию, так как это не критичный компонент
 
+    async def _initialize_signal_scheduler(self) -> None:
+        """Инициализация ML Signal Scheduler для real-time генерации сигналов"""
+        try:
+            # Проверяем ML конфигурацию
+            ml_config = self.config_manager.get_ml_config()
+
+            # Проверяем включен ли ML
+            if not ml_config.get("model", {}).get("enabled", True):
+                self.logger.info("⏭️ ML Signal Scheduler отключен в конфигурации")
+                return
+
+            # Проверяем переменную окружения ML_DISABLED
+            if os.getenv("ML_DISABLED", "").lower() == "true":
+                self.logger.info("⏭️ ML Signal Scheduler отключен через ML_DISABLED")
+                return
+
+            # Проверяем есть ли модель
+            model_path = ml_config.get("model", {}).get("path")
+            if not model_path:
+                self.logger.warning("⚠️ ML Signal Scheduler: путь к модели не указан")
+                return
+
+            # Проверяем физическое наличие файла модели
+            from pathlib import Path
+
+            if not Path(model_path).exists():
+                self.logger.warning(f"⚠️ ML модель не найдена: {model_path}")
+                return
+
+            from ml.signal_scheduler import SignalScheduler
+
+            self.signal_scheduler = SignalScheduler(self.config_manager)
+            await self.signal_scheduler.initialize()
+
+            self.active_components.add("signal_scheduler")
+            self.logger.info("✅ ML Signal Scheduler инициализирован")
+            self.logger.info(
+                f"📊 Будет генерировать сигналы для {len(ml_config.get('data', {}).get('symbols', []))} символов"
+            )
+
+        except Exception as e:
+            self.failed_components.add("signal_scheduler")
+            self.logger.warning(f"⚠️ ML Signal Scheduler не инициализирован: {e}")
+            # Не прерываем инициализацию, так как это не критичный компонент
+
+    async def _initialize_data_maintenance(self) -> None:
+        """Инициализация сервиса поддержания данных"""
+        try:
+            from data.maintenance_service import DataMaintenanceService
+
+            self.data_maintenance = DataMaintenanceService(self.config_manager)
+            await self.data_maintenance.initialize()
+
+            self.active_components.add("data_maintenance")
+            self.logger.info("✅ Data Maintenance Service инициализирован")
+
+        except Exception as e:
+            self.failed_components.add("data_maintenance")
+            self.logger.warning(f"⚠️ Data Maintenance Service не инициализирован: {e}")
+            # Не прерываем инициализацию
+
+    async def _initialize_api_servers(self) -> None:
+        """Инициализация API серверов"""
+        try:
+            # Проверяем конфигурацию API
+            api_config = self.system_config.get("api", {})
+            rest_config = api_config.get("rest", {})
+
+            if not rest_config.get("enabled", True):
+                self.logger.info("⏭️ Web API отключен в конфигурации")
+                return
+
+            # Создаем задачу для запуска API сервера
+            self.api_task = None
+            self.api_host = rest_config.get("host", "0.0.0.0")
+            self.api_port = rest_config.get("port", 8080)
+
+            self.active_components.add("api_server")
+            self.logger.info(
+                f"✅ Web API сервер будет запущен на http://{self.api_host}:{self.api_port}"
+            )
+
+        except Exception as e:
+            self.failed_components.add("api_server")
+            self.logger.warning(f"⚠️ Web API сервер не инициализирован: {e}")
+            # Не прерываем инициализацию
+
     async def _start_background_tasks(self) -> None:
         """Запуск фоновых задач"""
         # Задача мониторинга здоровья
@@ -573,8 +696,26 @@ class SystemOrchestrator:
 
     async def _start_api_servers(self) -> None:
         """Запуск API серверов"""
-        # Реализация будет добавлена позже
-        pass
+        try:
+            if "api_server" in self.active_components:
+                # Запускаем сервер в отдельной задаче
+                self.api_task = asyncio.create_task(self._run_api_server())
+                self.logger.info("🌐 Запускаем Web API сервер...")
+        except Exception as e:
+            self.logger.error(f"Ошибка запуска API сервера: {e}")
+
+    async def _run_api_server(self) -> None:
+        """Запуск Web API сервера"""
+        try:
+            from web.api.main import start_web_server
+
+            self.logger.info(
+                f"🌐 Web API сервер запускается на http://{self.api_host}:{self.api_port}"
+            )
+            await start_web_server(host=self.api_host, port=self.api_port)
+
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка в Web API сервере: {e}")
 
     async def _stop_api_servers(self) -> None:
         """Остановка API серверов"""
