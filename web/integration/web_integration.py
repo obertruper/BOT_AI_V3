@@ -26,7 +26,7 @@ from .dependencies import cleanup_dependencies, initialize_dependencies
 from .event_bridge import EventBridge
 
 logger_factory = get_global_logger_factory()
-logger = logger_factory.get_logger("web_integration", component="web_integration")
+logger = logger_factory.get_logger("web_integration")
 
 
 class WebIntegration:

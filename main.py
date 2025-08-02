@@ -1,169 +1,215 @@
 #!/usr/bin/env python3
 """
-BOT_Trading v3.0 - Главная точка входа в систему
-
-Мульти-трейдер, мульти-биржевая, мульти-стратегийная система
-автоматизированной торговли на криптовалютных рынках.
-
-Автор: OberTrading Team
-Версия: 3.0
-Дата: 2025-01-07
+Главная точка входа для BOT_AI_V3
+Запускает SystemOrchestrator который координирует все компоненты системы
 """
 
 import asyncio
-import logging
+import os
 import signal
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Добавление корневой директории в путь
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
+
+# Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.config.config_manager import ConfigManager
-from core.exceptions import SystemInitializationError
-from core.logging.logger_factory import LoggerFactory
+from core.exceptions import ConfigurationError, SystemError
+from core.logger import setup_logger
+from core.shared_context import shared_context
 from core.system.orchestrator import SystemOrchestrator
-from utils.helpers import print_banner
+
+# Настройка логирования
+logger = setup_logger("main")
 
 
-class BOTTradingApp:
-    """
-    Главное приложение BOT_Trading v3.0
-
-    Обеспечивает:
-    - Инициализацию системы
-    - Управление жизненным циклом
-    - Обработку сигналов системы
-    - Graceful shutdown
-    """
+class BotAIV3Application:
+    """Основное приложение торгового бота"""
 
     def __init__(self):
         self.orchestrator: Optional[SystemOrchestrator] = None
         self.config_manager: Optional[ConfigManager] = None
-        self.logger: Optional[logging.Logger] = None
-        self.is_running = False
+        self.shutdown_event = asyncio.Event()
 
-    async def initialize(self) -> None:
-        """Инициализация системы"""
+    async def initialize(self):
+        """Инициализация всех компонентов системы"""
+        logger.info("=" * 80)
+        logger.info("🚀 BOT_AI_V3 - Запуск системы")
+        logger.info(f"📅 Время запуска: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("=" * 80)
+
         try:
-            # Загрузка конфигурации
+            # Загружаем конфигурацию
+            logger.info("📋 Загрузка конфигурации...")
             self.config_manager = ConfigManager()
-            await self.config_manager.load_system_config()
+            await self.config_manager.initialize()
 
-            # Инициализация логирования
-            LoggerFactory.initialize(self.config_manager.get_logging_config())
-            self.logger = LoggerFactory.get_logger("main")
+            # Проверяем критические настройки
+            self._validate_critical_settings()
 
-            self.logger.info("🚀 Инициализация BOT_Trading v3.0...")
-
-            # Создание оркестратора
+            # Создаем и инициализируем оркестратор
+            logger.info("🎯 Инициализация SystemOrchestrator...")
             self.orchestrator = SystemOrchestrator(self.config_manager)
             await self.orchestrator.initialize()
 
-            self.logger.info("✅ Система успешно инициализирована")
+            # Сохраняем orchestrator в shared context для веб API
+            shared_context.set_orchestrator(self.orchestrator)
+            logger.info("✅ Orchestrator сохранен в shared context")
 
+            logger.info("✅ Система успешно инициализирована")
+
+        except ConfigurationError as e:
+            logger.error(f"❌ Ошибка конфигурации: {e}")
+            logger.error("💡 Проверьте файл .env и конфигурационные файлы")
+            raise
         except Exception as e:
-            error_msg = f"❌ Ошибка инициализации системы: {e}"
-            if self.logger:
-                self.logger.error(error_msg)
-            else:
-                print(error_msg)
-            raise SystemInitializationError(error_msg) from e
+            logger.error(f"❌ Критическая ошибка при инициализации: {e}")
+            raise
 
-    async def start(self) -> None:
-        """Запуск системы"""
+    def _validate_critical_settings(self):
+        """Проверка критических настроек"""
+        # Проверка переменных окружения
+        required_env = ["PGUSER", "PGPASSWORD", "PGDATABASE", "SECRET_KEY"]
+
+        missing = []
+        for var in required_env:
+            if not os.getenv(var):
+                missing.append(var)
+
+        if missing:
+            raise ConfigurationError(
+                f"Отсутствуют обязательные переменные окружения: {', '.join(missing)}\n"
+                f"Создайте файл .env на основе config/.env.example"
+            )
+
+        # Проверка наличия хотя бы одного API ключа биржи
+        exchanges = ["BYBIT", "BINANCE", "OKX", "BITGET", "GATEIO", "KUCOIN", "HUOBI"]
+        has_exchange = False
+
+        for exchange in exchanges:
+            if os.getenv(f"{exchange}_API_KEY"):
+                has_exchange = True
+                logger.info(f"✅ Обнаружены API ключи для {exchange}")
+                break
+
+        if not has_exchange:
+            logger.warning(
+                "⚠️ Не найдены API ключи бирж. "
+                "Добавьте хотя бы один набор ключей в .env для торговли"
+            )
+
+    async def start(self):
+        """Запуск всех компонентов системы"""
+        if not self.orchestrator:
+            raise SystemError("Система не инициализирована")
+
+        logger.info("\n🔄 Запуск компонентов системы...")
+
         try:
-            self.logger.info("🎯 Запуск торговой системы...")
-
-            # Запуск оркестратора
+            # Запускаем оркестратор
             await self.orchestrator.start()
-            self.is_running = True
 
-            self.logger.info("🟢 Система запущена и готова к работе")
+            # Выводим статус
+            await self._print_system_status()
 
-            # Основной цикл работы
-            await self._main_loop()
+            logger.info("\n✅ Все компоненты запущены успешно")
+            logger.info("📊 Система готова к работе")
+            logger.info("🌐 Веб-интерфейс: http://localhost:8080")
+            logger.info("📚 API документация: http://localhost:8080/api/docs")
 
-        except Exception as e:
-            self.logger.error(f"❌ Ошибка при запуске системы: {e}")
-            raise
-
-    async def _main_loop(self) -> None:
-        """Основной цикл работы системы"""
-        try:
-            while self.is_running:
-                # Проверка здоровья системы
-                health_status = await self.orchestrator.health_check()
-
-                if not health_status.is_healthy:
-                    self.logger.warning(f"⚠️ Проблемы в системе: {health_status.issues}")
-
-                # Ожидание перед следующей проверкой
-                await asyncio.sleep(30)  # Проверка каждые 30 секунд
-
-        except asyncio.CancelledError:
-            self.logger.info("📊 Основной цикл прерван")
-        except Exception as e:
-            self.logger.error(f"❌ Ошибка в основном цикле: {e}")
-            raise
-
-    async def shutdown(self) -> None:
-        """Graceful shutdown системы"""
-        try:
-            self.logger.info("🛑 Начинаем остановку системы...")
-            self.is_running = False
-
-            if self.orchestrator:
-                await self.orchestrator.shutdown()
-
-            self.logger.info("✅ Система успешно остановлена")
+            # Ожидаем сигнал остановки
+            await self.shutdown_event.wait()
 
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при остановке системы: {e}")
+            logger.error(f"❌ Ошибка при запуске системы: {e}")
             raise
 
-    def _setup_signal_handlers(self) -> None:
-        """Настройка обработчиков сигналов"""
+    async def _print_system_status(self):
+        """Вывод статуса системы"""
+        if not self.orchestrator:
+            return
 
-        def signal_handler(signum, frame):
-            self.logger.info(f"📨 Получен сигнал {signum}")
-            asyncio.create_task(self.shutdown())
+        status = await self.orchestrator.get_status()
 
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
+        logger.info("\n📊 СТАТУС СИСТЕМЫ:")
+        logger.info("-" * 50)
+
+        # Компоненты
+        logger.info("Активные компоненты:")
+        for component, is_active in status.get("components", {}).items():
+            icon = "✅" if is_active else "❌"
+            logger.info(f"  {icon} {component}")
+
+        # Биржи
+        logger.info("\nПодключенные биржи:")
+        for exchange in status.get("exchanges", []):
+            logger.info(f"  🏦 {exchange}")
+
+        # Стратегии
+        logger.info("\nАктивные стратегии:")
+        for strategy in status.get("strategies", []):
+            logger.info(f"  📈 {strategy}")
+
+        # База данных
+        db_status = status.get("database", {})
+        if db_status.get("connected"):
+            logger.info(
+                f"\n💾 База данных: Подключена (PostgreSQL на порту {os.getenv('PGPORT', '5555')})"
+            )
+        else:
+            logger.info("\n💾 База данных: Не подключена")
+
+        logger.info("-" * 50)
+
+    async def stop(self):
+        """Остановка всех компонентов системы"""
+        logger.info("\n🛑 Получен сигнал остановки системы...")
+
+        if self.orchestrator:
+            logger.info("⏸️ Останавливаем компоненты...")
+            await self.orchestrator.stop()
+            logger.info("✅ Все компоненты остановлены")
+
+        logger.info("👋 BOT_AI_V3 завершил работу")
+
+    def handle_signal(self, sig, frame):
+        """Обработчик системных сигналов"""
+        logger.info(f"\n📡 Получен сигнал {sig}")
+        self.shutdown_event.set()
 
 
 async def main():
-    """Главная функция запуска приложения"""
-    app = BOTTradingApp()
+    """Основная функция запуска"""
+    app = BotAIV3Application()
+
+    # Настройка обработчиков сигналов
+    signal.signal(signal.SIGINT, app.handle_signal)
+    signal.signal(signal.SIGTERM, app.handle_signal)
 
     try:
-        # Вывод баннера
-        print_banner()
-
         # Инициализация
         await app.initialize()
 
-        # Настройка обработчиков сигналов
-        app._setup_signal_handlers()
-
-        # Запуск системы
+        # Запуск
         await app.start()
 
     except KeyboardInterrupt:
-        print("\n🛑 Получен сигнал прерывания")
-    except SystemInitializationError as e:
-        print(f"❌ Ошибка инициализации: {e}")
-        sys.exit(1)
+        logger.info("\n⌨️ Прерывание от пользователя")
     except Exception as e:
-        print(f"❌ Критическая ошибка: {e}")
-        sys.exit(1)
+        logger.error(f"\n❌ Критическая ошибка: {e}")
+        import traceback
+
+        traceback.print_exc()
     finally:
-        try:
-            await app.shutdown()
-        except Exception:
-            pass  # Игнорируем ошибки при shutdown, т.к. система уже в нестабильном состоянии
+        # Остановка
+        await app.stop()
 
 
 if __name__ == "__main__":
@@ -172,11 +218,5 @@ if __name__ == "__main__":
         print("❌ Требуется Python 3.8 или выше")
         sys.exit(1)
 
-    try:
-        # Запуск главного приложения
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n👋 До свидания!")
-    except Exception as e:
-        print(f"❌ Фатальная ошибка: {e}")
-        sys.exit(1)
+    # Запуск приложения
+    asyncio.run(main())

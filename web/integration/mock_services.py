@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 from core.logging.logger_factory import get_global_logger_factory
 
 logger_factory = get_global_logger_factory()
-logger = logger_factory.get_logger("mock_services", component="web_integration")
+logger = logger_factory.get_logger("mock_services")
 
 # =================== MOCK USER MANAGEMENT ===================
 

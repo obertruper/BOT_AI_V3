@@ -1,0 +1,155 @@
+# ML Trading Bot Production Configuration
+# Использует UnifiedPatchTST модель для генерации торговых сигналов
+
+# Основные параметры трейдера
+id: "ml_prod_01"
+name: "ML Production Trader"
+enabled: true  # Установите false для отключения
+exchange: "bybit"
+symbol: "BTC/USDT"
+strategy: "PatchTSTStrategy"
+
+# Конфигурация стратегии
+strategy_config:
+  # Пути к модели
+  models:
+    model_path: "models/saved/best_model_20250728_215703.pth"
+    scaler_path: "models/saved/data_scaler.pkl"
+    config_path: "models/saved/config.pkl"
+
+  # Параметры торговли
+  trading:
+    # Минимальная уверенность модели для входа в позицию (0.0-1.0)
+    min_confidence: 0.75  # Консервативно для продакшена
+
+    # Минимальное ожидаемое движение цены для входа (%)
+    min_expected_return: 0.5
+
+    # Максимальное количество позиций одновременно
+    max_positions: 1
+
+    # Временные параметры
+    signal_validity_minutes: 5  # Сколько минут действителен сигнал
+    cooldown_minutes: 15  # Минимум минут между сделками
+
+  # Параметры модели
+  model:
+    # Таймфрейм для анализа
+    timeframe: "15m"
+
+    # Количество свечей для анализа
+    lookback_window: 96
+
+    # Устройство для инференса
+    device: "cpu"  # Используем CPU для стабильности
+
+    # Интервал обновления предсказаний (секунды)
+    update_interval: 60
+
+# Управление рисками
+risk_management:
+  # Максимальный размер позиции (% от капитала)
+  max_position_size_pct: 10.0
+
+  # Размер позиции по умолчанию (% от капитала)
+  default_position_size_pct: 5.0
+
+  # Стоп-лосс (%)
+  stop_loss_pct: 2.0
+
+  # Тейк-профит (%)
+  take_profit_pct: 3.0
+
+  # Максимальное плечо
+  max_leverage: 2
+
+  # Максимальная просадка перед остановкой (%)
+  max_drawdown_pct: 10.0
+
+  # Дневной лимит потерь (%)
+  daily_loss_limit_pct: 5.0
+
+# Исполнение ордеров
+execution:
+  # Тип ордеров: "market" или "limit"
+  order_type: "limit"
+
+  # Проскальзывание для лимитных ордеров (базисные пункты)
+  limit_order_offset_bps: 5
+
+  # Таймаут для лимитных ордеров (секунды)
+  order_timeout: 30
+
+  # Повторные попытки при неудаче
+  max_retries: 3
+
+  # Задержка между попытками (секунды)
+  retry_delay: 5
+
+# Мониторинг и логирование
+monitoring:
+  # Уровень логирования: DEBUG, INFO, WARNING, ERROR
+  log_level: "INFO"
+
+  # Логировать все сигналы модели
+  log_all_signals: true
+
+  # Логировать причины пропуска сигналов
+  log_skip_reasons: true
+
+  # Интервал отчетов о производительности (минуты)
+  performance_report_interval: 60
+
+  # Telegram уведомления
+  telegram_alerts:
+    enabled: false  # Установите true и настройте токен в .env
+    alert_on_trade: true
+    alert_on_error: true
+    alert_on_daily_report: true
+
+# Специальные настройки для ML
+ml_specific:
+  # Использовать ансамбль моделей
+  use_ensemble: false
+
+  # Адаптивная настройка параметров
+  adaptive_params: true
+
+  # Минимальное количество данных для начала торговли
+  min_data_points: 200
+
+  # Режим бэктеста перед реальной торговлей
+  backtest_before_live: true
+  backtest_days: 7
+
+  # Фильтры сигналов
+  signal_filters:
+    # Фильтр по волатильности
+    volatility_filter:
+      enabled: true
+      min_volatility: 0.5  # %
+      max_volatility: 5.0  # %
+
+    # Фильтр по объему
+    volume_filter:
+      enabled: true
+      min_volume_percentile: 20  # Минимум 20 перцентиль объема
+
+    # Фильтр по времени
+    time_filter:
+      enabled: true
+      # Не торговать в эти часы (UTC)
+      blacklist_hours: []
+      # Торговать только в эти часы (UTC)
+      whitelist_hours: []  # Пусто = торговать всегда
+
+# Режим работы
+mode:
+  # "live" для реальной торговли, "paper" для симуляции
+  trading_mode: "paper"  # ИЗМЕНИТЕ НА "live" ДЛЯ РЕАЛЬНОЙ ТОРГОВЛИ
+
+  # Режим отладки
+  debug: false
+
+  # Симуляция задержек для реалистичности
+  simulate_delays: true

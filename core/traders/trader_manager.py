@@ -675,6 +675,62 @@ class TraderManager:
             },
         }
 
+    async def get_health_status(self):
+        """Получение статуса здоровья всех трейдеров"""
+
+        @dataclass
+        class HealthResult:
+            failed_traders: List[str] = field(default_factory=list)
+            warnings: List[str] = field(default_factory=list)
+
+        result = HealthResult()
+
+        # Проверяем здоровье каждого трейдера
+        for trader_id, health in self._trader_health.items():
+            if not health.is_healthy:
+                result.failed_traders.append(trader_id)
+            elif health.consecutive_errors > 3:
+                result.warnings.append(
+                    f"Трейдер {trader_id} имеет {health.consecutive_errors} последовательных ошибок"
+                )
+
+        # Проверяем общее состояние
+        if self._state == ManagerState.ERROR:
+            result.warnings.append("Менеджер трейдеров в состоянии ошибки")
+
+        return result
+
+    async def get_active_traders(self) -> List[TraderContext]:
+        """Получение списка активных трейдеров"""
+        active_traders = []
+        for trader in self._traders.values():
+            if trader.state in [TraderState.RUNNING, TraderState.PAUSED]:
+                active_traders.append(trader)
+        return active_traders
+
+    async def get_total_traders(self) -> int:
+        """Получение общего количества трейдеров"""
+        return len(self._traders)
+
+    async def get_statistics(self):
+        """Получение статистики трейдеров"""
+
+        @dataclass
+        class TradingStats:
+            active_traders: int = 0
+            total_trades: int = 0
+
+        stats = TradingStats()
+        stats.active_traders = len(await self.get_active_traders())
+        stats.total_trades = self.metrics.total_trades
+
+        return stats
+
+    async def emergency_stop(self):
+        """Экстренная остановка всех трейдеров"""
+        self.logger.error("🚨 Выполняется экстренная остановка всех трейдеров!")
+        await self.stop_all_traders()
+
 
 # Глобальный менеджер для удобства использования
 _global_trader_manager: Optional[TraderManager] = None

@@ -9,7 +9,7 @@ REST API для аутентификации и авторизации:
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from core.logging.logger_factory import get_global_logger_factory
 
 logger_factory = get_global_logger_factory()
-logger = logger_factory.get_logger("auth_api", component="web_api")
+logger = logger_factory.get_logger("auth_api")
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
@@ -86,6 +86,101 @@ class ChangePasswordRequest(BaseModel):
 
     current_password: str
     new_password: str
+
+
+# =================== UTILITY FUNCTIONS ===================
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """Создание access token"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+
+    to_encode.update({"exp": expire, "type": "access"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """Создание refresh token"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(days=7)
+
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Проверка пароля"""
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    """Хеширование пароля"""
+    return pwd_context.hash(password)
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> dict:
+    """Получение текущего пользователя из токена"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Не удалось проверить учетные данные",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
+        )
+        username: str = payload.get("sub")
+        user_id: str = payload.get("user_id")
+        token_type: str = payload.get("type")
+
+        if username is None or user_id is None or token_type != "access":
+            raise credentials_exception
+
+    except jwt.PyJWTError:
+        raise credentials_exception
+
+    # Проверяем что пользователь существует
+    user_manager = get_user_manager()
+    user = await user_manager.get_user_by_username(username)
+
+    if user is None or not user.is_active:
+        raise credentials_exception
+
+    return {
+        "user_id": user_id,
+        "username": username,
+        "role": payload.get("role"),
+        "permissions": user.permissions,
+    }
+
+
+# =================== DEPENDENCY INJECTION ===================
+
+
+def get_user_manager():
+    """Получить user_manager из глобального контекста"""
+    from web.integration.dependencies import get_user_manager_dependency
+
+    return get_user_manager_dependency()
+
+
+def get_session_manager():
+    """Получить session_manager из глобального контекста"""
+    from web.integration.dependencies import get_session_manager_dependency
+
+    return get_session_manager_dependency()
 
 
 # =================== ENDPOINTS ===================
@@ -385,98 +480,3 @@ async def delete_session(
     except Exception as e:
         logger.error(f"Ошибка удаления сессии {session_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка удаления сессии: {str(e)}")
-
-
-# =================== UTILITY FUNCTIONS ===================
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Создание access token"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-
-    to_encode.update({"exp": expire, "type": "access"})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Создание refresh token"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(days=7)
-
-    to_encode.update({"exp": expire, "type": "refresh"})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Проверка пароля"""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    """Хеширование пароля"""
-    return pwd_context.hash(password)
-
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict:
-    """Получение текущего пользователя из токена"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Не удалось проверить учетные данные",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    try:
-        payload = jwt.decode(
-            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
-        )
-        username: str = payload.get("sub")
-        user_id: str = payload.get("user_id")
-        token_type: str = payload.get("type")
-
-        if username is None or user_id is None or token_type != "access":
-            raise credentials_exception
-
-    except jwt.PyJWTError:
-        raise credentials_exception
-
-    # Проверяем что пользователь существует
-    user_manager = get_user_manager()
-    user = await user_manager.get_user_by_username(username)
-
-    if user is None or not user.is_active:
-        raise credentials_exception
-
-    return {
-        "user_id": user_id,
-        "username": username,
-        "role": payload.get("role"),
-        "permissions": user.permissions,
-    }
-
-
-# =================== DEPENDENCY INJECTION ===================
-
-
-def get_user_manager():
-    """Получить user_manager из глобального контекста"""
-    from web.integration.dependencies import get_user_manager_dependency
-
-    return get_user_manager_dependency()
-
-
-def get_session_manager():
-    """Получить session_manager из глобального контекста"""
-    from web.integration.dependencies import get_session_manager_dependency
-
-    return get_session_manager_dependency()

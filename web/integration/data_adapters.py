@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 from core.logging.logger_factory import get_global_logger_factory
 
 logger_factory = get_global_logger_factory()
-logger = logger_factory.get_logger("data_adapters", component="web_integration")
+logger = logger_factory.get_logger("data_adapters")
 
 
 class DataAdapters:
@@ -53,41 +53,67 @@ class DataAdapters:
             if trader is None:
                 return {}
 
+            # Получаем конфигурацию трейдера
+            trader_config = (
+                trader.get_config("trader", {}) if hasattr(trader, "get_config") else {}
+            )
+
             # Базовая информация о трейдере
             response = {
                 "trader_id": getattr(trader, "trader_id", "unknown"),
-                "exchange": getattr(trader, "exchange", "unknown"),
-                "strategy": getattr(trader, "strategy", "unknown"),
-                "symbol": getattr(trader, "symbol", "unknown"),
-                "state": getattr(trader, "state", "unknown"),
-                "is_trading": getattr(trader, "is_trading", lambda: False)(),
+                "exchange": trader_config.get("exchange", "unknown"),
+                "strategy": trader_config.get("strategy", "unknown"),
+                "symbol": trader_config.get("symbol", "unknown"),
+                "state": trader._state.value
+                if hasattr(trader, "_state")
+                else "unknown",
+                "is_trading": getattr(trader, "_is_running", False),
                 "created_at": self._datetime_to_iso(
-                    getattr(trader, "created_at", None)
+                    getattr(trader, "_created_at", None)
                 ),
                 "last_activity": self._datetime_to_iso(
-                    getattr(trader, "last_activity", None)
+                    getattr(trader, "_started_at", None)
+                    or getattr(trader, "_created_at", None)
                 ),
             }
 
             # Метрики производительности
             try:
-                performance = getattr(trader, "get_performance_metrics", lambda: {})()
-                response["performance"] = self._clean_performance_metrics(performance)
+                if hasattr(trader, "metrics"):
+                    metrics = trader.metrics
+                    response["performance"] = {
+                        "total_trades": metrics.trades_total,
+                        "winning_trades": metrics.trades_successful,
+                        "losing_trades": metrics.trades_failed,
+                        "win_rate": metrics.win_rate,
+                        "profit_loss": metrics.profit_loss,
+                        "max_drawdown": metrics.max_drawdown,
+                        "current_positions": metrics.current_positions,
+                        "last_trade_time": self._datetime_to_iso(
+                            metrics.last_trade_time
+                        ),
+                        "errors_count": metrics.errors_count,
+                    }
+                else:
+                    response["performance"] = {}
             except Exception as e:
                 logger.warning(
                     f"Не удалось получить метрики производительности трейдера: {e}"
                 )
                 response["performance"] = {}
 
-            # Текущая позиция
+            # Текущие позиции
             try:
-                position = getattr(trader, "get_current_position", lambda: None)()
-                response["current_position"] = (
-                    self.position_to_response(position) if position else None
-                )
+                if hasattr(trader, "_positions"):
+                    positions = list(trader._positions.values())
+                    response["current_positions"] = (
+                        self.positions_list_to_response(positions) if positions else []
+                    )
+                else:
+                    response["current_positions"] = []
             except Exception as e:
-                logger.warning(f"Не удалось получить текущую позицию трейдера: {e}")
-                response["current_position"] = None
+                logger.warning(f"Не удалось получить текущие позиции трейдера: {e}")
+                response["current_positions"] = []
 
             return response
 

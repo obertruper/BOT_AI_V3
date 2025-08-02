@@ -368,6 +368,29 @@ class InsufficientBalanceError(ExchangeError):
         )
 
 
+class LeverageError(ExchangeError):
+    """Ошибка настройки кредитного плеча"""
+
+    def __init__(
+        self,
+        exchange_name: str,
+        requested_leverage: int,
+        max_leverage: Optional[int] = None,
+        **kwargs,
+    ):
+        message = f"Leverage error on {exchange_name}: requested {requested_leverage}x"
+        if max_leverage:
+            message += f", max allowed {max_leverage}x"
+
+        super().__init__(message, exchange_name, **kwargs)
+        self.context.update(
+            {
+                "requested_leverage": requested_leverage,
+                "max_leverage": max_leverage,
+            }
+        )
+
+
 # =================== STRATEGY ERRORS ===================
 
 
@@ -754,3 +777,45 @@ def handle_and_log_error(
 
     log_exception(logger, trading_error)
     return trading_error
+
+
+# =================== SYSTEM ERRORS ===================
+
+
+class SystemInitializationError(BaseTradingError):
+    """Ошибка инициализации системы"""
+
+    def __init__(self, message: str, component: Optional[str] = None, **kwargs):
+        super().__init__(
+            message=message,
+            component=component or "system",
+            severity=ErrorSeverity.CRITICAL,
+            category=ErrorCategory.SYSTEM,
+            **kwargs,
+        )
+
+
+class SystemShutdownError(BaseTradingError):
+    """Ошибка при остановке системы"""
+
+    def __init__(self, message: str, component: Optional[str] = None, **kwargs):
+        super().__init__(
+            message=message,
+            component=component or "system",
+            severity=ErrorSeverity.HIGH,
+            category=ErrorCategory.SYSTEM,
+            **kwargs,
+        )
+
+
+class HealthCheckError(BaseTradingError):
+    """Ошибка проверки здоровья системы"""
+
+    def __init__(self, message: str, component: Optional[str] = None, **kwargs):
+        super().__init__(
+            message=message,
+            component=component or "health_checker",
+            severity=ErrorSeverity.MEDIUM,
+            category=ErrorCategory.SYSTEM,
+            **kwargs,
+        )

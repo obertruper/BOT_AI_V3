@@ -15,7 +15,12 @@ from datetime import datetime
 from typing import Dict, List, Optional, Set
 
 from core.config.config_manager import ConfigManager, get_global_config_manager
-from core.exceptions import ComponentInitializationError
+from core.exceptions import (
+    ComponentInitializationError,
+    HealthCheckError,
+    SystemInitializationError,
+    SystemShutdownError,
+)
 from core.logging.logger_factory import get_global_logger_factory
 from core.traders.trader_factory import TraderFactory, get_global_trader_factory
 from core.traders.trader_manager import TraderManager, get_global_trader_manager
@@ -50,17 +55,21 @@ class SystemOrchestrator:
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         self.config_manager = config_manager or get_global_config_manager()
         self.logger_factory = get_global_logger_factory()
-        self.logger = self.logger_factory.get_logger(
-            "orchestrator", component="system_orchestrator"
-        )
+        self.logger = self.logger_factory.get_logger("system_orchestrator")
 
         # Основные компоненты
         self.trader_manager: Optional[TraderManager] = None
         self.trader_factory: Optional[TraderFactory] = None
+        self.health_checker = None  # Будет инициализирован позже
+        self.exchange_registry = None  # Для проверки бирж
+        self.telegram_service = None  # Telegram уведомления
+        self.ai_signal_generator = None  # AI генератор сигналов
 
         # TODO: Эти компоненты будут добавлены в следующих этапах
-        # self.system_monitor: Optional[SystemMonitor] = None
-        # self.db_manager: Optional[ConnectionManager] = None
+        self.system_monitor = None  # Инициализируем как None
+        self.db_manager = (
+            None  # Инициализируем как None, будет заполнено позже если нужно
+        )
         # self.api_server: Optional[APIServer] = None
 
         # Статус системы
@@ -81,6 +90,64 @@ class SystemOrchestrator:
         # Задачи мониторинга
         self._monitoring_tasks: List[asyncio.Task] = []
 
+    async def get_status(self) -> Dict:
+        """Получение статуса системы"""
+        status = {
+            "components": {
+                "trader_manager": self.trader_manager is not None,
+                "trader_factory": self.trader_factory is not None,
+                "health_checker": self.health_checker is not None,
+                "exchange_registry": self.exchange_registry is not None,
+            },
+            "exchanges": [],
+            "strategies": [],
+            "database": {"connected": True},  # TODO: реальная проверка
+        }
+
+        # Получаем список бирж если доступен exchange_registry
+        if self.exchange_registry:
+            try:
+                status[
+                    "exchanges"
+                ] = await self.exchange_registry.get_available_exchanges()
+            except:
+                pass
+
+        # Получаем список стратегий если доступен trader_manager
+        if self.trader_manager:
+            try:
+                active_traders = await self.trader_manager.get_active_traders()
+                for trader in active_traders:
+                    if hasattr(trader, "strategy_name"):
+                        status["strategies"].append(trader.strategy_name)
+            except:
+                pass
+
+        return status
+
+    async def stop(self) -> None:
+        """Остановка всех компонентов системы"""
+        self.logger.info("🛑 Начинаем остановку системы...")
+
+        # Отменяем задачи мониторинга
+        for task in self._monitoring_tasks:
+            if not task.done():
+                task.cancel()
+
+        # Ждем завершения задач
+        if self._monitoring_tasks:
+            await asyncio.gather(*self._monitoring_tasks, return_exceptions=True)
+
+        # Останавливаем трейдеры
+        if self.trader_manager:
+            try:
+                await self.trader_manager._stop_all_traders()
+            except Exception as e:
+                self.logger.error(f"Ошибка при остановке трейдеров: {e}")
+
+        self.is_running = False
+        self.logger.info("✅ Система остановлена")
+
     async def initialize(self) -> None:
         """Инициализация всех компонентов системы"""
         try:
@@ -94,6 +161,15 @@ class SystemOrchestrator:
 
             # Инициализация менеджера трейдеров
             await self._initialize_trader_manager()
+
+            # Инициализация HealthChecker
+            await self._initialize_health_checker()
+
+            # Инициализация Telegram сервиса
+            await self._initialize_telegram_service()
+
+            # Инициализация AI Signal Generator
+            await self._initialize_ai_signal_generator()
 
             # TODO: Эти компоненты будут добавлены в следующих этапах
             # await self._initialize_database()
@@ -127,6 +203,11 @@ class SystemOrchestrator:
             await self.trader_manager.start()
             self.active_components.add("trader_manager")
 
+            # Запуск AI Signal Generator если инициализирован
+            if self.ai_signal_generator:
+                await self.ai_signal_generator.start()
+                self.logger.info("🤖 AI Signal Generator запущен")
+
             # TODO: Эти компоненты будут добавлены в следующих этапах
             # await self.system_monitor.start()
             # self.active_components.add("system_monitor")
@@ -153,6 +234,11 @@ class SystemOrchestrator:
             if self.trader_manager:
                 await self.trader_manager.stop()
                 self.active_components.discard("trader_manager")
+
+            # Остановка Telegram сервиса
+            if self.telegram_service:
+                await self.telegram_service.stop()
+                self.active_components.discard("telegram_service")
 
             # TODO: Остановка мониторинга будет добавлена позже
             # if self.system_monitor:
@@ -300,12 +386,14 @@ class SystemOrchestrator:
     async def _initialize_database(self) -> None:
         """Инициализация подключения к базе данных"""
         try:
-            self.db_manager = ConnectionManager(
-                self.config_manager.get_database_config()
-            )
-            await self.db_manager.initialize()
-            self.active_components.add("database")
-            self.logger.info("✅ База данных инициализирована")
+            # TODO: Имплементация ConnectionManager будет добавлена позже
+            # self.db_manager = ConnectionManager(
+            #     self.config_manager.get_database_config()
+            # )
+            # await self.db_manager.initialize()
+            # self.active_components.add("database")
+            # self.logger.info("✅ База данных инициализирована")
+            self.logger.info("⏭️ Инициализация базы данных отложена")
         except Exception as e:
             self.failed_components.add("database")
             raise SystemInitializationError(
@@ -315,10 +403,12 @@ class SystemOrchestrator:
     async def _initialize_monitoring(self) -> None:
         """Инициализация системы мониторинга"""
         try:
-            self.system_monitor = SystemMonitor(self.config_manager)
-            await self.system_monitor.initialize()
-            self.active_components.add("system_monitor")
-            self.logger.info("✅ Система мониторинга инициализирована")
+            # TODO: Имплементация SystemMonitor будет добавлена позже
+            # self.system_monitor = SystemMonitor(self.config_manager)
+            # await self.system_monitor.initialize()
+            # self.active_components.add("system_monitor")
+            # self.logger.info("✅ Система мониторинга инициализирована")
+            self.logger.info("⏭️ Инициализация мониторинга отложена")
         except Exception as e:
             self.failed_components.add("system_monitor")
             self.logger.warning(f"⚠️ Не удалось инициализировать мониторинг: {e}")
@@ -343,6 +433,103 @@ class SystemOrchestrator:
         except Exception as e:
             self.failed_components.add("trader_manager")
             raise ComponentInitializationError("trader_manager", str(e)) from e
+
+    async def _initialize_health_checker(self) -> None:
+        """Инициализация компонента проверки здоровья системы"""
+        try:
+            from core.system.health_checker import HealthChecker
+
+            self.health_checker = HealthChecker(self.config_manager)
+
+            # Устанавливаем компоненты для проверки
+            self.health_checker.set_components(
+                exchange_registry=self.exchange_registry,
+                trader_manager=self.trader_manager,
+                strategy_manager=None,  # Будет добавлен позже
+            )
+
+            self.active_components.add("health_checker")
+            self.logger.info("✅ Health Checker инициализирован")
+        except Exception as e:
+            self.failed_components.add("health_checker")
+            self.logger.warning(f"⚠️ Health Checker не инициализирован: {e}")
+            # Не прерываем инициализацию, так как это не критичный компонент
+
+    async def _initialize_telegram_service(self) -> None:
+        """Инициализация Telegram сервиса для уведомлений"""
+        try:
+            telegram_config = (
+                self.config_manager.get_system_config()
+                .get("notifications", {})
+                .get("telegram", {})
+            )
+
+            if not telegram_config.get("enabled", False):
+                self.logger.info("⏭️ Telegram сервис отключен в конфигурации")
+                return
+
+            from notifications.telegram import TelegramNotificationService
+
+            self.telegram_service = TelegramNotificationService(self.config_manager)
+
+            # Устанавливаем ссылки на компоненты
+            self.telegram_service.set_orchestrator(self)
+            self.telegram_service.set_trader_manager(self.trader_manager)
+
+            # Инициализируем сервис
+            await self.telegram_service.initialize()
+
+            self.active_components.add("telegram_service")
+            self.logger.info("✅ Telegram сервис инициализирован")
+
+        except Exception as e:
+            self.failed_components.add("telegram_service")
+            self.logger.warning(f"⚠️ Telegram сервис не инициализирован: {e}")
+            # Не прерываем инициализацию, так как это не критичный компонент
+
+    async def _initialize_ai_signal_generator(self) -> None:
+        """Инициализация AI генератора сигналов"""
+        try:
+            # Проверяем, есть ли включенные multi-crypto трейдеры
+            full_config = self.config_manager.get_config()
+            traders = full_config.get("traders", [])
+
+            multi_crypto_enabled = any(
+                trader.get("id") == "multi_crypto_10" and trader.get("enabled")
+                for trader in traders
+            )
+
+            if not multi_crypto_enabled:
+                self.logger.info(
+                    "⏭️ AI Signal Generator отключен (нет активных multi-crypto трейдеров)"
+                )
+                return
+
+            # Попробуем сначала загрузить полную версию с ML
+            try:
+                from trading.signals.ai_signal_generator import AISignalGenerator
+
+                self.ai_signal_generator = AISignalGenerator(self.config_manager)
+                await self.ai_signal_generator.initialize()
+                self.logger.info("🤖 AI Signal Generator с ML инициализирован")
+            except Exception as ml_error:
+                # Если не получилось - используем упрощенную версию
+                self.logger.warning(f"⚠️ ML версия недоступна: {ml_error}")
+                from trading.signals.simple_ai_signal_generator import (
+                    SimpleAISignalGenerator,
+                )
+
+                self.ai_signal_generator = SimpleAISignalGenerator(self.config_manager)
+                await self.ai_signal_generator.initialize()
+                self.logger.info("🤖 Simple AI Signal Generator инициализирован")
+
+            self.active_components.add("ai_signal_generator")
+            self.logger.info("✅ AI Signal Generator инициализирован")
+
+        except Exception as e:
+            self.failed_components.add("ai_signal_generator")
+            self.logger.warning(f"⚠️ AI Signal Generator не инициализирован: {e}")
+            # Не прерываем инициализацию, так как это не критичный компонент
 
     async def _start_background_tasks(self) -> None:
         """Запуск фоновых задач"""

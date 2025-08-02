@@ -295,6 +295,10 @@ class ConfigManager:
         """Получение конфигурации логирования"""
         return self._config.get("logging", {})
 
+    def get_redis_config(self) -> Dict[str, Any]:
+        """Получение конфигурации Redis"""
+        return self._config.get("redis", {})
+
     def set_db_path(self, db_path: str) -> None:
         """Установка пути к БД (совместимость с v1.0/v2.0)"""
         self._db_path = db_path

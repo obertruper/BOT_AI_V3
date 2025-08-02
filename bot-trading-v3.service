@@ -1,0 +1,28 @@
+[Unit]
+Description=BOT Trading v3 - Cryptocurrency Trading Bot
+After=network.target postgresql.service
+
+[Service]
+Type=forking
+User=obertruper
+Group=obertruper
+WorkingDirectory=/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3
+
+# Переменные окружения
+Environment="PATH=/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONPATH=/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3"
+
+# Запуск системы
+ExecStart=/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/start_all.sh
+ExecStop=/bin/bash -c 'pkill -f "python main.py|python web/launcher.py|vite"'
+
+# Перезапуск при сбое
+Restart=on-failure
+RestartSec=30
+
+# Логирование
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

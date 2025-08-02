@@ -10,15 +10,17 @@ Web Integration Layer для BOT_Trading v3.0
 """
 
 from .data_adapters import DataAdapters
-from .dependencies import Dependencies
+
+# from .dependencies import Dependencies  # TODO: Добавить класс Dependencies
 from .event_bridge import EventBridge
-from .permissions import PermissionManager
+
+# from .permissions import PermissionManager  # TODO: Добавить файл permissions.py
 from .web_integration import WebIntegration
 
 __all__ = [
     "WebIntegration",
     "EventBridge",
     "DataAdapters",
-    "Dependencies",
-    "PermissionManager",
+    # "Dependencies",
+    # "PermissionManager",
 ]

@@ -11,6 +11,7 @@ FastAPI Web Application для BOT_Trading v3.0
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Any, Optional
 
 import uvicorn
@@ -24,6 +25,7 @@ try:
     # Попытка импорта для установленного пакета
     from core.config.config_manager import ConfigManager
     from core.logging.logger_factory import get_global_logger_factory
+    from core.shared_context import shared_context
     from web.integration.web_orchestrator_bridge import (
         WebOrchestratorBridge,
         get_web_orchestrator_bridge,
@@ -42,7 +44,11 @@ except ImportError:
     # Повторная попытка импорта
     from core.config.config_manager import ConfigManager
     from core.logging.logger_factory import get_global_logger_factory
-    from web.integration.web_orchestrator_bridge import WebOrchestratorBridge, initialize_web_bridge
+    from core.shared_context import shared_context
+    from web.integration.web_orchestrator_bridge import (
+        WebOrchestratorBridge,
+        initialize_web_bridge,
+    )
 
 
 # Глобальные переменные для интеграции
@@ -56,14 +62,23 @@ _web_bridge: Optional[WebOrchestratorBridge] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом FastAPI приложения"""
-    global _web_bridge
+    global _web_bridge, _orchestrator
 
     # Startup
     logger = logging.getLogger("web_api")
     logger.info("Starting BOT_Trading v3.0 Web API...")
 
+    # Попытка получить orchestrator из shared context
+    _orchestrator = shared_context.get_orchestrator()
+    if _orchestrator:
+        logger.info("✅ Получен orchestrator из shared context")
+    else:
+        logger.warning(
+            "⚠️ Orchestrator не найден в shared context, работаем в mock режиме"
+        )
+
     try:
-        # Инициализация веб-моста (в mock режиме если orchestrator не передан)
+        # Инициализация веб-моста с orchestrator из shared context
         _web_bridge = await initialize_web_bridge(_orchestrator)
         logger.info("Web bridge initialized successfully")
     except Exception as e:
@@ -112,6 +127,25 @@ app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=["localhost", "127.0.0.1", "*"],  # В продакшене ограничить
 )
+
+
+# =================== ПОДКЛЮЧЕНИЕ РОУТЕРОВ ===================
+
+# Импортируем роутеры
+from web.api.endpoints import (
+    auth_router,
+    exchanges_router,
+    monitoring_router,
+    strategies_router,
+    traders_router,
+)
+
+# Подключаем роутеры к приложению
+app.include_router(monitoring_router)
+app.include_router(traders_router)
+app.include_router(exchanges_router)
+app.include_router(strategies_router)
+app.include_router(auth_router)
 
 
 # =================== DEPENDENCY INJECTION ===================
@@ -213,17 +247,108 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    """Проверка здоровья API"""
-    return {
-        "status": "healthy",
-        "timestamp": asyncio.get_event_loop().time(),
-        "components": {
+    """
+    Комплексная проверка здоровья системы
+
+    Проверяет все критические компоненты:
+    - База данных PostgreSQL
+    - Redis кеш
+    - Подключения к биржам
+    - Системные ресурсы
+    - Внутренние компоненты
+
+    Returns:
+        Детальный статус всех компонентов системы
+    """
+    global _trader_manager, _exchange_factory, _config_manager
+
+    try:
+        # Быстрая проверка основных компонентов
+        basic_status = {
             "orchestrator": _orchestrator is not None,
             "trader_manager": _trader_manager is not None,
             "exchange_factory": _exchange_factory is not None,
             "config_manager": _config_manager is not None,
-        },
-    }
+            "web_bridge": _web_bridge is not None,
+        }
+
+        # Обновляем глобальные переменные из orchestrator если они не заданы
+        if _orchestrator:
+            _trader_manager = _trader_manager or getattr(
+                _orchestrator, "trader_manager", None
+            )
+            _exchange_factory = _exchange_factory or getattr(
+                _orchestrator, "exchange_factory", None
+            )
+            _config_manager = _config_manager or getattr(
+                _orchestrator, "config_manager", None
+            )
+
+            # Обновляем статус компонентов
+            basic_status.update(
+                {
+                    "trader_manager": _trader_manager is not None,
+                    "exchange_factory": _exchange_factory is not None,
+                    "config_manager": _config_manager is not None,
+                }
+            )
+
+        # Если есть HealthChecker, используем его для детальной проверки
+        if (
+            _orchestrator
+            and hasattr(_orchestrator, "health_checker")
+            and _orchestrator.health_checker
+        ):
+            health_checker = _orchestrator.health_checker
+
+            # Устанавливаем компоненты для проверки
+            health_checker.set_components(
+                exchange_registry=_exchange_factory,
+                trader_manager=_trader_manager,
+                strategy_manager=getattr(_orchestrator, "strategy_manager", None),
+            )
+
+            # Получаем детальный отчет
+            detailed_report = await health_checker.get_detailed_report()
+
+            return {
+                "status": detailed_report["overall_status"],
+                "timestamp": datetime.utcnow().isoformat(),
+                "uptime_seconds": (
+                    int((datetime.now() - _orchestrator.startup_time).total_seconds())
+                    if _orchestrator and _orchestrator.startup_time
+                    else 0
+                ),
+                "components": detailed_report["components"],
+                "basic_components": basic_status,
+                "details": detailed_report.get("details", {}),
+            }
+        else:
+            # Fallback на базовую проверку
+            overall_status = "healthy" if all(basic_status.values()) else "degraded"
+
+            return {
+                "status": overall_status,
+                "timestamp": datetime.utcnow().isoformat(),
+                "components": basic_status,
+                "message": "Detailed health check not available",
+            }
+
+    except Exception as e:
+        logger = logging.getLogger("web_api")
+        logger.error(f"Error during health check: {e}")
+
+        return {
+            "status": "error",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e),
+            "components": {
+                "orchestrator": _orchestrator is not None,
+                "trader_manager": _trader_manager is not None,
+                "exchange_factory": _exchange_factory is not None,
+                "config_manager": _config_manager is not None,
+            },
+        }
 
 
 @app.get("/api/system/status")

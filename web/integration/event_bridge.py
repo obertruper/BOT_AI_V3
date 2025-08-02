@@ -526,3 +526,7 @@ class EventBridge:
         self.event_filters.clear()
 
         logger.info("EventBridge очищен")
+
+    async def shutdown(self):
+        """Корректное завершение работы EventBridge"""
+        await self.cleanup()

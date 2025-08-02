@@ -86,9 +86,9 @@ class ExchangeFactory:
         """Регистрация всех доступных бирж"""
         try:
             # Bybit
-            from .bybit.client import BybitClient
+            from .bybit import BybitExchange
 
-            self._exchange_classes[ExchangeType.BYBIT] = BybitClient
+            self._exchange_classes[ExchangeType.BYBIT] = BybitExchange
             self.logger.info("Registered Bybit exchange")
 
         except ImportError as e:

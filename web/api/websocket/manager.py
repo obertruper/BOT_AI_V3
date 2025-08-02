@@ -23,7 +23,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from core.logging.logger_factory import get_global_logger_factory
 
 logger_factory = get_global_logger_factory()
-logger = logger_factory.get_logger("websocket_manager", component="web_api")
+logger = logger_factory.get_logger("websocket_manager")
 
 
 class WebSocketConnection:

@@ -24,9 +24,9 @@ system:
 database:
   type: "postgresql"
   host: "127.0.0.1"
-  port: 5432
+  port: 5555  # Правильный порт для локальной БД
   name: "bot_trading_v3"
-  user: "postgres"
+  user: "obertruper"  # Правильный пользователь
   password: "${DB_PASSWORD}"
 
   # Настройки пула подключений
@@ -132,7 +132,7 @@ api:
 # Настройки уведомлений
 notifications:
   telegram:
-    enabled: false
+    enabled: true  # Включаем Telegram для уведомлений
     bot_token: "${TELEGRAM_BOT_TOKEN}"
     chat_id: "${TELEGRAM_CHAT_ID}"
 
@@ -182,3 +182,163 @@ development:
     enabled: true
     mock_signals: true
     paper_trading: true
+
+# Настройки бирж
+exchanges:
+  bybit:
+    enabled: true
+    api_key: "${BYBIT_API_KEY}"
+    api_secret: "${BYBIT_API_SECRET}"
+    testnet: false
+    rate_limits:
+      orders_per_second: 5
+      requests_per_minute: 120
+
+  binance:
+    enabled: false
+    api_key: "${BINANCE_API_KEY}"
+    api_secret: "${BINANCE_API_SECRET}"
+    testnet: false
+
+# ML модели
+ml_models:
+  patchtst:
+    enabled: true
+    model_path: "models/saved/best_model_20250728_215703.pth"
+    config_path: "config/ml/ml_config.yaml"
+    scaler_path: "models/saved/data_scaler.pkl"
+
+  xgboost:
+    enabled: false
+    model_path: "models/saved/xgboost_model.pkl"
+
+# Управление рисками
+risk_management:
+  global:
+    enabled: true
+    max_total_risk: 0.1  # 10% от капитала
+    max_daily_loss: 0.05  # 5% максимальная дневная потеря
+    max_open_positions: 10
+
+  position:
+    default_stop_loss: 0.02  # 2%
+    default_take_profit: 0.03  # 3%
+    max_position_size: 0.1  # 10% от капитала на позицию
+
+  trailing_stop:
+    enabled: true
+    activation_profit: 0.01  # 1%
+    trailing_distance: 0.005  # 0.5%
+
+# Enhanced SL/TP конфигурация
+enhanced_sltp:
+  enabled: true
+
+  # Трейлинг стоп
+  trailing_stop:
+    enabled: true
+    type: "percentage"  # percentage, fixed, atr_based, adaptive
+    step: 0.5  # % или пункты
+    min_profit: 0.3  # Минимальная прибыль для активации (%)
+    max_distance: 2.0  # Максимальное расстояние от цены (%)
+
+  # Частичный тейк-профит
+  partial_take_profit:
+    enabled: true
+    levels:
+      - percentage: 25  # Закрыть 25% позиции
+        at_profit: 1.0  # При прибыли 1%
+      - percentage: 25  # Закрыть еще 25%
+        at_profit: 2.0  # При прибыли 2%
+      - percentage: 50  # Закрыть оставшиеся 50%
+        at_profit: 3.0  # При прибыли 3%
+
+  # Защита прибыли
+  profit_protection:
+    enabled: true
+    levels:
+      - profit: 1.0   # При прибыли 1%
+        protection: 0.5  # Защищаем 0.5%
+      - profit: 2.0   # При прибыли 2%
+        protection: 1.2  # Защищаем 1.2%
+      - profit: 3.0   # При прибыли 3%
+        protection: 2.0  # Защищаем 2.0%
+
+  # Корректировка по волатильности
+  volatility_adjustment:
+    enabled: true
+    multiplier: 1.0  # Множитель для корректировки
+
+# Конфигурация трейдеров
+# Трейдеры могут быть определены здесь или в отдельных файлах в config/traders/
+traders:
+  # Multi-Crypto трейдер для 10 криптовалют с генерацией сигналов каждую минуту
+  - id: "multi_crypto_10"
+    name: "Multi Crypto Trader - 10 Symbols"
+    enabled: true  # Активен
+    exchange: "bybit"
+
+    # 10 основных криптовалют для торговли
+    symbols:
+      - "BTCUSDT"   # Bitcoin
+      - "ETHUSDT"   # Ethereum
+      - "BNBUSDT"   # Binance Coin
+      - "SOLUSDT"   # Solana
+      - "XRPUSDT"   # Ripple
+      - "ADAUSDT"   # Cardano
+      - "DOGEUSDT"  # Dogecoin
+      - "DOTUSDT"   # Polkadot
+      - "LINKUSDT"  # Chainlink
+      - "MATICUSDT" # Polygon
+
+    strategy: "IndicatorStrategy"
+
+    # Inline конфигурация стратегии
+    strategy_config:
+      # Генерация сигналов каждую минуту
+      signal_interval: 60  # секунд
+
+      indicators:
+        - type: "RSI"
+          period: 14
+          overbought: 70
+          oversold: 30
+        - type: "EMA"
+          short_period: 9
+          long_period: 21
+        - type: "MACD"
+          fast_period: 12
+          slow_period: 26
+          signal_period: 9
+
+      # Условия для входа
+      entry_conditions:
+        buy:
+          rsi_oversold: true
+          ema_crossover: "bullish"
+        sell:
+          rsi_overbought: true
+          ema_crossover: "bearish"
+
+    risk_management:
+      max_risk_per_trade: 0.02  # 2% от баланса
+      max_positions: 10  # По одной на каждую валюту
+      max_positions_per_symbol: 1
+      stop_loss:
+        enabled: false  # Как в V2
+        type: "percentage"
+        value: 0.02
+      take_profit:
+        enabled: true
+        type: "percentage"
+        buy_value: 0.058   # 5.8%
+        sell_value: -0.058 # -5.8%
+
+  # Пример ML трейдера (отключен)
+  - id: "ml_trader_btc"
+    name: "ML BTC Trader"
+    enabled: false  # Включить при необходимости
+    exchange: "bybit"
+    symbol: "BTC/USDT"
+    strategy: "PatchTSTStrategy"
+    config_file: "config/traders/ml_trader_example.yaml"

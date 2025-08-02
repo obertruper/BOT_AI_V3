@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from core.logging.logger_factory import get_global_logger_factory
 
-from .data_adapters import DataAdapter
+from .data_adapters import DataAdapters
 from .event_bridge import EventBridge, EventType
 from .mock_services import MockSessionManager, MockStatsService, MockUserManager
 
@@ -35,9 +35,7 @@ class WebOrchestratorBridge:
         """
         # Логирование
         logger_factory = get_global_logger_factory()
-        self.logger = logger_factory.get_logger(
-            "web_bridge", component="web_integration"
-        )
+        self.logger = logger_factory.get_logger("web_bridge")
 
         # Core компоненты
         self.orchestrator = orchestrator
@@ -53,7 +51,7 @@ class WebOrchestratorBridge:
 
         # Веб компоненты
         self.event_bridge = EventBridge()
-        self.data_adapter = DataAdapter()
+        self.data_adapter = DataAdapters()
 
         # Mock сервисы для разработки
         self.use_mock = orchestrator is None
@@ -145,9 +143,10 @@ class WebOrchestratorBridge:
 
             # Реальная интеграция с trader_manager
             if self.trader_manager:
-                traders = await self.trader_manager.get_all_traders()
+                traders = self.trader_manager.get_all_traders()
                 return [
-                    self.data_adapter.trader_to_response(trader) for trader in traders
+                    self.data_adapter.trader_to_response(trader)
+                    for trader in traders.values()
                 ]
 
             return []
@@ -164,7 +163,7 @@ class WebOrchestratorBridge:
                 return next((t for t in traders if t["id"] == trader_id), None)
 
             if self.trader_manager:
-                trader = await self.trader_manager.get_trader(trader_id)
+                trader = self.trader_manager.get_trader(trader_id)
                 return self.data_adapter.trader_to_response(trader) if trader else None
 
             return None

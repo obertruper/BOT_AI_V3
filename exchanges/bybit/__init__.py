@@ -18,10 +18,14 @@ Bybit Exchange Module для BOT_Trading v3.0
 """
 
 from .adapter import BybitAPIClient, BybitLegacyAdapter, get_bybit_client
+from .bybit_exchange import BybitExchange, create_bybit_exchange
 from .client import BybitClient, clean_symbol
 
 # Экспорт всех публичных классов и функций
 __all__ = [
+    # Основной exchange класс
+    "BybitExchange",
+    "create_bybit_exchange",
     # Основной унифицированный клиент
     "BybitClient",
     # Legacy совместимость

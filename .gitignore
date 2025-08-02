@@ -49,6 +49,13 @@ env/
 .env.*.local
 *.env
 
+# ML Models
+models/saved/*.pth
+models/saved/*.pkl
+models/saved/*.pt
+models/saved/*.h5
+models/saved/*.onnx
+
 # Database
 *.db
 *.sqlite

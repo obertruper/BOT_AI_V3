@@ -11,10 +11,9 @@
       "args": ["mcp-postgres-server"],
       "transport": "stdio",
       "env": {
-        "PGHOST": "${PGHOST:-localhost}",
-        "PGPORT": "${PGPORT:-5432}",
-        "PGUSER": "${PGUSER:-postgres}",
-        "PGPASSWORD": "${PGPASSWORD}",
+        "PGPORT": "${PGPORT:-5555}",
+        "PGUSER": "${PGUSER:-obertruper}",
+        "PGPASSWORD": "${PGPASSWORD:-ilpnqw1234}",
         "PGDATABASE": "${PGDATABASE:-bot_trading_v3}"
       }
     },

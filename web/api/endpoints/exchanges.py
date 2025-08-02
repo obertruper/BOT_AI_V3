@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from core.logging.logger_factory import get_global_logger_factory
 
 logger_factory = get_global_logger_factory()
-logger = logger_factory.get_logger("exchanges_api", component="web_api")
+logger = logger_factory.get_logger("exchanges_api")
 
 router = APIRouter(prefix="/api/exchanges", tags=["exchanges"])
 

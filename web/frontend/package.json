@@ -37,6 +37,7 @@
     "react-use-websocket": "^4.5.0",
     "recharts": "^2.8.0",
     "tailwind-merge": "^2.0.0",
+    "tailwindcss-animate": "^1.0.7",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
