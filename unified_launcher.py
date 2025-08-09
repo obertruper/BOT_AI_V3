@@ -183,7 +183,7 @@ class UnifiedLauncher:
             },
             "api": {
                 "enabled": True,
-                "command": f"{sys.executable} web/launcher.py",
+                "command": "venv/bin/python web/launcher.py",
                 "name": "Web API",
                 "port": 8080,
                 "auto_restart": True,
@@ -192,6 +192,8 @@ class UnifiedLauncher:
                 "env": {
                     "UNIFIED_MODE": "true",
                     "PYTHONPATH": str(Path(__file__).parent),
+                    "PATH": f"{Path(__file__).parent}/venv/bin:"
+                    + os.environ.get("PATH", ""),
                 },
             },
             "frontend": {
