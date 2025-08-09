@@ -69,9 +69,7 @@ async def check_ml_system():
 
         # Проверка ML Signal Processor
         logger.info("\n📊 Инициализация ML Signal Processor...")
-        MLSignalProcessor(
-            ml_manager=ml_manager, config={"symbols": symbols}
-        )
+        MLSignalProcessor(ml_manager=ml_manager, config={"symbols": symbols})
         logger.info("✅ ML Signal Processor инициализирован")
 
         # Генерация тестового сигнала
