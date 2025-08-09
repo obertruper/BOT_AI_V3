@@ -113,6 +113,9 @@ class ConfigManager:
         # Загрузка PostgreSQL конфигурации
         await self._load_postgres_config()
 
+        # Загрузка traders.yaml если есть
+        await self._load_traders_yaml()
+
         # Создание информации о конфигурации
         self._config_info = ConfigInfo(
             path=self._config_path or "not_found",
@@ -133,6 +136,21 @@ class ConfigManager:
                     self._config["postgres"] = postgres_config["postgres"]
             except Exception as e:
                 print(f"Ошибка загрузки PostgreSQL конфигурации: {e}")
+
+    async def _load_traders_yaml(self) -> None:
+        """Загрузка traders.yaml в основную конфигурацию"""
+        if self._config_path:
+            config_dir = os.path.dirname(self._config_path)
+            traders_path = os.path.join(config_dir, "traders.yaml")
+
+            if os.path.exists(traders_path):
+                try:
+                    traders_config = await self._load_yaml_file(traders_path)
+                    if "traders" in traders_config:
+                        self._config["traders"] = traders_config["traders"]
+                    print(f"✅ Загружена конфигурация трейдеров из {traders_path}")
+                except Exception as e:
+                    print(f"Ошибка загрузки traders.yaml: {e}")
 
     async def _load_trader_configs(self) -> None:
         """Загрузка конфигураций отдельных трейдеров"""

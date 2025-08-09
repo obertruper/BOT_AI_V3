@@ -60,9 +60,10 @@ class ConnectionError(ExchangeError):
             message,
             exchange_name,
             endpoint=endpoint,
-            severity=ErrorSeverity.HIGH,
             **kwargs,
         )
+        # Устанавливаем severity после инициализации базового класса
+        self.severity = ErrorSeverity.HIGH
 
         if timeout:
             self.context["timeout"] = timeout
@@ -77,10 +78,11 @@ class AuthenticationError(ExchangeError):
         super().__init__(
             message,
             exchange_name,
-            severity=ErrorSeverity.CRITICAL,
-            category=ErrorCategory.AUTHENTICATION,
             **kwargs,
         )
+        # Устанавливаем severity и category после инициализации базового класса
+        self.severity = ErrorSeverity.CRITICAL
+        self.category = ErrorCategory.AUTHENTICATION
 
         self.context["auth_type"] = auth_type
 

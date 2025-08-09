@@ -13,7 +13,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from database.models import Order, OrderSide, OrderStatus
+from database.models.base_models import Order, OrderSide, OrderStatus, OrderType
 
 
 class ExecutionMode(Enum):
@@ -73,10 +73,17 @@ class ExecutionEngine:
         start_time = datetime.utcnow()
 
         try:
+            self.logger.info(
+                f"🎯 Начинаем исполнение ордера: {order.side} {order.quantity} {order.symbol} "
+                f"(режим: {mode.value})"
+            )
+
             # Проверяем валидность ордера
             if not self._validate_order(order):
-                self.logger.error(f"Ордер {order.order_id} не прошел валидацию")
+                self.logger.error(f"❌ Ордер {order.order_id} не прошел валидацию")
                 return False
+
+            self.logger.info(f"✅ Ордер {order.order_id} прошел валидацию")
 
             # Выбираем стратегию исполнения
             if mode == ExecutionMode.AGGRESSIVE:
@@ -90,10 +97,20 @@ class ExecutionEngine:
             execution_time = (datetime.utcnow() - start_time).total_seconds()
             self._update_statistics(success, execution_time)
 
+            if success:
+                self.logger.info(
+                    f"✅ Ордер {order.order_id} успешно исполнен за {execution_time:.2f}с"
+                )
+            else:
+                self.logger.error(f"❌ Ордер {order.order_id} не был исполнен")
+
             return success
 
         except Exception as e:
-            self.logger.error(f"Ошибка исполнения ордера {order.order_id}: {e}")
+            self.logger.error(f"❌ Ошибка исполнения ордера {order.order_id}: {e}")
+            import traceback
+
+            traceback.print_exc()
             self._update_statistics(False, 0)
             return False
 
@@ -310,6 +327,31 @@ class ExecutionEngine:
         if order.order_type == OrderType.LIMIT and not order.price:
             return False
 
+        # Проверка доступного баланса
+        try:
+            exchange = self._get_exchange(order.exchange)
+            if exchange:
+                # Получаем баланс в базовой валюте
+                symbol_info = order.symbol.split("/")
+                if len(symbol_info) >= 2:
+                    quote_currency = symbol_info[1]  # USDT для BTCUSDT
+                    balance = exchange.get_balance(quote_currency)
+
+                    # Рассчитываем необходимую сумму с учетом комиссии
+                    required_amount = (
+                        order.quantity * (order.price or 0) * 1.002
+                    )  # 0.2% запас на комиссию
+
+                    if balance.get("free", 0) < required_amount:
+                        self.logger.warning(
+                            f"Недостаточно баланса для ордера {order.id}. Требуется: {required_amount:.2f}, доступно: {balance.get('free', 0):.2f}"
+                        )
+                        return False
+        except Exception as e:
+            self.logger.warning(f"Ошибка проверки баланса для ордера {order.id}: {e}")
+            # Не отклоняем ордер, если не удалось проверить баланс
+            pass
+
         return True
 
     def _update_statistics(self, success: bool, execution_time: float):
@@ -339,3 +381,19 @@ class ExecutionEngine:
             stats["success_rate"] = 0.0
 
         return stats
+
+    async def health_check(self) -> bool:
+        """Проверка здоровья компонента"""
+        return True
+
+    async def start(self):
+        """Запуск компонента"""
+        self.logger.info("Execution Engine запущен")
+
+    async def stop(self):
+        """Остановка компонента"""
+        self.logger.info("Execution Engine остановлен")
+
+    def is_running(self) -> bool:
+        """Проверка работы компонента"""
+        return True

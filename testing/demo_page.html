@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOT_Trading v3.0 - Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        .card {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            border-left: 5px solid #007bff;
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .card-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        .card-label {
+            color: #666;
+        }
+        .success {
+            border-left-color: #28a745;
+        }
+        .success .card-value {
+            color: #28a745;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .button:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+        .button:active {
+            transform: translateY(0);
+        }
+        .traders-section {
+            margin-top: 40px;
+        }
+        .trader-item {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #28a745;
+        }
+        .trader-name {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .trader-status {
+            color: #28a745;
+            font-size: 0.9em;
+        }
+        .ws-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+            .header h1 { font-size: 2em; }
+            .container { padding: 20px; margin: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>BOT_Trading v3.0</h1>
+            <p>Панель управления торговыми ботами</p>
+            <div class="status">
+                <div class="status-indicator ws-status-indicator"></div>
+                <span class="ws-status">WebSocket Подключено</span>
+                <button class="button" onclick="refreshData()">Обновить</button>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-value">3</div>
+                <div class="card-label">Активные трейдеры</div>
+            </div>
+            <div class="card success">
+                <div class="card-value">$12,450</div>
+                <div class="card-label">Общий капитал</div>
+            </div>
+            <div class="card success">
+                <div class="card-value">+$342</div>
+                <div class="card-label">Текущий P&L</div>
+            </div>
+            <div class="card">
+                <div class="card-value">7</div>
+                <div class="card-label">Открытые позиции</div>
+            </div>
+        </div>
+
+        <div class="traders-section">
+            <h2>Активные трейдеры</h2>
+            <div class="trader-item">
+                <div>
+                    <div class="trader-name">BTC Scalper</div>
+                    <div class="trader-status">Bybit • BTCUSDT • Active</div>
+                </div>
+                <div class="success">+$124.50</div>
+            </div>
+            <div class="trader-item">
+                <div>
+                    <div class="trader-name">ETH Grid Bot</div>
+                    <div class="trader-status">Binance • ETHUSDT • Active</div>
+                </div>
+                <div class="success">+$89.20</div>
+            </div>
+            <div class="trader-item">
+                <div>
+                    <div class="trader-name">ML Signal Bot</div>
+                    <div class="trader-status">OKX • SOLUSDT • Active</div>
+                </div>
+                <div class="success">+$128.30</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function refreshData() {
+            console.log('Обновление данных...');
+            const button = document.querySelector('.button');
+            button.textContent = 'Обновление...';
+            button.disabled = true;
+
+            setTimeout(() => {
+                button.textContent = 'Обновить';
+                button.disabled = false;
+                console.log('Данные обновлены');
+            }, 2000);
+        }
+
+        // Симуляция WebSocket соединения
+        function simulateWebSocket() {
+            console.log('WebSocket соединение установлено');
+
+            // Обновление статуса каждые 5 секунд
+            setInterval(() => {
+                const indicator = document.querySelector('.status-indicator');
+                indicator.style.animation = 'pulse 1s infinite';
+                console.log('WebSocket heartbeat');
+            }, 5000);
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('BOT_Trading v3.0 Dashboard загружен');
+            simulateWebSocket();
+        });
+
+        // Тестовые функции для Puppeteer
+        window.testFunctions = {
+            getMetrics: () => ({
+                activeTraders: 3,
+                totalCapital: 12450,
+                pnl: 342,
+                openPositions: 7
+            }),
+
+            simulateWebSocketTest: () => {
+                return new Promise((resolve) => {
+                    const ws = { readyState: 1 }; // OPEN
+                    setTimeout(() => {
+                        resolve({
+                            status: 'connected',
+                            readyState: ws.readyState,
+                            message: 'WebSocket тест успешен'
+                        });
+                    }, 1000);
+                });
+            }
+        };
+    </script>
+</body>
+</html>

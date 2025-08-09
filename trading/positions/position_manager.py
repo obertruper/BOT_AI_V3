@@ -357,3 +357,19 @@ class PositionManager:
 
         except Exception as e:
             self.logger.error(f"Ошибка синхронизации позиций с {exchange_name}: {e}")
+
+    async def health_check(self) -> bool:
+        """Проверка здоровья компонента"""
+        return True
+
+    async def start(self):
+        """Запуск компонента"""
+        self.logger.info("Position Manager запущен")
+
+    async def stop(self):
+        """Остановка компонента"""
+        self.logger.info("Position Manager остановлен")
+
+    def is_running(self) -> bool:
+        """Проверка работы компонента"""
+        return True

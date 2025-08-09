@@ -1,344 +1,355 @@
-# BOT_Trading v3.0 - Системная конфигурация
-# Основные настройки мульти-трейдер системы
-
 system:
-  name: "BOT_Trading_v3"
-  version: "3.0.0"
-  environment: "development"  # development, staging, production
-
-  # Системные ограничения
+  name: BOT_Trading_v3
+  version: 3.0.0
+  environment: development
   limits:
     max_traders: 10
     max_concurrent_trades: 50
     max_memory_usage_mb: 2048
     max_cpu_usage_percent: 80
-
-  # Настройки производительности
   performance:
     worker_threads: 4
     async_pool_size: 100
     connection_pool_size: 20
     cache_size_mb: 512
-
-# Конфигурация базы данных
 database:
-  type: "postgresql"
-  host: "127.0.0.1"
-  port: 5555  # Правильный порт для локальной БД
-  name: "bot_trading_v3"
-  user: "obertruper"  # Правильный пользователь
-  password: "${DB_PASSWORD}"
-
-  # Настройки пула подключений
+  type: postgresql
+  host: 127.0.0.1
+  port: 5555
+  name: bot_trading_v3
+  user: obertruper
+  password: ${DB_PASSWORD}
   pool:
     min_connections: 5
     max_connections: 25
     connection_timeout: 30
     idle_timeout: 300
-
-  # Настройки миграций
   migrations:
     auto_migrate: true
     backup_before_migration: true
-
-# Мониторинг и здоровье системы
 monitoring:
   enabled: true
-  health_check_interval: 30  # секунды
-  metrics_collection_interval: 10  # секунды
-
-  # Prometheus метрики
+  health_check_interval: 30
+  metrics_collection_interval: 10
   prometheus:
     enabled: true
     port: 9090
-    path: "/metrics"
-
-  # Алерты
+    path: /metrics
   alerts:
     enabled: true
     telegram_enabled: false
     email_enabled: false
-
-    # Пороги для алертов
     thresholds:
       memory_usage_percent: 85
       cpu_usage_percent: 90
       error_rate_percent: 5
       latency_ms: 1000
-
-# Настройки логирования
 logging:
-  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  format: "structured"  # simple, structured, json
-
-  # Файлы логов
+  level: INFO
+  format: structured
   files:
-    main: "logs/system.log"
-    trades: "logs/trades.log"
-    errors: "logs/errors.log"
-
-  # Ротация логов
+    main: logs/system.log
+    trades: logs/trades.log
+    errors: logs/errors.log
   rotation:
     max_size_mb: 100
     backup_count: 10
-
-  # Внешние системы
   external:
     sentry:
       enabled: false
-      dsn: "${SENTRY_DSN}"
-
-# Настройки безопасности
+      dsn: ${SENTRY_DSN}
 security:
-  # Шифрование API ключей
   encryption:
     enabled: true
     key_rotation_days: 30
-
-  # Ограничения доступа
   access:
     max_login_attempts: 5
     lockout_duration_minutes: 30
-
-  # Аудит
   audit:
     enabled: true
     log_all_actions: true
     retention_days: 90
-
-# Настройки API
 api:
   rest:
-    enabled: true
-    host: "0.0.0.0"
-    port: 8080
+    enabled: false
+    host: 0.0.0.0
+    port: 8081
     cors_enabled: true
     rate_limiting:
       enabled: true
       requests_per_minute: 100
-
   websocket:
     enabled: true
     port: 8081
     max_connections: 100
     heartbeat_interval: 30
-
   webhook:
     enabled: true
     port: 8082
     timeout_seconds: 30
     retry_attempts: 3
-
-# Настройки уведомлений
 notifications:
   telegram:
-    enabled: true  # Включаем Telegram для уведомлений
-    bot_token: "${TELEGRAM_BOT_TOKEN}"
-    chat_id: "${TELEGRAM_CHAT_ID}"
-
+    enabled: true
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    chat_id: ${TELEGRAM_CHAT_ID}
   email:
     enabled: false
-    smtp_server: "smtp.gmail.com"
+    smtp_server: smtp.gmail.com
     smtp_port: 587
-    username: "${EMAIL_USERNAME}"
-    password: "${EMAIL_PASSWORD}"
-
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}
   discord:
     enabled: false
-    webhook_url: "${DISCORD_WEBHOOK_URL}"
-
-# Настройки резервного копирования
+    webhook_url: ${DISCORD_WEBHOOK_URL}
 backup:
   enabled: true
   interval_hours: 6
   retention_days: 30
-
-  # Типы данных для бэкапа
   include:
-    - database
-    - configurations
-    - models
-    - logs
-
-  # Местоположение бэкапов
+  - database
+  - configurations
+  - models
+  - logs
   storage:
     local:
       enabled: true
-      path: "backups/"
+      path: backups/
     cloud:
       enabled: false
-      provider: "aws"  # aws, gcp, azure
-      bucket: "${BACKUP_BUCKET}"
-
-# Настройки разработки
+      provider: aws
+      bucket: ${BACKUP_BUCKET}
 development:
   debug_mode: true
   hot_reload: true
   mock_exchanges: false
   test_mode: false
-
-  # Тестовые данные
   test_data:
-    enabled: true
-    mock_signals: true
-    paper_trading: true
-
-# Настройки бирж
+    enabled: false
+    mock_signals: false
+    paper_trading: false
+trading:
+  hedge_mode: true
+  category: linear
+  leverage: 5
+  max_positions_per_direction: 1
+  order_execution:
+    use_limit_orders: false
+    default_order_type: MARKET
 exchanges:
   bybit:
     enabled: true
-    api_key: "${BYBIT_API_KEY}"
-    api_secret: "${BYBIT_API_SECRET}"
+    api_key: ${BYBIT_API_KEY}
+    api_secret: ${BYBIT_API_SECRET}
     testnet: false
     rate_limits:
       orders_per_second: 5
       requests_per_minute: 120
-
   binance:
     enabled: false
-    api_key: "${BINANCE_API_KEY}"
-    api_secret: "${BINANCE_API_SECRET}"
+    api_key: ${BINANCE_API_KEY}
+    api_secret: ${BINANCE_API_SECRET}
     testnet: false
-
-# ML модели
 ml_models:
   patchtst:
     enabled: true
-    model_path: "models/saved/best_model_20250728_215703.pth"
-    config_path: "config/ml/ml_config.yaml"
-    scaler_path: "models/saved/data_scaler.pkl"
-
+    model_path: models/saved/best_model_20250728_215703.pth
+    config_path: config/ml/ml_config.yaml
+    scaler_path: models/saved/data_scaler.pkl
   xgboost:
     enabled: false
-    model_path: "models/saved/xgboost_model.pkl"
-
-# Управление рисками
+    model_path: models/saved/xgboost_model.pkl
+unified_system:
+  enabled: true
+  components:
+    core:
+      enabled: true
+      auto_restart: true
+      health_check_interval: 30
+      startup_delay: 0
+    ml:
+      enabled: true
+      auto_restart: true
+      integrated_with: core
+    api:
+      enabled: true
+      port: 8080
+      auto_restart: true
+      health_check_interval: 30
+      startup_delay: 3
+    frontend:
+      enabled: true
+      port: 5173
+      auto_restart: false
+      startup_delay: 5
+  monitoring:
+    interval_seconds: 30
+    auto_restart_on_failure: true
+    max_restart_attempts: 5
+    restart_delay_seconds: 10
+  logging:
+    aggregate_logs: true
+    log_directory: logs
+    process_log_directory: logs/processes
+ml:
+  enabled: true
+  signal_generation:
+    interval_seconds: 60
+    batch_size: 10
+    parallel_workers: 4
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  - ADAUSDT
+  - DOGEUSDT
+  - DOTUSDT
+  - LINKUSDT
+  model:
+    enabled: true
+    path: models/saved/best_model_20250728_215703.pth
+    scaler_path: models/saved/data_scaler.pkl
+    device: cuda
+  data:
+    lookback_minutes: 3600
+    min_candles: 240
+  filters:
+    min_confidence: 0.45
+    min_signal_strength: 0.3
+  risk:
+    max_positions_per_symbol: 1
+    position_size_percent: 2
 risk_management:
   global:
     enabled: true
-    max_total_risk: 0.1  # 10% от капитала
-    max_daily_loss: 0.05  # 5% максимальная дневная потеря
+    max_total_risk: 0.1
+    max_daily_loss: 0.05
     max_open_positions: 10
-
   position:
-    default_stop_loss: 0.02  # 2%
-    default_take_profit: 0.03  # 3%
-    max_position_size: 0.1  # 10% от капитала на позицию
-
+    default_stop_loss: 0.02
+    default_take_profit: 0.03
+    max_position_size: 0.1
   trailing_stop:
     enabled: true
-    activation_profit: 0.01  # 1%
-    trailing_distance: 0.005  # 0.5%
-
-# Enhanced SL/TP конфигурация
+    activation_profit: 0.01
+    trailing_distance: 0.005
 enhanced_sltp:
   enabled: true
-
-  # Трейлинг стоп
   trailing_stop:
     enabled: true
-    type: "percentage"  # percentage, fixed, atr_based, adaptive
-    step: 0.5  # % или пункты
-    min_profit: 0.3  # Минимальная прибыль для активации (%)
-    max_distance: 2.0  # Максимальное расстояние от цены (%)
-
-  # Частичный тейк-профит
+    type: percentage
+    step: 0.5
+    min_profit: 0.3
+    max_distance: 2.0
   partial_take_profit:
     enabled: true
+    update_sl_after_partial: true
     levels:
-      - percentage: 25  # Закрыть 25% позиции
-        at_profit: 1.0  # При прибыли 1%
-      - percentage: 25  # Закрыть еще 25%
-        at_profit: 2.0  # При прибыли 2%
-      - percentage: 50  # Закрыть оставшиеся 50%
-        at_profit: 3.0  # При прибыли 3%
-
-  # Защита прибыли
+    - percent: 1.0
+      close_ratio: 0.25
+    - percent: 2.0
+      close_ratio: 0.25
+    - percent: 3.0
+      close_ratio: 0.50
   profit_protection:
     enabled: true
-    levels:
-      - profit: 1.0   # При прибыли 1%
-        protection: 0.5  # Защищаем 0.5%
-      - profit: 2.0   # При прибыли 2%
-        protection: 1.2  # Защищаем 1.2%
-      - profit: 3.0   # При прибыли 3%
-        protection: 2.0  # Защищаем 2.0%
-
-  # Корректировка по волатильности
+    breakeven_percent: 1.0
+    breakeven_offset: 0.2
+    lock_percent:
+    - trigger: 2.0
+      lock: 1.0
+    - trigger: 3.0
+      lock: 2.0
+    - trigger: 4.0
+      lock: 3.0
+    max_updates: 5
   volatility_adjustment:
     enabled: true
-    multiplier: 1.0  # Множитель для корректировки
-
-# Конфигурация трейдеров
-# Трейдеры могут быть определены здесь или в отдельных файлах в config/traders/
+    multiplier: 1.0
 traders:
-  # Multi-Crypto трейдер для 10 криптовалют с генерацией сигналов каждую минуту
-  - id: "multi_crypto_10"
-    name: "Multi Crypto Trader - 10 Symbols"
-    enabled: true  # Активен
-    exchange: "bybit"
-
-    # 10 основных криптовалют для торговли
-    symbols:
-      - "BTCUSDT"   # Bitcoin
-      - "ETHUSDT"   # Ethereum
-      - "BNBUSDT"   # Binance Coin
-      - "SOLUSDT"   # Solana
-      - "XRPUSDT"   # Ripple
-      - "ADAUSDT"   # Cardano
-      - "DOGEUSDT"  # Dogecoin
-      - "DOTUSDT"   # Polkadot
-      - "LINKUSDT"  # Chainlink
-      - "MATICUSDT" # Polygon
-
-    strategy: "IndicatorStrategy"
-
-    # Inline конфигурация стратегии
-    strategy_config:
-      # Генерация сигналов каждую минуту
-      signal_interval: 60  # секунд
-
-      indicators:
-        - type: "RSI"
-          period: 14
-          overbought: 70
-          oversold: 30
-        - type: "EMA"
-          short_period: 9
-          long_period: 21
-        - type: "MACD"
-          fast_period: 12
-          slow_period: 26
-          signal_period: 9
-
-      # Условия для входа
-      entry_conditions:
-        buy:
-          rsi_oversold: true
-          ema_crossover: "bullish"
-        sell:
-          rsi_overbought: true
-          ema_crossover: "bearish"
-
-    risk_management:
-      max_risk_per_trade: 0.02  # 2% от баланса
-      max_positions: 10  # По одной на каждую валюту
-      max_positions_per_symbol: 1
-      stop_loss:
-        enabled: false  # Как в V2
-        type: "percentage"
-        value: 0.02
-      take_profit:
-        enabled: true
-        type: "percentage"
-        buy_value: 0.058   # 5.8%
-        sell_value: -0.058 # -5.8%
-
-  # Пример ML трейдера (отключен)
-  - id: "ml_trader_btc"
-    name: "ML BTC Trader"
-    enabled: false  # Включить при необходимости
-    exchange: "bybit"
-    symbol: "BTC/USDT"
-    strategy: "PatchTSTStrategy"
-    config_file: "config/traders/ml_trader_example.yaml"
+- id: multi_crypto_10
+  name: Multi Crypto Trader - 10 Symbols
+  enabled: true
+  exchange: bybit
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  - ADAUSDT
+  - DOGEUSDT
+  - DOTUSDT
+  - LINKUSDT
+  strategy: IndicatorStrategy
+  strategy_config:
+    signal_interval: 60
+    indicators:
+    - type: RSI
+      period: 14
+      overbought: 70
+      oversold: 30
+    - type: EMA
+      short_period: 9
+      long_period: 21
+    - type: MACD
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+    entry_conditions:
+      buy:
+        rsi_oversold: true
+        ema_crossover: bullish
+      sell:
+        rsi_overbought: true
+        ema_crossover: bearish
+  risk_management:
+    max_risk_per_trade: 0.02
+    max_positions: 10
+    max_positions_per_symbol: 1
+    stop_loss:
+      enabled: false
+      type: percentage
+      value: 0.02
+    take_profit:
+      enabled: true
+      type: percentage
+      buy_value: 0.058
+      sell_value: -0.058
+- id: ml_trader_multi_crypto
+  name: Multi Crypto ML Trader - 9 Symbols
+  enabled: true
+  exchange: bybit
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  - ADAUSDT
+  - DOGEUSDT
+  - DOTUSDT
+  - LINKUSDT
+  strategy: MLSignalStrategy
+  strategy_config:
+    min_confidence: 0.55
+    min_signal_strength: 0.4
+    signal_timeout_minutes: 10
+    position_size_percent: 0.015
+    max_positions: 9
+    use_ml_stop_loss: true
+    use_ml_take_profit: true
+    default_stop_loss_pct: 0.025
+    default_take_profit_pct: 0.05
+  risk_management:
+    max_risk_per_trade: 0.015
+    max_positions: 9
+    max_positions_per_symbol: 1
+    max_daily_loss: 0.05
+    max_drawdown: 0.1
+    stop_loss:
+      enabled: false
+    take_profit:
+      enabled: false

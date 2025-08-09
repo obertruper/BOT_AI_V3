@@ -67,21 +67,29 @@ class TestMLManager:
         """Создание экземпляра MLManager с mock конфигурацией"""
         mock_config["ml"]["model_directory"] = str(temp_model_dir)
 
-        with patch("ml.ml_manager.ConfigManager") as mock_config_manager:
-            mock_config_manager.return_value.get_config.return_value = mock_config
-            manager = MLManager()
-            return manager
+        # MLManager принимает config напрямую
+        manager = MLManager(mock_config)
+        return manager
 
     @pytest.mark.asyncio
     async def test_initialization(self, ml_manager):
         """Тест инициализации MLManager"""
-        await ml_manager.initialize()
+        # Mock методы загрузки
+        with patch.object(ml_manager, "_load_model") as mock_load_model:
+            with patch.object(ml_manager, "_load_scaler") as mock_load_scaler:
+                await ml_manager.initialize()
 
         assert ml_manager._initialized
-        assert ml_manager.device == torch.device("cpu")
+        # Проверяем, что device установлен (может быть cuda или cpu)
+        assert ml_manager.device is not None
+        assert ml_manager.device.type in ["cuda", "cpu"]
         assert len(ml_manager._model_cache) == 0
         assert ml_manager._cache_size == 3
         assert ml_manager._memory_limit == 1024
+
+        # Проверяем, что методы были вызваны
+        mock_load_model.assert_called_once()
+        mock_load_scaler.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_preload_models(self, ml_manager, temp_model_dir):

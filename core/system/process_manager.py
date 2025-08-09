@@ -93,6 +93,7 @@ class ProcessManager:
         process_env = os.environ.copy()
         if env:
             process_env.update(env)
+            logger.info(f"📋 Дополнительные env переменные для {name}: {env}")
 
         # Подготовка рабочей директории
         if cwd:
@@ -142,82 +143,145 @@ class ProcessManager:
             raise
 
     async def _monitor_process(self, name: str, stdout_log: Path, stderr_log: Path):
-        """Мониторинг процесса и логирование вывода"""
+        """Мониторинг процесса и логирование вывода с оптимизированной обработкой"""
         proc_info = self.processes.get(name)
         if not proc_info or not proc_info.process:
             return
 
         process = proc_info.process
+        log_buffer = []
+        last_flush = datetime.now()
 
-        # Открываем файлы для логирования
-        with (
-            open(stdout_log, "ab") as stdout_file,
-            open(stderr_log, "ab") as stderr_file,
-        ):
-            # Асинхронное чтение stdout и stderr
-            async def read_stream(stream, file, prefix):
+        # Создаем оптимизированную функцию чтения с буферизацией
+        async def read_stream_optimized(stream, file, prefix):
+            nonlocal log_buffer, last_flush
+
+            try:
                 async for line in stream:
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    log_line = f"[{timestamp}] {line.decode('utf-8', errors='replace')}"
-                    file.write(log_line.encode("utf-8"))
+                    now = datetime.now()
+
+                    # Буферизуем логи для уменьшения I/O операций
+                    log_line = f"[{now.strftime('%H:%M:%S')}] {line.decode('utf-8', errors='replace')}"
+                    log_buffer.append(log_line.encode("utf-8"))
+
+                    # Сброс буфера каждые 5 секунд или при накоплении 50 строк
+                    if (now - last_flush).total_seconds() > 5 or len(log_buffer) >= 50:
+                        file.write(b"".join(log_buffer))
+                        file.flush()
+                        log_buffer.clear()
+                        last_flush = now
+
+                    # Выводим только критические ошибки для снижения шума
+                    line_str = line.decode("utf-8", errors="replace").strip()
+                    if b"CRITICAL" in line or (
+                        b"ERROR" in line and b"BrokenPipeError" not in line
+                    ):
+                        logger.error(f"[{name}] {line_str}")
+                    elif b"timeout" in line.lower() or b"connection" in line.lower():
+                        logger.warning(f"[{name}] {line_str}")
+
+            except Exception as e:
+                logger.debug(f"Stream reading error for {name}: {e}")
+            finally:
+                # Финальный сброс буфера
+                if log_buffer:
+                    file.write(b"".join(log_buffer))
                     file.flush()
 
-                    # Также выводим важные логи в основной лог
-                    if b"ERROR" in line or b"CRITICAL" in line:
-                        logger.error(
-                            f"[{name}] {line.decode('utf-8', errors='replace').strip()}"
-                        )
-                    elif b"WARNING" in line:
-                        logger.warning(
-                            f"[{name}] {line.decode('utf-8', errors='replace').strip()}"
-                        )
+        # Открываем файлы для логирования с буферизацией
+        try:
+            with (
+                open(stdout_log, "ab", buffering=8192) as stdout_file,
+                open(stderr_log, "ab", buffering=8192) as stderr_file,
+            ):
+                # Запускаем чтение обоих потоков с timeout protection
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        read_stream_optimized(process.stdout, stdout_file, "STDOUT"),
+                        read_stream_optimized(process.stderr, stderr_file, "STDERR"),
+                        return_exceptions=True,
+                    ),
+                    timeout=None,  # Убираем общий timeout для избежания BrokenPipeError
+                )
+        except Exception as e:
+            logger.debug(f"Process monitoring error for {name}: {e}")
 
-            # Запускаем чтение обоих потоков
-            await asyncio.gather(
-                read_stream(process.stdout, stdout_file, "STDOUT"),
-                read_stream(process.stderr, stderr_file, "STDERR"),
-                return_exceptions=True,
-            )
+        # Ждем завершения процесса с улучшенной обработкой
+        try:
+            return_code = await process.wait()
+        except Exception as e:
+            logger.debug(f"Process wait error for {name}: {e}")
+            return_code = -1
 
-        # Ждем завершения процесса
-        return_code = await process.wait()
-
-        # Обрабатываем завершение
+        # Обрабатываем завершение с оптимизированной логикой перезапуска
         if name in self.processes:
             if return_code != 0:
-                logger.error(f"❌ Компонент {name} завершился с кодом {return_code}")
+                # Анализируем причину завершения
+                if return_code == -1 or "BrokenPipeError" in str(return_code):
+                    logger.debug(
+                        f"🔄 Компонент {name} завершился из-за pipe/timeout ошибки"
+                    )
+                else:
+                    logger.error(
+                        f"❌ Компонент {name} завершился с кодом {return_code}"
+                    )
 
-                # Автоматический перезапуск
+                # Интеллектуальный перезапуск с экспоненциальной задержкой
                 if proc_info.auto_restart and self.is_running:
                     proc_info.restart_count += 1
-                    if proc_info.restart_count <= 5:
-                        logger.info(
-                            f"🔄 Перезапуск {name} (попытка {proc_info.restart_count})"
-                        )
-                        await asyncio.sleep(5)  # Пауза перед перезапуском
+                    max_restarts = (
+                        3 if name == "core" else 5
+                    )  # Меньше перезапусков для core
 
-                        # Сохраняем счетчик перезапусков
+                    if proc_info.restart_count <= max_restarts:
+                        # Экспоненциальная задержка: 2^attempt секунд (2, 4, 8, 16...)
+                        delay = min(
+                            2**proc_info.restart_count, 60
+                        )  # Максимум 60 секунд
+
+                        logger.info(
+                            f"🔄 Перезапуск {name} через {delay}с (попытка {proc_info.restart_count}/{max_restarts})"
+                        )
+                        await asyncio.sleep(delay)
+
+                        # Проверяем, что система все еще работает
+                        if not self.is_running:
+                            return
+
+                        # Сохраняем информацию для перезапуска
                         restart_count = proc_info.restart_count
+                        command = proc_info.command
+                        cwd = proc_info.cwd
+                        auto_restart = proc_info.auto_restart
 
                         # Удаляем старую информацию
-                        del self.processes[name]
+                        if name in self.processes:
+                            del self.processes[name]
 
                         # Перезапускаем с сохранением счетчика
                         try:
                             pid = await self.start_component(
                                 name=name,
-                                command=proc_info.command,
-                                cwd=proc_info.cwd,
-                                auto_restart=proc_info.auto_restart,
+                                command=command,
+                                cwd=cwd,
+                                auto_restart=auto_restart,
                             )
                             # Восстанавливаем счетчик
                             if name in self.processes:
                                 self.processes[name].restart_count = restart_count
+                                logger.info(
+                                    f"✅ Компонент {name} перезапущен успешно (PID: {pid})"
+                                )
                         except Exception as e:
-                            logger.error(f"Ошибка перезапуска {name}: {e}")
+                            logger.error(f"❌ Ошибка перезапуска {name}: {e}")
+                            # Увеличиваем задержку при ошибке перезапуска
+                            await asyncio.sleep(30)
                     else:
-                        logger.error(f"❌ Превышен лимит перезапусков для {name}")
-                        del self.processes[name]
+                        logger.error(
+                            f"❌ Превышен лимит перезапусков для {name} ({max_restarts})"
+                        )
+                        if name in self.processes:
+                            del self.processes[name]
             else:
                 logger.info(f"✅ Компонент {name} завершился успешно")
                 if name in self.processes:
@@ -275,7 +339,10 @@ class ProcessManager:
             # Отменяем задачу мониторинга
             if name in self._monitoring_tasks:
                 self._monitoring_tasks[name].cancel()
-                del self._monitoring_tasks[name]
+                try:
+                    del self._monitoring_tasks[name]
+                except KeyError:
+                    pass  # Уже удалено
 
     async def restart_component(self, name: str):
         """Перезапуск компонента"""

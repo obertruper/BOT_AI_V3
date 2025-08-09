@@ -18,7 +18,8 @@ from core.config.config_manager import ConfigManager
 from core.logger import get_logger
 from core.system.orchestrator import SystemOrchestrator
 from database.connections import get_async_db
-from database.models.base_models import Balance, Signal, Trade
+from database.models.base_models import Balance, Trade
+from database.models.signal import Signal
 
 logger = get_logger(__name__)
 

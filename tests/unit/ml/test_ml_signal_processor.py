@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
-from database.models import Signal, SignalType
+from database.models.base_models import Signal, SignalType
 from ml.ml_signal_processor import MLSignalProcessor
 
 
@@ -37,12 +37,11 @@ class TestMLSignalProcessor:
         }
 
     @pytest.fixture
-    def signal_processor(self, mock_config):
+    def signal_processor(self, mock_config, mock_ml_manager):
         """Создание экземпляра MLSignalProcessor"""
-        with patch("ml.ml_signal_processor.ConfigManager") as mock_config_manager:
-            mock_config_manager.return_value.get_config.return_value = mock_config
-            processor = MLSignalProcessor()
-            return processor
+        # MLSignalProcessor принимает ml_manager и config
+        processor = MLSignalProcessor(mock_ml_manager, mock_config)
+        return processor
 
     @pytest.fixture
     def mock_ml_manager(self):
@@ -76,12 +75,13 @@ class TestMLSignalProcessor:
     @pytest.mark.asyncio
     async def test_initialization(self, signal_processor):
         """Тест инициализации процессора"""
-        await signal_processor.initialize()
-
-        assert signal_processor._initialized
-        assert signal_processor._signal_weight == 0.7
-        assert signal_processor._min_confidence == 0.6
-        assert signal_processor._signal_expiry == 15
+        # Проверяем, что процессор правильно инициализирован
+        assert signal_processor.ml_manager is not None
+        assert signal_processor.config is not None
+        assert signal_processor.min_confidence == 0.6  # из mock_config
+        assert signal_processor.min_signal_strength == 0.3
+        assert signal_processor.risk_tolerance == "MEDIUM"
+        assert signal_processor.cache_ttl == 60
 
     @pytest.mark.asyncio
     async def test_process_single_signal(

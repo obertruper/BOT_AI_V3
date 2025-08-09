@@ -129,6 +129,24 @@ symbol: "BTC/USDT"          # Торговая пара
 strategy: "StrategyClass"   # Имя класса стратегии
 ```
 
+### Настройки торговли (Hedge Mode)
+
+Для фьючерсной торговли с hedge mode добавьте в `system.yaml`:
+
+```yaml
+# Настройки торговли
+trading:
+  hedge_mode: true          # Включить hedge mode (позволяет держать long и short одновременно)
+  category: linear          # Тип торговли: linear для USDT фьючерсов
+  leverage: 5               # Плечо по умолчанию (1-100)
+  max_positions_per_direction: 1  # Максимум позиций на направление
+
+# Position Index в hedge mode:
+# - 0: One-way mode (нельзя держать long и short одновременно)
+# - 1: Buy/Long позиции в hedge mode
+# - 2: Sell/Short позиции в hedge mode
+```
+
 ### Опциональные поля
 
 ```yaml
@@ -363,6 +381,23 @@ python -m core.config.validator config/traders/my_trader.yaml
 - Проверьте приоритет загрузки
 - Перезагрузите конфигурацию
 - Проверьте синтаксис YAML
+
+### 4. Ошибка "position idx not match position mode"
+
+Эта ошибка возникает когда настройки hedge mode не совпадают между биржей и конфигурацией:
+
+- Проверьте настройку `hedge_mode` в `system.yaml`
+- Убедитесь что на бирже включен соответствующий режим позиций
+- Для Bybit: hedge mode требует position_idx=1 для buy, position_idx=2 для sell
+- Если используете one-way mode, установите `hedge_mode: false`
+
+```yaml
+# Пример правильной настройки для hedge mode
+trading:
+  hedge_mode: true
+  category: linear
+  leverage: 5
+```
 
 ## Заключение
 

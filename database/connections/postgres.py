@@ -8,7 +8,7 @@ PostgreSQL подключение для BOT Trading v3
 """
 
 import os
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from typing import Optional
 
 import asyncpg
@@ -81,9 +81,10 @@ def get_db() -> Session:
         db.close()
 
 
-async def get_async_db() -> AsyncSession:
+@asynccontextmanager
+async def get_async_db():
     """
-    Асинхронная функция для получения сессии.
+    Асинхронный контекстный менеджер для получения сессии.
 
     Использование:
         async with get_async_db() as db:

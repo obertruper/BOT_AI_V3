@@ -63,9 +63,11 @@ class SystemOrchestrator:
         self.trader_factory: Optional[TraderFactory] = None
         self.health_checker = None  # Будет инициализирован позже
         self.exchange_registry = None  # Для проверки бирж
+        self.trading_engine = None  # Торговый движок
         self.telegram_service = None  # Telegram уведомления
         self.ai_signal_generator = None  # AI генератор сигналов
         self.signal_scheduler = None  # ML Signal Scheduler для real-time генерации
+        self.data_update_service = None  # Служба автообновления данных
 
         # TODO: Эти компоненты будут добавлены в следующих этапах
         self.system_monitor = None  # Инициализируем как None
@@ -164,6 +166,12 @@ class SystemOrchestrator:
             # Инициализация менеджера трейдеров
             await self._initialize_trader_manager()
 
+            # Инициализация Exchange Registry
+            await self._initialize_exchange_registry()
+
+            # Инициализация Trading Engine
+            await self._initialize_trading_engine()
+
             # Инициализация HealthChecker
             await self._initialize_health_checker()
 
@@ -173,14 +181,26 @@ class SystemOrchestrator:
             # Инициализация AI Signal Generator
             await self._initialize_ai_signal_generator()
 
-            # Инициализация Data Maintenance Service
+            # Инициализация Data Update Service
+            await self._initialize_data_update_service()
+
+            # Инициализация Data Maintenance Service (legacy)
             await self._initialize_data_maintenance()
 
             # Инициализация ML Signal Scheduler
             await self._initialize_signal_scheduler()
 
             # Инициализация API серверов
-            await self._initialize_api_servers()
+            # НЕ инициализируем API серверы если запущены через unified launcher
+            # так как API будет запущен отдельным процессом
+            unified_mode = os.getenv("UNIFIED_MODE")
+            self.logger.info(f"🔍 UNIFIED_MODE = {unified_mode}")
+            if unified_mode != "true":
+                await self._initialize_api_servers()
+            else:
+                self.logger.info(
+                    "⏭️ API серверы будут запущены отдельным процессом (UNIFIED_MODE=true)"
+                )
 
             # TODO: Эти компоненты будут добавлены в следующих этапах
             # await self._initialize_database()
@@ -213,6 +233,12 @@ class SystemOrchestrator:
             await self.trader_manager.start()
             self.active_components.add("trader_manager")
 
+            # Запуск Trading Engine если инициализирован
+            if self.trading_engine:
+                await self.trading_engine.start()
+                self.logger.info("📈 Trading Engine запущен")
+                self.active_components.add("trading_engine")
+
             # Запуск AI Signal Generator если инициализирован
             if self.ai_signal_generator:
                 await self.ai_signal_generator.start()
@@ -225,7 +251,14 @@ class SystemOrchestrator:
                     "🤖 ML Signal Scheduler запущен - генерация сигналов каждую минуту"
                 )
 
-            # Запуск Data Maintenance Service если инициализирован
+            # Запуск Data Update Service
+            if self.data_update_service:
+                await self.data_update_service.start()
+                self.logger.info(
+                    "🔄 Data Update Service запущен - автоматическое обновление данных"
+                )
+
+            # Запуск Data Maintenance Service если инициализирован (legacy)
             if hasattr(self, "data_maintenance") and self.data_maintenance:
                 await self.data_maintenance.start()
                 self.logger.info(
@@ -233,7 +266,11 @@ class SystemOrchestrator:
                 )
 
             # Запуск API серверов
-            await self._start_api_servers()
+            # НЕ запускаем API серверы если запущены через unified launcher
+            if os.getenv("UNIFIED_MODE") != "true":
+                await self._start_api_servers()
+            else:
+                self.logger.info("⏭️ API серверы запускаются отдельным процессом")
 
             # TODO: Эти компоненты будут добавлены в следующих этапах
             # await self.system_monitor.start()
@@ -261,6 +298,11 @@ class SystemOrchestrator:
                 await self.trader_manager.stop()
                 self.active_components.discard("trader_manager")
 
+            # Остановка Trading Engine
+            if self.trading_engine:
+                await self.trading_engine.stop()
+                self.active_components.discard("trading_engine")
+
             # Остановка Telegram сервиса
             if self.telegram_service:
                 await self.telegram_service.stop()
@@ -270,6 +312,11 @@ class SystemOrchestrator:
             if self.signal_scheduler:
                 await self.signal_scheduler.stop()
                 self.active_components.discard("signal_scheduler")
+
+            # Остановка Data Update Service
+            if self.data_update_service:
+                await self.data_update_service.stop()
+                self.active_components.discard("data_update_service")
 
             # Остановка Data Maintenance Service
             if hasattr(self, "data_maintenance") and self.data_maintenance:
@@ -470,6 +517,54 @@ class SystemOrchestrator:
             self.failed_components.add("trader_manager")
             raise ComponentInitializationError("trader_manager", str(e)) from e
 
+    async def _initialize_exchange_registry(self) -> None:
+        """Инициализация реестра бирж"""
+        try:
+            from exchanges.registry import ExchangeRegistry
+
+            # ExchangeRegistry не принимает параметры в __init__
+            self.exchange_registry = ExchangeRegistry()
+            await self.exchange_registry.initialize()
+            self.active_components.add("exchange_registry")
+            self.logger.info("✅ Exchange Registry инициализирован")
+        except Exception as e:
+            self.failed_components.add("exchange_registry")
+            self.logger.warning(f"⚠️ Exchange Registry не инициализирован: {e}")
+
+    async def _initialize_trading_engine(self) -> None:
+        """Инициализация торгового движка"""
+        self.logger.info("🔧 Начинаем инициализацию Trading Engine...")
+        try:
+            # Проверяем зависимости
+            if not self.exchange_registry:
+                self.logger.warning("⚠️ Trading Engine требует Exchange Registry")
+                self.logger.info(
+                    f"   Exchange Registry статус: {self.exchange_registry}"
+                )
+                self.logger.info(f"   Active components: {self.active_components}")
+                return
+
+            from trading.engine import TradingEngine
+
+            self.logger.info("📦 Импортирован модуль TradingEngine")
+
+            # Передаем config вместо несуществующих параметров
+            config = self.config_manager.get_config()
+            self.logger.info("⚙️ Создаем экземпляр TradingEngine...")
+
+            self.trading_engine = TradingEngine(orchestrator=self, config=config)
+            self.logger.info("🔄 Инициализируем TradingEngine...")
+
+            await self.trading_engine.initialize()
+            self.active_components.add("trading_engine")
+            self.logger.info("✅ Trading Engine инициализирован")
+        except Exception as e:
+            self.failed_components.add("trading_engine")
+            self.logger.error(f"❌ Trading Engine не инициализирован: {e}")
+            import traceback
+
+            self.logger.error(traceback.format_exc())
+
     async def _initialize_health_checker(self) -> None:
         """Инициализация компонента проверки здоровья системы"""
         try:
@@ -562,6 +657,13 @@ class SystemOrchestrator:
             self.active_components.add("ai_signal_generator")
             self.logger.info("✅ AI Signal Generator инициализирован")
 
+            # Связываем AI Signal Generator с Trading Engine
+            if self.trading_engine and hasattr(
+                self.ai_signal_generator, "set_trading_engine"
+            ):
+                self.ai_signal_generator.set_trading_engine(self.trading_engine)
+                self.logger.info("🔗 AI Signal Generator связан с Trading Engine")
+
         except Exception as e:
             self.failed_components.add("ai_signal_generator")
             self.logger.warning(f"⚠️ AI Signal Generator не инициализирован: {e}")
@@ -583,15 +685,27 @@ class SystemOrchestrator:
                 self.logger.info("⏭️ ML Signal Scheduler отключен через ML_DISABLED")
                 return
 
-            # Проверяем есть ли модель
-            model_path = ml_config.get("model", {}).get("path")
-            if not model_path:
-                self.logger.warning("⚠️ ML Signal Scheduler: путь к модели не указан")
-                return
-
-            # Проверяем физическое наличие файла модели
+            # Проверяем есть ли модель - сначала пробуем в стандартном месте
             from pathlib import Path
 
+            base_dir = Path(__file__).parent.parent.parent  # Корень проекта
+            default_model_path = (
+                base_dir / "models/saved/best_model_20250728_215703.pth"
+            )
+
+            model_path = ml_config.get("model", {}).get("model_path") or ml_config.get(
+                "model", {}
+            ).get("path")
+
+            # Если путь не указан в конфигурации, используем стандартный
+            if not model_path:
+                model_path = default_model_path
+            else:
+                # Если путь относительный, делаем его относительно проекта
+                if not Path(model_path).is_absolute():
+                    model_path = base_dir / model_path
+
+            # Проверяем физическое наличие файла модели
             if not Path(model_path).exists():
                 self.logger.warning(f"⚠️ ML модель не найдена: {model_path}")
                 return
@@ -607,10 +721,32 @@ class SystemOrchestrator:
                 f"📊 Будет генерировать сигналы для {len(ml_config.get('data', {}).get('symbols', []))} символов"
             )
 
+            # Связываем Signal Scheduler с Trading Engine
+            if self.trading_engine and hasattr(
+                self.signal_scheduler, "set_trading_engine"
+            ):
+                self.signal_scheduler.set_trading_engine(self.trading_engine)
+                self.logger.info("🔗 Signal Scheduler связан с Trading Engine")
+
         except Exception as e:
             self.failed_components.add("signal_scheduler")
             self.logger.warning(f"⚠️ ML Signal Scheduler не инициализирован: {e}")
             # Не прерываем инициализацию, так как это не критичный компонент
+
+    async def _initialize_data_update_service(self) -> None:
+        """Инициализация службы автообновления данных"""
+        try:
+            from data.data_update_service import DataUpdateService
+
+            self.data_update_service = DataUpdateService(self.config_manager)
+
+            self.active_components.add("data_update_service")
+            self.logger.info("✅ Data Update Service инициализирован")
+
+        except Exception as e:
+            self.failed_components.add("data_update_service")
+            self.logger.warning(f"⚠️ Data Update Service не инициализирован: {e}")
+            # Не прерываем инициализацию, продолжаем с legacy service
 
     async def _initialize_data_maintenance(self) -> None:
         """Инициализация сервиса поддержания данных"""

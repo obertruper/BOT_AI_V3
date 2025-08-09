@@ -1,2811 +1,2235 @@
-"""
-Инженерия признаков для криптовалютных данных
-"""
+import logging
+from dataclasses import dataclass
 
-# Для совместимости с логированием
-import warnings
-from typing import Dict, List, Optional, Tuple
+# import talib  # Закомментировано для совместимости
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import ta
-from sklearn.preprocessing import RobustScaler, StandardScaler
-from tqdm import tqdm
 
-warnings.filterwarnings("ignore")
+logger = logging.getLogger(__name__)
 
-from core.logger import setup_logger
 
-# Создаем логгер для этого модуля
-logger = setup_logger("FeatureEngineer")
+@dataclass
+class FeatureConfig:
+    """Конфигурация для генерации признаков"""
+
+    lookback_periods: List[int] = None
+    price_features: bool = True
+    volume_features: bool = True
+    technical_indicators: bool = True
+    statistical_features: bool = True
+    time_features: bool = True
+
+    def __post_init__(self):
+        if self.lookback_periods is None:
+            self.lookback_periods = [5, 10, 20, 50]
 
 
 class FeatureEngineer:
-    """Создание признаков для модели прогнозирования"""
+    """
+    Генератор признаков для ML модели UnifiedPatchTST.
 
-    def __init__(self, config: Dict):
-        self.config = config
-        self.logger = logger  # Используем глобальный логгер модуля
-        self.feature_config = config.get("features", {})
-        self.scalers = {}
-        self.process_position = (
-            None  # Позиция для прогресс-баров при параллельной обработке
-        )
-        self.disable_progress = False  # Флаг для отключения прогресс-баров
+    Принимает простой DataFrame с OHLCV данными и генерирует 240+ признаков:
+    - Price features (возвраты, диапазоны, уровни)
+    - Volume features (объемы, профили)
+    - Technical indicators (RSI, MACD, Bollinger Bands, ATR и др.)
+    - Statistical features (волатильность, асимметрия, эксцесс)
+    - Time features (час, день недели)
+    """
 
-    @staticmethod
-    def safe_divide(
-        numerator: pd.Series,
-        denominator: pd.Series,
-        fill_value=0.0,
-        max_value=1000.0,
-        min_denominator=1e-8,
-    ) -> pd.Series:
-        """ИСПРАВЛЕНО: Безопасное деление с правильной обработкой малых значений"""
-        # Создаем безопасный знаменатель
-        safe_denominator = denominator.copy()
-
-        # Заменяем очень маленькие значения
-        mask_small = safe_denominator.abs() < min_denominator
-        safe_denominator = safe_denominator.astype(
-            float
-        )  # Преобразуем в float перед присваиванием
-        safe_denominator[mask_small] = min_denominator
-
-        # Выполняем деление
-        result = numerator / safe_denominator
-
-        # Клиппинг результата для предотвращения экстремальных значений
-        result = result.clip(lower=-max_value, upper=max_value)
-
-        # Обработка inf и nan
-        result = result.replace([np.inf, -np.inf], [fill_value, fill_value])
-        result = result.fillna(fill_value)
-
-        return result
-
-    def calculate_vwap(self, df: pd.DataFrame) -> pd.Series:
-        """Улучшенный расчет VWAP с дополнительными проверками"""
-        # Базовый расчет VWAP
-        vwap = self.safe_divide(df["turnover"], df["volume"], fill_value=df["close"])
-
-        # Дополнительная проверка: VWAP не должен сильно отличаться от close
-        # Если VWAP слишком отличается от close (более чем в 2 раза), используем close
-        mask_invalid = (vwap < df["close"] * 0.5) | (vwap > df["close"] * 2.0)
-        vwap[mask_invalid] = df["close"][mask_invalid]
-
-        return vwap
-
-    def create_features(
-        self,
-        df: pd.DataFrame,
-        train_end_date: Optional[str] = None,
-        use_enhanced_features: bool = False,
-    ) -> pd.DataFrame:
-        """Создание всех признаков для датасета с walk-forward валидацией
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """
+        Инициализация генератора признаков.
 
         Args:
-            df: DataFrame с raw данными
-            train_end_date: дата окончания обучения для walk-forward нормализации
-            use_enhanced_features: использовать ли расширенные признаки для direction prediction
+            config: Конфигурация (может быть пустой)
         """
-        if not self.disable_progress:
-            self.logger.info(
-                f"🚀 Начало feature engineering для {df['symbol'].nunique()} символов"
-            )
+        # Фильтруем только поля, которые есть в FeatureConfig
+        if config:
+            valid_fields = {
+                "lookback_periods",
+                "price_features",
+                "volume_features",
+                "technical_indicators",
+                "statistical_features",
+                "time_features",
+            }
+            filtered_config = {k: v for k, v in config.items() if k in valid_fields}
+            self.config = FeatureConfig(**filtered_config)
+        else:
+            self.config = FeatureConfig()
+        self.feature_names = []
 
-        # Валидация данных
-        self._validate_data(df)
+        # Параметры технических индикаторов для 240 признаков
+        self.rsi_periods = [7, 14, 21, 30, 50, 70, 100]
+        self.ma_periods = [5, 10, 15, 20, 30, 50, 100, 150, 200, 250]
+        self.ema_periods = [5, 10, 15, 20, 30, 50, 100, 150, 200, 250]
+        self.bb_periods = [10, 20, 30, 50, 100]
+        self.atr_periods = [7, 14, 21, 30, 50, 100]
+        self.macd_configs = [
+            (12, 26, 9),
+            (5, 13, 9),
+            (8, 21, 9),
+            (19, 39, 9),
+            (50, 100, 20),
+        ]
+        self.stoch_configs = [(14, 3), (21, 5)]
+        self.willr_periods = [14, 21, 28]
+        self.cci_periods = [14, 20, 30]
+        self.roc_periods = [10, 20, 30, 50]
+        self.mfi_periods = [14, 20, 30]
+        self.momentum_periods = [10, 14, 20, 30]
+        self.trix_periods = [14, 21, 30]
+        self.aroon_periods = [14, 25]
+        self.adx_periods = [14, 20, 30]
 
-        featured_dfs = []
-        all_symbols_data = {}  # Для enhanced features
+        logger.info("FeatureEngineer инициализирован")
 
-        # Первый проход - базовые признаки
-        for symbol in df["symbol"].unique():
-            symbol_data = df[df["symbol"] == symbol].copy()
-            symbol_data = symbol_data.sort_values("datetime")
+    def create_features(self, df: pd.DataFrame) -> np.ndarray:
+        """
+        Основной метод генерации признаков.
 
-            symbol_data = self._create_basic_features(symbol_data)
-            symbol_data = self._create_technical_indicators(symbol_data)
-            symbol_data = self._create_microstructure_features(symbol_data)
-            symbol_data = self._create_rally_detection_features(symbol_data)
-            symbol_data = self._create_signal_quality_features(symbol_data)
-            symbol_data = self._create_futures_specific_features(symbol_data)
-            symbol_data = self._create_ml_optimized_features(symbol_data)
-            symbol_data = self._create_temporal_features(symbol_data)
-            symbol_data = self._create_target_variables(symbol_data)
+        Args:
+            df: DataFrame с колонками [open, high, low, close, volume, symbol, datetime]
 
-            featured_dfs.append(symbol_data)
+        Returns:
+            np.ndarray: Массив признаков размером (samples, features)
+        """
+        try:
+            if df.empty:
+                raise ValueError("DataFrame пуст")
 
-            # Сохраняем для enhanced features
-            if use_enhanced_features:
-                all_symbols_data[symbol] = symbol_data.copy()
+            # Проверка обязательных колонок
+            required_cols = ["open", "high", "low", "close", "volume"]
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            if missing_cols:
+                raise ValueError(f"Отсутствуют колонки: {missing_cols}")
 
-        result_df = pd.concat(featured_dfs, ignore_index=True)
+            logger.info(f"Генерация признаков для {len(df)} записей")
 
-        # ИСПРАВЛЕНО: cross-asset features нужны все символы, но если обрабатываем по одному - пропускаем
-        # Если в df больше одного символа - создаем cross-asset features
-        if df["symbol"].nunique() > 1:
-            result_df = self._create_cross_asset_features(result_df)
+            # Сортировка по времени
+            if "datetime" in df.columns:
+                df = df.sort_values("datetime").reset_index(drop=True)
 
-        # Добавляем enhanced features если запрошено
-        if use_enhanced_features:
-            result_df = self._add_enhanced_features(result_df, all_symbols_data)
+            # Инициализация списка признаков
+            all_features = []
+            self.feature_names = []
 
-        # Обработка NaN значений
-        result_df = self._handle_missing_values(result_df)
+            # Генерация различных групп признаков
+            if self.config.price_features:
+                price_features = self._calculate_price_features(df)
+                all_features.append(price_features)
 
-        # Walk-forward нормализация только если указана дата (иначе нормализация будет в prepare_trading_data.py)
-        if train_end_date:
-            result_df = self._normalize_walk_forward(result_df, train_end_date)
+            if self.config.volume_features:
+                volume_features = self._calculate_volume_features(df)
+                all_features.append(volume_features)
 
-        self._log_feature_statistics(result_df)
+            if self.config.technical_indicators:
+                tech_features = self._calculate_technical_indicators(df)
+                all_features.append(tech_features)
 
-        if not self.disable_progress:
-            self.logger.info(
-                f"✅ Feature engineering завершен. Всего признаков: {len(result_df.columns)}"
-            )
+            if self.config.statistical_features:
+                stat_features = self._calculate_statistical_features(df)
+                all_features.append(stat_features)
 
-        return result_df
+            if self.config.time_features:
+                time_features = self._calculate_time_features(df)
+                all_features.append(time_features)
 
-    def _validate_data(self, df: pd.DataFrame):
-        """Валидация целостности данных"""
-        # ИСПРАВЛЕНО: Конвертация числовых колонок в правильные типы
-        numeric_columns = ["open", "high", "low", "close", "volume", "turnover"]
-        for col in numeric_columns:
-            if col in df.columns:
-                # Конвертируем в числовой тип, заменяя ошибки на NaN
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-                # Заполняем NaN значения предыдущими значениями
-                df[col] = df[col].ffill().bfill()
+            # Дополнительные группы признаков для достижения 240
+            microstructure_features = self._calculate_microstructure_features(df)
+            all_features.append(microstructure_features)
 
-        # Проверка на отсутствующие значения
-        if df.isnull().any().any():
-            if not self.disable_progress:
-                self.logger.warning("Обнаружены пропущенные значения в данных")
+            advanced_features = self._calculate_advanced_features(df, all_features)
+            all_features.append(advanced_features)
 
-        # Проверка на аномальные цены
-        price_changes = df.groupby("symbol")["close"].pct_change()
-        extreme_moves = abs(price_changes) > 0.15  # >15% за 15 минут
+            lag_features = self._calculate_lag_features(df, all_features)
+            all_features.append(lag_features)
 
-        if extreme_moves.sum() > 0:
-            if not self.disable_progress:
-                self.logger.warning(
-                    f"Обнаружено {extreme_moves.sum()} экстремальных движений цены"
+            # Дополнительные признаки для достижения 240
+            pattern_features = self._calculate_pattern_features(df)
+            all_features.append(pattern_features)
+
+            momentum_features = self._calculate_momentum_features(df)
+            all_features.append(momentum_features)
+
+            # Объединение всех признаков
+            if not all_features:
+                raise ValueError("Не сгенерировано ни одного признака")
+
+            features_array = np.concatenate(all_features, axis=1)
+
+            # Обработка NaN значений
+            features_array = self._handle_nan_values(features_array)
+
+            logger.info(f"Сгенерировано {features_array.shape[1]} признаков")
+
+            return features_array
+
+        except Exception as e:
+            logger.error(f"Ошибка генерации признаков: {e}")
+            raise
+
+    def _calculate_price_features(self, df: pd.DataFrame) -> np.ndarray:
+        """Расчет ценовых признаков"""
+        features = []
+
+        # Базовые ценовые признаки
+        open_prices = df["open"].values
+        high_prices = df["high"].values
+        low_prices = df["low"].values
+        close_prices = df["close"].values
+
+        # Нормализованные цены
+        features.append(self._normalize_prices(close_prices))
+        self.feature_names.append("close_norm")
+        features.append(self._normalize_prices(open_prices))
+        self.feature_names.append("open_norm")
+        features.append(self._normalize_prices(high_prices))
+        self.feature_names.append("high_norm")
+        features.append(self._normalize_prices(low_prices))
+        self.feature_names.append("low_norm")
+
+        # Ценовые возвраты
+        for period in self.config.lookback_periods:
+            if len(close_prices) > period:
+                returns = np.diff(close_prices, n=period) / close_prices[:-period]
+                returns = np.concatenate([np.full(period, 0), returns])
+                features.append(returns.reshape(-1, 1))
+                self.feature_names.append(f"returns_{period}")
+
+        # Ценовые диапазоны
+        hl_range = (high_prices - low_prices) / close_prices
+        oc_range = np.abs(open_prices - close_prices) / close_prices
+
+        features.extend([hl_range.reshape(-1, 1), oc_range.reshape(-1, 1)])
+        self.feature_names.extend(["hl_range", "oc_range"])
+
+        # Уровни поддержки/сопротивления
+        for period in [10, 20, 50]:
+            if len(close_prices) >= period:
+                rolling_max = (
+                    pd.Series(high_prices).rolling(period).max().fillna(high_prices[0])
+                )
+                rolling_min = (
+                    pd.Series(low_prices).rolling(period).min().fillna(low_prices[0])
                 )
 
-        # Проверка временных гэпов (только значительные разрывы > 2 часов)
-        for symbol in df["symbol"].unique():
-            symbol_data = df[df["symbol"] == symbol]
-            time_diff = symbol_data["datetime"].diff()
-            expected_diff = pd.Timedelta("15 minutes")
-            # Считаем большими только разрывы больше 2 часов (8 интервалов)
-            large_gaps = time_diff > expected_diff * 8
+                resistance_distance = (rolling_max - close_prices) / close_prices
+                support_distance = (close_prices - rolling_min) / close_prices
 
-            if large_gaps.sum() > 0:
-                if not self.disable_progress:
-                    self.logger.warning(
-                        f"Символ {symbol}: обнаружено {large_gaps.sum()} значительных временных разрывов (> 2 часов)"
-                    )
+                features.extend(
+                    [
+                        resistance_distance.values.reshape(-1, 1),
+                        support_distance.values.reshape(-1, 1),
+                    ]
+                )
+                self.feature_names.extend(
+                    [f"resistance_dist_{period}", f"support_dist_{period}"]
+                )
 
-    def _create_basic_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Базовые признаки из OHLCV данных без look-ahead bias"""
-        df["returns"] = np.log(df["close"] / df["close"].shift(1))
+        return np.concatenate(features, axis=1)
 
-        # Доходности за разные периоды
+    def _calculate_volume_features(self, df: pd.DataFrame) -> np.ndarray:
+        """Расчет объемных признаков"""
+        features = []
+        volume = df["volume"].values
+        close_prices = df["close"].values
+
+        # Нормализованный объем
+        volume_norm = self._normalize_series(volume)
+        features.append(volume_norm)
+        self.feature_names.append("volume_norm")
+
+        # VWAP
+        typical_price = (df["high"] + df["low"] + df["close"]) / 3
+        for period in [10, 20, 50]:
+            if len(volume) >= period:
+                vwap = (typical_price * df["volume"]).rolling(period).sum() / df[
+                    "volume"
+                ].rolling(period).sum()
+                vwap_distance = (
+                    close_prices - vwap.fillna(close_prices[0])
+                ) / close_prices
+                features.append(vwap_distance.values.reshape(-1, 1))
+                self.feature_names.append(f"vwap_distance_{period}")
+
+        # Volume Rate of Change
         for period in [5, 10, 20]:
-            df[f"returns_{period}"] = np.log(df["close"] / df["close"].shift(period))
+            if len(volume) > period:
+                volume_roc = np.diff(volume, n=period) / volume[:-period]
+                volume_roc = np.concatenate([np.full(period, 0), volume_roc])
+                features.append(volume_roc.reshape(-1, 1))
+                self.feature_names.append(f"volume_roc_{period}")
 
-        # Ценовые соотношения
-        df["high_low_ratio"] = df["high"] / df["low"]
-        df["close_open_ratio"] = df["close"] / df["open"]
+        # On Balance Volume
+        price_changes = np.diff(close_prices)
+        price_changes = np.concatenate([np.array([0]), price_changes])
 
-        # Позиция закрытия в диапазоне
-        df["close_position"] = (df["close"] - df["low"]) / (
-            df["high"] - df["low"] + 1e-10
-        )
+        obv = np.zeros_like(volume, dtype=float)
+        for i in range(1, len(volume)):
+            if price_changes[i] > 0:
+                obv[i] = obv[i - 1] + volume[i]
+            elif price_changes[i] < 0:
+                obv[i] = obv[i - 1] - volume[i]
+            else:
+                obv[i] = obv[i - 1]
 
-        # Объемные соотношения с использованием только исторических данных
-        df["volume_ratio"] = self.safe_divide(
-            df["volume"],
-            df["volume"].rolling(20, min_periods=20).mean(),
-            fill_value=1.0,
-        )
-        df["turnover_ratio"] = self.safe_divide(
-            df["turnover"],
-            df["turnover"].rolling(20, min_periods=20).mean(),
-            fill_value=1.0,
-        )
+        obv_norm = self._normalize_series(obv)
+        features.append(obv_norm)
+        self.feature_names.append("obv_norm")
 
-        # VWAP с улучшенным расчетом
-        df["vwap"] = self.calculate_vwap(df)
+        return np.concatenate(features, axis=1)
 
-        # Более надежный расчет close_vwap_ratio
-        # Нормальное соотношение close/vwap должно быть около 1.0
-        # VWAP уже проверен и исправлен в calculate_vwap()
+    def _calculate_technical_indicators(self, df: pd.DataFrame) -> np.ndarray:
+        """Расчет технических индикаторов"""
+        features = []
 
-        # Простой и надежный расчет
-        df["close_vwap_ratio"] = df["close"] / df["vwap"]
-
-        # ИСПРАВЛЕНО: Расширенные границы для криптовалют (±30%)
-        # Криптовалюты могут отклоняться от VWAP на 20-50% в периоды высокой волатильности
-        df["close_vwap_ratio"] = df["close_vwap_ratio"].clip(lower=0.7, upper=1.3)
-
-        # Добавляем индикатор экстремального отклонения от VWAP
-        df["vwap_extreme_deviation"] = (
-            (df["close_vwap_ratio"] < 0.85) | (df["close_vwap_ratio"] > 1.15)
-        ).astype(int)
-
-        # Дополнительная проверка на аномалии
-        # Если ratio все еще выходит за разумные пределы, заменяем на 1.0
-        mask_invalid = (df["close_vwap_ratio"] < 0.95) | (df["close_vwap_ratio"] > 1.05)
-        if mask_invalid.sum() > 0:
-            self.logger.debug(
-                f"Заменено {mask_invalid.sum()} аномальных close_vwap_ratio на 1.0"
-            )
-            df.loc[mask_invalid, "close_vwap_ratio"] = 1.0
-
-        return df
-
-    def _create_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Технические индикаторы"""
-        tech_config = self.feature_config["technical"]
-
-        # SMA
-        sma_config = next((c for c in tech_config if c["name"] == "sma"), None)
-        if sma_config:
-            for period in sma_config["periods"]:
-                df[f"sma_{period}"] = ta.trend.sma_indicator(df["close"], period)
-                df[f"close_sma_{period}_ratio"] = df["close"] / df[f"sma_{period}"]
-
-        # EMA
-        ema_config = next((c for c in tech_config if c["name"] == "ema"), None)
-        if ema_config:
-            for period in ema_config["periods"]:
-                df[f"ema_{period}"] = ta.trend.ema_indicator(df["close"], period)
-                df[f"close_ema_{period}_ratio"] = df["close"] / df[f"ema_{period}"]
+        open_prices = df["open"].values.astype(float)
+        high_prices = df["high"].values.astype(float)
+        low_prices = df["low"].values.astype(float)
+        close_prices = df["close"].values.astype(float)
+        volume = df["volume"].values.astype(float)
 
         # RSI
-        rsi_config = next((c for c in tech_config if c["name"] == "rsi"), None)
-        if rsi_config:
-            df["rsi"] = ta.momentum.RSIIndicator(
-                df["close"], window=rsi_config["period"]
-            ).rsi()
-
-            df["rsi_oversold"] = (df["rsi"] < 30).astype(int)
-            df["rsi_overbought"] = (df["rsi"] > 70).astype(int)
-
-        # MACD
-        macd_config = next((c for c in tech_config if c["name"] == "macd"), None)
-        if macd_config:
-            macd = ta.trend.MACD(
-                df["close"],
-                window_slow=macd_config["slow"],
-                window_fast=macd_config["fast"],
-                window_sign=macd_config["signal"],
-            )
-            # Нормализуем MACD относительно цены для сравнимости между активами
-            # MACD в абсолютных значениях может быть очень большим для дорогих активов
-            df["macd"] = macd.macd() / df["close"] * 100  # В процентах от цены
-            df["macd_signal"] = macd.macd_signal() / df["close"] * 100
-            df["macd_diff"] = macd.macd_diff() / df["close"] * 100
+        for period in self.rsi_periods:
+            try:
+                rsi = self._calculate_rsi(close_prices, period)
+                rsi = np.nan_to_num(rsi, nan=50.0) / 100.0  # Нормализация к [0,1]
+                features.append(rsi.reshape(-1, 1))
+                self.feature_names.append(f"rsi_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета RSI {period}: {e}")
+                # ИСПРАВЛЕНО: вместо константы используем простую скользящую среднюю изменений
+                simple_changes = np.diff(close_prices, prepend=close_prices[0])
+                rsi_fallback = np.clip(
+                    (simple_changes + np.abs(simple_changes))
+                    / (2 * np.abs(simple_changes) + 1e-8),
+                    0,
+                    1,
+                )
+                features.append(rsi_fallback.reshape(-1, 1))
+                self.feature_names.append(f"rsi_{period}_fallback")
 
         # Bollinger Bands
-        bb_config = next(
-            (c for c in tech_config if c["name"] == "bollinger_bands"), None
-        )
-        if bb_config:
-            bb = ta.volatility.BollingerBands(
-                df["close"], window=bb_config["period"], window_dev=bb_config["std_dev"]
-            )
-            df["bb_high"] = bb.bollinger_hband()
-            df["bb_low"] = bb.bollinger_lband()
-            df["bb_middle"] = bb.bollinger_mavg()
-            # ИСПРАВЛЕНО: bb_width как процент от цены
-            df["bb_width"] = self.safe_divide(
-                df["bb_high"] - df["bb_low"],
-                df["close"],
-                fill_value=0.02,  # 2% по умолчанию
-                max_value=0.5,  # Максимум 50% от цены
-            )
+        for period in self.bb_periods:
+            try:
+                bb_upper, bb_middle, bb_lower = self._calculate_bollinger_bands(
+                    close_prices, period
+                )
+                bb_upper = np.nan_to_num(bb_upper, nan=close_prices)
+                bb_lower = np.nan_to_num(bb_lower, nan=close_prices)
+                bb_middle = np.nan_to_num(bb_middle, nan=close_prices)
 
-            # ИСПРАВЛЕНО: bb_position теперь корректно рассчитывается с использованием абсолютной ширины
-            # bb_position показывает где находится цена внутри канала Bollinger
-            bb_range = df["bb_high"] - df["bb_low"]
-            df["bb_position"] = self.safe_divide(
-                df["close"] - df["bb_low"],
-                bb_range,
-                fill_value=0.5,
-                max_value=2.0,  # Позволяем выходы за пределы для отслеживания прорывов
-            )
+                bb_position = (close_prices - bb_lower) / (bb_upper - bb_lower + 1e-8)
+                bb_width = (bb_upper - bb_lower) / bb_middle
 
-            # Создаем индикаторы прорывов ПЕРЕД клиппингом
-            df["bb_breakout_upper"] = (df["bb_position"] > 1).astype(int)
-            df["bb_breakout_lower"] = (df["bb_position"] < 0).astype(int)
-            df["bb_breakout_strength"] = (
-                np.abs(df["bb_position"] - 0.5) * 2
-            )  # Сила отклонения от центра
+                bb_position = np.clip(bb_position, 0, 1)
+                bb_width_norm = self._normalize_series(bb_width)
 
-            # Теперь ограничиваем для совместимости
-            df["bb_position"] = df["bb_position"].clip(0, 1)
+                features.extend([bb_position.reshape(-1, 1), bb_width_norm])
+                self.feature_names.extend(
+                    [f"bb_position_{period}", f"bb_width_{period}"]
+                )
+
+            except Exception as e:
+                logger.warning(f"Ошибка расчета BB {period}: {e}")
+                # ИСПРАВЛЕНО: вместо константы используем ценовые диапазоны
+                price_range = (high_prices - low_prices) / (close_prices + 1e-8)
+                bb_position = (close_prices - np.mean(close_prices)) / (
+                    np.std(close_prices) + 1e-8
+                )
+                features.extend(
+                    [
+                        np.clip(price_range, 0, 1).reshape(-1, 1),
+                        np.clip((bb_position + 3) / 6, 0, 1).reshape(
+                            -1, 1
+                        ),  # Нормализуем к [0,1]
+                    ]
+                )
+                self.feature_names.extend(
+                    [f"bb_position_{period}", f"bb_width_{period}"]
+                )
 
         # ATR
-        atr_config = next((c for c in tech_config if c["name"] == "atr"), None)
-        if atr_config:
-            df["atr"] = ta.volatility.AverageTrueRange(
-                df["high"], df["low"], df["close"], window=atr_config["period"]
-            ).average_true_range()
+        for period in self.atr_periods:
+            try:
+                atr = self._calculate_atr(high_prices, low_prices, close_prices, period)
+                atr = np.nan_to_num(atr, nan=0.0)
+                atr_norm = atr / close_prices  # Нормализация к цене
+                features.append(atr_norm.reshape(-1, 1))
+                self.feature_names.append(f"atr_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета ATR {period}: {e}")
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"atr_{period}")
 
-            # ATR в процентах от цены с ограничением экстремальных значений
-            df["atr_pct"] = self.safe_divide(
-                df["atr"],
-                df["close"],
-                fill_value=0.01,  # 1% по умолчанию
-                max_value=0.2,  # Максимум 20% от цены
+        # Moving Averages
+        for period in self.ma_periods:
+            try:
+                ma = self._calculate_sma(close_prices, period)
+                ma = np.nan_to_num(ma, nan=close_prices[0])
+                ma_distance = (close_prices - ma) / close_prices
+                features.append(ma_distance.reshape(-1, 1))
+                self.feature_names.append(f"ma_distance_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета MA {period}: {e}")
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"ma_distance_{period}")
+
+        # Williams %R - несколько периодов
+        for period in self.willr_periods:
+            try:
+                willr = self._calculate_williams_r(
+                    high_prices, low_prices, close_prices, period
+                )
+                willr = np.nan_to_num(willr, nan=-50.0)
+                willr_norm = (willr + 100) / 100  # Нормализация к [0,1]
+                features.append(willr_norm.reshape(-1, 1))
+                self.feature_names.append(f"willr_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета Williams %R {period}: {e}")
+                # ИСПРАВЛЕНО: вместо константы используем позицию цены в диапазоне
+                price_position = (
+                    close_prices - np.minimum.accumulate(low_prices[::-1])[::-1]
+                ) / (
+                    np.maximum.accumulate(high_prices[::-1])[::-1]
+                    - np.minimum.accumulate(low_prices[::-1])[::-1]
+                    + 1e-8
+                )
+                features.append(np.clip(price_position, 0, 1).reshape(-1, 1))
+                self.feature_names.append(f"willr_{period}_fallback")
+
+        # CCI - Commodity Channel Index
+        for period in self.cci_periods:
+            try:
+                cci = self._calculate_cci(high_prices, low_prices, close_prices, period)
+                cci_norm = self._normalize_series(cci)
+                features.append(cci_norm)
+                self.feature_names.append(f"cci_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета CCI {period}: {e}")
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"cci_{period}")
+
+        # ROC - Rate of Change
+        for period in self.roc_periods:
+            try:
+                roc = self._calculate_roc(close_prices, period)
+                roc_norm = self._normalize_series(roc)
+                features.append(roc_norm)
+                self.feature_names.append(f"roc_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета ROC {period}: {e}")
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"roc_{period}")
+
+        # MFI - Money Flow Index
+        for period in self.mfi_periods:
+            try:
+                mfi = self._calculate_mfi(
+                    high_prices, low_prices, close_prices, volume, period
+                )
+                mfi_norm = mfi / 100.0  # Нормализация к [0,1]
+                features.append(mfi_norm.reshape(-1, 1))
+                self.feature_names.append(f"mfi_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета MFI {period}: {e}")
+                # ИСПРАВЛЕНО: вместо константы используем объемно-взвешенную цену
+                typical_price = (high_prices + low_prices + close_prices) / 3
+                volume_price = typical_price * volume / (np.mean(volume) + 1e-8)
+                mfi_fallback = np.clip(
+                    volume_price / (np.max(volume_price) + 1e-8), 0, 1
+                )
+                features.append(mfi_fallback.reshape(-1, 1))
+                self.feature_names.append(f"mfi_{period}_fallback")
+
+        # Momentum
+        for period in self.momentum_periods:
+            try:
+                momentum = self._calculate_momentum(close_prices, period)
+                momentum_norm = self._normalize_series(momentum)
+                features.append(momentum_norm)
+                self.feature_names.append(f"momentum_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета Momentum {period}: {e}")
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"momentum_{period}")
+
+        # TRIX
+        for period in self.trix_periods:
+            try:
+                trix = self._calculate_trix(close_prices, period)
+                trix_norm = self._normalize_series(trix)
+                features.append(trix_norm)
+                self.feature_names.append(f"trix_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета TRIX {period}: {e}")
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"trix_{period}")
+
+        # Aroon
+        for period in self.aroon_periods:
+            try:
+                aroon_up, aroon_down = self._calculate_aroon(
+                    high_prices, low_prices, period
+                )
+                aroon_up_norm = aroon_up / 100.0
+                aroon_down_norm = aroon_down / 100.0
+                features.extend(
+                    [aroon_up_norm.reshape(-1, 1), aroon_down_norm.reshape(-1, 1)]
+                )
+                self.feature_names.extend(
+                    [f"aroon_up_{period}", f"aroon_down_{period}"]
+                )
+            except Exception as e:
+                logger.warning(f"Ошибка расчета Aroon {period}: {e}")
+                # ИСПРАВЛЕНО: вместо константы используем трендовые показатели
+                price_trend = np.gradient(close_prices)
+                high_trend = np.gradient(high_prices)
+                features.extend(
+                    [
+                        np.clip((price_trend + 1) / 2, 0, 1).reshape(-1, 1),
+                        np.clip((high_trend + 1) / 2, 0, 1).reshape(-1, 1),
+                    ]
+                )
+                self.feature_names.extend(
+                    [f"aroon_up_{period}", f"aroon_down_{period}"]
+                )
+
+        # ADX и связанные индикаторы
+        for period in self.adx_periods:
+            try:
+                dx, adx, plus_di, minus_di = self._calculate_adx(
+                    high_prices, low_prices, close_prices, period
+                )
+                dx_norm = dx / 100.0
+                adx_norm = adx / 100.0
+                plus_di_norm = plus_di / 100.0
+                minus_di_norm = minus_di / 100.0
+                features.extend(
+                    [
+                        dx_norm.reshape(-1, 1),
+                        adx_norm.reshape(-1, 1),
+                        plus_di_norm.reshape(-1, 1),
+                        minus_di_norm.reshape(-1, 1),
+                    ]
+                )
+                self.feature_names.extend(
+                    [
+                        f"dx_{period}",
+                        f"adx_{period}",
+                        f"plus_di_{period}",
+                        f"minus_di_{period}",
+                    ]
+                )
+            except Exception as e:
+                logger.warning(f"Ошибка расчета ADX {period}: {e}")
+                features.extend([np.zeros((len(close_prices), 1)) for _ in range(4)])
+                self.feature_names.extend(
+                    [
+                        f"dx_{period}",
+                        f"adx_{period}",
+                        f"plus_di_{period}",
+                        f"minus_di_{period}",
+                    ]
+                )
+
+        # Ultimate Oscillator
+        try:
+            uo = self._calculate_ultimate_oscillator(
+                high_prices, low_prices, close_prices
             )
+            uo_norm = uo / 100.0
+            features.append(uo_norm.reshape(-1, 1))
+            self.feature_names.append("ultimate_oscillator")
+        except Exception as e:
+            logger.warning(f"Ошибка расчета Ultimate Oscillator: {e}")
+            features.append(np.full((len(close_prices), 1), 0.5))
+            self.feature_names.append("ultimate_oscillator")
 
-        # Stochastic
-        stoch = ta.momentum.StochasticOscillator(
-            df["high"], df["low"], df["close"], window=14, smooth_window=3
-        )
-        df["stoch_k"] = stoch.stoch()
-        df["stoch_d"] = stoch.stoch_signal()
-
-        # ADX
-        adx = ta.trend.ADXIndicator(df["high"], df["low"], df["close"])
-        df["adx"] = adx.adx()
-        df["adx_pos"] = adx.adx_pos()
-        df["adx_neg"] = adx.adx_neg()
+        # Balance of Power
+        try:
+            bop = self._calculate_balance_of_power(
+                open_prices, high_prices, low_prices, close_prices
+            )
+            bop_norm = self._normalize_series(bop)
+            features.append(bop_norm)
+            self.feature_names.append("balance_of_power")
+        except Exception as e:
+            logger.warning(f"Ошибка расчета Balance of Power: {e}")
+            features.append(np.zeros((len(close_prices), 1)))
+            self.feature_names.append("balance_of_power")
 
         # Parabolic SAR
-        psar = ta.trend.PSARIndicator(df["high"], df["low"], df["close"])
-        df["psar"] = psar.psar()
-        # Вместо отдельных psar_up и psar_down, создаем индикатор направления
-        df["psar_trend"] = (df["close"] > df["psar"]).astype(float)
+        try:
+            sar_default = self._calculate_parabolic_sar(high_prices, low_prices)
+            sar_distance = (close_prices - sar_default) / close_prices
+            features.append(sar_distance.reshape(-1, 1))
+            self.feature_names.append("sar_distance_default")
 
-        # ИСПРАВЛЕНО: Нормализованное расстояние PSAR по волатильности
-        # Деление на ATR делает метрику сравнимой между активами
-        df["psar_distance"] = (df["close"] - df["psar"]) / df["close"]
-        if "atr" in df.columns:
-            df["psar_distance_normalized"] = (df["close"] - df["psar"]) / (
-                df["atr"] + 1e-10
+            sar_aggressive = self._calculate_parabolic_sar(
+                high_prices, low_prices, 0.05, 0.3
             )
+            sar_distance_agg = (close_prices - sar_aggressive) / close_prices
+            features.append(sar_distance_agg.reshape(-1, 1))
+            self.feature_names.append("sar_distance_aggressive")
+        except Exception as e:
+            logger.warning(f"Ошибка расчета Parabolic SAR: {e}")
+            features.extend([np.zeros((len(close_prices), 1)) for _ in range(2)])
+            self.feature_names.extend(
+                ["sar_distance_default", "sar_distance_aggressive"]
+            )
+
+        # EMA - Exponential Moving Averages
+        for period in self.ema_periods:
+            try:
+                ema = self._calculate_ema(close_prices, period)
+                ema = np.nan_to_num(ema, nan=close_prices[0])
+                ema_distance = (close_prices - ema) / close_prices
+                features.append(ema_distance.reshape(-1, 1))
+                self.feature_names.append(f"ema_distance_{period}")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета EMA {period}: {e}")
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"ema_distance_{period}")
+
+        # Множественные конфигурации MACD
+        for fast, slow, signal in self.macd_configs:
+            try:
+                macd, macd_signal, macd_hist = self._calculate_macd(
+                    close_prices, fast, slow, signal
+                )
+                macd = np.nan_to_num(macd, nan=0.0)
+                macd_signal = np.nan_to_num(macd_signal, nan=0.0)
+                macd_hist = np.nan_to_num(macd_hist, nan=0.0)
+
+                # Нормализация MACD
+                macd_norm = self._normalize_series(macd)
+                macd_signal_norm = self._normalize_series(macd_signal)
+                macd_hist_norm = self._normalize_series(macd_hist)
+
+                features.extend([macd_norm, macd_signal_norm, macd_hist_norm])
+                self.feature_names.extend(
+                    [
+                        f"macd_{fast}_{slow}",
+                        f"macd_signal_{fast}_{slow}",
+                        f"macd_hist_{fast}_{slow}",
+                    ]
+                )
+            except Exception as e:
+                logger.warning(f"Ошибка расчета MACD {fast},{slow},{signal}: {e}")
+                features.extend([np.zeros((len(close_prices), 1)) for _ in range(3)])
+                self.feature_names.extend(
+                    [
+                        f"macd_{fast}_{slow}",
+                        f"macd_signal_{fast}_{slow}",
+                        f"macd_hist_{fast}_{slow}",
+                    ]
+                )
+
+        # Множественные конфигурации Stochastic
+        for k_period, d_period in self.stoch_configs:
+            try:
+                slowk, slowd = self._calculate_stochastic(
+                    high_prices, low_prices, close_prices, k_period, d_period
+                )
+                slowk = np.nan_to_num(slowk, nan=50.0) / 100.0
+                slowd = np.nan_to_num(slowd, nan=50.0) / 100.0
+
+                features.extend([slowk.reshape(-1, 1), slowd.reshape(-1, 1)])
+                self.feature_names.extend(
+                    [f"stoch_k_{k_period}_{d_period}", f"stoch_d_{k_period}_{d_period}"]
+                )
+            except Exception as e:
+                logger.warning(f"Ошибка расчета Stochastic {k_period},{d_period}: {e}")
+                features.extend(
+                    [np.full((len(close_prices), 1), 0.5) for _ in range(2)]
+                )
+                self.feature_names.extend(
+                    [f"stoch_k_{k_period}_{d_period}", f"stoch_d_{k_period}_{d_period}"]
+                )
+
+        # Дополнительные индикаторы для достижения 240 признаков
+        # Fisher Transform
+        try:
+            fisher = self._calculate_fisher_transform(
+                high_prices, low_prices, close_prices
+            )
+            fisher_norm = self._normalize_series(fisher)
+            features.append(fisher_norm)
+            self.feature_names.append("fisher_transform")
+        except Exception as e:
+            logger.warning(f"Ошибка расчета Fisher Transform: {e}")
+            features.append(np.zeros((len(close_prices), 1)))
+            self.feature_names.append("fisher_transform")
+
+        # Keltner Channel Position
+        if len(close_prices) >= 20:
+            try:
+                keltner_middle = self._calculate_ema(close_prices, 20)
+                atr20 = self._calculate_atr(high_prices, low_prices, close_prices, 20)
+                keltner_upper = keltner_middle + 2 * atr20
+                keltner_lower = keltner_middle - 2 * atr20
+                keltner_pos = (close_prices - keltner_lower) / (
+                    keltner_upper - keltner_lower + 1e-10
+                )
+                features.append(keltner_pos.reshape(-1, 1))
+                self.feature_names.append("keltner_position")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета Keltner Channel: {e}")
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append("keltner_position")
         else:
-            df["psar_distance_normalized"] = df["psar_distance"]
+            features.append(np.zeros((len(close_prices), 1)))
+            self.feature_names.append("keltner_position")
 
-        # ===== НОВЫЕ ТЕХНИЧЕСКИЕ ИНДИКАТОРЫ (2024 best practices) =====
-
-        # 1. Ichimoku Cloud - популярный в крипто
+        # Ichimoku Cloud компоненты (упрощенная версия)
         try:
-            ichimoku = ta.trend.IchimokuIndicator(
-                high=df["high"],
-                low=df["low"],
-                window1=9,  # Tenkan-sen
-                window2=26,  # Kijun-sen
-                window3=52,  # Senkou Span B
-            )
-            df["ichimoku_conversion"] = ichimoku.ichimoku_conversion_line()
-            df["ichimoku_base"] = ichimoku.ichimoku_base_line()
-            df["ichimoku_span_a"] = ichimoku.ichimoku_a()
-            df["ichimoku_span_b"] = ichimoku.ichimoku_b()
-            # Облако - расстояние между span A и B
-            df["ichimoku_cloud_thickness"] = (
-                df["ichimoku_span_a"] - df["ichimoku_span_b"]
-            ) / df["close"]
-            # Позиция цены относительно облака
-            df["price_vs_cloud"] = (
-                df["close"] - (df["ichimoku_span_a"] + df["ichimoku_span_b"]) / 2
-            ) / df["close"]
-        except:
-            pass
+            # Tenkan-sen (Conversion Line)
+            tenkan_period = 9
+            if len(high_prices) >= tenkan_period:
+                tenkan = (
+                    pd.Series(high_prices).rolling(tenkan_period).max()
+                    + pd.Series(low_prices).rolling(tenkan_period).min()
+                ) / 2
+                tenkan_distance = (
+                    close_prices - tenkan.fillna(close_prices[0])
+                ) / close_prices
+                features.append(tenkan_distance.values.reshape(-1, 1))
+                self.feature_names.append("ichimoku_tenkan_distance")
+            else:
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append("ichimoku_tenkan_distance")
 
-        # 2. Keltner Channels - альтернатива Bollinger Bands
+            # Kijun-sen (Base Line)
+            kijun_period = 26
+            if len(high_prices) >= kijun_period:
+                kijun = (
+                    pd.Series(high_prices).rolling(kijun_period).max()
+                    + pd.Series(low_prices).rolling(kijun_period).min()
+                ) / 2
+                kijun_distance = (
+                    close_prices - kijun.fillna(close_prices[0])
+                ) / close_prices
+                features.append(kijun_distance.values.reshape(-1, 1))
+                self.feature_names.append("ichimoku_kijun_distance")
+            else:
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append("ichimoku_kijun_distance")
+        except Exception as e:
+            logger.warning(f"Ошибка расчета Ichimoku: {e}")
+            features.extend([np.zeros((len(close_prices), 1)) for _ in range(2)])
+            self.feature_names.extend(
+                ["ichimoku_tenkan_distance", "ichimoku_kijun_distance"]
+            )
+
+        # Choppiness Index
+        if len(close_prices) >= 14:
+            try:
+                ci = self._calculate_choppiness_index(
+                    high_prices, low_prices, close_prices
+                )
+                features.append(ci.reshape(-1, 1))
+                self.feature_names.append("choppiness_index")
+            except Exception as e:
+                logger.warning(f"Ошибка расчета Choppiness Index: {e}")
+                features.append(np.full((len(close_prices), 1), 0.5))
+                self.feature_names.append("choppiness_index")
+        else:
+            features.append(np.full((len(close_prices), 1), 0.5))
+            self.feature_names.append("choppiness_index")
+
+        # Pivot Points
         try:
-            keltner = ta.volatility.KeltnerChannel(
-                high=df["high"],
-                low=df["low"],
-                close=df["close"],
-                window=20,
-                window_atr=10,
-            )
-            df["keltner_upper"] = keltner.keltner_channel_hband()
-            df["keltner_middle"] = keltner.keltner_channel_mband()
-            df["keltner_lower"] = keltner.keltner_channel_lband()
-            df["keltner_position"] = (df["close"] - df["keltner_lower"]) / (
-                df["keltner_upper"] - df["keltner_lower"]
-            )
-        except:
-            pass
+            pivot = (high_prices + low_prices + close_prices) / 3
+            r1 = 2 * pivot - low_prices
+            s1 = 2 * pivot - high_prices
 
-        # 3. Donchian Channels - для определения прорывов
-        try:
-            donchian = ta.volatility.DonchianChannel(
-                high=df["high"], low=df["low"], close=df["close"], window=20
-            )
-            df["donchian_upper"] = donchian.donchian_channel_hband()
-            df["donchian_middle"] = donchian.donchian_channel_mband()
-            df["donchian_lower"] = donchian.donchian_channel_lband()
-            # Индикатор прорыва
-            df["donchian_breakout"] = (
-                (df["close"] > df["donchian_upper"].shift(1))
-                | (df["close"] < df["donchian_lower"].shift(1))
-            ).astype(int)
-        except:
-            pass
+            pivot_distance = (close_prices - pivot) / close_prices
+            r1_distance = (r1 - close_prices) / close_prices
+            s1_distance = (close_prices - s1) / close_prices
 
-        # 4. Volume Weighted Moving Average (VWMA)
-        df["vwma_20"] = (df["close"] * df["volume"]).rolling(20).sum() / df[
-            "volume"
-        ].rolling(20).sum()
-        df["close_vwma_ratio"] = df["close"] / df["vwma_20"]
-
-        # 5. Money Flow Index (MFI) - объемный осциллятор
-        try:
-            mfi = ta.volume.MFIIndicator(
-                high=df["high"],
-                low=df["low"],
-                close=df["close"],
-                volume=df["volume"],
-                window=14,
-            )
-            df["mfi"] = mfi.money_flow_index()
-            df["mfi_overbought"] = (df["mfi"] > 80).astype(int)
-            df["mfi_oversold"] = (df["mfi"] < 20).astype(int)
-        except:
-            pass
-
-        # 6. Commodity Channel Index (CCI)
-        try:
-            cci = ta.trend.CCIIndicator(
-                high=df["high"], low=df["low"], close=df["close"], window=20
-            )
-            df["cci"] = cci.cci()
-            df["cci_overbought"] = (df["cci"] > 100).astype(int)
-            df["cci_oversold"] = (df["cci"] < -100).astype(int)
-        except:
-            pass
-
-        # 7. Williams %R
-        try:
-            williams = ta.momentum.WilliamsRIndicator(
-                high=df["high"], low=df["low"], close=df["close"], lbp=14
-            )
-            df["williams_r"] = williams.williams_r()
-        except:
-            pass
-
-        # 8. Ultimate Oscillator - комбинирует несколько периодов
-        try:
-            ultimate = ta.momentum.UltimateOscillator(
-                high=df["high"],
-                low=df["low"],
-                close=df["close"],
-                window1=7,
-                window2=14,
-                window3=28,
-            )
-            df["ultimate_oscillator"] = ultimate.ultimate_oscillator()
-        except:
-            pass
-
-        # 9. Accumulation/Distribution Index
-        try:
-            adl = ta.volume.AccDistIndexIndicator(
-                high=df["high"], low=df["low"], close=df["close"], volume=df["volume"]
-            )
-            df["accumulation_distribution"] = adl.acc_dist_index()
-        except:
-            pass
-
-        # 10. On Balance Volume (OBV)
-        try:
-            obv = ta.volume.OnBalanceVolumeIndicator(
-                close=df["close"], volume=df["volume"]
-            )
-            df["obv"] = obv.on_balance_volume()
-            # OBV trend
-            df["obv_ema"] = df["obv"].ewm(span=20).mean()
-            df["obv_trend"] = (df["obv"] > df["obv_ema"]).astype(int)
-        except:
-            pass
-
-        # 11. Chaikin Money Flow (CMF)
-        try:
-            cmf = ta.volume.ChaikinMoneyFlowIndicator(
-                high=df["high"],
-                low=df["low"],
-                close=df["close"],
-                volume=df["volume"],
-                window=20,
-            )
-            df["cmf"] = cmf.chaikin_money_flow()
-        except:
-            pass
-
-        # 12. Average Directional Movement Index Rating (ADXR)
-        try:
-            adxr = ta.trend.ADXIndicator(
-                high=df["high"], low=df["low"], close=df["close"], window=14
-            )
-            df["adxr"] = adxr.adx().rolling(14).mean()  # ADXR = среднее ADX
-        except:
-            pass
-
-        # 13. Aroon Indicator
-        try:
-            aroon = ta.trend.AroonIndicator(close=df["close"], window=25)
-            df["aroon_up"] = aroon.aroon_up()
-            df["aroon_down"] = aroon.aroon_down()
-            df["aroon_oscillator"] = df["aroon_up"] - df["aroon_down"]
-        except:
-            pass
-
-        # 14. Pivot Points (поддержка/сопротивление)
-        df["pivot"] = (df["high"] + df["low"] + df["close"]) / 3
-        df["resistance1"] = 2 * df["pivot"] - df["low"]
-        df["support1"] = 2 * df["pivot"] - df["high"]
-        df["resistance2"] = df["pivot"] + (df["high"] - df["low"])
-        df["support2"] = df["pivot"] - (df["high"] - df["low"])
-
-        # Расстояние до уровней
-        df["dist_to_resistance1"] = (df["resistance1"] - df["close"]) / df["close"]
-        df["dist_to_support1"] = (df["close"] - df["support1"]) / df["close"]
-
-        # 15. Rate of Change (ROC)
-        try:
-            roc = ta.momentum.ROCIndicator(close=df["close"], window=10)
-            df["roc"] = roc.roc()
-        except:
-            pass
-
-        # 16. Trix - тройное экспоненциальное сглаживание
-        try:
-            trix = ta.trend.TRIXIndicator(close=df["close"], window=15)
-            df["trix"] = trix.trix()
-        except:
-            pass
-
-        return df
-
-    def _create_microstructure_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Признаки микроструктуры рынка"""
-        # Спред high-low
-        df["hl_spread"] = self.safe_divide(
-            df["high"] - df["low"], df["close"], fill_value=0.0
-        )
-        df["hl_spread_ma"] = df["hl_spread"].rolling(20).mean()
-
-        # Направление цены и объем
-        df["price_direction"] = np.sign(df["close"] - df["open"])
-        df["directed_volume"] = df["volume"] * df["price_direction"]
-        df["volume_imbalance"] = (
-            df["directed_volume"].rolling(10).sum() / df["volume"].rolling(10).sum()
-        )
-
-        # Ценовое воздействие - улучшенная формула
-        # ИСПРАВЛЕНО: Используем dollar volume для более точной оценки
-        df["dollar_volume"] = df["volume"] * df["close"]
-        # ИСПРАВЛЕНО v3: Масштабируем price_impact для криптовалют
-        # где dollar_volume может быть от $10K до $100M+
-        # log10($10K) ≈ 4, log10($1M) ≈ 6, log10($100M) ≈ 8
-        # Умножаем на 100 для получения значимых значений price_impact
-        df["price_impact"] = self.safe_divide(
-            df["returns"].abs() * 100,  # Умножаем на 100 для правильного масштаба
-            np.log10(df["dollar_volume"] + 100),  # log10 для правильного масштаба
-            fill_value=0.0,
-            max_value=0.1,  # Лимит для нового масштаба
-        )
-
-        # Альтернативная формула с логарифмом объема
-        df["price_impact_log"] = self.safe_divide(
-            df["returns"].abs(),
-            np.log(df["volume"] + 10),  # Увеличен сдвиг для стабильности
-            fill_value=0.0,
-            max_value=10.0,
-        )
-
-        # ИСПРАВЛЕНО v3: Используем экспоненциальную формулу для toxicity
-        # toxicity = exp(-price_impact * 20)
-        # С новым масштабированием price_impact:
-        # При price_impact=0.04: toxicity≈0.45
-        # При price_impact=0.02: toxicity≈0.67
-        # При price_impact=0.01: toxicity≈0.82
-        df["toxicity"] = np.exp(-df["price_impact"] * 20)
-        df["toxicity"] = df["toxicity"].clip(0.3, 1.0)
-
-        # Амихуд неликвидность - скорректированная формула
-        # Традиционная формула: |returns| / dollar_volume
-        # Но мы масштабируем на миллион для получения значимых значений
-        df["amihud_illiquidity"] = self.safe_divide(
-            df["returns"].abs() * 1e6,  # Масштабируем на миллион
-            df["turnover"],
-            fill_value=0.0,
-            max_value=100.0,  # Ограничиваем разумным максимумом
-        )
-        df["amihud_ma"] = df["amihud_illiquidity"].rolling(20).mean()
-
-        # Кайл лямбда - правильная формула
-        # ИСПРАВЛЕНО: |price_change| / volume, а не отношение std
-        df["kyle_lambda"] = self.safe_divide(
-            df["returns"].abs(),
-            np.log(df["volume"] + 1),
-            fill_value=0.0,
-            max_value=10.0,
-        )
-
-        # Альтернативная версия - отношение волатильностей
-        df["volatility_volume_ratio"] = self.safe_divide(
-            df["returns"].rolling(10).std(),
-            df["volume"].rolling(10).std(),
-            fill_value=0.0,
-            max_value=10.0,
-        )
-
-        # Реализованная волатильность - правильная аннуализация
-        # ИСПРАВЛЕНО: Разные периоды аннуализации
-        # Для 15-минутных данных: 96 периодов в день, 365 дней в году
-        df["realized_vol_1h"] = df["returns"].rolling(4).std() * np.sqrt(
-            96
-        )  # Часовая волатильность -> дневная
-        df["realized_vol_daily"] = df["returns"].rolling(96).std() * np.sqrt(
-            96
-        )  # Дневная волатильность
-        df["realized_vol_annual"] = df["returns"].rolling(96).std() * np.sqrt(
-            96 * 365
-        )  # Годовая волатильность
-
-        # Для совместимости оставляем старое имя
-        df["realized_vol"] = df["realized_vol_daily"]
-
-        # Соотношение объема к волатильности
-        # ИСПРАВЛЕНО: Используем log объема и нормализуем на средний объем
-        avg_volume = df["volume"].rolling(96).mean()
-        normalized_volume = df["volume"] / (avg_volume + 1)  # Нормализованный объем
-
-        df["volume_volatility_ratio"] = self.safe_divide(
-            normalized_volume,
-            df["realized_vol"] * 100,  # Волатильность в процентах
-            fill_value=1.0,
-            max_value=100.0,  # Разумный лимит
-        )
-
-        return df
-
-    def _create_rally_detection_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Признаки для определения ралли и крупных движений"""
-        if not self.disable_progress:
-            self.logger.info("Создание признаков для определения ралли...")
-        initial_cols = len(df.columns)
-        features_created = []
-
-        # 1. Накопленный объем за разные периоды (8 признаков)
-        # ИСПРАВЛЕНО: Используем log-трансформацию для больших объемов
-        for hours in [4, 8, 12, 24]:
-            periods = hours * 4  # 15-минутные свечи
-            col_cumsum = f"volume_cumsum_{hours}h"
-            col_ratio = f"volume_cumsum_{hours}h_ratio"
-
-            # Используем log1p для безопасной трансформации
-            # log1p(x) = log(1 + x), безопасен для x=0
-            df[col_cumsum] = np.log1p(df["volume"].rolling(periods).sum())
-
-            # Отношение к среднему объему за более длинный период
-            avg_volume_long = df["volume"].rolling(periods * 4).mean()
-            df[col_ratio] = self.safe_divide(
-                df["volume"].rolling(periods).sum(),
-                avg_volume_long * periods,  # Нормализуем на ожидаемую сумму
-                fill_value=1.0,
-                max_value=10.0,  # Ограничиваем экстремальные всплески
-            )
-            features_created.extend([col_cumsum, col_ratio])
-
-        if not self.disable_progress:
-            self.logger.info(
-                f"  ✓ Накопленный объем: создано {len([f for f in features_created if 'volume_cumsum' in f])} признаков"
-            )
-
-        # 2. Аномальные всплески объема (3 признака)
-        volume_mean = df["volume"].rolling(96).mean()  # средний объем за 24ч
-        volume_std = df["volume"].rolling(96).std()
-        df["volume_zscore"] = self.safe_divide(
-            df["volume"] - volume_mean,
-            volume_std,
-            fill_value=0.0,
-            max_value=50.0,  # ИСПРАВЛЕНО: В крипто Z-score может достигать 20-50
-        )
-        df["volume_spike"] = (df["volume_zscore"] > 3).astype(int)
-        df["volume_spike_magnitude"] = df["volume_zscore"].clip(0, 10)
-        features_created.extend(
-            ["volume_zscore", "volume_spike", "volume_spike_magnitude"]
-        )
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Аномальные всплески объема: создано 3 признака")
-
-        # 3. Уровни поддержки/сопротивления (15 признаков)
-        # Локальные минимумы и максимумы
-        for window in [20, 50, 100]:  # 5ч, 12.5ч, 25ч
-            df[f"local_high_{window}"] = df["high"].rolling(window).max()
-            df[f"local_low_{window}"] = df["low"].rolling(window).min()
-            df[f"distance_from_high_{window}"] = (
-                df["close"] - df[f"local_high_{window}"]
-            ) / df["close"]
-            df[f"distance_from_low_{window}"] = (
-                df["close"] - df[f"local_low_{window}"]
-            ) / df["close"]
-            df[f"position_in_range_{window}"] = self.safe_divide(
-                df["close"] - df[f"local_low_{window}"],
-                df[f"local_high_{window}"] - df[f"local_low_{window}"],
-                fill_value=0.5,  # Середина диапазона
-                max_value=1.0,  # Позиция в диапазоне от 0 до 1
-            )
-            features_created.extend(
+            features.extend(
                 [
-                    f"local_high_{window}",
-                    f"local_low_{window}",
-                    f"distance_from_high_{window}",
-                    f"distance_from_low_{window}",
-                    f"position_in_range_{window}",
+                    pivot_distance.reshape(-1, 1),
+                    r1_distance.reshape(-1, 1),
+                    s1_distance.reshape(-1, 1),
+                ]
+            )
+            self.feature_names.extend(["pivot_distance", "r1_distance", "s1_distance"])
+        except Exception as e:
+            logger.warning(f"Ошибка расчета Pivot Points: {e}")
+            features.extend([np.zeros((len(close_prices), 1)) for _ in range(3)])
+            self.feature_names.extend(["pivot_distance", "r1_distance", "s1_distance"])
+
+        return np.concatenate(features, axis=1)
+
+    def _calculate_statistical_features(self, df: pd.DataFrame) -> np.ndarray:
+        """Расчет статистических признаков"""
+        features = []
+        close_prices = df["close"].values
+        returns = np.diff(close_prices) / close_prices[:-1]
+        returns = np.concatenate([np.array([0]), returns])
+
+        # Волатильность
+        for period in [5, 10, 20, 50]:
+            if len(returns) >= period:
+                volatility = pd.Series(returns).rolling(period).std().fillna(0)
+                features.append(volatility.values.reshape(-1, 1))
+                self.feature_names.append(f"volatility_{period}")
+
+        # Скользящие статистики доходности
+        for period in [10, 20]:
+            if len(returns) >= period:
+                returns_series = pd.Series(returns)
+
+                # Асимметрия
+                skewness = returns_series.rolling(period).skew().fillna(0)
+                features.append(skewness.values.reshape(-1, 1))
+                self.feature_names.append(f"skewness_{period}")
+
+                # Эксцесс
+                kurtosis = returns_series.rolling(period).kurt().fillna(0)
+                features.append(kurtosis.values.reshape(-1, 1))
+                self.feature_names.append(f"kurtosis_{period}")
+
+        # Z-score цены
+        for period in [20, 50]:
+            if len(close_prices) >= period:
+                price_series = pd.Series(close_prices)
+                rolling_mean = price_series.rolling(period).mean()
+                rolling_std = price_series.rolling(period).std()
+                z_score = (close_prices - rolling_mean) / (rolling_std + 1e-8)
+                z_score = z_score.fillna(0)
+                features.append(z_score.values.reshape(-1, 1))
+                self.feature_names.append(f"z_score_{period}")
+
+        # Дополнительные статистические признаки
+        # Коэффициент вариации
+        for period in [10, 20, 30]:
+            if len(returns) >= period:
+                cv = pd.Series(returns).rolling(period).std() / (
+                    pd.Series(returns).rolling(period).mean() + 1e-8
+                )
+                cv = cv.fillna(0)
+                features.append(cv.values.reshape(-1, 1))
+                self.feature_names.append(f"coefficient_variation_{period}")
+
+        # Downside deviation
+        for period in [10, 20]:
+            if len(returns) >= period:
+                downside_returns = np.where(returns < 0, returns, 0)
+                downside_dev = (
+                    pd.Series(downside_returns).rolling(period).std().fillna(0)
+                )
+                features.append(downside_dev.values.reshape(-1, 1))
+                self.feature_names.append(f"downside_deviation_{period}")
+
+        # Sharpe ratio
+        for period in [20, 50]:
+            if len(returns) >= period:
+                sharpe = pd.Series(returns).rolling(period).mean() / (
+                    pd.Series(returns).rolling(period).std() + 1e-8
+                )
+                sharpe = sharpe.fillna(0)
+                features.append(sharpe.values.reshape(-1, 1))
+                self.feature_names.append(f"sharpe_ratio_{period}")
+
+        # Maximum drawdown
+        for period in [20, 50]:
+            if len(close_prices) >= period:
+                rolling_max = pd.Series(close_prices).rolling(period).max()
+                drawdown = (close_prices - rolling_max) / rolling_max
+                features.append(drawdown.fillna(0).values.reshape(-1, 1))
+                self.feature_names.append(f"drawdown_{period}")
+
+        # Hurst exponent approximation
+        if len(close_prices) >= 100:
+            # Простая аппроксимация через R/S анализ
+            hurst_estimate = self._estimate_hurst_exponent(close_prices[-100:])
+            hurst_array = np.full(len(close_prices), hurst_estimate)
+            features.append(hurst_array.reshape(-1, 1))
+            self.feature_names.append("hurst_exponent")
+        else:
+            features.append(np.full((len(close_prices), 1), 0.5))
+            self.feature_names.append("hurst_exponent")
+
+        return np.concatenate(features, axis=1)
+
+    def _calculate_time_features(self, df: pd.DataFrame) -> np.ndarray:
+        """Расчет временных признаков"""
+        features = []
+
+        if "datetime" in df.columns:
+            dt_series = pd.to_datetime(df["datetime"])
+
+            # Час дня (нормализованный)
+            hour = dt_series.dt.hour / 23.0
+            features.append(hour.values.reshape(-1, 1))
+            self.feature_names.append("hour_norm")
+
+            # День недели (нормализованный)
+            day_of_week = dt_series.dt.dayofweek / 6.0
+            features.append(day_of_week.values.reshape(-1, 1))
+            self.feature_names.append("day_of_week_norm")
+
+            # Минута часа (нормализованная)
+            minute = dt_series.dt.minute / 59.0
+            features.append(minute.values.reshape(-1, 1))
+            self.feature_names.append("minute_norm")
+
+            # День месяца (нормализованный)
+            day_of_month = dt_series.dt.day / 31.0
+            features.append(day_of_month.values.reshape(-1, 1))
+            self.feature_names.append("day_of_month_norm")
+
+            # Месяц (нормализованный)
+            month = dt_series.dt.month / 12.0
+            features.append(month.values.reshape(-1, 1))
+            self.feature_names.append("month_norm")
+
+            # Квартал
+            quarter = dt_series.dt.quarter / 4.0
+            features.append(quarter.values.reshape(-1, 1))
+            self.feature_names.append("quarter_norm")
+
+            # Выходной день
+            is_weekend = (dt_series.dt.dayofweek >= 5).astype(float)
+            features.append(is_weekend.values.reshape(-1, 1))
+            self.feature_names.append("is_weekend")
+
+            # Торговая сессия (азиатская, европейская, американская)
+            # Азиатская: 00:00-08:00 UTC
+            is_asian = ((dt_series.dt.hour >= 0) & (dt_series.dt.hour < 8)).astype(
+                float
+            )
+            features.append(is_asian.values.reshape(-1, 1))
+            self.feature_names.append("is_asian_session")
+
+            # Европейская: 08:00-16:00 UTC
+            is_european = ((dt_series.dt.hour >= 8) & (dt_series.dt.hour < 16)).astype(
+                float
+            )
+            features.append(is_european.values.reshape(-1, 1))
+            self.feature_names.append("is_european_session")
+
+            # Американская: 16:00-24:00 UTC
+            is_american = (dt_series.dt.hour >= 16).astype(float)
+            features.append(is_american.values.reshape(-1, 1))
+            self.feature_names.append("is_american_session")
+
+            # Циклические представления времени
+            # Sin/Cos представление часа
+            hour_sin = np.sin(2 * np.pi * dt_series.dt.hour / 24)
+            hour_cos = np.cos(2 * np.pi * dt_series.dt.hour / 24)
+            features.extend(
+                [hour_sin.values.reshape(-1, 1), hour_cos.values.reshape(-1, 1)]
+            )
+            self.feature_names.extend(["hour_sin", "hour_cos"])
+
+            # Sin/Cos представление дня недели
+            dow_sin = np.sin(2 * np.pi * dt_series.dt.dayofweek / 7)
+            dow_cos = np.cos(2 * np.pi * dt_series.dt.dayofweek / 7)
+            features.extend(
+                [dow_sin.values.reshape(-1, 1), dow_cos.values.reshape(-1, 1)]
+            )
+            self.feature_names.extend(["day_of_week_sin", "day_of_week_cos"])
+
+            # Sin/Cos представление дня месяца
+            dom_sin = np.sin(2 * np.pi * dt_series.dt.day / 31)
+            dom_cos = np.cos(2 * np.pi * dt_series.dt.day / 31)
+            features.extend(
+                [dom_sin.values.reshape(-1, 1), dom_cos.values.reshape(-1, 1)]
+            )
+            self.feature_names.extend(["day_of_month_sin", "day_of_month_cos"])
+
+            # Sin/Cos представление месяца
+            month_sin = np.sin(2 * np.pi * dt_series.dt.month / 12)
+            month_cos = np.cos(2 * np.pi * dt_series.dt.month / 12)
+            features.extend(
+                [month_sin.values.reshape(-1, 1), month_cos.values.reshape(-1, 1)]
+            )
+            self.feature_names.extend(["month_sin", "month_cos"])
+
+        else:
+            # Если нет времени, заполняем нулями
+            n_rows = len(df)
+            n_time_features = 18  # Обновленное количество временных признаков
+            features.extend([np.zeros((n_rows, 1)) for _ in range(n_time_features)])
+            self.feature_names.extend(
+                [
+                    "hour_norm",
+                    "day_of_week_norm",
+                    "minute_norm",
+                    "day_of_month_norm",
+                    "month_norm",
+                    "quarter_norm",
+                    "is_weekend",
+                    "is_asian_session",
+                    "is_european_session",
+                    "is_american_session",
+                    "hour_sin",
+                    "hour_cos",
+                    "day_of_week_sin",
+                    "day_of_week_cos",
+                    "day_of_month_sin",
+                    "day_of_month_cos",
+                    "month_sin",
+                    "month_cos",
                 ]
             )
 
-        if not self.disable_progress:
-            self.logger.info("  ✓ Уровни поддержки/сопротивления: создано 15 признаков")
+        return np.concatenate(features, axis=1)
 
-        # 4. Сжатие волатильности (признак будущего прорыва) (2 признака)
-        # Bollinger Bands уже есть, добавим Keltner Channels для сравнения
-        atr_multiplier = 2.0
-        ema20 = df["close"].ewm(span=20, adjust=False).mean()
-        kc_upper = ema20 + atr_multiplier * df["atr"]
-        kc_lower = ema20 - atr_multiplier * df["atr"]
-        # ИСПРАВЛЕНО: сравниваем относительные ширины каналов
-        kc_width = (kc_upper - kc_lower) / df["close"]
+    def _normalize_prices(self, prices: np.ndarray) -> np.ndarray:
+        """Нормализация ценовых рядов"""
+        if len(prices) == 0:
+            return prices.reshape(-1, 1)
 
-        df["volatility_squeeze"] = (df["bb_width"] < kc_width).astype(int)
-        # ИСПРАВЛЕНО: продолжительность сжатия считается только для периодов squeeze
-        squeeze_group = (
-            df["volatility_squeeze"] != df["volatility_squeeze"].shift()
-        ).cumsum()
-        df["volatility_squeeze_duration"] = (
-            df["volatility_squeeze"].groupby(squeeze_group).cumsum()
-        )
-        df.loc[df["volatility_squeeze"] == 0, "volatility_squeeze_duration"] = 0
-        features_created.extend(["volatility_squeeze", "volatility_squeeze_duration"])
+        # Log returns нормализация
+        log_prices = np.log(prices + 1e-8)
+        normalized = (log_prices - np.mean(log_prices)) / (np.std(log_prices) + 1e-8)
+        return normalized.reshape(-1, 1)
 
-        if not self.disable_progress:
-            self.logger.info("  ✓ Сжатие волатильности: создано 2 признака")
+    def _normalize_series(self, series: np.ndarray) -> np.ndarray:
+        """Нормализация временного ряда"""
+        if len(series) == 0:
+            return series.reshape(-1, 1)
 
-        # 5. Дивергенции RSI/MACD с ценой (4 признака)
-        # RSI дивергенция
-        price_higher = (df["close"] > df["close"].shift(14)) & (
-            df["close"].shift(14) > df["close"].shift(28)
-        )
-        rsi_lower = (df["rsi"] < df["rsi"].shift(14)) & (
-            df["rsi"].shift(14) < df["rsi"].shift(28)
-        )
-        df["bearish_divergence_rsi"] = (price_higher & rsi_lower).astype(int)
+        series_clean = np.nan_to_num(series, nan=0.0)
+        mean_val = np.mean(series_clean)
+        std_val = np.std(series_clean)
 
-        price_lower = (df["close"] < df["close"].shift(14)) & (
-            df["close"].shift(14) < df["close"].shift(28)
-        )
-        rsi_higher = (df["rsi"] > df["rsi"].shift(14)) & (
-            df["rsi"].shift(14) > df["rsi"].shift(28)
-        )
-        df["bullish_divergence_rsi"] = (price_lower & rsi_higher).astype(int)
-
-        # MACD дивергенция
-        macd_lower = (df["macd"] < df["macd"].shift(14)) & (
-            df["macd"].shift(14) < df["macd"].shift(28)
-        )
-        df["bearish_divergence_macd"] = (price_higher & macd_lower).astype(int)
-
-        macd_higher = (df["macd"] > df["macd"].shift(14)) & (
-            df["macd"].shift(14) > df["macd"].shift(28)
-        )
-        df["bullish_divergence_macd"] = (price_lower & macd_higher).astype(int)
-        features_created.extend(
-            [
-                "bearish_divergence_rsi",
-                "bullish_divergence_rsi",
-                "bearish_divergence_macd",
-                "bullish_divergence_macd",
-            ]
-        )
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Дивергенции RSI/MACD: создано 4 признака")
-
-        # 6. Паттерны накопления/распределения (4 признака)
-        # On-Balance Volume (OBV)
-        # ИСПРАВЛЕНО: Используем log-трансформацию для контроля масштаба
-        obv_change = df["volume"] * ((df["close"] > df["close"].shift(1)) * 2 - 1)
-
-        # Используем скользящее окно с log-трансформацией
-        obv_raw = obv_change.rolling(100).sum()  # 100 периодов (25 часов)
-
-        # Применяем log-трансформацию для контроля масштаба
-        df["obv"] = np.sign(obv_raw) * np.log1p(np.abs(obv_raw))
-
-        # Нормализуем OBV относительно среднего объема для сравнимости между активами
-        avg_volume = df["volume"].rolling(100).mean()
-        df["obv_normalized"] = self.safe_divide(
-            df["obv"],
-            np.log1p(avg_volume),  # Логарифмируем и средний объем
-            fill_value=0.0,
-            max_value=20.0,
-        )
-
-        df["obv_ema"] = df["obv"].ewm(span=20, adjust=False).mean()
-        df["obv_divergence"] = df["obv"] - df["obv_ema"]
-
-        # Chaikin Money Flow
-        mfm = ((df["close"] - df["low"]) - (df["high"] - df["close"])) / (
-            df["high"] - df["low"] + 1e-10
-        )
-        mfv = mfm * df["volume"]
-        df["cmf"] = mfv.rolling(20).sum() / df["volume"].rolling(20).sum()
-        features_created.extend(
-            ["obv", "obv_normalized", "obv_ema", "obv_divergence", "cmf"]
-        )
-
-        if not self.disable_progress:
-            self.logger.info(
-                "  ✓ Паттерны накопления/распределения: создано 5 признаков"
-            )
-
-        # 7. Momentum и ускорение (4 признака)
-        # Используем groupby для правильного расчета по символам
-        df["momentum_1h"] = df.groupby("symbol")["close"].pct_change(4) * 100  # 1 час
-        df["momentum_4h"] = df.groupby("symbol")["close"].pct_change(16) * 100  # 4 часа
-        df["momentum_24h"] = (
-            df.groupby("symbol")["close"].pct_change(96) * 100
-        )  # 24 часа
-
-        # Ускорение (изменение momentum)
-        df["momentum_acceleration"] = df.groupby("symbol")["momentum_1h"].transform(
-            lambda x: x - x.shift(4)
-        )
-        features_created.extend(
-            ["momentum_1h", "momentum_4h", "momentum_24h", "momentum_acceleration"]
-        )
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Momentum индикаторы: создано 4 признака")
-
-        # 8. Паттерн "пружина" - сильное сжатие перед движением (1 признак)
-        df["spring_pattern"] = (
-            (df["volatility_squeeze"] == 1)
-            & (df["volume_spike"] == 1)
-            & (
-                df["atr_pct"].rolling(20).mean()
-                < df["atr_pct"].rolling(100).mean() * 0.7
-            )
-        ).astype(int)
-        features_created.append("spring_pattern")
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Паттерн 'пружина': создан 1 признак")
-
-        # Итоговая статистика
-        total_created = len(features_created)
-        if not self.disable_progress:
-            self.logger.info(
-                f"✅ Rally detection features: всего создано {total_created} признаков"
-            )
-            self.logger.info(f"   Детализация: {features_created}")
-
-        return df
-
-    def _create_signal_quality_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Признаки для оценки качества торговых сигналов"""
-        if not self.disable_progress:
-            self.logger.info("Создание признаков качества сигналов...")
-        initial_cols = len(df.columns)
-        features_created = []
-
-        # 1. Согласованность индикаторов
-        # Определяем сигналы от разных индикаторов
-        indicators_long = []
-        indicators_short = []
-        indicators_used = []
-
-        # RSI
-        if "rsi" in df.columns:
-            indicators_long.append((df["rsi"] < 30).astype(int))
-            indicators_short.append((df["rsi"] > 70).astype(int))
-            indicators_used.append("RSI")
-
-        # MACD
-        if "macd_diff" in df.columns:
-            indicators_long.append((df["macd_diff"] > 0).astype(int))
-            indicators_short.append((df["macd_diff"] < 0).astype(int))
-            indicators_used.append("MACD")
-
-        # Bollinger Bands
-        if "bb_position" in df.columns:
-            indicators_long.append((df["bb_position"] < 0.2).astype(int))
-            indicators_short.append((df["bb_position"] > 0.8).astype(int))
-            indicators_used.append("Bollinger Bands")
-
-        # Stochastic
-        if "stoch_k" in df.columns:
-            indicators_long.append((df["stoch_k"] < 20).astype(int))
-            indicators_short.append((df["stoch_k"] > 80).astype(int))
-            indicators_used.append("Stochastic")
-
-        # ADX (сила тренда)
-        if "adx" in df.columns:
-            strong_trend = (df["adx"] > 25).astype(int)
-            indicators_long.append(strong_trend & (df["adx_pos"] > df["adx_neg"]))
-            indicators_short.append(strong_trend & (df["adx_neg"] > df["adx_pos"]))
-            indicators_used.append("ADX")
-
-        # Moving averages
-        if "close_sma_20_ratio" in df.columns and "close_sma_50_ratio" in df.columns:
-            indicators_long.append(
-                (df["close_sma_20_ratio"] > df["close_sma_50_ratio"]).astype(int)
-            )
-            indicators_short.append(
-                (df["close_sma_20_ratio"] < df["close_sma_50_ratio"]).astype(int)
-            )
-            indicators_used.append("Moving Averages")
-
-        # Считаем согласованность
-        if indicators_long:
-            df["indicators_consensus_long"] = sum(indicators_long) / len(
-                indicators_long
-            )
-            df["indicators_count_long"] = sum(indicators_long)
+        if std_val > 1e-8:
+            normalized = (series_clean - mean_val) / std_val
         else:
-            df["indicators_consensus_long"] = 0
-            df["indicators_count_long"] = 0
+            normalized = series_clean
 
-        if indicators_short:
-            df["indicators_consensus_short"] = sum(indicators_short) / len(
-                indicators_short
-            )
-            df["indicators_count_short"] = sum(indicators_short)
-        else:
-            df["indicators_consensus_short"] = 0
-            df["indicators_count_short"] = 0
+        return normalized.reshape(-1, 1)
 
-        features_created.extend(
-            [
-                "indicators_consensus_long",
-                "indicators_count_long",
-                "indicators_consensus_short",
-                "indicators_count_short",
-            ]
+    def _handle_nan_values(self, features_array: np.ndarray) -> np.ndarray:
+        """Обработка NaN значений БЕЗ изменения масштаба данных"""
+        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убрана нормализация, которая делала все данные одинаковыми
+        # Теперь ТОЛЬКО заменяем NaN/inf и делаем очень мягкий клиппинг для защиты от выбросов
+
+        # Замена NaN на 0, inf на большие но конечные значения
+        features_array = np.nan_to_num(features_array, nan=0.0, posinf=1e6, neginf=-1e6)
+
+        # Очень мягкий клиппинг экстремальных значений БЕЗ нормализации
+        # Большие пределы чтобы сохранить различия между BTC (40000) и ETH (2500)
+        features_array = np.clip(features_array, -1e6, 1e6)
+
+        logger.debug(
+            f"После обработки NaN: min={features_array.min():.3f}, max={features_array.max():.3f}, "
+            f"std={features_array.std():.3f}, уникальных значений={np.unique(features_array).size}"
         )
 
-        if not self.disable_progress:
-            self.logger.info("  ✓ Согласованность индикаторов: создано 4 признака")
-            self.logger.info(
-                f"    Используемые индикаторы: {', '.join(indicators_used)}"
-            )
+        return features_array
 
-        # 2. Сила тренда на старших таймфреймах (4 признака)
-        # ИСПРАВЛЕНО: Нормализуем тренды относительно цены для избежания больших значений
-        # Эмулируем 1-часовой таймфрейм (4 свечи по 15 мин)
-        ma_1h = df["close"].rolling(4).mean()
-        ma_1h_prev = ma_1h.shift(4)
-        df["trend_1h"] = (
-            self.safe_divide(
-                ma_1h - ma_1h_prev,
-                ma_1h_prev,
-                fill_value=0.0,
-                max_value=0.1,  # Максимум 10% изменение
-            )
-            * 100
-        )  # В процентах
+    def get_feature_names(self) -> List[str]:
+        """Получить названия признаков"""
+        return self.feature_names
 
-        df["trend_1h_strength"] = self.safe_divide(
-            df["trend_1h"],
-            df["atr_pct"].rolling(4).mean() * 100,  # ATR уже в процентах
-            fill_value=0.0,
-            max_value=10.0,
+    def get_feature_count(self) -> int:
+        """Получить количество признаков"""
+        return len(self.feature_names)
+
+    # Методы расчета технических индикаторов (замена talib)
+
+    def _calculate_rsi(self, prices: np.ndarray, period: int = 14) -> np.ndarray:
+        """Расчет RSI индикатора"""
+        if len(prices) < period + 1:
+            return np.full_like(prices, 50.0)
+
+        deltas = np.diff(prices)
+        gains = np.where(deltas > 0, deltas, 0)
+        losses = np.where(deltas < 0, -deltas, 0)
+
+        # Первое значение - простое среднее
+        avg_gain = np.mean(gains[:period])
+        avg_loss = np.mean(losses[:period])
+
+        rsi = np.full(len(prices), 50.0)
+
+        if avg_loss != 0:
+            rs = avg_gain / avg_loss
+            rsi[period] = 100 - (100 / (1 + rs))
+
+        # Последующие значения - экспоненциальное сглаживание
+        for i in range(period + 1, len(prices)):
+            gain = gains[i - 1]
+            loss = losses[i - 1]
+
+            avg_gain = (avg_gain * (period - 1) + gain) / period
+            avg_loss = (avg_loss * (period - 1) + loss) / period
+
+            if avg_loss != 0:
+                rs = avg_gain / avg_loss
+                rsi[i] = 100 - (100 / (1 + rs))
+
+        return rsi
+
+    def _calculate_macd(
+        self, prices: np.ndarray, fast: int = 12, slow: int = 26, signal: int = 9
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Расчет MACD индикатора"""
+        if len(prices) < slow:
+            zeros = np.zeros_like(prices)
+            return zeros, zeros, zeros
+
+        # Экспоненциальные скользящие средние
+        ema_fast = self._calculate_ema(prices, fast)
+        ema_slow = self._calculate_ema(prices, slow)
+
+        # MACD линия
+        macd_line = ema_fast - ema_slow
+
+        # Сигнальная линия
+        signal_line = self._calculate_ema(macd_line, signal)
+
+        # Гистограмма
+        histogram = macd_line - signal_line
+
+        return macd_line, signal_line, histogram
+
+    def _calculate_ema(self, prices: np.ndarray, period: int) -> np.ndarray:
+        """Расчет экспоненциальной скользящей средней"""
+        if len(prices) < period:
+            return np.full_like(prices, prices[0] if len(prices) > 0 else 0)
+
+        alpha = 2.0 / (period + 1)
+        ema = np.zeros_like(prices)
+        ema[0] = prices[0]
+
+        for i in range(1, len(prices)):
+            ema[i] = alpha * prices[i] + (1 - alpha) * ema[i - 1]
+
+        return ema
+
+    def _calculate_sma(self, prices: np.ndarray, period: int) -> np.ndarray:
+        """Расчет простой скользящей средней"""
+        if len(prices) < period:
+            return np.full_like(prices, np.mean(prices) if len(prices) > 0 else 0)
+
+        sma = np.zeros_like(prices)
+        sma[: period - 1] = prices[0]  # Заполняем начальные значения
+
+        for i in range(period - 1, len(prices)):
+            sma[i] = np.mean(prices[i - period + 1 : i + 1])
+
+        return sma
+
+    def _calculate_bollinger_bands(
+        self, prices: np.ndarray, period: int = 20, std_dev: float = 2.0
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Расчет полос Боллинджера"""
+        if len(prices) < period:
+            middle = np.full_like(prices, np.mean(prices) if len(prices) > 0 else 0)
+            return middle, middle, middle
+
+        middle = self._calculate_sma(prices, period)
+        std = np.zeros_like(prices)
+
+        # Расчет стандартного отклонения
+        for i in range(period - 1, len(prices)):
+            std[i] = np.std(prices[i - period + 1 : i + 1])
+
+        # Заполняем начальные значения
+        std[: period - 1] = std[period - 1] if period - 1 < len(std) else 0
+
+        upper = middle + (std * std_dev)
+        lower = middle - (std * std_dev)
+
+        return upper, middle, lower
+
+    def _calculate_atr(
+        self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14
+    ) -> np.ndarray:
+        """Расчет Average True Range"""
+        if len(high) < 2:
+            return np.zeros_like(high)
+
+        # True Range
+        tr1 = high - low
+        tr2 = np.abs(high - np.roll(close, 1))
+        tr3 = np.abs(low - np.roll(close, 1))
+
+        tr = np.maximum(tr1, np.maximum(tr2, tr3))
+        tr[0] = tr1[0]  # Первое значение
+
+        # ATR как скользящее среднее TR
+        if len(tr) < period:
+            return np.full_like(tr, np.mean(tr))
+
+        atr = np.zeros_like(tr)
+        atr[period - 1] = np.mean(tr[:period])
+
+        # Экспоненциальное сглаживание
+        for i in range(period, len(tr)):
+            atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period
+
+        # Заполняем начальные значения
+        atr[: period - 1] = atr[period - 1] if period - 1 < len(atr) else 0
+
+        return atr
+
+    def _calculate_stochastic(
+        self,
+        high: np.ndarray,
+        low: np.ndarray,
+        close: np.ndarray,
+        k_period: int = 14,
+        d_period: int = 3,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Расчет стохастического осциллятора"""
+        if len(high) < k_period:
+            slowk = np.full_like(close, 50.0)
+            slowd = np.full_like(close, 50.0)
+            return slowk, slowd
+
+        slowk = np.zeros_like(close)
+
+        for i in range(k_period - 1, len(close)):
+            period_high = np.max(high[i - k_period + 1 : i + 1])
+            period_low = np.min(low[i - k_period + 1 : i + 1])
+
+            if period_high != period_low:
+                slowk[i] = 100 * (close[i] - period_low) / (period_high - period_low)
+            else:
+                slowk[i] = 50.0
+
+        # Заполняем начальные значения
+        slowk[: k_period - 1] = (
+            slowk[k_period - 1] if k_period - 1 < len(slowk) else 50.0
         )
 
-        # Эмулируем 4-часовой таймфрейм (16 свечей)
-        ma_4h = df["close"].rolling(16).mean()
-        ma_4h_prev = ma_4h.shift(16)
-        df["trend_4h"] = (
-            self.safe_divide(
-                ma_4h - ma_4h_prev,
-                ma_4h_prev,
-                fill_value=0.0,
-                max_value=0.2,  # Максимум 20% изменение
-            )
-            * 100
-        )  # В процентах
+        # %D - скользящее среднее от %K
+        slowd = self._calculate_sma(slowk, d_period)
 
-        df["trend_4h_strength"] = self.safe_divide(
-            df["trend_4h"],
-            df["atr_pct"].rolling(16).mean() * 100,  # ATR уже в процентах
-            fill_value=0.0,
-            max_value=10.0,
+        return slowk, slowd
+
+    def _calculate_williams_r(
+        self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14
+    ) -> np.ndarray:
+        """Расчет Williams %R"""
+        if len(high) < period:
+            return np.full_like(close, -50.0)
+
+        willr = np.zeros_like(close)
+
+        for i in range(period - 1, len(close)):
+            period_high = np.max(high[i - period + 1 : i + 1])
+            period_low = np.min(low[i - period + 1 : i + 1])
+
+            if period_high != period_low:
+                willr[i] = -100 * (period_high - close[i]) / (period_high - period_low)
+            else:
+                willr[i] = -50.0
+
+        # Заполняем начальные значения
+        willr[: period - 1] = willr[period - 1] if period - 1 < len(willr) else -50.0
+
+        return willr
+
+    def _calculate_cci(
+        self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 20
+    ) -> np.ndarray:
+        """Расчет Commodity Channel Index"""
+        if len(high) < period:
+            return np.zeros_like(close)
+
+        # Typical Price
+        typical_price = (high + low + close) / 3
+
+        cci = np.zeros_like(close)
+
+        for i in range(period - 1, len(close)):
+            tp_slice = typical_price[i - period + 1 : i + 1]
+            sma = np.mean(tp_slice)
+            mad = np.mean(np.abs(tp_slice - sma))
+
+            if mad != 0:
+                cci[i] = (typical_price[i] - sma) / (0.015 * mad)
+            else:
+                cci[i] = 0
+
+        return cci
+
+    def _calculate_roc(self, prices: np.ndarray, period: int = 10) -> np.ndarray:
+        """Расчет Rate of Change"""
+        if len(prices) < period + 1:
+            return np.zeros_like(prices)
+
+        roc = np.zeros_like(prices)
+
+        for i in range(period, len(prices)):
+            if prices[i - period] != 0:
+                roc[i] = ((prices[i] - prices[i - period]) / prices[i - period]) * 100
+
+        return roc
+
+    def _calculate_mfi(
+        self,
+        high: np.ndarray,
+        low: np.ndarray,
+        close: np.ndarray,
+        volume: np.ndarray,
+        period: int = 14,
+    ) -> np.ndarray:
+        """Расчет Money Flow Index"""
+        if len(high) < period + 1:
+            return np.full_like(close, 50.0)
+
+        typical_price = (high + low + close) / 3
+        raw_money_flow = typical_price * volume
+
+        mfi = np.full_like(close, 50.0)
+
+        for i in range(period, len(close)):
+            positive_flow = 0
+            negative_flow = 0
+
+            for j in range(i - period + 1, i + 1):
+                if j > 0:
+                    if typical_price[j] > typical_price[j - 1]:
+                        positive_flow += raw_money_flow[j]
+                    elif typical_price[j] < typical_price[j - 1]:
+                        negative_flow += raw_money_flow[j]
+
+            if negative_flow > 0:
+                money_ratio = positive_flow / negative_flow
+                mfi[i] = 100 - (100 / (1 + money_ratio))
+            else:
+                mfi[i] = 100
+
+        return mfi
+
+    def _calculate_momentum(self, prices: np.ndarray, period: int = 10) -> np.ndarray:
+        """Расчет Momentum индикатора"""
+        if len(prices) < period:
+            return np.zeros_like(prices)
+
+        momentum = np.zeros_like(prices)
+
+        for i in range(period, len(prices)):
+            momentum[i] = prices[i] - prices[i - period]
+
+        return momentum
+
+    def _calculate_trix(self, prices: np.ndarray, period: int = 14) -> np.ndarray:
+        """Расчет TRIX индикатора"""
+        if len(prices) < period * 3:
+            return np.zeros_like(prices)
+
+        # Тройное экспоненциальное сглаживание
+        ema1 = self._calculate_ema(prices, period)
+        ema2 = self._calculate_ema(ema1, period)
+        ema3 = self._calculate_ema(ema2, period)
+
+        # Rate of change EMA3
+        trix = np.zeros_like(prices)
+        for i in range(1, len(ema3)):
+            if ema3[i - 1] != 0:
+                trix[i] = ((ema3[i] - ema3[i - 1]) / ema3[i - 1]) * 10000
+
+        return trix
+
+    def _calculate_aroon(
+        self, high: np.ndarray, low: np.ndarray, period: int = 25
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Расчет Aroon индикатора"""
+        if len(high) < period:
+            return np.full_like(high, 50.0), np.full_like(low, 50.0)
+
+        aroon_up = np.zeros_like(high)
+        aroon_down = np.zeros_like(low)
+
+        for i in range(period - 1, len(high)):
+            high_slice = high[i - period + 1 : i + 1]
+            low_slice = low[i - period + 1 : i + 1]
+
+            # Найти позицию максимума и минимума
+            high_idx = np.argmax(high_slice)
+            low_idx = np.argmin(low_slice)
+
+            # Aroon расчет
+            aroon_up[i] = ((period - (period - 1 - high_idx)) / period) * 100
+            aroon_down[i] = ((period - (period - 1 - low_idx)) / period) * 100
+
+        # Заполняем начальные значения
+        aroon_up[: period - 1] = 50.0
+        aroon_down[: period - 1] = 50.0
+
+        return aroon_up, aroon_down
+
+    def _calculate_adx(
+        self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Расчет ADX и связанных индикаторов"""
+        if len(high) < period + 1:
+            zeros = np.zeros_like(close)
+            return zeros, zeros, zeros, zeros
+
+        # True Range
+        tr = self._calculate_true_range(high, low, close)
+
+        # Directional Movement
+        plus_dm = np.zeros_like(close)
+        minus_dm = np.zeros_like(close)
+
+        for i in range(1, len(high)):
+            up_move = high[i] - high[i - 1]
+            down_move = low[i - 1] - low[i]
+
+            if up_move > down_move and up_move > 0:
+                plus_dm[i] = up_move
+            if down_move > up_move and down_move > 0:
+                minus_dm[i] = down_move
+
+        # Сглаженные значения
+        atr = self._calculate_atr(high, low, close, period)
+        plus_di = np.zeros_like(close)
+        minus_di = np.zeros_like(close)
+
+        # Сглаживание DM
+        smoothed_plus_dm = self._smooth_series(plus_dm, period)
+        smoothed_minus_dm = self._smooth_series(minus_dm, period)
+
+        # DI расчет
+        for i in range(period, len(close)):
+            if atr[i] != 0:
+                plus_di[i] = (smoothed_plus_dm[i] / atr[i]) * 100
+                minus_di[i] = (smoothed_minus_dm[i] / atr[i]) * 100
+
+        # DX и ADX
+        dx = np.zeros_like(close)
+        for i in range(period, len(close)):
+            di_sum = plus_di[i] + minus_di[i]
+            if di_sum != 0:
+                dx[i] = abs(plus_di[i] - minus_di[i]) / di_sum * 100
+
+        # ADX - сглаженный DX
+        adx = self._smooth_series(dx, period)
+
+        return dx, adx, plus_di, minus_di
+
+    def _calculate_true_range(
+        self, high: np.ndarray, low: np.ndarray, close: np.ndarray
+    ) -> np.ndarray:
+        """Расчет True Range"""
+        if len(high) < 2:
+            return high - low
+
+        tr1 = high - low
+        tr2 = np.abs(high - np.roll(close, 1))
+        tr3 = np.abs(low - np.roll(close, 1))
+
+        tr = np.maximum(tr1, np.maximum(tr2, tr3))
+        tr[0] = tr1[0]  # Первое значение
+
+        return tr
+
+    def _smooth_series(self, series: np.ndarray, period: int) -> np.ndarray:
+        """Сглаживание временного ряда методом Уайлдера"""
+        smoothed = np.zeros_like(series)
+        smoothed[period - 1] = np.mean(series[:period])
+
+        for i in range(period, len(series)):
+            smoothed[i] = (smoothed[i - 1] * (period - 1) + series[i]) / period
+
+        # Заполняем начальные значения
+        smoothed[: period - 1] = (
+            smoothed[period - 1] if period - 1 < len(smoothed) else 0
         )
 
-        features_created.extend(
-            ["trend_1h", "trend_1h_strength", "trend_4h", "trend_4h_strength"]
-        )
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Сила тренда на старших ТФ: создано 4 признака")
-
-        # 3. Позиция в дневном диапазоне (7 признаков)
-        # Дневной диапазон (96 свечей = 24 часа)
-        df["daily_high"] = df["high"].rolling(96).max()
-        df["daily_low"] = df["low"].rolling(96).min()
-        # ИСПРАВЛЕНО: daily_range как процент от цены
-        df["daily_range"] = self.safe_divide(
-            df["daily_high"] - df["daily_low"],
-            df["close"],
-            fill_value=0.02,  # 2% по умолчанию
-            max_value=0.5,  # Максимум 50% от цены
-        )
-        # ИСПРАВЛЕНО: Правильный расчет позиции в дневном диапазоне
-        # daily_range уже в процентах, поэтому используем абсолютные цены
-        daily_range_abs = df["daily_high"] - df["daily_low"]
-        df["position_in_daily_range"] = self.safe_divide(
-            df["close"] - df["daily_low"],
-            daily_range_abs,
-            fill_value=0.5,
-            max_value=1.0,
-        )
-
-        # Близость к экстремумам
-        df["near_daily_high"] = (df["position_in_daily_range"] > 0.9).astype(int)
-        df["near_daily_low"] = (df["position_in_daily_range"] < 0.1).astype(int)
-        features_created.extend(
-            [
-                "daily_high",
-                "daily_low",
-                "daily_range",
-                "position_in_daily_range",
-                "near_daily_high",
-                "near_daily_low",
-            ]
-        )
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Позиция в дневном диапазоне: создано 6 признаков")
-
-        # 4. Качество структуры рынка (2 признака)
-        # Higher highs и higher lows для uptrend
-        hh = (df["high"] > df["high"].shift(4)) & (
-            df["high"].shift(4) > df["high"].shift(8)
-        )
-        hl = (df["low"] > df["low"].shift(4)) & (
-            df["low"].shift(4) > df["low"].shift(8)
-        )
-        df["uptrend_structure"] = (hh & hl).astype(int)
-
-        # Lower highs и lower lows для downtrend
-        lh = (df["high"] < df["high"].shift(4)) & (
-            df["high"].shift(4) < df["high"].shift(8)
-        )
-        ll = (df["low"] < df["low"].shift(4)) & (
-            df["low"].shift(4) < df["low"].shift(8)
-        )
-        df["downtrend_structure"] = (lh & ll).astype(int)
-        features_created.extend(["uptrend_structure", "downtrend_structure"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Качество структуры рынка: создано 2 признака")
-
-        # 5. Риск новостных событий (1 признак)
-        # Аномальный объем часто связан с новостями
-        df["news_risk"] = (df["volume_spike"] == 1).astype(int)
-        features_created.append("news_risk")
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Риск новостных событий: создан 1 признак")
-
-        # 6. Оценка ликвидности (3 признака)
-        # Средний спред и объем за последний час
-        # Используем high-low спред вместо bid-ask
-        df["hl_spread"] = (df["high"] - df["low"]) / df["close"]
-
-        # ИСПРАВЛЕНО: Безопасный расчет liquidity_score с ограничениями
-        hl_spread_mean = df["hl_spread"].rolling(4).mean()
-        volume_mean = df["volume"].rolling(4).mean()
-
-        # Клиппинг hl_spread для избежания деления на очень малые числа
-        # Минимальный спред 0.01% (0.0001) для стейблкоинов
-        hl_spread_clipped = np.clip(hl_spread_mean, 0.0001, 1.0)
-
-        # Используем log-трансформацию для контроля масштаба
-        # liquidity_score теперь в диапазоне примерно [0, 20]
-        df["liquidity_score"] = np.log1p(volume_mean / (hl_spread_clipped * 1000))
-
-        # Ранжирование по ликвидности
-        df["liquidity_rank"] = df.groupby("datetime")["liquidity_score"].rank(pct=True)
-        features_created.extend(["hl_spread", "liquidity_score", "liquidity_rank"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Оценка ликвидности: создано 3 признака")
-
-        # 6. Signal Strength - комбинированная сила сигнала на основе исторических данных
-        # БЕЗ УТЕЧЕК: используем только исторические индикаторы
-
-        # Компоненты signal_strength:
-        # 1. Сила тренда (ADX)
-        trend_strength = (
-            df["adx"] / 100 if "adx" in df.columns else pd.Series(0.5, index=df.index)
-        )
-
-        # 2. Momentum (RSI отклонение от 50)
-        momentum_strength = (
-            np.abs(df["rsi"] - 50) / 50
-            if "rsi" in df.columns
-            else pd.Series(0.5, index=df.index)
-        )
-
-        # 3. Волатильность (нормализованная историческая)
-        if "volatility_20" in df.columns:
-            # Используем историческое среднее, НЕ будущие данные
-            vol_mean_hist = df.groupby("symbol")["volatility_20"].transform(
-                lambda x: x.rolling(100, min_periods=20).mean()
-            )
-            vol_strength = df["volatility_20"] / (vol_mean_hist + 1e-6)
-            vol_strength = np.clip(vol_strength, 0, 2) / 2
-        else:
-            vol_strength = pd.Series(0.5, index=df.index)
-
-        # 4. Volume (нормализованный исторический)
-        if "volume" in df.columns:
-            # Используем историческое среднее, НЕ будущие данные
-            vol_mean_hist = df.groupby("symbol")["volume"].transform(
-                lambda x: x.rolling(100, min_periods=20).mean()
-            )
-            volume_strength = df["volume"] / (vol_mean_hist + 1e-6)
-            volume_strength = np.clip(volume_strength, 0, 2) / 2
-        else:
-            volume_strength = pd.Series(0.5, index=df.index)
-
-        # Комбинированная сила сигнала (признак, не целевая переменная)
-        df["signal_strength"] = (
-            0.3 * trend_strength
-            + 0.3 * momentum_strength
-            + 0.2 * vol_strength
-            + 0.2 * volume_strength
-        )
-        df["signal_strength"] = np.clip(df["signal_strength"], 0, 1)
-        features_created.append("signal_strength")
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Signal strength: создан 1 признак (без утечек)")
-
-        # Итоговая статистика
-        total_created = len(features_created)
-        if not self.disable_progress:
-            self.logger.info(
-                f"✅ Signal quality features: всего создано {total_created} признаков"
-            )
-
-        return df
-
-    def _create_futures_specific_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Признаки специфичные для торговли фьючерсами с плечом"""
-        if not self.disable_progress:
-            self.logger.info("Создание признаков для фьючерсной торговли...")
-        initial_cols = len(df.columns)
-        features_created = []
-
-        # Динамическое плечо на основе волатильности
-        # Базовое плечо 5x, но корректируем на основе ATR
-        base_leverage = 5
-
-        # Корректируем плечо на основе волатильности
-        # Чем выше волатильность, тем меньше плечо
-        # ATR в процентах уже есть в df['atr_pct']
-        volatility_factor = (
-            df["atr_pct"].rolling(24).mean()
-        )  # Средняя волатильность за 6 часов
-
-        # Плечо от 3x до 10x в зависимости от волатильности
-        # При волатильности 0.5% -> leverage = 10
-        # При волатильности 2% -> leverage = 3
-        dynamic_leverage = base_leverage * (0.01 / (volatility_factor + 0.001))
-        dynamic_leverage = dynamic_leverage.clip(3, 10)  # Ограничиваем диапазон
-
-        # 1. Расчет ликвидационной цены
-        # Для LONG: Liq Price = Entry Price * (1 - 1/leverage + fees)
-        # Для SHORT: Liq Price = Entry Price * (1 + 1/leverage - fees)
-        maintenance_margin = 0.5 / 100  # 0.5% для Bybit
-
-        df["long_liquidation_price"] = df["close"] * (
-            1 - 1 / dynamic_leverage + maintenance_margin
-        )
-        df["short_liquidation_price"] = df["close"] * (
-            1 + 1 / dynamic_leverage - maintenance_margin
-        )
-
-        # Расстояние до ликвидации в процентах
-        df["long_liquidation_distance_pct"] = (
-            (df["close"] - df["long_liquidation_price"]) / df["close"]
-        ) * 100
-        df["short_liquidation_distance_pct"] = (
-            (df["short_liquidation_price"] - df["close"]) / df["close"]
-        ) * 100
-
-        # Сохраняем текущее динамическое плечо
-        df["current_leverage"] = dynamic_leverage
-        features_created.extend(
-            [
-                "long_liquidation_price",
-                "short_liquidation_price",
-                "long_liquidation_distance_pct",
-                "short_liquidation_distance_pct",
-                "current_leverage",
-            ]
-        )
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Ликвидационные цены: создано 4 признака")
-
-        # 2. Вероятность касания ликвидационной цены
-        # Основано на исторической волатильности
-        # Используем максимальное отклонение за последние 24 часа
-        max_drawdown_24h = df["low"].rolling(96).min() / df["close"].shift(96) - 1
-        max_rally_24h = df["high"].rolling(96).max() / df["close"].shift(96) - 1
-
-        # Простая оценка вероятности на основе исторических движений
-        df["long_liquidation_risk"] = (
-            (abs(max_drawdown_24h) > df["long_liquidation_distance_pct"] / 100)
-            .rolling(96)
-            .mean()
-        )
-        df["short_liquidation_risk"] = (
-            (max_rally_24h > df["short_liquidation_distance_pct"] / 100)
-            .rolling(96)
-            .mean()
-        )
-        features_created.extend(["long_liquidation_risk", "short_liquidation_risk"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Вероятность ликвидации: создано 2 признака")
-
-        # 3. Оптимальное плечо для текущей волатильности
-        # Правило: максимальное плечо = 20% / (дневная волатильность)
-        daily_volatility = df["returns"].rolling(96).std() * np.sqrt(
-            96
-        )  # Приведение к дневной
-        df["optimal_leverage"] = (0.2 / (daily_volatility + 0.01)).clip(
-            1, 10
-        )  # От 1x до 10x
-
-        # Безопасное плечо (консервативное)
-        df["safe_leverage"] = (0.1 / (daily_volatility + 0.01)).clip(
-            1, 5
-        )  # От 1x до 5x
-        features_created.extend(["optimal_leverage", "safe_leverage"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Оптимальное плечо: создано 2 признака")
-
-        # 4. Риск каскадных ликвидаций
-        # Когда много позиций могут быть ликвидированы одновременно
-        # Индикатор: резкие движения + высокий объем
-        df["cascade_risk"] = (
-            (df["volume_spike"] == 1)
-            & (abs(df["returns"]) > df["returns"].rolling(96).std() * 2)
-        ).astype(int)
-        features_created.append("cascade_risk")
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Риск каскадных ликвидаций: создан 1 признак")
-
-        # 5. Funding rate влияние (для удержания позиций)
-        # Примерный funding rate (в реальности нужно загружать с биржи)
-        # Положительный funding = лонги платят шортам
-        # Используем разницу между спот и фьючерс как прокси
-        df["funding_proxy"] = df["momentum_1h"] * 0.01  # Упрощенная оценка
-
-        # Стоимость удержания позиции на день (3 funding периода)
-        df["long_holding_cost_daily"] = df["funding_proxy"] * 3
-        df["short_holding_cost_daily"] = -df["funding_proxy"] * 3
-        features_created.extend(
-            ["funding_proxy", "long_holding_cost_daily", "short_holding_cost_daily"]
-        )
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Funding rate влияние: создано 3 признака")
-
-        # 6. Метрики риска для размера позиции
-        # Value at Risk (VaR) - максимальная потеря с 95% вероятностью
-        returns_sorted = df["returns"].rolling(96).apply(lambda x: np.percentile(x, 5))
-        df["var_95"] = abs(returns_sorted)
-
-        # Рекомендуемый размер позиции относительно VaR
-        max_loss_per_trade = 2.0  # 2% максимальная потеря как в конфиге
-        df["recommended_position_size"] = max_loss_per_trade / (
-            df["var_95"] * dynamic_leverage
-        )
-        features_created.extend(["var_95", "recommended_position_size"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Метрики риска для позиций: создано 2 признака")
-
-        # Итоговая статистика
-        total_created = len(features_created)
-        if not self.disable_progress:
-            self.logger.info(
-                f"✅ Futures-specific features: всего создано {total_created} признаков"
-            )
-
-        return df
-
-    def _create_temporal_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Временные признаки"""
-        df["hour"] = df["datetime"].dt.hour
-        df["minute"] = df["datetime"].dt.minute
-
-        # Циклическое кодирование времени
-        df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
-        df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
-
-        df["dayofweek"] = df["datetime"].dt.dayofweek
-        df["is_weekend"] = (df["dayofweek"] >= 5).astype(int)
-
-        df["dow_sin"] = np.sin(2 * np.pi * df["dayofweek"] / 7)
-        df["dow_cos"] = np.cos(2 * np.pi * df["dayofweek"] / 7)
-
-        df["day"] = df["datetime"].dt.day
-        df["month"] = df["datetime"].dt.month
-
-        df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
-        df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
-
-        # Торговые сессии
-        df["asian_session"] = ((df["hour"] >= 0) & (df["hour"] < 8)).astype(int)
-        df["european_session"] = ((df["hour"] >= 7) & (df["hour"] < 16)).astype(int)
-        df["american_session"] = ((df["hour"] >= 13) & (df["hour"] < 22)).astype(int)
-
-        # Пересечение сессий
-        df["session_overlap"] = (
-            (df["asian_session"] + df["european_session"] + df["american_session"]) > 1
-        ).astype(int)
-
-        return df
-
-    def _create_ml_optimized_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Создание ML-оптимизированных признаков для 2024-2025"""
-        if not self.disable_progress:
-            self.logger.info("Создание ML-оптимизированных признаков...")
-
-        # 1. Hurst Exponent - мера персистентности рынка
-        # >0.5 = тренд, <0.5 = возврат к среднему, ~0.5 = случайное блуждание
-        def hurst_exponent(ts, max_lag=20):
-            """Вычисление экспоненты Херста"""
-            lags = range(2, min(max_lag, len(ts) // 2))
-            tau = []
-
-            for lag in lags:
-                pp = np.array(ts[:-lag])
-                pn = np.array(ts[lag:])
-                diff = pn - pp
-                tau.append(np.sqrt(np.nanmean(diff**2)))
-
-            if len(tau) > 0 and all(t > 0 for t in tau):
-                poly = np.polyfit(np.log(lags), np.log(tau), 1)
-                return poly[0] * 2.0
-            return 0.5
-
-        # Применяем Hurst для close с окном 50
-        df["hurst_exponent"] = (
-            df["close"]
-            .rolling(50)
-            .apply(lambda x: hurst_exponent(x) if len(x) == 50 else 0.5)
-        )
-
-        # 2. Fractal Dimension - сложность ценового движения
-        # 1 = прямая линия, 2 = заполняет плоскость
-        def fractal_dimension(ts):
-            """Вычисление фрактальной размерности методом Хигучи"""
-            N = len(ts)
-            if N < 10:
-                return 1.5
-
-            kmax = min(5, N // 2)
-            L = []
-
-            for k in range(1, kmax + 1):
-                Lk = 0
-                for m in range(k):
-                    Lmk = 0
-                    for i in range(1, int((N - m) / k)):
-                        Lmk += abs(ts[m + i * k] - ts[m + (i - 1) * k])
-                    if int((N - m) / k) > 0:
-                        Lmk = Lmk * (N - 1) / (k * int((N - m) / k))
-                    Lk += Lmk
-                L.append(Lk / k)
-
-            if len(L) > 0 and all(l > 0 for l in L):
-                x = np.log(range(1, kmax + 1))
-                y = np.log(L)
-                poly = np.polyfit(x, y, 1)
-                return poly[0]
-            return 1.5
-
-        df["fractal_dimension"] = (
-            df["close"]
-            .rolling(30)
-            .apply(lambda x: fractal_dimension(x.values) if len(x) == 30 else 1.5)
-        )
-
-        # 3. Market Efficiency Ratio - эффективность движения цены
-        # Высокие значения = сильный тренд, низкие = боковик
-        df["efficiency_ratio"] = self.safe_divide(
-            (df["close"] - df["close"].shift(20)).abs(),
-            df["close"].diff().abs().rolling(20).sum(),
-        )
-
-        # 4. Trend Quality Index - качество тренда
-        # Комбинация ADX, направления и волатильности
-        df["trend_quality"] = (
-            df["adx"]
-            / 100  # Сила тренда
-            * ((df["close"] > df["sma_50"]).astype(float) * 2 - 1)  # Направление
-            * (
-                1 - df["bb_width"] / df["bb_width"].rolling(50).max()
-            )  # Нормализованная волатильность
-        )
-
-        # 5. Regime Detection Features
-        # Определение рыночного режима (тренд/флэт/высокая волатильность)
-        returns = df["close"].pct_change()
-
-        # Realized volatility
-        df["realized_vol_5m"] = returns.rolling(20).std() * np.sqrt(20)
-        df["realized_vol_15m"] = returns.rolling(60).std() * np.sqrt(60)
-        df["realized_vol_1h"] = returns.rolling(240).std() * np.sqrt(240)
-
-        # GARCH-подобная волатильность (упрощенная)
-        df["garch_vol"] = returns.rolling(20).apply(
-            lambda x: np.sqrt(0.94 * x.var() + 0.06 * x.iloc[-1] ** 2)
-            if len(x) > 0
-            else 0
-        )
-
-        # Режим волатильности
-        atr_q25 = df["atr"].rolling(1000).quantile(0.25)
-        atr_q75 = df["atr"].rolling(1000).quantile(0.75)
-        df["vol_regime"] = 0  # Нормальная
-        df.loc[df["atr"] < atr_q25, "vol_regime"] = -1  # Низкая
-        df.loc[df["atr"] > atr_q75, "vol_regime"] = 1  # Высокая
-
-        # 6. Information-theoretic features
-        # Энтропия распределения доходностей
-        def shannon_entropy(series, bins=10):
-            """Вычисление энтропии Шеннона"""
-            if len(series) < bins:
-                return 0
-            counts, _ = np.histogram(series, bins=bins)
-            probs = counts / counts.sum()
-            probs = probs[probs > 0]
-            return -np.sum(probs * np.log(probs))
-
-        df["return_entropy"] = returns.rolling(100).apply(lambda x: shannon_entropy(x))
-
-        # 7. Microstructure features
-        # Amihud illiquidity
-        df["amihud_illiquidity"] = (
-            self.safe_divide(returns.abs(), df["turnover"]).rolling(20).mean()
-        )
-
-        # Kyle's lambda (price impact)
-        df["kyle_lambda"] = self.safe_divide(
-            returns.abs().rolling(20).mean(), df["volume"].rolling(20).mean()
-        )
-
-        # 8. Cross-sectional features (если есть данные BTC)
-        if "btc_returns" in df.columns:
-            # Beta к BTC
-            df["btc_beta"] = (
-                returns.rolling(100).cov(df["btc_returns"])
-                / df["btc_returns"].rolling(100).var()
-            )
-
-            # Идиосинкратическая волатильность
-            df["idio_vol"] = (
-                (returns - df["btc_beta"] * df["btc_returns"]).rolling(50).std()
-            )
-
-        # 9. Autocorrelation features
-        # Автокорреляция доходностей на разных лагах
-        df["returns_ac_1"] = returns.rolling(50).apply(
-            lambda x: x.autocorr(lag=1) if len(x) > 1 else 0
-        )
-        df["returns_ac_5"] = returns.rolling(50).apply(
-            lambda x: x.autocorr(lag=5) if len(x) > 5 else 0
-        )
-        df["returns_ac_10"] = returns.rolling(50).apply(
-            lambda x: x.autocorr(lag=10) if len(x) > 10 else 0
-        )
-
-        # 10. Jump detection
-        # Обнаружение прыжков в цене
-        df["price_jump"] = (returns.abs() > returns.rolling(100).std() * 3).astype(int)
-
-        df["jump_intensity"] = df["price_jump"].rolling(50).mean()
-
-        # 11. Order flow imbalance persistence
-        if "order_flow_imbalance" in df.columns:
-            df["ofi_persistence"] = (
-                df["order_flow_imbalance"]
-                .rolling(20)
-                .apply(lambda x: x.autocorr(lag=1) if len(x) > 1 else 0)
-            )
-
-        # 12. Volume-synchronized probability of informed trading (VPIN)
-        # Упрощенная версия
-        df["vpin"] = self.safe_divide(
-            (df["volume"] * ((df["close"] > df["open"]).astype(float) - 0.5))
-            .rolling(50)
-            .sum()
-            .abs(),
-            df["volume"].rolling(50).sum(),
-        )
-
-        # 13. Liquidity-adjusted returns
-        df["liquidity_adj_returns"] = returns * (
-            1 - df["amihud_illiquidity"] / df["amihud_illiquidity"].rolling(100).max()
-        )
-
-        # 14. Tail risk measures
-        # Conditional Value at Risk (CVaR)
-        df["cvar_5pct"] = returns.rolling(100).apply(
-            lambda x: (
-                x[x <= x.quantile(0.05)].mean()
-                if len(x[x <= x.quantile(0.05)]) > 0
-                else x.quantile(0.05)
-            )
-        )
-
-        # Заполнение пропусков
-        ml_features = [
-            "hurst_exponent",
-            "fractal_dimension",
-            "efficiency_ratio",
-            "trend_quality",
-            "realized_vol_5m",
-            "realized_vol_15m",
-            "realized_vol_1h",
-            "garch_vol",
-            "vol_regime",
-            "return_entropy",
-            "amihud_illiquidity",
-            "kyle_lambda",
-            "returns_ac_1",
-            "returns_ac_5",
-            "returns_ac_10",
-            "price_jump",
-            "jump_intensity",
-            "vpin",
-            "liquidity_adj_returns",
-            "cvar_5pct",
-        ]
-
-        # Добавляем условные признаки если они были созданы
-        if "btc_beta" in df.columns:
-            ml_features.extend(["btc_beta", "idio_vol"])
-        if "ofi_persistence" in df.columns:
-            ml_features.append("ofi_persistence")
-
-        # Заполняем пропуски
-        for feature in ml_features:
-            if feature in df.columns:
-                df[feature] = df[feature].fillna(method="ffill").fillna(0)
-
-        return df
-
-    def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Обработка пропущенных значений"""
-        if not self.disable_progress:
-            self.logger.info("Обработка пропущенных значений...")
-
-        # Сохраняем информационные колонки
-        info_cols = [
-            "id",
-            "symbol",
-            "timestamp",
-            "datetime",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-        ]
-
-        # Группируем по символам для правильной обработки
-        processed_dfs = []
-
-        for symbol in df["symbol"].unique():
-            symbol_data = df[df["symbol"] == symbol].copy()
-
-            # Для каждой колонки применяем соответствующий метод заполнения
-            for col in symbol_data.columns:
-                if col in info_cols:
-                    continue
-
-                if symbol_data[col].isna().any():
-                    # Для категориальных переменных (Categorical dtype)
-                    if hasattr(symbol_data[col], "cat"):
-                        # Для категориальных переменных используем наиболее частую категорию или 'FLAT'/'HOLD'
-                        if "direction" in col:
-                            symbol_data[col] = symbol_data[col].fillna("FLAT")
-                        else:
-                            # Используем моду (наиболее частое значение)
-                            mode = symbol_data[col].mode()
-                            if len(mode) > 0:
-                                symbol_data[col] = symbol_data[col].fillna(mode.iloc[0])
-                    # Для технических индикаторов используем forward fill
-                    elif any(
-                        indicator in col
-                        for indicator in ["sma", "ema", "rsi", "macd", "bb_", "adx"]
-                    ):
-                        symbol_data[col] = symbol_data[col].ffill()
-                    # Для остальных используем 0
-                    else:
-                        symbol_data[col] = symbol_data[col].fillna(0)
-
-            # Удаляем первые строки где могут быть NaN из-за расчета индикаторов
-            # Находим максимальный период среди всех индикаторов
-            max_period = 50  # SMA50 требует минимум 50 периодов
-            symbol_data = symbol_data.iloc[max_period:].copy()
-
-            processed_dfs.append(symbol_data)
-
-        result_df = pd.concat(processed_dfs, ignore_index=True)
-
-        # Финальная проверка
-        nan_count = result_df.isna().sum().sum()
-        if nan_count > 0:
-            if not self.disable_progress:
-                self.logger.warning(
-                    f"Остались {nan_count} NaN значений после обработки"
-                )
-            # Принудительно заполняем оставшиеся NaN
-            for col in result_df.columns:
-                if result_df[col].isna().any():
-                    # Для категориальных переменных
-                    if hasattr(result_df[col], "cat"):
-                        if "direction" in col:
-                            result_df[col] = result_df[col].fillna("FLAT")
-                        else:
-                            mode = result_df[col].mode()
-                            if len(mode) > 0:
-                                result_df[col] = result_df[col].fillna(mode.iloc[0])
-                    # Для числовых колонок
-                    elif pd.api.types.is_numeric_dtype(result_df[col]):
-                        result_df[col] = result_df[col].fillna(0)
-
-        # Проверка на бесконечные значения
-        numeric_cols = result_df.select_dtypes(include=[np.number]).columns
-        inf_count = np.isinf(result_df[numeric_cols]).sum().sum()
-        if inf_count > 0:
-            if not self.disable_progress:
-                self.logger.warning(
-                    f"Обнаружены {inf_count} бесконечных значений, заменяем на конечные"
-                )
-            # ИСПРАВЛЕНО: Заменяем бесконечности на 99-й персентиль для каждой колонки
-            for col in numeric_cols:
-                if np.isinf(result_df[col]).any():
-                    # Вычисляем персентили на конечных значениях
-                    finite_vals = result_df[col][np.isfinite(result_df[col])]
-                    if len(finite_vals) > 0:
-                        p99 = finite_vals.quantile(0.99)
-                        p1 = finite_vals.quantile(0.01)
-                        result_df[col] = result_df[col].replace(
-                            [np.inf, -np.inf], [p99, p1]
-                        )
-                    else:
-                        result_df[col] = result_df[col].replace(
-                            [np.inf, -np.inf], [0, 0]
-                        )
-
-        if not self.disable_progress:
-            self.logger.info(
-                f"Обработка завершена. Итоговый размер: {len(result_df)} записей"
-            )
-        return result_df
-
-    def _create_cross_asset_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Кросс-активные признаки"""
-        if not self.disable_progress:
-            self.logger.info("Создание кросс-активных признаков...")
-
-        # BTC как базовый актив
-        btc_data = df[df["symbol"] == "BTCUSDT"][
-            ["datetime", "close", "returns"]
-        ].copy()
-        if len(btc_data) > 0:
-            btc_data.rename(
-                columns={"close": "btc_close", "returns": "btc_returns"}, inplace=True
-            )
-
-            df = df.merge(btc_data, on="datetime", how="left")
-
-            # Корреляция с BTC
-            for symbol in df["symbol"].unique():
-                if symbol != "BTCUSDT":
-                    mask = df["symbol"] == symbol
-                    # ИСПРАВЛЕНО: используем min_periods для корреляции
-                    df.loc[mask, "btc_correlation"] = (
-                        df.loc[mask, "returns"]
-                        .rolling(window=96, min_periods=50)
-                        .corr(df.loc[mask, "btc_returns"])
-                    )
-
-            df.loc[df["symbol"] == "BTCUSDT", "btc_correlation"] = 1.0
-
-            # Относительная сила к BTC
-            df["relative_strength_btc"] = df["close"] / df["btc_close"]
-            df["rs_btc_ma"] = df.groupby("symbol")["relative_strength_btc"].transform(
-                lambda x: x.rolling(20, min_periods=10).mean()
-            )
-
-            # ИСПРАВЛЕНО: заполняем NaN значения для BTC-связанных признаков
-            df["btc_close"] = (
-                df["btc_close"].fillna(method="ffill").fillna(method="bfill")
-            )
-            df["btc_returns"] = df["btc_returns"].fillna(0.0)
-            df["btc_correlation"] = df["btc_correlation"].fillna(
-                0.5
-            )  # нейтральная корреляция
-            df["relative_strength_btc"] = df["relative_strength_btc"].fillna(1.0)
-            df["rs_btc_ma"] = df["rs_btc_ma"].fillna(1.0)
-        else:
-            # Заполняем нулями если нет данных BTC
-            df["btc_close"] = 0
-            df["btc_returns"] = 0
-            df["btc_correlation"] = 0
-            df["relative_strength_btc"] = 0
-            df["rs_btc_ma"] = 0
-
-        # Определяем сектора
-        defi_tokens = ["AAVEUSDT", "UNIUSDT", "CAKEUSDT", "DYDXUSDT"]
-        layer1_tokens = ["ETHUSDT", "SOLUSDT", "AVAXUSDT", "DOTUSDT", "NEARUSDT"]
-        meme_tokens = [
-            "DOGEUSDT",
-            "FARTCOINUSDT",
-            "MELANIAUSDT",
-            "TRUMPUSDT",
-            "POPCATUSDT",
-            "PNUTUSDT",
-            "ZEREBROUSDT",
-            "WIFUSDT",
-        ]
-
-        df["sector"] = "other"
-        df.loc[df["symbol"].isin(defi_tokens), "sector"] = "defi"
-        df.loc[df["symbol"].isin(layer1_tokens), "sector"] = "layer1"
-        df.loc[df["symbol"].isin(meme_tokens), "sector"] = "meme"
-        df.loc[df["symbol"] == "BTCUSDT", "sector"] = "btc"
-
-        # Секторные доходности
-        df["sector_returns"] = df.groupby(["datetime", "sector"])["returns"].transform(
-            "mean"
-        )
-
-        # Относительная доходность к сектору
-        df["relative_to_sector"] = df["returns"] - df["sector_returns"]
-
-        # Ранк доходности
-        df["returns_rank"] = df.groupby("datetime")["returns"].rank(pct=True)
-
-        # 24-часовой моментум - уже рассчитан в rally_detection_features
-        # Здесь только заполняем NaN значения если есть
-        if "momentum_24h" in df.columns and df["momentum_24h"].isna().any():
-            df["momentum_24h"] = df["momentum_24h"].fillna(0)
-        df["is_momentum_leader"] = (
-            df.groupby("datetime")["momentum_24h"].rank(ascending=False) <= 5
-        ).astype(int)
-
-        return df
-
-    def _create_target_variables(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Создание целевых переменных БЕЗ УТЕЧЕК ДАННЫХ - версия 4.0"""
-        if not self.disable_progress:
-            self.logger.info("🎯 Создание целевых переменных v4.0 (без утечек)...")
-
-        # Периоды для расчета будущих возвратов (в свечах по 15 минут)
-        return_periods = {
-            "15m": 1,  # 15 минут
-            "1h": 4,  # 1 час
-            "4h": 16,  # 4 часа
-            "12h": 48,  # 12 часов
-        }
-
-        # Пороги для классификации направления
-        # ОПТИМИЗИРОВАНЫ для баланса между качеством и количеством сигналов
-        direction_thresholds = {
-            "15m": 0.0015,  # 0.15% - уменьшает шум от мелких движений
-            "1h": 0.003,  # 0.3% - фильтрует случайные колебания
-            "4h": 0.007,  # 0.7% - фокус на значимых движениях
-            "12h": 0.01,  # 1% - долгосрочные тренды
-        }
-
-        # Уровни прибыли для бинарных целевых
-        profit_levels = {
-            "1pct_4h": (0.01, 16),  # 1% за 4 часа
-            "2pct_4h": (0.02, 16),  # 2% за 4 часа
-            "3pct_12h": (0.03, 48),  # 3% за 12 часов
-            "5pct_12h": (0.05, 48),  # 5% за 12 часов
-        }
-
-        # Commission and costs
-        commission_rate = 0.0006  # 0.06%
-        slippage = 0.0005  # 0.05%
-
-        # A. Базовые возвраты (4)
-        for period_name, n_candles in return_periods.items():
-            df[f"future_return_{period_name}"] = df.groupby("symbol")[
-                "close"
-            ].transform(lambda x: x.shift(-n_candles) / x - 1)
-
-        # B. Направление движения (4)
-        for period_name in return_periods.keys():
-            future_return = df[f"future_return_{period_name}"]
-            threshold = direction_thresholds[period_name]
-
-            df[f"direction_{period_name}"] = pd.cut(
-                future_return,
-                bins=[-np.inf, -threshold, threshold, np.inf],
-                labels=["DOWN", "FLAT", "UP"],
-            )
-
-        # C. Достижение уровней прибыли LONG (4) - используем только shift для будущих цен
-        for level_name, (profit_threshold, n_candles) in profit_levels.items():
-            # Для каждой строки проверяем достигнет ли максимальная цена нужного уровня
-            max_future_returns = pd.DataFrame()
-            for i in range(1, n_candles + 1):
-                future_high = df.groupby("symbol")["high"].transform(
-                    lambda x: x.shift(-i)
-                )
-                future_return = future_high / df["close"] - 1
-                max_future_returns[f"return_{i}"] = future_return
-
-            # Максимальный return за период
-            max_return = max_future_returns.max(axis=1)
-            df[f"long_will_reach_{level_name}"] = (
-                max_return >= profit_threshold
-            ).astype(int)
-
-        # D. Достижение уровней прибыли SHORT (4)
-        for level_name, (profit_threshold, n_candles) in profit_levels.items():
-            # Для SHORT: проверяем минимальную цену
-            min_future_returns = pd.DataFrame()
-            for i in range(1, n_candles + 1):
-                future_low = df.groupby("symbol")["low"].transform(
-                    lambda x: x.shift(-i)
-                )
-                future_return = df["close"] / future_low - 1  # Для SHORT инвертируем
-                min_future_returns[f"return_{i}"] = future_return
-
-            # Максимальный return для SHORT за период
-            max_return = min_future_returns.max(axis=1)
-            df[f"short_will_reach_{level_name}"] = (
-                max_return >= profit_threshold
-            ).astype(int)
-
-        # E. Риск-метрики (4)
-        # Максимальная просадка за период (для LONG)
-        for period_name, n_candles in [("1h", 4), ("4h", 16)]:
-            min_prices = pd.DataFrame()
-            for i in range(1, n_candles + 1):
-                future_low = df.groupby("symbol")["low"].transform(
-                    lambda x: x.shift(-i)
-                )
-                min_prices[f"low_{i}"] = future_low
-
-            # Минимальная цена за период
-            min_price = min_prices.min(axis=1)
-            df[f"max_drawdown_{period_name}"] = (df["close"] / min_price - 1).fillna(0)
-
-        # Максимальный рост за период (для SHORT)
-        for period_name, n_candles in [("1h", 4), ("4h", 16)]:
-            max_prices = pd.DataFrame()
-            for i in range(1, n_candles + 1):
-                future_high = df.groupby("symbol")["high"].transform(
-                    lambda x: x.shift(-i)
-                )
-                max_prices[f"high_{i}"] = future_high
-
-            # Максимальная цена за период
-            max_price = max_prices.max(axis=1)
-            df[f"max_rally_{period_name}"] = (max_price / df["close"] - 1).fillna(0)
-
-        # ИСПРАВЛЕНО: Убираем торговые сигналы с утечками данных
-        # best_action, risk_reward_ratio и optimal_hold_time будут генерироваться
-        # в trading/signal_generator.py на основе предсказаний модели
-
-        # ПЕРЕНЕСЕНО В ПРИЗНАКИ: signal_strength теперь feature, не target
-        # Это основано на исторических данных, без утечек
-
-        # УДАЛЕНО: risk_reward_ratio и optimal_hold_time содержали утечки данных
-        # Эти переменные будут генерироваться в trading/signal_generator.py
-        # на основе предсказаний модели, а не реальных будущих данных
-
-        # УДАЛЕНО: best_action и все legacy переменные (best_direction, reached, hit)
-        # В версии 4.0 используем только 20 целевых переменных без утечек данных
-        # Все необходимые целевые переменные уже созданы выше
-
-        # Фиктивные временные переменные для совместимости
-        df["long_tp1_time"] = 16  # 4 часа
-        df["long_tp2_time"] = 16
-        df["long_tp3_time"] = 48  # 12 часов
-        df["long_sl_time"] = 100
-        df["short_tp1_time"] = 16
-        df["short_tp2_time"] = 16
-        df["short_tp3_time"] = 48
-        df["short_sl_time"] = 100
-
-        # Expected value для совместимости
-        df["long_expected_value"] = (
-            df["future_return_4h"] * df["long_will_reach_2pct_4h"] * 2.0
-        )
-        df["short_expected_value"] = (
-            -df["future_return_4h"] * df["short_will_reach_2pct_4h"] * 2.0
-        )
-
-        # Optimal entry фиктивные переменные
-        df["long_optimal_entry_time"] = 1
-        df["long_optimal_entry_price"] = df["close"]
-        df["long_optimal_entry_improvement"] = 0
-        df["short_optimal_entry_time"] = 1
-        df["short_optimal_entry_price"] = df["close"]
-        df["short_optimal_entry_improvement"] = 0
-
-        # Итоговая статистика
-        if not self.disable_progress:
-            self.logger.info("  ✅ Создано 20 целевых переменных без утечек данных")
-            self.logger.info("  📊 Распределение направлений:")
-            for period in ["15m", "1h", "4h", "12h"]:
-                if f"direction_{period}" in df.columns:
-                    dist = df[f"direction_{period}"].value_counts(normalize=True) * 100
-                    self.logger.info(
-                        f"     {period}: UP={dist.get('UP', 0):.1f}%, DOWN={dist.get('DOWN', 0):.1f}%, FLAT={dist.get('FLAT', 0):.1f}%"
-                    )
-
-        return df
-
-    def _normalize_features(self, df: pd.DataFrame, fit: bool = True) -> pd.DataFrame:
-        """Нормализация признаков с поддержкой режима fit/transform
-
-        Args:
-            df: данные для нормализации
-            fit: если True - обучает scaler, если False - использует существующий
-        """
-        if fit:
-            if not self.disable_progress:
-                self.logger.info("📊 Обучение и применение нормализации...")
-        else:
-            if not self.disable_progress:
-                self.logger.info("📊 Применение существующей нормализации...")
-
-        # Столбцы для исключения из нормализации
-        exclude_cols = [
-            "id",
-            "symbol",
-            "timestamp",
-            "datetime",
-            "sector",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-        ]
-
-        # Целевые переменные и индикаторы направления
-        target_cols = [
-            col
-            for col in df.columns
-            if any(
-                pattern in col
-                for pattern in [
-                    "target_",
-                    "future_",
-                    "optimal_",
-                    "_reached",
-                    "_tp",
-                    "_sl",
-                    "expected_value",
-                    "best_direction",
-                    "signal_strength",
-                ]
-            )
-        ]
-        exclude_cols.extend(target_cols)
-
-        # Временные и категориальные колонки
-        time_cols = [
-            "hour",
-            "minute",
-            "dayofweek",
-            "day",
-            "month",
-            "is_weekend",
-            "asian_session",
-            "european_session",
-            "american_session",
-            "session_overlap",
-        ]
-        exclude_cols.extend(time_cols)
-
-        # Признаки-соотношения, которые уже нормализованы по своей природе
-        ratio_cols = [
-            "close_vwap_ratio",
-            "close_open_ratio",
-            "high_low_ratio",
-            "close_position",
-            "bb_position",
-            "position_in_range_20",
-            "position_in_range_50",
-            "position_in_range_100",
-        ]
-        exclude_cols.extend(ratio_cols)
-
-        # ИСПРАВЛЕНО: Технические индикаторы с естественными диапазонами НЕ нормализуем
-        technical_indicators = [
-            "rsi",
-            "stoch_k",
-            "stoch_d",
-            "adx",
-            "adx_pos",
-            "adx_neg",
-            "rsi_oversold",
-            "rsi_overbought",
-            "toxicity",
-            "psar_trend",
-            "cci",
-            "williams_r",
-            "roc",
-            "momentum",
-            "kama",
-            "trix",
-            "ppo",
-            "macd",
-            "macd_signal",
-            "macd_diff",
-        ]
-        exclude_cols.extend(technical_indicators)
-
-        # Определяем только числовые признаки для нормализации
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        feature_cols = [col for col in numeric_cols if col not in exclude_cols]
-
-        # Логирование для отладки
-        if not self.disable_progress:
-            self.logger.debug(
-                f"Колонки для нормализации ({len(feature_cols)}): {feature_cols[:10]}..."
-            )
-            excluded_technical = [
-                col
-                for col in [
-                    "toxicity",
-                    "bb_position",
-                    "close_position",
-                    "psar_trend",
-                    "rsi_oversold",
-                    "rsi_overbought",
-                ]
-                if col in numeric_cols
-            ]
-            self.logger.debug(
-                f"Технические индикаторы в исключениях: {excluded_technical}"
-            )
-
-        if not feature_cols:
-            self.logger.warning("⚠️ Нет признаков для нормализации!")
-            return df
-
-        # Нормализация по символам
-        for symbol in df["symbol"].unique():
-            symbol_mask = df["symbol"] == symbol
-
-            if symbol_mask.sum() > 0:
-                if fit:
-                    # Создаем новый scaler для символа
-                    if symbol not in self.scalers:
-                        self.scalers[symbol] = RobustScaler()
-
-                    # Обучаем scaler
-                    symbol_data = df.loc[symbol_mask, feature_cols]
-                    valid_data = symbol_data.dropna()
-
-                    if len(valid_data) > 0:
-                        self.scalers[symbol].fit(valid_data)
-                        if not self.disable_progress:
-                            self.logger.debug(
-                                f"✅ Scaler обучен для {symbol} на {len(valid_data)} записях"
-                            )
-
-                # Применяем scaler (если он существует)
-                if symbol in self.scalers:
-                    valid_mask = symbol_mask & df[feature_cols].notna().all(axis=1)
-                    if valid_mask.sum() > 0:
-                        df.loc[valid_mask, feature_cols] = self.scalers[
-                            symbol
-                        ].transform(df.loc[valid_mask, feature_cols])
+        return smoothed
+
+    def _calculate_ultimate_oscillator(
+        self,
+        high: np.ndarray,
+        low: np.ndarray,
+        close: np.ndarray,
+        period1: int = 7,
+        period2: int = 14,
+        period3: int = 28,
+    ) -> np.ndarray:
+        """Расчет Ultimate Oscillator"""
+        if len(high) < period3 + 1:
+            return np.full_like(close, 50.0)
+
+        # Buying Pressure и True Range
+        bp = close - np.minimum(low, np.roll(close, 1))
+        tr = self._calculate_true_range(high, low, close)
+
+        # Средние для каждого периода
+        avg1 = np.zeros_like(close)
+        avg2 = np.zeros_like(close)
+        avg3 = np.zeros_like(close)
+
+        for i in range(period3, len(close)):
+            sum_bp1 = np.sum(bp[i - period1 + 1 : i + 1])
+            sum_tr1 = np.sum(tr[i - period1 + 1 : i + 1])
+            avg1[i] = sum_bp1 / sum_tr1 if sum_tr1 != 0 else 0
+
+            sum_bp2 = np.sum(bp[i - period2 + 1 : i + 1])
+            sum_tr2 = np.sum(tr[i - period2 + 1 : i + 1])
+            avg2[i] = sum_bp2 / sum_tr2 if sum_tr2 != 0 else 0
+
+            sum_bp3 = np.sum(bp[i - period3 + 1 : i + 1])
+            sum_tr3 = np.sum(tr[i - period3 + 1 : i + 1])
+            avg3[i] = sum_bp3 / sum_tr3 if sum_tr3 != 0 else 0
+
+        # Ultimate Oscillator
+        uo = ((avg1 * 4) + (avg2 * 2) + avg3) / 7 * 100
+
+        return uo
+
+    def _calculate_balance_of_power(
+        self,
+        open_prices: np.ndarray,
+        high: np.ndarray,
+        low: np.ndarray,
+        close: np.ndarray,
+    ) -> np.ndarray:
+        """Расчет Balance of Power"""
+        bop = np.zeros_like(close)
+
+        for i in range(len(close)):
+            hl_diff = high[i] - low[i]
+            if hl_diff != 0:
+                bop[i] = (close[i] - open_prices[i]) / hl_diff
+
+        return bop
+
+    def _calculate_parabolic_sar(
+        self,
+        high: np.ndarray,
+        low: np.ndarray,
+        acceleration: float = 0.02,
+        maximum: float = 0.2,
+    ) -> np.ndarray:
+        """Расчет Parabolic SAR"""
+        if len(high) < 2:
+            return np.zeros_like(high)
+
+        sar = np.zeros_like(high)
+        ep = 0  # Extreme Point
+        af = acceleration  # Acceleration Factor
+        uptrend = True
+
+        # Инициализация
+        sar[0] = low[0]
+        ep = high[0]
+
+        for i in range(1, len(high)):
+            if uptrend:
+                sar[i] = sar[i - 1] + af * (ep - sar[i - 1])
+
+                if low[i] <= sar[i]:
+                    uptrend = False
+                    sar[i] = ep
+                    ep = low[i]
+                    af = acceleration
                 else:
-                    if not self.disable_progress:
-                        self.logger.warning(f"⚠️ Scaler не найден для {symbol}")
+                    if high[i] > ep:
+                        ep = high[i]
+                        af = min(af + acceleration, maximum)
 
-        return df
-
-    def _normalize_walk_forward(
-        self, df: pd.DataFrame, train_end_date: str
-    ) -> pd.DataFrame:
-        """Walk-forward нормализация без data leakage"""
-        if not self.disable_progress:
-            self.logger.info(f"Walk-forward нормализация до {train_end_date}...")
-
-        # Столбцы для исключения из нормализации
-        exclude_cols = [
-            "id",
-            "symbol",
-            "timestamp",
-            "datetime",
-            "sector",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-        ]
-
-        # Целевые переменные
-        target_cols = [
-            col
-            for col in df.columns
-            if col.startswith(("target_", "future_", "optimal_"))
-        ]
-        exclude_cols.extend(target_cols)
-
-        # Временные колонки
-        time_cols = [
-            "hour",
-            "minute",
-            "dayofweek",
-            "day",
-            "month",
-            "is_weekend",
-            "asian_session",
-            "european_session",
-            "american_session",
-            "session_overlap",
-        ]
-        exclude_cols.extend(time_cols)
-
-        # Признаки-соотношения, которые уже нормализованы по своей природе
-        ratio_cols = [
-            "close_vwap_ratio",
-            "close_open_ratio",
-            "high_low_ratio",
-            "close_position",
-            "bb_position",
-            "position_in_range_20",
-            "position_in_range_50",
-            "position_in_range_100",
-        ]
-        exclude_cols.extend(ratio_cols)
-
-        # ИСПРАВЛЕНО: Технические индикаторы с естественными диапазонами НЕ нормализуем
-        technical_indicators = [
-            "rsi",
-            "stoch_k",
-            "stoch_d",
-            "adx",
-            "adx_pos",
-            "adx_neg",
-            "rsi_oversold",
-            "rsi_overbought",
-            "toxicity",
-            "psar_trend",
-            "cci",
-            "williams_r",
-            "roc",
-            "momentum",
-            "kama",
-            "trix",
-            "ppo",
-            "macd",
-            "macd_signal",
-            "macd_diff",
-        ]
-        exclude_cols.extend(technical_indicators)
-
-        # Определяем признаки для нормализации
-        feature_cols = [col for col in df.columns if col not in exclude_cols]
-
-        # Маска для обучающих данных
-        train_mask = df["datetime"] <= pd.to_datetime(train_end_date)
-
-        # Нормализация по символам
-        for symbol in df["symbol"].unique():
-            symbol_mask = df["symbol"] == symbol
-            train_symbol_mask = symbol_mask & train_mask
-
-            if train_symbol_mask.sum() > 0:
-                if symbol not in self.scalers:
-                    self.scalers[symbol] = StandardScaler()
-
-                # Обучаем scaler только на train данных
-                train_data = df.loc[train_symbol_mask, feature_cols].dropna()
-                if len(train_data) > 0:
-                    self.scalers[symbol].fit(train_data)
-
-                    # Применяем ко всем данным символа
-                    valid_mask = symbol_mask & df[feature_cols].notna().all(axis=1)
-                    if valid_mask.sum() > 0:
-                        df.loc[valid_mask, feature_cols] = self.scalers[
-                            symbol
-                        ].transform(df.loc[valid_mask, feature_cols])
-
-        return df
-
-    def _log_feature_statistics(self, df: pd.DataFrame):
-        """Логирование статистики по признакам"""
-        if not self.disable_progress:
-            feature_counts = {
-                "basic": len(
-                    [
-                        col
-                        for col in df.columns
-                        if col
-                        in [
-                            "returns",
-                            "high_low_ratio",
-                            "close_open_ratio",
-                            "volume_ratio",
-                        ]
-                    ]
-                ),
-                "technical": len(
-                    [
-                        col
-                        for col in df.columns
-                        if any(
-                            ind in col
-                            for ind in ["sma", "ema", "rsi", "macd", "bb", "atr"]
-                        )
-                    ]
-                ),
-                "microstructure": len(
-                    [
-                        col
-                        for col in df.columns
-                        if any(
-                            ms in col
-                            for ms in ["spread", "imbalance", "toxicity", "illiquidity"]
-                        )
-                    ]
-                ),
-                "temporal": len(
-                    [
-                        col
-                        for col in df.columns
-                        if any(t in col for t in ["hour", "day", "month", "session"])
-                    ]
-                ),
-                "cross_asset": len(
-                    [
-                        col
-                        for col in df.columns
-                        if any(
-                            ca in col for ca in ["btc_", "sector", "rank", "momentum"]
-                        )
-                    ]
-                ),
-            }
-
-            self.logger.info(f"📊 Создано признаков по категориям: {feature_counts}")
-
-            # Проверка пропущенных значений
-            missing_counts = df.isnull().sum()
-            if missing_counts.sum() > 0:
-                self.logger.warning(
-                    f"⚠️ Обнаружены пропущенные значения в {missing_counts[missing_counts > 0].shape[0]} признаках"
-                )
-
-    def get_feature_names(self, include_targets: bool = False) -> List[str]:
-        """Получение списка названий признаков"""
-        # TODO: Реализовать правильное хранение названий признаков
-        return []
-
-    def save_scalers(self, path: str):
-        """Сохранение скейлеров для использования в продакшене"""
-        import pickle
-
-        with open(path, "wb") as f:
-            pickle.dump(self.scalers, f)
-
-        if not self.disable_progress:
-            self.logger.info(f"Скейлеры сохранены в {path}")
-
-    def load_scalers(self, path: str):
-        """Загрузка сохраненных скейлеров"""
-        import pickle
-
-        with open(path, "rb") as f:
-            self.scalers = pickle.load(f)
-
-        if not self.disable_progress:
-            self.logger.info(f"Скейлеры загружены из {path}")
-
-    def create_features_with_train_split(
-        self, df: pd.DataFrame, train_ratio: float = 0.6, val_ratio: float = 0.2
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """ИСПРАВЛЕННЫЙ метод создания признаков БЕЗ DATA LEAKAGE
-
-        Args:
-            df: исходные данные
-            train_ratio: доля обучающих данных
-            val_ratio: доля валидационных данных
-
-        Returns:
-            Tuple[train_data, val_data, test_data] - правильно нормализованные данные
-        """
-        if not self.disable_progress:
-            self.logger.start_stage(
-                "feature_engineering_no_leakage", symbols=df["symbol"].nunique()
-            )
-
-        # 1. Создание признаков (без нормализации)
-        if not self.disable_progress:
-            self.logger.info("1/5 - Создание базовых признаков...")
-        featured_dfs = []
-
-        symbols = df["symbol"].unique()
-        if not self.disable_progress:
-            self.logger.info(f"Обработка {len(symbols)} символов...")
-
-        # В многопроцессорном режиме прогресс-бары не нужны
-        disable_progress = hasattr(self, "disable_progress") and self.disable_progress
-
-        if disable_progress:
-            symbols_iterator = symbols
-        else:
-            symbols_iterator = tqdm(symbols, desc="Создание признаков", unit="символ")
-
-        for symbol in symbols_iterator:
-            symbol_data = df[df["symbol"] == symbol].copy()
-            symbol_data = symbol_data.sort_values("datetime")
-
-            symbol_data = self._create_basic_features(symbol_data)
-            symbol_data = self._create_technical_indicators(symbol_data)
-            symbol_data = self._create_microstructure_features(symbol_data)
-            symbol_data = self._create_rally_detection_features(symbol_data)
-            symbol_data = self._create_signal_quality_features(symbol_data)
-            symbol_data = self._create_futures_specific_features(symbol_data)
-            symbol_data = self._create_ml_optimized_features(symbol_data)
-            symbol_data = self._create_temporal_features(symbol_data)
-            symbol_data = self._create_target_variables(symbol_data)
-
-            featured_dfs.append(symbol_data)
-
-        if not self.disable_progress:
-            self.logger.info("2/5 - Объединение кросс-активных признаков...")
-        result_df = pd.concat(featured_dfs, ignore_index=True)
-        result_df = self._create_cross_asset_features(result_df)
-
-        if not self.disable_progress:
-            self.logger.info("3/5 - Обработка пропущенных значений...")
-        result_df = self._handle_missing_values(result_df)
-
-        # 2. Разделение данных ПО ВРЕМЕНИ (критично для предотвращения data leakage)
-        if not self.disable_progress:
-            self.logger.info("4/5 - Временное разделение данных...")
-        train_data_list = []
-        val_data_list = []
-        test_data_list = []
-
-        for symbol in result_df["symbol"].unique():
-            symbol_data = result_df[result_df["symbol"] == symbol].sort_values(
-                "datetime"
-            )
-            n = len(symbol_data)
-
-            train_end = int(n * train_ratio)
-            val_end = int(n * (train_ratio + val_ratio))
-
-            train_data_list.append(symbol_data.iloc[:train_end])
-            val_data_list.append(symbol_data.iloc[train_end:val_end])
-            test_data_list.append(symbol_data.iloc[val_end:])
-
-        train_data = pd.concat(train_data_list, ignore_index=True)
-        val_data = pd.concat(val_data_list, ignore_index=True)
-        test_data = pd.concat(test_data_list, ignore_index=True)
-
-        # 3. ПРАВИЛЬНАЯ нормализация БЕЗ DATA LEAKAGE
-        if not self.disable_progress:
-            self.logger.info("5/5 - Нормализация без data leakage...")
-
-        # Определяем признаки для нормализации
-        exclude_cols = [
-            "id",
-            "symbol",
-            "timestamp",
-            "datetime",
-            "sector",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-        ]
-
-        # Целевые переменные
-        target_cols = [
-            col
-            for col in train_data.columns
-            if col.startswith(("target_", "future_", "optimal_"))
-        ]
-        exclude_cols.extend(target_cols)
-
-        # Временные колонки (уже нормализованы)
-        time_cols = [
-            "hour",
-            "minute",
-            "dayofweek",
-            "day",
-            "month",
-            "is_weekend",
-            "asian_session",
-            "european_session",
-            "american_session",
-            "session_overlap",
-        ]
-        exclude_cols.extend(time_cols)
-
-        # Признаки-соотношения, которые уже нормализованы по своей природе
-        ratio_cols = [
-            "close_vwap_ratio",
-            "close_open_ratio",
-            "high_low_ratio",
-            "close_position",
-            "bb_position",
-            "position_in_range_20",
-            "position_in_range_50",
-            "position_in_range_100",
-        ]
-        exclude_cols.extend(ratio_cols)
-
-        feature_cols = [col for col in train_data.columns if col not in exclude_cols]
-
-        # Нормализация по символам
-        unique_symbols = train_data["symbol"].unique()
-        # В многопроцессорном режиме отключаем прогресс-бары
-        if disable_progress:
-            norm_iterator = unique_symbols
-        else:
-            norm_iterator = tqdm(unique_symbols, desc="Нормализация", unit="символ")
-
-        for symbol in norm_iterator:
-            # Маски для каждого символа
-            train_mask = train_data["symbol"] == symbol
-            val_mask = val_data["symbol"] == symbol
-            test_mask = test_data["symbol"] == symbol
-
-            if train_mask.sum() == 0:
-                continue
-
-            # Обучаем scaler ТОЛЬКО на train данных
-            if symbol not in self.scalers:
-                self.scalers[symbol] = RobustScaler()
-
-            # Получаем только валидные train данные
-            train_symbol_data = train_data.loc[train_mask, feature_cols].dropna()
-
-            # Сохраняем числовые колонки для использования во всем цикле
-            numeric_feature_cols = []
-
-            if len(train_symbol_data) > 0:
-                # Очистка экстремальных значений в train данных
-                train_cleaned = train_symbol_data.copy()
-
-                # Проверяем типы данных и фильтруем только числовые колонки
-                for col in feature_cols:
-                    if col in train_cleaned.columns and pd.api.types.is_numeric_dtype(
-                        train_cleaned[col]
-                    ):
-                        numeric_feature_cols.append(col)
+                    # Убедимся что SAR не выше минимума последних двух периодов
+                    if i > 1:
+                        sar[i] = min(sar[i], low[i - 1], low[i - 2])
                     else:
-                        if not self.disable_progress:
-                            self.logger.warning(
-                                f"Колонка '{col}' не является числовой или отсутствует, пропускаем"
-                            )
+                        sar[i] = min(sar[i], low[i - 1])
+            else:
+                sar[i] = sar[i - 1] + af * (ep - sar[i - 1])
 
-                for col in numeric_feature_cols:
-                    # ИСПРАВЛЕНО: Дополнительная проверка и конвертация перед квантилями
-                    # Конвертируем в числовой тип на случай если есть строки
-                    train_cleaned[col] = pd.to_numeric(
-                        train_cleaned[col], errors="coerce"
-                    )
+                if high[i] >= sar[i]:
+                    uptrend = True
+                    sar[i] = ep
+                    ep = high[i]
+                    af = acceleration
+                else:
+                    if low[i] < ep:
+                        ep = low[i]
+                        af = min(af + acceleration, maximum)
 
-                    # Пропускаем колонки с только NaN значениями
-                    if train_cleaned[col].notna().sum() == 0:
-                        if not self.disable_progress:
-                            self.logger.warning(
-                                f"Колонка '{col}' содержит только NaN значения, пропускаем"
-                            )
-                        continue
+                    # Убедимся что SAR не ниже максимума последних двух периодов
+                    if i > 1:
+                        sar[i] = max(sar[i], high[i - 1], high[i - 2])
+                    else:
+                        sar[i] = max(sar[i], high[i - 1])
 
-                    # Клиппинг экстремальных значений
-                    q01 = train_cleaned[col].quantile(0.01)
-                    q99 = train_cleaned[col].quantile(0.99)
-                    train_cleaned[col] = train_cleaned[col].clip(lower=q01, upper=q99)
+        return sar
 
-                    # Замена inf на конечные значения
-                    train_cleaned[col] = train_cleaned[col].replace(
-                        [np.inf, -np.inf], [q99, q01]
-                    )
-                    train_cleaned[col] = train_cleaned[col].fillna(
-                        train_cleaned[col].median()
-                    )
+    def _calculate_microstructure_features(self, df: pd.DataFrame) -> np.ndarray:
+        """Расчет микроструктурных признаков рынка"""
+        features = []
 
-                # Обучаем scaler на очищенных train данных только по числовым колонкам
-                self.scalers[symbol].fit(train_cleaned[numeric_feature_cols])
+        open_prices = df["open"].values.astype(float)
+        high_prices = df["high"].values.astype(float)
+        low_prices = df["low"].values.astype(float)
+        close_prices = df["close"].values.astype(float)
+        volume = df["volume"].values.astype(float)
 
-                # Применяем ко всем данным символа
-                # Train
-                train_valid_mask = train_mask & train_data[
-                    numeric_feature_cols
-                ].notna().all(axis=1)
-                if train_valid_mask.sum() > 0:
-                    train_to_scale = train_data.loc[
-                        train_valid_mask, numeric_feature_cols
-                    ].copy()
-                    # Применяем ту же очистку
-                    for col in numeric_feature_cols:
-                        # ИСПРАВЛЕНО: Конвертация в числовой тип
-                        train_to_scale[col] = pd.to_numeric(
-                            train_to_scale[col], errors="coerce"
-                        )
+        # Bid-Ask Spread Proxy
+        spread_proxy = (high_prices - low_prices) / close_prices
+        features.append(spread_proxy.reshape(-1, 1))
+        self.feature_names.append("spread_proxy")
 
-                        if train_to_scale[col].notna().sum() == 0:
-                            continue
+        # Price Impact
+        returns = np.diff(close_prices) / close_prices[:-1]
+        returns = np.concatenate([np.array([0]), returns])
+        price_impact = np.abs(returns) / (volume + 1e-10)
+        price_impact_norm = self._normalize_series(price_impact)
+        features.append(price_impact_norm)
+        self.feature_names.append("price_impact")
 
-                        q01 = (
-                            train_cleaned[col].quantile(0.01)
-                            if col in train_cleaned.columns
-                            else train_to_scale[col].quantile(0.01)
-                        )
-                        q99 = (
-                            train_cleaned[col].quantile(0.99)
-                            if col in train_cleaned.columns
-                            else train_to_scale[col].quantile(0.99)
-                        )
-                        train_to_scale[col] = train_to_scale[col].clip(
-                            lower=q01, upper=q99
-                        )
-                        train_to_scale[col] = train_to_scale[col].replace(
-                            [np.inf, -np.inf], [q99, q01]
-                        )
-                        train_to_scale[col] = train_to_scale[col].fillna(
-                            train_to_scale[col].median()
-                        )
+        # Order Imbalance Proxy
+        order_imbalance = (close_prices - open_prices) / (
+            high_prices - low_prices + 1e-10
+        )
+        features.append(order_imbalance.reshape(-1, 1))
+        self.feature_names.append("order_imbalance")
 
-                    train_data.loc[train_valid_mask, numeric_feature_cols] = (
-                        self.scalers[symbol].transform(train_to_scale)
-                    )
+        # Amihud Illiquidity
+        amihud_illiq = np.abs(returns) / (volume * close_prices + 1e-10)
+        amihud_norm = self._normalize_series(amihud_illiq)
+        features.append(amihud_norm)
+        self.feature_names.append("amihud_illiquidity")
 
-                # Val
-                val_valid_mask = val_mask & val_data[numeric_feature_cols].notna().all(
-                    axis=1
+        # Effective Spread
+        mid_price = (high_prices + low_prices) / 2
+        effective_spread = 2 * np.abs(close_prices - mid_price) / close_prices
+        features.append(effective_spread.reshape(-1, 1))
+        self.feature_names.append("effective_spread")
+
+        # Price Dispersion
+        price_dispersion = (high_prices - low_prices) / close_prices
+        features.append(price_dispersion.reshape(-1, 1))
+        self.feature_names.append("price_dispersion")
+
+        # Intraday Momentum
+        intraday_momentum = (close_prices - open_prices) / (open_prices + 1e-10)
+        features.append(intraday_momentum.reshape(-1, 1))
+        self.feature_names.append("intraday_momentum")
+
+        # Volume Concentration
+        volume_series = pd.Series(volume)
+        volume_concentration = volume / (
+            volume_series.rolling(20).max().fillna(1) + 1e-10
+        )
+        features.append(volume_concentration.values.reshape(-1, 1))
+        self.feature_names.append("volume_concentration")
+
+        # High-Low Ratio
+        hl_ratio = high_prices / (low_prices + 1e-10)
+        hl_ratio_norm = self._normalize_series(hl_ratio)
+        features.append(hl_ratio_norm)
+        self.feature_names.append("high_low_ratio")
+
+        # Close Location Value
+        clv = ((close_prices - low_prices) - (high_prices - close_prices)) / (
+            high_prices - low_prices + 1e-10
+        )
+        features.append(clv.reshape(-1, 1))
+        self.feature_names.append("close_location_value")
+
+        return np.concatenate(features, axis=1)
+
+    def _calculate_advanced_features(
+        self, df: pd.DataFrame, existing_features: List[np.ndarray]
+    ) -> np.ndarray:
+        """Расчет продвинутых комбинированных признаков"""
+        features = []
+
+        close_prices = df["close"].values.astype(float)
+        volume = df["volume"].values.astype(float)
+
+        # Price Position in Range для разных периодов
+        for period in [5, 10, 20]:
+            if len(close_prices) >= period:
+                high_rolling = (
+                    pd.Series(df["high"].values)
+                    .rolling(period)
+                    .max()
+                    .fillna(df["high"].values[0])
                 )
-                if val_valid_mask.sum() > 0:
-                    val_to_scale = val_data.loc[
-                        val_valid_mask, numeric_feature_cols
-                    ].copy()
-                    # Применяем ту же очистку используя статистики из train
-                    for col in numeric_feature_cols:
-                        # ИСПРАВЛЕНО: Конвертация в числовой тип
-                        val_to_scale[col] = pd.to_numeric(
-                            val_to_scale[col], errors="coerce"
-                        )
-
-                        if val_to_scale[col].notna().sum() == 0:
-                            continue
-
-                        q01 = (
-                            train_cleaned[col].quantile(0.01)
-                            if col in train_cleaned.columns
-                            else val_to_scale[col].quantile(0.01)
-                        )
-                        q99 = (
-                            train_cleaned[col].quantile(0.99)
-                            if col in train_cleaned.columns
-                            else val_to_scale[col].quantile(0.99)
-                        )
-                        val_to_scale[col] = val_to_scale[col].clip(lower=q01, upper=q99)
-                        val_to_scale[col] = val_to_scale[col].replace(
-                            [np.inf, -np.inf], [q99, q01]
-                        )
-                        val_to_scale[col] = val_to_scale[col].fillna(
-                            val_to_scale[col].median()
-                        )
-
-                    val_data.loc[val_valid_mask, numeric_feature_cols] = self.scalers[
-                        symbol
-                    ].transform(val_to_scale)
-
-                # Test
-                test_valid_mask = test_mask & test_data[
-                    numeric_feature_cols
-                ].notna().all(axis=1)
-                if test_valid_mask.sum() > 0:
-                    test_to_scale = test_data.loc[
-                        test_valid_mask, numeric_feature_cols
-                    ].copy()
-                    # Применяем ту же очистку используя статистики из train
-                    for col in numeric_feature_cols:
-                        # ИСПРАВЛЕНО: Конвертация в числовой тип
-                        test_to_scale[col] = pd.to_numeric(
-                            test_to_scale[col], errors="coerce"
-                        )
-
-                        if test_to_scale[col].notna().sum() == 0:
-                            continue
-
-                        q01 = (
-                            train_cleaned[col].quantile(0.01)
-                            if col in train_cleaned.columns
-                            else test_to_scale[col].quantile(0.01)
-                        )
-                        q99 = (
-                            train_cleaned[col].quantile(0.99)
-                            if col in train_cleaned.columns
-                            else test_to_scale[col].quantile(0.99)
-                        )
-                        test_to_scale[col] = test_to_scale[col].clip(
-                            lower=q01, upper=q99
-                        )
-                        test_to_scale[col] = test_to_scale[col].replace(
-                            [np.inf, -np.inf], [q99, q01]
-                        )
-                        test_to_scale[col] = test_to_scale[col].fillna(
-                            test_to_scale[col].median()
-                        )
-
-                    test_data.loc[test_valid_mask, numeric_feature_cols] = self.scalers[
-                        symbol
-                    ].transform(test_to_scale)
-
-        # КРИТИЧНО: Удаляем строки с NaN в future переменных
-        # NaN появляются в последних N строках каждого символа из-за shift(-N)
-        future_cols = [col for col in train_data.columns if col.startswith("future_")]
-        if future_cols:
-            if not self.disable_progress:
-                self.logger.info("🧑 Удаление строк с NaN в целевых переменных...")
-
-            # Подсчет до удаления
-            train_before = len(train_data)
-            val_before = len(val_data)
-            test_before = len(test_data)
-
-            # Удаляем строки с NaN в любой из future колонок
-            train_data = train_data.dropna(subset=future_cols)
-            val_data = val_data.dropna(subset=future_cols)
-            test_data = test_data.dropna(subset=future_cols)
-
-            if not self.disable_progress:
-                self.logger.info(
-                    f"  Удалено строк: Train={train_before - len(train_data)}, "
-                    f"Val={val_before - len(val_data)}, Test={test_before - len(test_data)}"
+                low_rolling = (
+                    pd.Series(df["low"].values)
+                    .rolling(period)
+                    .min()
+                    .fillna(df["low"].values[0])
                 )
+                price_position = (close_prices - low_rolling) / (
+                    high_rolling - low_rolling + 1e-10
+                )
+                features.append(price_position.values.reshape(-1, 1))
+                self.feature_names.append(f"price_position_{period}")
 
-        # Проверка на оставшиеся NaN
-        nan_check = {
-            "train": train_data.isna().sum().sum(),
-            "val": val_data.isna().sum().sum(),
-            "test": test_data.isna().sum().sum(),
-        }
+        # Volume-Price Trend
+        vpt = np.zeros_like(close_prices)
+        for i in range(1, len(close_prices)):
+            price_change = (
+                (close_prices[i] - close_prices[i - 1]) / close_prices[i - 1]
+                if close_prices[i - 1] != 0
+                else 0
+            )
+            vpt[i] = vpt[i - 1] + price_change * volume[i]
+        vpt_norm = self._normalize_series(vpt)
+        features.append(vpt_norm)
+        self.feature_names.append("volume_price_trend")
 
-        for split, nan_count in nan_check.items():
-            if nan_count > 0:
-                if not self.disable_progress:
-                    self.logger.warning(f"⚠️  Осталось {nan_count} NaN в {split} данных")
+        # Chaikin Money Flow (20 период)
+        clv = (
+            (close_prices - df["low"].values) - (df["high"].values - close_prices)
+        ) / (df["high"].values - df["low"].values + 1e-10)
+        mfv = clv * volume
+        cmf = pd.Series(mfv).rolling(20).sum() / (
+            pd.Series(volume).rolling(20).sum() + 1e-10
+        )
+        features.append(cmf.fillna(0).values.reshape(-1, 1))
+        self.feature_names.append("chaikin_money_flow")
 
-        # Финальная статистика
-        if not self.disable_progress:
-            self.logger.info("✅ Размеры данных без data leakage:")
-            self.logger.info(f"   - Train: {len(train_data)} записей")
-            self.logger.info(f"   - Val: {len(val_data)} записей")
-            self.logger.info(f"   - Test: {len(test_data)} записей")
-            self.logger.info(f"   - Признаков: {len(feature_cols)}")
+        # Donchian Channel Position
+        for period in [20, 50]:
+            if len(close_prices) >= period:
+                upper_channel = (
+                    pd.Series(df["high"].values)
+                    .rolling(period)
+                    .max()
+                    .fillna(df["high"].values[0])
+                )
+                lower_channel = (
+                    pd.Series(df["low"].values)
+                    .rolling(period)
+                    .min()
+                    .fillna(df["low"].values[0])
+                )
+                donchian_pos = (close_prices - lower_channel) / (
+                    upper_channel - lower_channel + 1e-10
+                )
+                features.append(donchian_pos.values.reshape(-1, 1))
+                self.feature_names.append(f"donchian_position_{period}")
 
-            self.logger.end_stage(
-                "feature_engineering_no_leakage",
-                train_size=len(train_data),
-                val_size=len(val_data),
-                test_size=len(test_data),
+        # Awesome Oscillator (SMA5 - SMA34)
+        if len(close_prices) >= 34:
+            hl_mid = (df["high"].values + df["low"].values) / 2
+            sma5 = self._calculate_sma(hl_mid, 5)
+            sma34 = self._calculate_sma(hl_mid, 34)
+            awesome_osc = sma5 - sma34
+            awesome_norm = self._normalize_series(awesome_osc)
+            features.append(awesome_norm)
+            self.feature_names.append("awesome_oscillator")
+        else:
+            features.append(np.zeros((len(close_prices), 1)))
+            self.feature_names.append("awesome_oscillator")
+
+        # Elder Ray Bull/Bear Power
+        if len(close_prices) >= 13:
+            ema13 = self._calculate_ema(close_prices, 13)
+            bull_power = df["high"].values - ema13
+            bear_power = df["low"].values - ema13
+            bull_norm = self._normalize_series(bull_power)
+            bear_norm = self._normalize_series(bear_power)
+            features.extend([bull_norm, bear_norm])
+            self.feature_names.extend(["elder_bull_power", "elder_bear_power"])
+        else:
+            features.extend([np.zeros((len(close_prices), 1)) for _ in range(2)])
+            self.feature_names.extend(["elder_bull_power", "elder_bear_power"])
+
+        # Mass Index
+        if len(close_prices) >= 25:
+            hl_range = df["high"].values - df["low"].values
+            ema9 = self._calculate_ema(hl_range, 9)
+            ema9_double = self._calculate_ema(ema9, 9)
+            ratio = ema9 / (ema9_double + 1e-10)
+            mass_index = pd.Series(ratio).rolling(25).sum().fillna(25)
+            mass_norm = self._normalize_series(mass_index.values)
+            features.append(mass_norm)
+            self.feature_names.append("mass_index")
+        else:
+            features.append(np.zeros((len(close_prices), 1)))
+            self.feature_names.append("mass_index")
+
+        return np.concatenate(features, axis=1)
+
+    def _calculate_lag_features(
+        self, df: pd.DataFrame, existing_features: List[np.ndarray]
+    ) -> np.ndarray:
+        """Расчет лаговых признаков"""
+        features = []
+
+        close_prices = df["close"].values
+        volume = df["volume"].values
+
+        # Лаги цен
+        for lag in [1, 2, 3, 5, 10]:
+            lagged_close = np.roll(close_prices, lag)
+            lagged_close[:lag] = close_prices[0]  # Заполняем начальные значения
+            close_lag_return = (close_prices - lagged_close) / (lagged_close + 1e-10)
+            features.append(close_lag_return.reshape(-1, 1))
+            self.feature_names.append(f"close_lag_return_{lag}")
+
+        # Лаги объемов
+        for lag in [1, 2, 3]:
+            lagged_volume = np.roll(volume, lag)
+            lagged_volume[:lag] = volume[0]
+            volume_lag_ratio = volume / (lagged_volume + 1e-10)
+            volume_lag_norm = self._normalize_series(volume_lag_ratio)
+            features.append(volume_lag_norm)
+            self.feature_names.append(f"volume_lag_ratio_{lag}")
+
+        # Лаги волатильности
+        returns = np.diff(close_prices) / close_prices[:-1]
+        returns = np.concatenate([np.array([0]), returns])
+        volatility = pd.Series(returns).rolling(20).std().fillna(0).values
+
+        for lag in [1, 2]:
+            lagged_vol = np.roll(volatility, lag)
+            lagged_vol[:lag] = volatility[0]
+            vol_lag_ratio = volatility / (lagged_vol + 1e-10)
+            features.append(vol_lag_ratio.reshape(-1, 1))
+            self.feature_names.append(f"volatility_lag_ratio_{lag}")
+
+        return np.concatenate(features, axis=1)
+
+    def _calculate_pattern_features(self, df: pd.DataFrame) -> np.ndarray:
+        """Расчет признаков паттернов свечей"""
+        features = []
+
+        open_prices = df["open"].values
+        high_prices = df["high"].values
+        low_prices = df["low"].values
+        close_prices = df["close"].values
+
+        # Doji pattern
+        body_size = np.abs(close_prices - open_prices)
+        hl_range = high_prices - low_prices
+        is_doji = (body_size / (hl_range + 1e-10) < 0.1).astype(float)
+        features.append(is_doji.reshape(-1, 1))
+        self.feature_names.append("is_doji")
+
+        # Hammer pattern
+        lower_shadow = np.minimum(open_prices, close_prices) - low_prices
+        upper_shadow = high_prices - np.maximum(open_prices, close_prices)
+        is_hammer = (
+            (lower_shadow > 2 * body_size) & (upper_shadow < body_size * 0.3)
+        ).astype(float)
+        features.append(is_hammer.reshape(-1, 1))
+        self.feature_names.append("is_hammer")
+
+        # Engulfing pattern
+        is_bullish_engulfing = np.zeros_like(close_prices)
+        is_bearish_engulfing = np.zeros_like(close_prices)
+        for i in range(1, len(close_prices)):
+            # Bullish engulfing
+            if (
+                open_prices[i] < close_prices[i - 1]
+                and close_prices[i] > open_prices[i - 1]
+                and open_prices[i] <= close_prices[i - 1]
+                and close_prices[i] >= open_prices[i - 1]
+            ):
+                is_bullish_engulfing[i] = 1
+            # Bearish engulfing
+            if (
+                open_prices[i] > close_prices[i - 1]
+                and close_prices[i] < open_prices[i - 1]
+                and open_prices[i] >= close_prices[i - 1]
+                and close_prices[i] <= open_prices[i - 1]
+            ):
+                is_bearish_engulfing[i] = 1
+
+        features.append(is_bullish_engulfing.reshape(-1, 1))
+        self.feature_names.append("is_bullish_engulfing")
+        features.append(is_bearish_engulfing.reshape(-1, 1))
+        self.feature_names.append("is_bearish_engulfing")
+
+        # Three White Soldiers / Three Black Crows
+        three_white_soldiers = np.zeros_like(close_prices)
+        three_black_crows = np.zeros_like(close_prices)
+        for i in range(2, len(close_prices)):
+            # Three White Soldiers
+            if (
+                close_prices[i] > open_prices[i]
+                and close_prices[i - 1] > open_prices[i - 1]
+                and close_prices[i - 2] > open_prices[i - 2]
+                and close_prices[i] > close_prices[i - 1]
+                and close_prices[i - 1] > close_prices[i - 2]
+            ):
+                three_white_soldiers[i] = 1
+            # Three Black Crows
+            if (
+                close_prices[i] < open_prices[i]
+                and close_prices[i - 1] < open_prices[i - 1]
+                and close_prices[i - 2] < open_prices[i - 2]
+                and close_prices[i] < close_prices[i - 1]
+                and close_prices[i - 1] < close_prices[i - 2]
+            ):
+                three_black_crows[i] = 1
+
+        features.append(three_white_soldiers.reshape(-1, 1))
+        self.feature_names.append("three_white_soldiers")
+        features.append(three_black_crows.reshape(-1, 1))
+        self.feature_names.append("three_black_crows")
+
+        # Gap patterns
+        gap_up = (low_prices > np.roll(high_prices, 1)).astype(float)
+        gap_down = (high_prices < np.roll(low_prices, 1)).astype(float)
+        gap_up[0] = 0
+        gap_down[0] = 0
+
+        features.append(gap_up.reshape(-1, 1))
+        self.feature_names.append("gap_up")
+        features.append(gap_down.reshape(-1, 1))
+        self.feature_names.append("gap_down")
+
+        # Inside bar
+        inside_bar = (
+            (high_prices <= np.roll(high_prices, 1))
+            & (low_prices >= np.roll(low_prices, 1))
+        ).astype(float)
+        inside_bar[0] = 0
+        features.append(inside_bar.reshape(-1, 1))
+        self.feature_names.append("inside_bar")
+
+        # Outside bar
+        outside_bar = (
+            (high_prices >= np.roll(high_prices, 1))
+            & (low_prices <= np.roll(low_prices, 1))
+        ).astype(float)
+        outside_bar[0] = 0
+        features.append(outside_bar.reshape(-1, 1))
+        self.feature_names.append("outside_bar")
+
+        return np.concatenate(features, axis=1)
+
+    def _calculate_momentum_features(self, df: pd.DataFrame) -> np.ndarray:
+        """Расчет дополнительных моментум признаков"""
+        features = []
+
+        close_prices = df["close"].values
+        high_prices = df["high"].values
+        low_prices = df["low"].values
+        volume = df["volume"].values
+
+        # Relative Vigor Index
+        for period in [10, 14]:
+            if len(close_prices) >= period + 1:
+                co = close_prices - df["open"].values
+                hl = high_prices - low_prices
+
+                co_smooth = self._smooth_series(co, period)
+                hl_smooth = self._smooth_series(hl, period)
+
+                rvi = np.zeros_like(close_prices)
+                rvi[period:] = co_smooth[period:] / (hl_smooth[period:] + 1e-10)
+
+                features.append(rvi.reshape(-1, 1))
+                self.feature_names.append(f"rvi_{period}")
+            else:
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"rvi_{period}")
+
+        # Force Index
+        for period in [13, 20]:
+            if len(close_prices) >= period + 1:
+                price_change = np.diff(close_prices)
+                price_change = np.concatenate([np.array([0]), price_change])
+                raw_fi = price_change * volume
+                force_index = self._calculate_ema(raw_fi, period)
+                fi_norm = self._normalize_series(force_index)
+                features.append(fi_norm)
+                self.feature_names.append(f"force_index_{period}")
+            else:
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"force_index_{period}")
+
+        # Chande Momentum Oscillator
+        for period in [14, 20]:
+            if len(close_prices) >= period + 1:
+                price_changes = np.diff(close_prices)
+                price_changes = np.concatenate([np.array([0]), price_changes])
+
+                gains = np.where(price_changes > 0, price_changes, 0)
+                losses = np.where(price_changes < 0, -price_changes, 0)
+
+                cmo = np.zeros_like(close_prices)
+
+                for i in range(period, len(close_prices)):
+                    sum_gains = np.sum(gains[i - period + 1 : i + 1])
+                    sum_losses = np.sum(losses[i - period + 1 : i + 1])
+
+                    if sum_gains + sum_losses != 0:
+                        cmo[i] = (
+                            (sum_gains - sum_losses) / (sum_gains + sum_losses) * 100
+                        )
+
+                cmo_norm = cmo / 100.0
+                features.append(cmo_norm.reshape(-1, 1))
+                self.feature_names.append(f"cmo_{period}")
+            else:
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"cmo_{period}")
+
+        # Klinger Volume Oscillator
+        if len(close_prices) >= 35:
+            hlc = (high_prices + low_prices + close_prices) / 3
+            dm = hlc - np.roll(hlc, 1)
+            dm[0] = 0
+
+            cm = np.zeros_like(close_prices)
+            for i in range(1, len(close_prices)):
+                if hlc[i] > hlc[i - 1]:
+                    cm[i] = cm[i - 1] + (high_prices[i] - low_prices[i])
+                else:
+                    cm[i] = high_prices[i] - low_prices[i]
+
+            vf = volume * np.sign(dm) * cm
+            kvo = self._calculate_ema(vf, 34) - self._calculate_ema(vf, 55)
+            kvo_signal = self._calculate_ema(kvo, 13)
+
+            kvo_norm = self._normalize_series(kvo)
+            kvo_signal_norm = self._normalize_series(kvo_signal)
+
+            features.extend([kvo_norm, kvo_signal_norm])
+            self.feature_names.extend(["klinger_oscillator", "klinger_signal"])
+        else:
+            features.extend([np.zeros((len(close_prices), 1)) for _ in range(2)])
+            self.feature_names.extend(["klinger_oscillator", "klinger_signal"])
+
+        # Price Rate of Change для дополнительных периодов
+        for period in [3, 7, 14]:
+            if len(close_prices) > period:
+                proc = (
+                    (close_prices - np.roll(close_prices, period))
+                    / np.roll(close_prices, period)
+                    * 100
+                )
+                proc[:period] = 0
+                proc_norm = self._normalize_series(proc)
+                features.append(proc_norm)
+                self.feature_names.append(f"price_roc_{period}")
+            else:
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"price_roc_{period}")
+
+        # Volume Oscillator
+        if len(volume) >= 20:
+            vol_short = self._calculate_ema(volume, 5)
+            vol_long = self._calculate_ema(volume, 20)
+            vol_osc = (vol_short - vol_long) / vol_long * 100
+            vol_osc_norm = self._normalize_series(vol_osc)
+            features.append(vol_osc_norm)
+            self.feature_names.append("volume_oscillator")
+        else:
+            features.append(np.zeros((len(close_prices), 1)))
+            self.feature_names.append("volume_oscillator")
+
+        # Accumulation/Distribution Line
+        clv = ((close_prices - low_prices) - (high_prices - close_prices)) / (
+            high_prices - low_prices + 1e-10
+        )
+        adl = np.cumsum(clv * volume)
+        adl_norm = self._normalize_series(adl)
+        features.append(adl_norm)
+        self.feature_names.append("accumulation_distribution")
+
+        # Ease of Movement
+        if len(close_prices) >= 14:
+            distance = (high_prices + low_prices) / 2 - np.roll(
+                (high_prices + low_prices) / 2, 1
+            )
+            emv = distance / (volume / 1e6 / ((high_prices - low_prices) + 1e-10))
+            emv[0] = 0
+            emv_smooth = self._calculate_sma(emv, 14)
+            emv_norm = self._normalize_series(emv_smooth)
+            features.append(emv_norm)
+            self.feature_names.append("ease_of_movement")
+        else:
+            features.append(np.zeros((len(close_prices), 1)))
+            self.feature_names.append("ease_of_movement")
+
+        # Negative Volume Index
+        nvi = np.ones_like(close_prices) * 1000  # Start at 1000
+        for i in range(1, len(close_prices)):
+            if volume[i] < volume[i - 1]:
+                nvi[i] = nvi[i - 1] * (
+                    1 + (close_prices[i] - close_prices[i - 1]) / close_prices[i - 1]
+                )
+            else:
+                nvi[i] = nvi[i - 1]
+        nvi_norm = self._normalize_series(nvi)
+        features.append(nvi_norm)
+        self.feature_names.append("negative_volume_index")
+
+        # Positive Volume Index
+        pvi = np.ones_like(close_prices) * 1000  # Start at 1000
+        for i in range(1, len(close_prices)):
+            if volume[i] > volume[i - 1]:
+                pvi[i] = pvi[i - 1] * (
+                    1 + (close_prices[i] - close_prices[i - 1]) / close_prices[i - 1]
+                )
+            else:
+                pvi[i] = pvi[i - 1]
+        pvi_norm = self._normalize_series(pvi)
+        features.append(pvi_norm)
+        self.feature_names.append("positive_volume_index")
+
+        # Detrended Price Oscillator
+        for period in [14, 20]:
+            if len(close_prices) >= period * 2:
+                ma = self._calculate_sma(close_prices, period)
+                ma_shifted = np.roll(ma, period // 2 + 1)
+                ma_shifted[: period // 2 + 1] = ma[0]
+                dpo = close_prices - ma_shifted
+                dpo_norm = self._normalize_series(dpo)
+                features.append(dpo_norm)
+                self.feature_names.append(f"dpo_{period}")
+            else:
+                features.append(np.zeros((len(close_prices), 1)))
+                self.feature_names.append(f"dpo_{period}")
+
+        # Вortex Indicator
+        if len(close_prices) >= 14:
+            vm_plus = np.abs(high_prices - np.roll(low_prices, 1))
+            vm_minus = np.abs(low_prices - np.roll(high_prices, 1))
+            vm_plus[0] = 0
+            vm_minus[0] = 0
+
+            tr = self._calculate_true_range(high_prices, low_prices, close_prices)
+
+            vi_plus = pd.Series(vm_plus).rolling(14).sum() / (
+                pd.Series(tr).rolling(14).sum() + 1e-10
+            )
+            vi_minus = pd.Series(vm_minus).rolling(14).sum() / (
+                pd.Series(tr).rolling(14).sum() + 1e-10
             )
 
-        return train_data, val_data, test_data
+            features.append(vi_plus.fillna(0).values.reshape(-1, 1))
+            self.feature_names.append("vortex_plus")
+            features.append(vi_minus.fillna(0).values.reshape(-1, 1))
+            self.feature_names.append("vortex_minus")
+        else:
+            features.extend([np.zeros((len(close_prices), 1)) for _ in range(2)])
+            self.feature_names.extend(["vortex_plus", "vortex_minus"])
 
-    def _add_enhanced_features(
-        self, df: pd.DataFrame, all_symbols_data: Dict[str, pd.DataFrame]
-    ) -> pd.DataFrame:
-        """Добавление расширенных признаков для улучшения direction prediction
+        # Percentage Price Oscillator
+        if len(close_prices) >= 26:
+            ema12 = self._calculate_ema(close_prices, 12)
+            ema26 = self._calculate_ema(close_prices, 26)
+            ppo = (ema12 - ema26) / ema26 * 100
+            ppo_signal = self._calculate_ema(ppo, 9)
+            ppo_hist = ppo - ppo_signal
 
-        Args:
-            df: DataFrame с базовыми признаками
-            all_symbols_data: словарь с данными всех символов для cross-asset features
+            ppo_norm = self._normalize_series(ppo)
+            ppo_signal_norm = self._normalize_series(ppo_signal)
+            ppo_hist_norm = self._normalize_series(ppo_hist)
 
-        Returns:
-            DataFrame с enhanced features
-        """
+            features.extend([ppo_norm, ppo_signal_norm, ppo_hist_norm])
+            self.feature_names.extend(["ppo", "ppo_signal", "ppo_hist"])
+        else:
+            features.extend([np.zeros((len(close_prices), 1)) for _ in range(3)])
+            self.feature_names.extend(["ppo", "ppo_signal", "ppo_hist"])
+
+        # Price Channel
+        for period in [20, 50]:
+            if len(close_prices) >= period:
+                upper_channel = (
+                    pd.Series(high_prices).rolling(period).max().fillna(high_prices[0])
+                )
+                lower_channel = (
+                    pd.Series(low_prices).rolling(period).min().fillna(low_prices[0])
+                )
+                center_line = (upper_channel + lower_channel) / 2
+
+                channel_pos = (close_prices - lower_channel) / (
+                    upper_channel - lower_channel + 1e-10
+                )
+                center_distance = (close_prices - center_line) / center_line
+
+                features.append(channel_pos.values.reshape(-1, 1))
+                self.feature_names.append(f"price_channel_position_{period}")
+                features.append(center_distance.values.reshape(-1, 1))
+                self.feature_names.append(f"price_channel_center_dist_{period}")
+            else:
+                features.extend([np.zeros((len(close_prices), 1)) for _ in range(2)])
+                self.feature_names.extend(
+                    [
+                        f"price_channel_position_{period}",
+                        f"price_channel_center_dist_{period}",
+                    ]
+                )
+
+        return np.concatenate(features, axis=1)
+
+    def _estimate_hurst_exponent(self, prices: np.ndarray) -> float:
+        """Оценка экспоненты Херста"""
         try:
-            from data.enhanced_features import EnhancedFeatureEngineer
-        except ImportError:
-            self.logger.warning(
-                "⚠️ Модуль enhanced_features не найден, пропускаем enhanced features"
-            )
-            return df
+            lags = range(2, min(20, len(prices) // 2))
+            tau = [
+                np.sqrt(np.std(np.subtract(prices[lag:], prices[:-lag])))
+                for lag in lags
+            ]
 
-        self.logger.info("🚀 Добавление enhanced features для direction prediction...")
+            # Линейная регрессия в логарифмическом пространстве
+            poly = np.polyfit(np.log(lags), np.log(tau), 1)
+            return poly[0] * 2.0  # Hurst exponent
+        except:
+            return 0.5  # Возвращаем 0.5 (случайное блуждание) в случае ошибки
 
-        enhanced_engineer = EnhancedFeatureEngineer()
-        enhanced_dfs = []
+    def _calculate_fisher_transform(
+        self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 10
+    ) -> np.ndarray:
+        """Расчет Fisher Transform"""
+        if len(close) < period:
+            return np.zeros_like(close)
 
-        # Обрабатываем каждый символ
-        for symbol in tqdm(
-            df["symbol"].unique(),
-            desc="Enhanced features",
-            disable=self.disable_progress,
-        ):
-            symbol_data = df[df["symbol"] == symbol].copy()
+        # Нормализация цены в диапазон [-1, 1]
+        hl2 = (high + low) / 2
+        max_high = pd.Series(hl2).rolling(period).max().fillna(hl2[0])
+        min_low = pd.Series(hl2).rolling(period).min().fillna(hl2[0])
 
-            # Применяем enhanced features
-            enhanced_data = enhanced_engineer.create_enhanced_features(
-                symbol_data, all_symbols_data if len(all_symbols_data) > 1 else None
-            )
+        value = np.zeros_like(close)
+        for i in range(len(close)):
+            if max_high.iloc[i] != min_low.iloc[i]:
+                value[i] = 2 * (
+                    (hl2[i] - min_low.iloc[i]) / (max_high.iloc[i] - min_low.iloc[i])
+                    - 0.5
+                )
+            value[i] = np.clip(value[i], -0.999, 0.999)
 
-            enhanced_dfs.append(enhanced_data)
+        # Fisher transform
+        fisher = np.zeros_like(close)
+        for i in range(1, len(close)):
+            fisher[i] = 0.5 * np.log((1 + value[i]) / (1 - value[i] + 1e-10))
 
-        # Объединяем результаты
-        result_df = pd.concat(enhanced_dfs, ignore_index=True)
+        return fisher
 
-        # Логируем статистику новых признаков
-        original_cols = set(df.columns)
-        new_cols = set(result_df.columns) - original_cols
+    def _calculate_choppiness_index(
+        self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14
+    ) -> np.ndarray:
+        """Расчет Choppiness Index"""
+        if len(close) < period:
+            return np.full_like(close, 0.5)
 
-        if new_cols:
-            self.logger.info(f"✅ Добавлено {len(new_cols)} enhanced features")
+        atr_sum = (
+            pd.Series(self._calculate_true_range(high, low, close))
+            .rolling(period)
+            .sum()
+        )
+        high_low_range = (
+            pd.Series(high).rolling(period).max() - pd.Series(low).rolling(period).min()
+        )
 
-            # Категоризация новых признаков
-            categories = {
-                "market_regime": [
-                    col for col in new_cols if "regime" in col or "wyckoff" in col
-                ],
-                "microstructure": [
-                    col
-                    for col in new_cols
-                    if any(x in col for x in ["ofi", "tick", "imbalance"])
-                ],
-                "cross_asset": [
-                    col
-                    for col in new_cols
-                    if any(x in col for x in ["btc_", "sector_", "beta_"])
-                ],
-                "sentiment": [
-                    col
-                    for col in new_cols
-                    if any(x in col for x in ["fear_greed", "panic", "euphoria"])
-                ],
-            }
+        ci = np.zeros_like(close)
+        for i in range(period - 1, len(close)):
+            if high_low_range.iloc[i] > 0:
+                ci[i] = (
+                    100
+                    * np.log10(atr_sum.iloc[i] / high_low_range.iloc[i])
+                    / np.log10(period)
+                )
 
-            for category, cols in categories.items():
-                if cols:
-                    self.logger.info(f"  - {category}: {len(cols)} признаков")
-
-        return result_df
+        return ci / 100.0  # Нормализация к [0, 1]

@@ -12,7 +12,14 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from database.connections import get_async_db
-from database.models import Order, OrderSide, OrderStatus, OrderType, Signal
+from database.models.base_models import (
+    Order,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    Signal,
+    SignalType,
+)
 
 
 class OrderManager:
@@ -116,22 +123,93 @@ class OrderManager:
         """
         async with self._order_locks.get(order.order_id, asyncio.Lock()):
             try:
-                # Получаем адаптер биржи
-                exchange = await self.exchange_registry.get_exchange(order.exchange)
-                if not exchange:
-                    self.logger.error(f"Биржа {order.exchange} не найдена")
+                # Проверяем, является ли order.side строкой или enum
+                side_str = (
+                    order.side if isinstance(order.side, str) else order.side.value
+                )
+                self.logger.info(
+                    f"📤 Отправка ордера на биржу: {side_str} {order.quantity} {order.symbol} "
+                    f"@ {order.price or 'MARKET'} на {order.exchange}"
+                )
+
+                # Получаем объект биржи из реестра подключений
+                # exchange_registry должен быть фабрикой или менеджером подключений
+                # Временное решение - создаем биржу напрямую
+                from exchanges.factory import ExchangeFactory
+
+                factory = ExchangeFactory()
+
+                # Получаем API ключи из окружения
+                import os
+
+                if order.exchange.lower() == "bybit":
+                    api_key = os.getenv("BYBIT_API_KEY")
+                    api_secret = os.getenv("BYBIT_API_SECRET")
+                else:
+                    self.logger.error(f"❌ Биржа {order.exchange} не поддерживается")
                     return False
 
-                # Отправляем ордер
-                exchange_order_id = await exchange.create_order(
-                    symbol=order.symbol,
-                    side=order.side.value,
-                    order_type=order.order_type.value,
-                    quantity=order.quantity,
-                    price=order.price,
-                    stop_loss=order.stop_loss,
-                    take_profit=order.take_profit,
+                # Создаем подключение к бирже
+                exchange = await factory.create_and_connect(
+                    exchange_type=order.exchange.lower(),
+                    api_key=api_key,
+                    api_secret=api_secret,
+                    sandbox=False,
                 )
+
+                if not exchange:
+                    self.logger.error(
+                        f"❌ Не удалось создать подключение к {order.exchange}"
+                    )
+                    return False
+
+                await exchange.initialize()
+                self.logger.info(f"🔗 Подключение к бирже {order.exchange} успешно")
+
+                # Отправляем ордер через place_order
+                # Создаем OrderRequest для Bybit
+                from exchanges.base.order_types import (
+                    OrderRequest,
+                )
+                from exchanges.base.order_types import OrderSide as ExchangeOrderSide
+                from exchanges.base.order_types import OrderType as ExchangeOrderType
+
+                # Маппинг типов ордеров
+                order_type_map = {
+                    "limit": ExchangeOrderType.LIMIT,
+                    "market": ExchangeOrderType.MARKET,
+                }
+
+                order_side_map = {
+                    "buy": ExchangeOrderSide.BUY,
+                    "sell": ExchangeOrderSide.SELL,
+                }
+
+                order_request = OrderRequest(
+                    symbol=order.symbol,
+                    side=order_side_map.get(order.side.value, ExchangeOrderSide.BUY),
+                    order_type=order_type_map.get(
+                        order.order_type.value, ExchangeOrderType.LIMIT
+                    ),
+                    quantity=order.quantity,
+                    price=order.price if order.order_type.value == "limit" else None,
+                )
+
+                # Отправляем ордер
+                self.logger.info(
+                    f"📤 Отправляем OrderRequest: {order_request.symbol} {order_request.side.value} "
+                    f"{order_request.quantity} @ {order_request.price}"
+                )
+
+                response = await exchange.place_order(order_request)
+
+                if response and response.success:
+                    exchange_order_id = response.order_id
+                else:
+                    self.logger.error(
+                        f"❌ Ошибка от биржи: {response.error if response else 'Нет ответа'}"
+                    )
+                    exchange_order_id = None
 
                 if exchange_order_id:
                     # Обновляем ID ордера от биржи
@@ -143,16 +221,20 @@ class OrderManager:
                     await self._update_order_in_db(order)
 
                     self.logger.info(
-                        f"Ордер {order.order_id} успешно отправлен на {order.exchange}"
+                        f"✅ Ордер {order.order_id} успешно отправлен на {order.exchange}"
                     )
                     return True
                 else:
                     order.status = OrderStatus.REJECTED
                     await self._update_order_in_db(order)
+                    self.logger.error("❌ Биржа вернула пустой ID для ордера")
                     return False
 
             except Exception as e:
-                self.logger.error(f"Ошибка отправки ордера {order.order_id}: {e}")
+                self.logger.error(f"❌ Ошибка отправки ордера {order.order_id}: {e}")
+                import traceback
+
+                traceback.print_exc()
                 order.status = OrderStatus.REJECTED
                 await self._update_order_in_db(order)
                 return False
@@ -309,3 +391,19 @@ class OrderManager:
                 await db.commit()
         except Exception as e:
             self.logger.error(f"Ошибка обновления ордера в БД: {e}")
+
+    async def health_check(self) -> bool:
+        """Проверка здоровья компонента"""
+        return True
+
+    async def start(self):
+        """Запуск компонента"""
+        self.logger.info("Order Manager запущен")
+
+    async def stop(self):
+        """Остановка компонента"""
+        self.logger.info("Order Manager остановлен")
+
+    def is_running(self) -> bool:
+        """Проверка работы компонента"""
+        return True

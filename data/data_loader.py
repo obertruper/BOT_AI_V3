@@ -35,7 +35,7 @@ class DataLoader:
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """Инициализация загрузчика данных"""
         self.config_manager = config_manager or ConfigManager()
-        self.exchange_factory = ExchangeFactory(self.config_manager)
+        self.exchange_factory = ExchangeFactory()
         self.exchanges = {}
         self._initialized = False
         
@@ -52,11 +52,35 @@ class DataLoader:
             return
             
         try:
+            # Получаем реальные API ключи из конфигурации
+            exchange_config = self.config_manager.get_config().get('exchanges', {}).get(self.default_exchange, {})
+            
+            # Если в конфигурации есть enabled=false, пропускаем
+            if not exchange_config.get('enabled', True):
+                logger.warning(f"Биржа {self.default_exchange} отключена в конфигурации")
+                return
+            
+            # Получаем API ключи из переменных окружения
+            import os
+            from dotenv import load_dotenv
+            load_dotenv()
+            
+            api_key = os.getenv(f'{self.default_exchange.upper()}_API_KEY')
+            api_secret = os.getenv(f'{self.default_exchange.upper()}_API_SECRET')
+            
+            if not api_key or not api_secret:
+                # Используем публичные методы без авторизации
+                logger.warning(f"API ключи для {self.default_exchange} не найдены, используем публичный доступ")
+                api_key = "public_access"
+                api_secret = "public_access"
+            
             # Создаем подключение к основной бирже
-            self.exchanges[self.default_exchange] = await self.exchange_factory.create_exchange(
-                self.default_exchange
+            self.exchanges[self.default_exchange] = self.exchange_factory.create_client(
+                exchange_type=self.default_exchange,
+                api_key=api_key,
+                api_secret=api_secret,
+                sandbox=exchange_config.get('testnet', False)
             )
-            await self.exchanges[self.default_exchange].initialize()
             
             self._initialized = True
             logger.info(f"DataLoader инициализирован для биржи {self.default_exchange}")
@@ -64,6 +88,89 @@ class DataLoader:
         except Exception as e:
             logger.error(f"Ошибка инициализации DataLoader: {e}")
             raise DataLoadError(f"Не удалось инициализировать DataLoader: {e}")
+
+    async def load_ohlcv(
+        self,
+        symbol: str,
+        exchange: str = None,
+        interval: str = "15m", 
+        limit: int = 1000,
+        save_to_db: bool = False
+    ) -> Optional[pd.DataFrame]:
+        """
+        Загрузка OHLCV данных - совместимый API для DataMaintenanceService
+        
+        Args:
+            symbol: Торговый символ
+            exchange: Биржа
+            interval: Интервал (15m, 1h, etc.)
+            limit: Количество свечей
+            save_to_db: Сохранять ли в БД
+            
+        Returns:
+            DataFrame с OHLCV данными или None
+        """
+        if not self._initialized:
+            await self.initialize()
+            
+        exchange = exchange or self.default_exchange
+        
+        try:
+            # Преобразуем интервал в минуты
+            interval_minutes = self._parse_interval_to_minutes(interval)
+            
+            # Рассчитываем начальную дату
+            end_date = datetime.now(timezone.utc)
+            start_date = end_date - timedelta(minutes=interval_minutes * limit)
+            
+            # Загружаем исторические данные
+            if save_to_db:
+                count = await self.load_historical_data(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    interval_minutes=interval_minutes,
+                    exchange=exchange
+                )
+                logger.info(f"Загружено и сохранено {count} записей для {symbol}")
+            
+            # Загружаем данные из БД
+            async with get_async_db() as session:
+                stmt = select(RawMarketData).where(
+                    and_(
+                        RawMarketData.symbol == symbol,
+                        RawMarketData.exchange == exchange,
+                        RawMarketData.interval_minutes == interval_minutes,
+                        RawMarketData.datetime >= start_date
+                    )
+                ).order_by(RawMarketData.datetime).limit(limit)
+                
+                result = await session.execute(stmt)
+                data = result.scalars().all()
+                
+                if data:
+                    # Конвертируем в DataFrame
+                    df = pd.DataFrame([{
+                        'timestamp': d.timestamp,
+                        'datetime': d.datetime,
+                        'open': float(d.open),
+                        'high': float(d.high),
+                        'low': float(d.low),
+                        'close': float(d.close),
+                        'volume': float(d.volume),
+                        'turnover': float(d.turnover) if d.turnover else 0
+                    } for d in data])
+                    
+                    df.set_index('datetime', inplace=True)
+                    df = df.sort_index()
+                    
+                    return df
+                
+            return None
+            
+        except Exception as e:
+            logger.error(f"Ошибка загрузки OHLCV для {symbol}: {e}")
+            return None
     
     async def load_historical_data(
         self, 
@@ -407,6 +514,19 @@ class DataLoader:
             1440: '1d'
         }
         return mapping.get(interval_minutes, '15m')
+
+    def _parse_interval_to_minutes(self, interval: str) -> int:
+        """Конвертация строкового интервала в минуты"""
+        mapping = {
+            '1m': 1,
+            '5m': 5,
+            '15m': 15,
+            '30m': 30,
+            '1h': 60,
+            '4h': 240,
+            '1d': 1440
+        }
+        return mapping.get(interval.lower(), 15)
     
     async def get_data_for_ml(
         self,
@@ -457,7 +577,8 @@ class DataLoader:
                 'low': float(d.low),
                 'close': float(d.close),
                 'volume': float(d.volume),
-                'turnover': float(d.turnover) if d.turnover else 0
+                'turnover': float(d.turnover) if d.turnover else 0,
+                'symbol': symbol  # ИСПРАВЛЕНО: Добавляем symbol для каждой записи
             } for d in data])
             
             df.set_index('datetime', inplace=True)

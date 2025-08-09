@@ -11,7 +11,7 @@ from pathlib import Path
 
 def setup_logger(name: str, level: str = None) -> logging.Logger:
     """
-    Настройка логгера
+    Настройка оптимизированного логгера с буферизацией и фильтрацией
 
     Args:
         name: Имя логгера
@@ -38,26 +38,45 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
     log_dir = Path("data/logs")
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    # Форматтер
+    # Оптимизированный форматтер (укороченный timestamp)
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        datefmt="%H:%M:%S",  # Укороченный формат времени для экономии места
     )
 
-    # Консольный обработчик
+    # Консольный обработчик только для WARNING и выше в production
+    console_level = (
+        logging.WARNING if os.getenv("ENVIRONMENT") == "production" else logging.INFO
+    )
     console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(console_level)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # Файловый обработчик для общих логов
+    # Буферизованный файловый обработчик для общих логов
     file_handler = logging.FileHandler(
-        log_dir / f"bot_trading_{datetime.now().strftime('%Y%m%d')}.log"
+        log_dir / f"bot_trading_{datetime.now().strftime('%Y%m%d')}.log",
+        encoding="utf-8",
     )
     file_handler.setFormatter(formatter)
+
+    # Добавляем фильтр для исключения шумных сообщений
+    def noise_filter(record):
+        message = record.getMessage()
+        # Исключаем частые неважные сообщения
+        noise_keywords = [
+            "BrokenPipeError",
+            "Загружено и сохранено 0 записей",
+            "WebSocket heartbeat",
+            "Health check passed",
+        ]
+        return not any(keyword in message for keyword in noise_keywords)
+
+    file_handler.addFilter(noise_filter)
     logger.addHandler(file_handler)
 
-    # Файловый обработчик для ошибок
-    error_handler = logging.FileHandler(log_dir / "errors.log")
+    # Файловый обработчик для ошибок (без фильтра)
+    error_handler = logging.FileHandler(log_dir / "errors.log", encoding="utf-8")
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(formatter)
     logger.addHandler(error_handler)

@@ -9,7 +9,6 @@ from .base_models import (
     OrderStatus,
     OrderType,
     Performance,
-    Signal,
     SignalType,
     Trade,
 )
@@ -21,6 +20,7 @@ from .market_data import (
     RawMarketData,
     TechnicalIndicators,
 )
+from .signal import Signal
 
 __all__ = [
     "Order",

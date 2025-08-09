@@ -4,134 +4,165 @@
 """
 
 import asyncio
+import logging
 import os
-import sys
-from datetime import datetime
 
-import ccxt
 from dotenv import load_dotenv
 
 # Загружаем переменные окружения
 load_dotenv()
 
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
 
 async def test_bybit_connection():
-    """Тестирование подключения к Bybit"""
+    """Тест подключения к Bybit"""
 
     print("=" * 60)
-    print("  ТЕСТ ПОДКЛЮЧЕНИЯ К BYBIT")
+    print("ТЕСТ ПОДКЛЮЧЕНИЯ К BYBIT API")
     print("=" * 60)
-
-    # Получаем API ключи
-    api_key = os.getenv("BYBIT_API_KEY")
-    api_secret = os.getenv("BYBIT_API_SECRET")
-    testnet = os.getenv("BYBIT_TESTNET", "false").lower() == "true"
-
-    if not api_key or not api_secret:
-        print("❌ ОШИБКА: API ключи не найдены в .env файле!")
-        return False
-
-    print(f"🔑 API ключ: {api_key[:10]}...")
-    print(f"🌐 Режим: {'Testnet' if testnet else 'Mainnet'}")
-    print("-" * 50)
 
     try:
-        # Создаем подключение к Bybit
-        exchange = ccxt.bybit(
-            {
-                "apiKey": api_key,
-                "secret": api_secret,
-                "enableRateLimit": True,
-                "options": {
-                    "defaultType": "linear",  # USDT perpetual
-                    "recvWindow": 10000,
-                },
-            }
-        )
+        # Проверяем переменные окружения напрямую
+        print("\n1. Проверка переменных окружения...")
+        api_key = os.getenv("BYBIT_API_KEY", "")
+        api_secret = os.getenv("BYBIT_API_SECRET", "")
+        testnet = os.getenv("BYBIT_TESTNET", "false").lower() == "true"
 
-        if testnet:
-            exchange.set_sandbox_mode(True)
+        print(f"   API Key: {'Установлен' if api_key else 'НЕ НАЙДЕН'}")
+        print(f"   API Secret: {'Установлен' if api_secret else 'НЕ НАЙДЕН'}")
+        print(f"   Testnet: {testnet}")
 
-        print("🔌 Подключаемся к Bybit...")
+        if not api_key or not api_secret:
+            print("❌ API ключи не настроены")
+            print("   Для тестирования создайте файл .env с переменными:")
+            print("   BYBIT_API_KEY=your_api_key")
+            print("   BYBIT_API_SECRET=your_api_secret")
+            print("   BYBIT_TESTNET=true  # для тестнета")
+            return
 
-        # Тест 1: Проверка баланса
-        print("\n📊 Проверка баланса:")
-        balance = exchange.fetch_balance()
-        usdt_balance = balance.get("USDT", {})
+        # Создаем Bybit клиент
+        print("\n2. Создание Bybit клиента...")
+        from exchanges.factory import ExchangeFactory
 
-        print("💰 USDT баланс:")
-        print(f"   Всего: {usdt_balance.get('total', 0):.2f}")
-        print(f"   Свободно: {usdt_balance.get('free', 0):.2f}")
-        print(f"   Используется: {usdt_balance.get('used', 0):.2f}")
+        factory = ExchangeFactory()
 
-        # Тест 2: Проверка рынков
-        print("\n📈 Проверка доступных рынков:")
-        markets = exchange.load_markets()
-        perp_markets = [
-            m for m in markets.values() if m["type"] == "swap" and m["quote"] == "USDT"
-        ]
-        print(f"   Найдено {len(perp_markets)} USDT perpetual рынков")
-
-        # Тест 3: Проверка цен для 10 криптовалют
-        print("\n💹 Текущие цены (10 основных криптовалют):")
-        symbols = [
-            "BTC/USDT:USDT",
-            "ETH/USDT:USDT",
-            "BNB/USDT:USDT",
-            "SOL/USDT:USDT",
-            "XRP/USDT:USDT",
-            "ADA/USDT:USDT",
-            "DOGE/USDT:USDT",
-            "DOT/USDT:USDT",
-            "LINK/USDT:USDT",
-            "MATIC/USDT:USDT",
-        ]
-
-        for symbol in symbols:
-            try:
-                ticker = exchange.fetch_ticker(symbol)
-                print(f"   {symbol.split('/')[0]}: ${ticker['last']:.4f}")
-            except Exception:
-                print(f"   {symbol.split('/')[0]}: Недоступен")
-
-        # Тест 4: Проверка открытых позиций
-        print("\n📋 Открытые позиции:")
-        positions = exchange.fetch_positions()
-        open_positions = [p for p in positions if p["contracts"] > 0]
-
-        if open_positions:
-            for pos in open_positions:
-                print(
-                    f"   {pos['symbol']}: {pos['side']} {pos['contracts']} контрактов"
-                )
-        else:
-            print("   Нет открытых позиций")
-
-        # Тест 5: Проверка режима хеджирования
-        print("\n⚙️ Настройки аккаунта:")
         try:
-            # Для Bybit v5 API
-            account_info = exchange.private_get_v5_account_info()
-            print(
-                f"   Режим маржи: {account_info.get('result', {}).get('marginMode', 'N/A')}"
-            )
-        except:
-            print("   Не удалось получить информацию об аккаунте")
+            bybit_client = factory.create_client("bybit", api_key, api_secret)
+            print("✅ Bybit клиент создан успешно")
+        except Exception as e:
+            print(f"❌ Ошибка создания клиента: {e}")
+            print("\nПопробуем создать тестнет клиент...")
 
-        print("\n✅ УСПЕХ! Подключение к Bybit работает!")
-        print(f"🕐 Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        return True
+            # Пробуем тестнет
+            os.environ["BYBIT_TESTNET"] = "true"
+
+            try:
+                bybit_client = factory.create_client("bybit", api_key, api_secret)
+                print("✅ Bybit testnet клиент создан")
+            except Exception as e2:
+                print(f"❌ Ошибка создания testnet клиента: {e2}")
+                return
+
+        # Тестируем базовые методы
+        print("\n3. Тестирование базовых методов...")
+
+        # Получение информации об аккаунте
+        try:
+            account_info = await bybit_client.get_account_info()
+            print("✅ Информация об аккаунте получена")
+            print(f"   Тип аккаунта: {account_info.get('account_type', 'Неизвестно')}")
+        except Exception as e:
+            print(f"❌ Ошибка получения информации об аккаунте: {e}")
+
+        # Получение балансов
+        try:
+            balances = await bybit_client.get_balances()
+            print("✅ Балансы получены")
+
+            # Показываем ненулевые балансы
+            non_zero_balances = {k: v for k, v in balances.items() if float(v) > 0}
+            if non_zero_balances:
+                print("   Ненулевые балансы:")
+                for currency, balance in list(non_zero_balances.items())[:5]:
+                    print(f"     {currency}: {balance}")
+            else:
+                print("   Все балансы равны нулю")
+
+        except Exception as e:
+            print(f"❌ Ошибка получения балансов: {e}")
+
+        # Получение рыночных данных
+        print("\n4. Тестирование рыночных данных...")
+        try:
+            ticker = await bybit_client.get_ticker("BTCUSDT")
+            print("✅ Ticker BTCUSDT получен")
+            print(f"   Цена: {ticker.get('last', 'N/A')}")
+            print(f"   Объем: {ticker.get('volume', 'N/A')}")
+        except Exception as e:
+            print(f"❌ Ошибка получения ticker: {e}")
+
+        # Получение OHLCV данных
+        try:
+            ohlcv = await bybit_client.fetch_ohlcv("BTCUSDT", "15m", limit=5)
+            print("✅ OHLCV данные получены")
+            print(f"   Количество свечей: {len(ohlcv)}")
+            if ohlcv:
+                last_candle = ohlcv[-1]
+                print(f"   Последняя свеча: {last_candle}")
+        except Exception as e:
+            print(f"❌ Ошибка получения OHLCV: {e}")
+
+        # Проверка позиций
+        print("\n5. Проверка позиций...")
+        try:
+            positions = await bybit_client.get_positions()
+            print("✅ Позиции получены")
+
+            active_positions = [p for p in positions if float(p.get("size", 0)) != 0]
+            if active_positions:
+                print(f"   Активных позиций: {len(active_positions)}")
+                for pos in active_positions[:3]:
+                    print(
+                        f"     {pos.get('symbol')}: {pos.get('size')} @ {pos.get('entry_price')}"
+                    )
+            else:
+                print("   Нет активных позиций")
+
+        except Exception as e:
+            print(f"❌ Ошибка получения позиций: {e}")
+
+        # Проверка position mode
+        print("\n6. Проверка position mode...")
+        try:
+            # Получаем текущий режим позиций
+            position_mode = await bybit_client.get_position_mode()
+            print(f"✅ Position mode: {position_mode}")
+
+            # Если не hedge mode, пытаемся переключить
+            if position_mode != "hedge":
+                print("   Переключение в hedge mode...")
+                await bybit_client.set_position_mode("hedge")
+                print("✅ Position mode переключен на hedge")
+            else:
+                print("✅ Position mode уже hedge")
+
+        except Exception as e:
+            print(f"❌ Ошибка работы с position mode: {e}")
+
+        print("\n✅ Тест Bybit API завершен успешно!")
 
     except Exception as e:
-        print(f"\n❌ ОШИБКА подключения: {str(e)}")
-        return False
+        print(f"❌ Критическая ошибка: {e}")
+        import traceback
 
-    finally:
-        if "exchange" in locals():
-            exchange.close()
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
-    # Запускаем тест
-    result = asyncio.run(test_bybit_connection())
-    sys.exit(0 if result else 1)
+    asyncio.run(test_bybit_connection())

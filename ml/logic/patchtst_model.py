@@ -385,11 +385,16 @@ class UnifiedPatchTSTForTrading(nn.Module):
         short_levels = self.short_levels_head(x_projected)  # (B, 4)
         risk_metrics = self.risk_metrics_head(x_projected)  # (B, 4)
 
-        # Объединяем все выходы
+        # Объединяем все выходы - ИСПРАВЛЕНО: возвращаем логиты вместо классов
+        # Для direction нам нужны сырые логиты для дифференцируемости
+        direction_scores = torch.mean(
+            direction_logits_reshaped, dim=-1
+        )  # (B, 4) - средний score
+
         outputs = torch.cat(
             [
                 future_returns,  # 0-3: future returns
-                directions,  # 4-7: directions
+                direction_scores,  # 4-7: direction scores (не классы!)
                 long_levels,  # 8-11: long levels
                 short_levels,  # 12-15: short levels
                 risk_metrics,  # 16-19: risk metrics

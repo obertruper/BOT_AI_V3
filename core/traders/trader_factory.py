@@ -75,11 +75,11 @@ class TraderFactory:
         """Регистрация поддерживаемых бирж"""
         # Ленивая загрузка для избежания циклических импортов
         try:
-            from exchanges.bybit.bybit_client import BybitClient
+            from exchanges.bybit.bybit_exchange import BybitExchange
 
-            self._exchange_registry["bybit"] = BybitClient
+            self._exchange_registry["bybit"] = BybitExchange
         except ImportError:
-            self.logger.warning("Bybit client недоступен")
+            self.logger.warning("Bybit exchange недоступен")
 
         try:
             from exchanges.binance.binance_client import BinanceClient
@@ -287,12 +287,21 @@ class TraderFactory:
         exchange_config = trader_context.get_trader_config("exchange_config", {})
 
         # Создание экземпляра клиента биржи
-        exchange_client = exchange_class(
-            api_key=exchange_config.get("api_key"),
-            api_secret=exchange_config.get("api_secret"),
-            testnet=exchange_config.get("testnet", False),
-            market_type=trader_context.get_market_type(),
-        )
+        # Для BybitExchange используем другие параметры
+        if exchange_name == "bybit":
+            exchange_client = exchange_class(
+                api_key=exchange_config.get("api_key"),
+                api_secret=exchange_config.get("api_secret"),
+                sandbox=exchange_config.get("testnet", False),
+                timeout=exchange_config.get("timeout", 30),
+            )
+        else:
+            exchange_client = exchange_class(
+                api_key=exchange_config.get("api_key"),
+                api_secret=exchange_config.get("api_secret"),
+                testnet=exchange_config.get("testnet", False),
+                market_type=trader_context.get_market_type(),
+            )
 
         # Инициализация соединения
         await exchange_client.initialize()

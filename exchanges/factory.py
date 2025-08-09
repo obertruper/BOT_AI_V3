@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Type, Union
 
-from core.logging.logger_factory import get_global_logger_factory
+from core.logger import setup_logger
 
 from .base.exceptions import AuthenticationError, ExchangeError
 from .base.exchange_interface import BaseExchangeInterface
@@ -74,10 +74,7 @@ class ExchangeFactory:
 
     def __init__(self):
         # Логирование
-        logger_factory = get_global_logger_factory()
-        self.logger = logger_factory.get_logger(
-            "exchange_factory", component="exchanges"
-        )
+        self.logger = setup_logger("exchange_factory")
 
         # Регистрируем доступные биржи
         self._register_exchanges()
@@ -308,6 +305,11 @@ class ExchangeFactory:
         self, api_key: str, api_secret: str, exchange_type: ExchangeType
     ):
         """Валидация учетных данных"""
+        # Разрешаем публичный доступ для загрузки рыночных данных
+        if api_key == "public_access" and api_secret == "public_access":
+            self.logger.info(f"Using public access for {exchange_type.value}")
+            return
+
         if not api_key or not api_secret:
             raise AuthenticationError(
                 exchange_type.value, "API key and secret are required"
@@ -315,9 +317,16 @@ class ExchangeFactory:
 
         # Дополнительная валидация для конкретных бирж
         if exchange_type == ExchangeType.BYBIT:
+            # Логируем для отладки
+            self.logger.debug(
+                f"Validating Bybit credentials: key_len={len(api_key)}, secret_len={len(api_secret)}"
+            )
+
+            # Проверяем минимальную длину (Bybit ключи обычно 18+ символов)
             if len(api_key) < 10 or len(api_secret) < 10:
                 raise AuthenticationError(
-                    "bybit", "Invalid Bybit API credentials format"
+                    "bybit",
+                    f"Invalid Bybit API credentials format: key_len={len(api_key)}, secret_len={len(api_secret)}",
                 )
 
     def get_client_info(self) -> Dict[str, Any]:

@@ -5,11 +5,30 @@
 """
 
 import enum
+from datetime import datetime
 
 from sqlalchemy import JSON, Column, DateTime, Enum, Float, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from database.connections import Base
+
+
+class BaseModel(Base):
+    """Базовая модель для всех таблиц в БД"""
+
+    __abstract__ = True
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
 
 class OrderStatus(enum.Enum):
@@ -48,7 +67,7 @@ class SignalType(enum.Enum):
     SHORT = "short"
     CLOSE_LONG = "close_long"
     CLOSE_SHORT = "close_short"
-    NEUTRAL = "neutral"
+    NEUTRAL = "neutral"  # Добавляем NEUTRAL для совместимости
 
 
 class Order(Base):
@@ -117,37 +136,7 @@ class Trade(Base):
     trader_id = Column(String(100))
 
 
-class Signal(Base):
-    """Модель торгового сигнала"""
-
-    __tablename__ = "signals"
-
-    id = Column(Integer, primary_key=True)
-    symbol = Column(String(20), nullable=False)
-    exchange = Column(String(50), nullable=False)
-
-    # Параметры сигнала
-    signal_type = Column(Enum(SignalType), nullable=False)
-    strength = Column(Float)  # Сила сигнала 0-1
-    confidence = Column(Float)  # Уверенность 0-1
-
-    # Рекомендуемые параметры
-    suggested_price = Column(Float)
-    suggested_quantity = Column(Float)
-    suggested_stop_loss = Column(Float)
-    suggested_take_profit = Column(Float)
-
-    # Источник
-    strategy_name = Column(String(100), nullable=False)
-    timeframe = Column(String(10))
-
-    # Временные метки
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    expires_at = Column(DateTime(timezone=True))
-
-    # Дополнительные данные
-    indicators = Column(JSON)  # Значения индикаторов
-    extra_data = Column(JSON)
+# Signal модель перенесена в database/models/signal.py
 
 
 class Balance(Base):

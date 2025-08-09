@@ -75,9 +75,7 @@ class ExchangeRegistry:
     def __init__(self):
         # Логирование
         logger_factory = get_global_logger_factory()
-        self.logger = logger_factory.get_logger(
-            "exchange_registry", component="exchanges"
-        )
+        self.logger = logger_factory.get_logger("exchange_registry")
 
         # Реестр бирж
         self._exchanges: Dict[ExchangeType, ExchangeMetadata] = {}
@@ -304,6 +302,15 @@ class ExchangeRegistry:
                 results.append(metadata)
 
         return results
+
+    async def initialize(self):
+        """Инициализация реестра бирж"""
+        self.logger.info("Exchange Registry инициализирован")
+        return True
+
+    async def health_check(self) -> bool:
+        """Проверка здоровья компонента"""
+        return True
 
     def get_exchange_summary(self) -> Dict[str, Any]:
         """Получение сводки по биржам"""

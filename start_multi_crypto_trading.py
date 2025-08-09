@@ -87,8 +87,12 @@ class MultiCryptoTradingSystem:
                 "testnet": os.getenv("BYBIT_TESTNET", "false").lower() == "true",
             }
 
-            self.exchange = await ExchangeFactory.create_exchange(
-                "bybit", exchange_config
+            factory = ExchangeFactory()
+            self.exchange = await factory.create_and_connect(
+                exchange_type="bybit",
+                api_key=exchange_config["api_key"],
+                api_secret=exchange_config["api_secret"],
+                sandbox=exchange_config.get("testnet", False),
             )
             await self.exchange.initialize()
 

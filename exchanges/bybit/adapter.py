@@ -11,10 +11,16 @@ Bybit Adapter для BOT_Trading v3.0
 from datetime import datetime
 from typing import Any, Dict, Optional, Union
 
-from core.logging.logger_factory import get_global_logger_factory
+from core.logger import setup_logger
 
 from ..base.models import Position
-from ..base.order_types import OrderRequest, OrderResponse, OrderSide, OrderType, TimeInForce
+from ..base.order_types import (
+    OrderRequest,
+    OrderResponse,
+    OrderSide,
+    OrderType,
+    TimeInForce,
+)
 from .client import BybitClient, clean_symbol
 
 
@@ -33,10 +39,7 @@ class BybitLegacyAdapter:
         )
 
         # Логирование
-        logger_factory = get_global_logger_factory()
-        self.logger = logger_factory.get_logger(
-            "bybit_adapter", component="exchange_adapter"
-        )
+        self.logger = setup_logger("bybit_adapter")
 
         # Состояние соединения
         self._connected = False

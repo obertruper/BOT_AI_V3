@@ -39,6 +39,12 @@ class ErrorCategory(Enum):
     RISK_MANAGEMENT = "risk_management"
 
 
+class SignalProcessingError(Exception):
+    """Ошибка обработки торговых сигналов"""
+
+    pass
+
+
 class BaseTradingError(Exception):
     """
     Базовый класс для всех ошибок торговой системы
@@ -125,6 +131,20 @@ class ConfigurationError(BaseTradingError):
         )
         if config_path:
             self.context["config_path"] = config_path
+
+
+class DataLoadError(BaseTradingError):
+    """Ошибки загрузки данных"""
+
+    def __init__(self, message: str, symbol: Optional[str] = None, **kwargs):
+        super().__init__(
+            message,
+            severity=ErrorSeverity.MEDIUM,
+            category=ErrorCategory.SYSTEM,
+            **kwargs,
+        )
+        if symbol:
+            self.context["symbol"] = symbol
 
 
 class ConfigValidationError(ConfigurationError):
@@ -706,10 +726,10 @@ class ComponentInitializationError(SystemError):
     """Ошибка инициализации компонента"""
 
     def __init__(self, component_name: str, reason: str, **kwargs):
+        kwargs["component"] = component_name
+        # Не устанавливаем severity, так как он уже установлен в SystemError
         super().__init__(
             f"Failed to initialize component '{component_name}': {reason}",
-            component=component_name,
-            severity=ErrorSeverity.CRITICAL,
             **kwargs,
         )
 

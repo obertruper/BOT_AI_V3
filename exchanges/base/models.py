@@ -49,6 +49,43 @@ class Instrument:
     margin_trading: bool = False  # Поддержка маржинальной торговли
     max_leverage: float = 1.0  # Максимальное плечо
 
+
+@dataclass
+class Candle:
+    """Свеча (OHLCV данные)"""
+
+    symbol: str  # Символ инструмента
+    exchange: str  # Название биржи
+    interval_minutes: int  # Интервал в минутах
+    timestamp: datetime  # Время открытия свечи
+
+    # OHLCV данные
+    open_price: float  # Цена открытия
+    high_price: float  # Максимальная цена
+    low_price: float  # Минимальная цена
+    close_price: float  # Цена закрытия
+    volume: float  # Объем торгов
+
+    # Дополнительные данные
+    turnover: float = 0.0  # Оборот в quote валюте
+    trades_count: int = 0  # Количество сделок
+    taker_buy_volume: float = 0.0  # Объем покупок тейкеров
+
+    def __post_init__(self):
+        """Валидация после инициализации"""
+        if self.high_price < self.low_price:
+            raise ValueError(
+                f"High price {self.high_price} cannot be less than low price {self.low_price}"
+            )
+        if self.open_price > self.high_price or self.open_price < self.low_price:
+            raise ValueError(
+                f"Open price {self.open_price} out of range [{self.low_price}, {self.high_price}]"
+            )
+        if self.close_price > self.high_price or self.close_price < self.low_price:
+            raise ValueError(
+                f"Close price {self.close_price} out of range [{self.low_price}, {self.high_price}]"
+            )
+
     # Метаданные
     exchange_info: Dict[str, Any] = field(default_factory=dict)
 
@@ -247,6 +284,11 @@ class Ticker:
 
     # Время
     timestamp: Optional[datetime] = None
+
+    @property
+    def price(self) -> float:
+        """Алиас для last_price для совместимости"""
+        return self.last_price
 
     @property
     def mid_price(self) -> float:

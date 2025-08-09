@@ -14,12 +14,13 @@ import argparse
 import asyncio
 import os
 import signal
+import socket
 import subprocess
 import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import psutil
 from dotenv import load_dotenv
@@ -37,6 +38,86 @@ from core.system.process_manager import ProcessManager
 
 # Настройка логирования
 logger = setup_logger("unified_launcher")
+
+
+def is_port_in_use(port: int, host: str = "localhost") -> bool:
+    """Проверка, используется ли порт"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+            return False
+        except OSError:
+            return True
+
+
+def find_processes_using_port(port: int) -> List[Dict[str, Any]]:
+    """Поиск процессов, использующих указанный порт"""
+    processes = []
+
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            for conn in proc.connections():
+                if conn.laddr and conn.laddr.port == port:
+                    processes.append(
+                        {
+                            "pid": proc.info["pid"],
+                            "name": proc.info["name"],
+                            "cmdline": (
+                                " ".join(proc.info["cmdline"])
+                                if proc.info["cmdline"]
+                                else ""
+                            ),
+                            "status": proc.status(),
+                        }
+                    )
+                    break
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+    return processes
+
+
+def kill_processes_on_port(port: int, force: bool = False) -> List[int]:
+    """Завершение процессов, использующих порт"""
+    killed_pids = []
+    processes = find_processes_using_port(port)
+
+    for proc_info in processes:
+        pid = proc_info["pid"]
+        try:
+            proc = psutil.Process(pid)
+
+            # Не убиваем системные процессы
+            if proc_info["name"] in ["System", "kernel_task", "launchd"]:
+                continue
+
+            # Сначала пробуем graceful shutdown
+            if not force:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                    killed_pids.append(pid)
+                    logger.info(
+                        f"✅ Процесс {proc_info['name']} (PID: {pid}) корректно завершен"
+                    )
+                except psutil.TimeoutExpired:
+                    # Если не завершился, убиваем принудительно
+                    proc.kill()
+                    killed_pids.append(pid)
+                    logger.warning(
+                        f"⚠️ Процесс {proc_info['name']} (PID: {pid}) принудительно завершен"
+                    )
+            else:
+                proc.kill()
+                killed_pids.append(pid)
+                logger.warning(
+                    f"⚠️ Процесс {proc_info['name']} (PID: {pid}) принудительно завершен"
+                )
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            logger.debug(f"Не удалось завершить процесс {pid}: {e}")
+
+    return killed_pids
 
 
 class LaunchMode(Enum):
@@ -170,6 +251,9 @@ class UnifiedLauncher:
         """Проверка критических зависимостей"""
         logger.info("🔍 Проверка зависимостей...")
 
+        # Проверка и освобождение портов
+        await self._check_and_free_ports()
+
         # Проверка PostgreSQL
         try:
             import asyncpg
@@ -209,6 +293,81 @@ class UnifiedLauncher:
             if self.mode == LaunchMode.ML:
                 logger.error("❌ ML режим требует наличия модели")
                 raise FileNotFoundError("ML модель не найдена")
+
+    async def _check_and_free_ports(self):
+        """Проверка и освобождение занятых портов"""
+        logger.info("🔍 Проверка портов...")
+
+        # Собираем порты, которые нам нужны
+        required_ports = []
+
+        for comp_name, comp_config in self.components_config.items():
+            if comp_config.get("enabled", False) and "port" in comp_config:
+                port = comp_config["port"]
+                required_ports.append((comp_name, port))
+
+        # Проверяем каждый порт
+        for comp_name, port in required_ports:
+            if is_port_in_use(port):
+                logger.warning(f"⚠️ Порт {port} ({comp_name}) занят")
+
+                # Ищем процессы, использующие порт
+                processes = find_processes_using_port(port)
+
+                for proc_info in processes:
+                    logger.info(
+                        f"   🔍 Процесс: {proc_info['name']} (PID: {proc_info['pid']})"
+                    )
+                    logger.info(f"   📝 Команда: {proc_info['cmdline'][:100]}...")
+
+                # Определяем, нужно ли освобождать порт
+                should_kill = False
+
+                # Если это наши процессы (предыдущие запуски), освобождаем
+                for proc_info in processes:
+                    cmdline = proc_info["cmdline"].lower()
+                    if any(
+                        keyword in cmdline
+                        for keyword in [
+                            "main.py",
+                            "web/launcher.py",
+                            "npm run dev",
+                            "bot_ai_v3",
+                            "unified_launcher",
+                            "uvicorn",
+                            "vite",
+                        ]
+                    ):
+                        should_kill = True
+                        break
+
+                if should_kill:
+                    logger.info(f"🔧 Освобождение порта {port}...")
+                    killed_pids = kill_processes_on_port(port)
+
+                    if killed_pids:
+                        logger.info(
+                            f"✅ Порт {port} освобожден (завершено процессов: {len(killed_pids)})"
+                        )
+
+                        # Даем время процессам завершиться
+                        await asyncio.sleep(2)
+
+                        # Проверяем еще раз
+                        if is_port_in_use(port):
+                            logger.warning(
+                                f"⚠️ Порт {port} все еще занят, принудительное освобождение..."
+                            )
+                            kill_processes_on_port(port, force=True)
+                            await asyncio.sleep(1)
+                    else:
+                        logger.warning(f"⚠️ Не удалось освободить порт {port}")
+                else:
+                    logger.warning(
+                        f"⚠️ Порт {port} занят сторонним процессом. Возможны конфликты!"
+                    )
+            else:
+                logger.info(f"✅ Порт {port} ({comp_name}) свободен")
 
     async def start(self):
         """Запуск всех компонентов"""
@@ -289,34 +448,101 @@ class UnifiedLauncher:
         logger.warning(f"⚠️ {name} не ответил за {timeout} секунд")
 
     async def _monitor_system(self):
-        """Мониторинг состояния системы"""
+        """Оптимизированный мониторинг состояния системы"""
+        consecutive_errors = 0
+        max_errors = 5
+
         while self.is_running:
             try:
                 # Проверяем health всех компонентов
                 health_status = await self.health_monitor.check_all()
 
-                # Обрабатываем нездоровые компоненты
-                for comp_name, status in health_status.items():
-                    if not status["healthy"] and self.components_config[comp_name].get(
-                        "auto_restart"
-                    ):
-                        logger.warning(
-                            f"🔄 Перезапуск {comp_name}: {status.get('error')}"
-                        )
-                        await self.process_manager.restart_component(comp_name)
+                # Оптимизированная обработка нездоровых компонентов
+                unhealthy_components = [
+                    (comp_name, status)
+                    for comp_name, status in health_status.items()
+                    if not status["healthy"]
+                    and self.components_config[comp_name].get("auto_restart")
+                ]
 
-                # Собираем метрики
-                metrics = await self._collect_metrics()
-                if metrics["memory_percent"] > 80:
+                if unhealthy_components:
                     logger.warning(
-                        f"⚠️ Высокое использование памяти: {metrics['memory_percent']:.1f}%"
+                        f"🏥 Найдено {len(unhealthy_components)} нездоровых компонентов"
                     )
 
-            except Exception as e:
-                logger.error(f"Ошибка мониторинга: {e}")
+                    # Ограничиваем количество одновременных перезапусков
+                    for comp_name, status in unhealthy_components[
+                        :2
+                    ]:  # Максимум 2 одновременно
+                        error_msg = status.get("error", "Unknown error")
 
-            # Интервал проверки
-            await asyncio.sleep(30)
+                        # Пропускаем временные сетевые ошибки
+                        if any(
+                            skip_err in error_msg
+                            for skip_err in ["timeout", "connection", "broken pipe"]
+                        ):
+                            logger.debug(
+                                f"🔄 Пропуск временной ошибки {comp_name}: {error_msg}"
+                            )
+                            continue
+
+                        logger.warning(
+                            f"🔄 Планируется перезапуск {comp_name}: {error_msg}"
+                        )
+                        asyncio.create_task(self._safe_restart_component(comp_name))
+
+                # Сбор метрик с оптимизированной частотой
+                metrics = await self._collect_metrics()
+
+                # Алерты только для критических значений
+                if metrics["memory_percent"] > 85:
+                    logger.warning(
+                        f"⚠️ Критическое использование памяти: {metrics['memory_percent']:.1f}%"
+                    )
+                elif metrics["cpu_percent"] > 90:
+                    logger.warning(
+                        f"⚠️ Критическое использование CPU: {metrics['cpu_percent']:.1f}%"
+                    )
+
+                # Сброс счетчика ошибок при успешной итерации
+                consecutive_errors = 0
+
+            except Exception as e:
+                consecutive_errors += 1
+                if consecutive_errors <= 3:
+                    logger.warning(f"Ошибка мониторинга #{consecutive_errors}: {e}")
+                elif consecutive_errors == max_errors:
+                    logger.error(
+                        f"Критическое количество ошибок мониторинга: {consecutive_errors}"
+                    )
+                    # Увеличиваем интервал проверки при частых ошибках
+                    await asyncio.sleep(60)
+                    continue
+
+            # Адаптивный интервал проверки
+            if consecutive_errors > 0:
+                sleep_time = min(60, 30 + consecutive_errors * 10)
+            else:
+                sleep_time = 30
+
+            await asyncio.sleep(sleep_time)
+
+    async def _safe_restart_component(self, comp_name: str):
+        """Безопасный перезапуск компонента с защитой от частых перезапусков"""
+        try:
+            # Проверяем, не перезапускался ли компонент недавно
+            proc_info = self.process_manager.get_process_info(comp_name)
+            if proc_info and proc_info.get("restart_count", 0) >= 3:
+                logger.warning(
+                    f"⏸️ Пропуск перезапуска {comp_name} - слишком много попыток"
+                )
+                return
+
+            await self.process_manager.restart_component(comp_name)
+            logger.info(f"✅ Компонент {comp_name} успешно перезапущен")
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка перезапуска {comp_name}: {e}")
 
     async def _collect_metrics(self) -> Dict[str, float]:
         """Сбор системных метрик"""

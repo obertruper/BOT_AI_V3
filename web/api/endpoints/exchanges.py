@@ -163,8 +163,11 @@ async def connect_exchange(config: ExchangeConfig):
         if config.additional_params:
             exchange_config.update(config.additional_params)
 
-        exchange_client = await exchange_factory.create_exchange(
-            config.exchange, exchange_config
+        exchange_client = await exchange_factory.create_and_connect(
+            exchange_type=config.exchange,
+            api_key=exchange_config["api_key"],
+            api_secret=exchange_config["api_secret"],
+            sandbox=exchange_config.get("sandbox", False),
         )
 
         # Тестируем подключение

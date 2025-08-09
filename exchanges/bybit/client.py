@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import os
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
@@ -21,8 +22,9 @@ from urllib.parse import urlencode
 import aiohttp
 
 from core.exceptions import LeverageError
-from core.logging.logger_factory import get_global_logger_factory
+from core.logger import setup_logger
 
+from ..base.api_key_manager import KeyType, get_key_manager
 from ..base.exceptions import (
     APIError,
     AuthenticationError,
@@ -36,6 +38,7 @@ from ..base.exceptions import (
     is_rate_limit_error,
 )
 from ..base.exchange_interface import BaseExchangeInterface, ExchangeCapabilities
+from ..base.health_monitor import get_health_monitor
 from ..base.models import (
     AccountInfo,
     Balance,
@@ -50,6 +53,7 @@ from ..base.models import (
     create_position_from_dict,
 )
 from ..base.order_types import OrderRequest, OrderResponse, OrderStatus, OrderType
+from ..base.rate_limiter import RequestPriority, get_rate_limiter
 
 
 def clean_symbol(symbol: str) -> str:
@@ -75,6 +79,14 @@ class BybitClient(BaseExchangeInterface):
     ):
         super().__init__(api_key, api_secret, sandbox, timeout)
 
+        # Логирование
+        self.logger = setup_logger("bybit_client")
+
+        # Определяем режим публичного доступа
+        self.public_only = api_key == "public_access" and api_secret == "public_access"
+        if self.public_only:
+            self.logger.info("Bybit client initialized in public-only mode")
+
         # Bybit API URLs
         if sandbox:
             self.base_url = "https://api-testnet.bybit.com"
@@ -92,11 +104,49 @@ class BybitClient(BaseExchangeInterface):
         self.error_count = 0
         self.last_errors = []
 
-        # Логирование
-        logger_factory = get_global_logger_factory()
-        self.logger = logger_factory.get_logger(
-            "bybit_client", component="exchange_bybit"
-        )
+        # Rate limiter
+        self.rate_limiter = get_rate_limiter()
+
+        # API Key manager
+        self.key_manager = get_key_manager()
+
+        # Health monitor
+        self.health_monitor = get_health_monitor()
+
+        # Регистрируем ключи в менеджере (если не публичный режим)
+        if not self.public_only:
+            self.key_manager.add_key(
+                exchange_name="bybit",
+                api_key=api_key,
+                api_secret=api_secret,
+                key_type=KeyType.MAIN,
+            )
+
+        # Добавляем биржу в мониторинг здоровья
+        self.health_monitor.add_exchange("bybit")
+
+        # Загружаем конфигурацию торговли
+        self.hedge_mode = False
+        self.default_leverage = 5
+        self.trading_category = "linear"
+        try:
+            import yaml
+
+            # Пытаемся загрузить настройки из system.yaml
+            config_path = "config/system.yaml"
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    system_config = yaml.safe_load(f)
+                if system_config and "trading" in system_config:
+                    trading_cfg = system_config["trading"]
+                    self.hedge_mode = trading_cfg.get("hedge_mode", False)
+                    self.default_leverage = trading_cfg.get("leverage", 5)
+                    self.trading_category = trading_cfg.get("category", "linear")
+                    self.logger.info(
+                        f"Trading config loaded: hedge_mode={self.hedge_mode}, leverage={self.default_leverage}, category={self.trading_category}"
+                    )
+        except Exception as e:
+            self.logger.warning(f"Failed to load trading config, using defaults: {e}")
 
         # Кеш для инструментов
         self._instruments_cache: Dict[str, List[Instrument]] = {}
@@ -205,140 +255,239 @@ class BybitClient(BaseExchangeInterface):
         endpoint: str,
         params: Optional[Dict] = None,
         auth: bool = False,
+        priority: RequestPriority = RequestPriority.NORMAL,
     ) -> Dict[str, Any]:
-        """Выполнение HTTP запроса с повторными попытками"""
+        """Выполнение HTTP запроса с rate limiting и повторными попытками"""
 
         if not self.session:
             await self.connect()
 
-        url = f"{self.base_url}{endpoint}"
-        headers = {}
-
-        # Подготовка параметров
-        query_string = ""
-        json_data = None
-
-        if params:
-            if method == "GET":
-                query_string = urlencode(params)
-                url = f"{url}?{query_string}"
-            else:
-                json_data = params
-
-        # Аутентификация
-        if auth:
-            if not self.api_key or not self.api_secret:
-                raise AuthenticationError("bybit", "API_KEY")
-
-            timestamp = str(int(time.time() * 1000))
-            sign_params = (
-                json.dumps(params) if method == "POST" and params else query_string
-            )
-            signature = self._generate_signature(sign_params, timestamp)
-
-            headers.update(
-                {
-                    "X-BAPI-API-KEY": self.api_key,
-                    "X-BAPI-TIMESTAMP": timestamp,
-                    "X-BAPI-SIGN": signature,
-                    "X-BAPI-RECV-WINDOW": "5000",
-                }
-            )
-
-        if method == "POST":
-            headers["Content-Type"] = "application/json"
-
-        # Выполнение запроса с повторными попытками
-        for attempt in range(self.retry_count + 1):
-            try:
-                self.request_count += 1
-
-                if attempt > 0:
-                    delay = self.retry_delay * (2 ** (attempt - 1))
-                    await asyncio.sleep(delay)
-                    self.logger.info(f"Retry attempt {attempt} for {method} {endpoint}")
-
-                # Выполнение запроса
-                if method == "GET":
-                    async with self.session.get(url, headers=headers) as response:
-                        response_data = await response.json()
-                        status_code = response.status
-                elif method == "POST":
-                    async with self.session.post(
-                        url, headers=headers, json=json_data
-                    ) as response:
-                        response_data = await response.json()
-                        status_code = response.status
-                else:
-                    raise ValueError(f"Unsupported HTTP method: {method}")
-
-                # Проверка HTTP статуса
-                if status_code != 200:
-                    if (
-                        status_code in [429, 500, 502, 503, 504]
-                        and attempt < self.retry_count
-                    ):
-                        continue
-
-                    raise APIError(
-                        "bybit",
-                        f"{method} {endpoint}",
-                        status_code=status_code,
-                        api_message=f"HTTP {status_code}",
-                    )
-
-                # Проверка кода ответа Bybit
-                ret_code = response_data.get("retCode", 0)
-                if ret_code != 0:
-                    ret_msg = response_data.get("retMsg", "Unknown error")
-
-                    # Проверка на rate limit
-                    if is_rate_limit_error(str(ret_code), "bybit"):
-                        retry_after = extract_retry_after(response_data)
-                        raise RateLimitError("bybit", retry_after=retry_after)
-
-                    # Повторная попытка для определенных ошибок
-                    retry_codes = [
-                        10002,
-                        10006,
-                        10018,
-                        20001,
-                        20022,
-                        20025,
-                        20027,
-                        20033,
-                    ]
-                    if ret_code in retry_codes and attempt < self.retry_count:
-                        continue
-
-                    # Создание соответствующего исключения
-                    raise create_api_error_from_response(
-                        "bybit", f"{method} {endpoint}", response_data, status_code
-                    )
-
-                # Успешный ответ
-                self.success_count += 1
-                return response_data
-
-            except aiohttp.ClientError as e:
-                if attempt < self.retry_count:
-                    continue
-
-                self.error_count += 1
-                raise ConnectionError("bybit", reason=str(e))
-
-            except Exception as e:
-                if attempt < self.retry_count and not isinstance(
-                    e, (APIError, AuthenticationError)
-                ):
-                    continue
-                raise
-
-        # Если дошли сюда - все попытки неудачны
-        self.error_count += 1
-        raise APIError(
-            "bybit", f"{method} {endpoint}", api_message="All retry attempts failed"
+        # Применяем rate limiting
+        rate_limiter = get_rate_limiter()
+        success = await rate_limiter.acquire(
+            "bybit", endpoint, is_private=auth, priority=priority, timeout=30.0
         )
+        if not success:
+            raise TimeoutError(f"Rate limit timeout for bybit {endpoint}")
+
+        try:
+            url = f"{self.base_url}{endpoint}"
+            headers = {}
+
+            # Подготовка параметров
+            query_string = ""
+            json_data = None
+
+            if params:
+                if method == "GET":
+                    query_string = urlencode(params)
+                    url = f"{url}?{query_string}"
+                else:
+                    json_data = params
+
+            # Аутентификация
+            if auth:
+                # В публичном режиме пропускаем аутентификацию
+                if self.public_only:
+                    self.logger.debug(
+                        f"Skipping authentication for public-only mode: {endpoint}"
+                    )
+                else:
+                    # Получаем актуальный ключ из менеджера
+                    key_info = await self.key_manager.get_active_key("bybit")
+                    if not key_info:
+                        raise AuthenticationError("bybit", "NO_VALID_KEY")
+
+                    timestamp = str(int(time.time() * 1000))
+                    sign_params = (
+                        json.dumps(params)
+                        if method == "POST" and params
+                        else query_string
+                    )
+
+                    # Используем ключи из менеджера
+                    signature = hmac.new(
+                        bytes(key_info.api_secret, "utf-8"),
+                        bytes(
+                            timestamp + key_info.api_key + "5000" + (sign_params or ""),
+                            "utf-8",
+                        ),
+                        hashlib.sha256,
+                    ).hexdigest()
+
+                    headers.update(
+                        {
+                            "X-BAPI-API-KEY": key_info.api_key,
+                            "X-BAPI-TIMESTAMP": timestamp,
+                            "X-BAPI-SIGN": signature,
+                            "X-BAPI-RECV-WINDOW": "5000",
+                        }
+                    )
+
+            if method == "POST":
+                headers["Content-Type"] = "application/json"
+
+            # Выполнение запроса с exponential backoff
+            for attempt in range(self.retry_count + 1):
+                try:
+                    self.request_count += 1
+                    start_time = time.time()
+
+                    if attempt > 0:
+                        # Exponential backoff с jitter
+                        base_delay = self.retry_delay * (2 ** (attempt - 1))
+                        jitter = base_delay * 0.1 * (time.time() % 1)  # 10% jitter
+                        delay = min(base_delay + jitter, 60)  # макс 60 секунд
+
+                        await asyncio.sleep(delay)
+                        self.logger.info(
+                            f"Retry attempt {attempt} for {method} {endpoint} after {delay:.1f}s"
+                        )
+
+                    # Выполнение запроса
+                    if method == "GET":
+                        async with self.session.get(url, headers=headers) as response:
+                            response_data = await response.json()
+                            status_code = response.status
+                            response_headers = dict(response.headers)
+                    elif method == "POST":
+                        async with self.session.post(
+                            url, headers=headers, json=json_data
+                        ) as response:
+                            response_data = await response.json()
+                            status_code = response.status
+                            response_headers = dict(response.headers)
+                    else:
+                        raise ValueError(f"Unsupported HTTP method: {method}")
+
+                    response_time = time.time() - start_time
+
+                    # Проверка HTTP статуса
+                    if status_code != 200:
+                        if status_code == 429:  # Rate limit
+                            retry_after = extract_retry_after(
+                                response_data, response_headers
+                            )
+                            self.rate_limiter.record_error(
+                                "bybit", endpoint, "429", retry_after
+                            )
+
+                            if attempt < self.retry_count:
+                                await asyncio.sleep(retry_after or 60)
+                                continue
+
+                            raise RateLimitError("bybit", retry_after=retry_after)
+
+                        elif (
+                            status_code in [500, 502, 503, 504]
+                            and attempt < self.retry_count
+                        ):
+                            # Server errors - продолжаем попытки
+                            self.rate_limiter.record_error(
+                                "bybit", endpoint, str(status_code)
+                            )
+                            continue
+
+                        raise APIError(
+                            "bybit",
+                            f"{method} {endpoint}",
+                            status_code=status_code,
+                            api_message=f"HTTP {status_code}",
+                        )
+
+                    # Проверка кода ответа Bybit
+                    ret_code = response_data.get("retCode", 0)
+                    if ret_code != 0:
+                        ret_msg = response_data.get("retMsg", "Unknown error")
+
+                        # Проверка на rate limit
+                        if is_rate_limit_error(str(ret_code), "bybit"):
+                            retry_after = extract_retry_after(
+                                response_data, response_headers
+                            )
+                            self.rate_limiter.record_error(
+                                "bybit", endpoint, str(ret_code), retry_after
+                            )
+
+                            if attempt < self.retry_count:
+                                await asyncio.sleep(retry_after or 60)
+                                continue
+
+                            raise RateLimitError("bybit", retry_after=retry_after)
+
+                        # Повторная попытка для определенных ошибок
+                        retry_codes = [
+                            10002,  # Invalid request
+                            10006,  # Rate limit exceeded
+                            10018,  # Request too frequent
+                            20001,  # Order not exists
+                            20022,  # Reduce-only rule not satisfied
+                            20025,  # Position idx not match position mode
+                            20027,  # Position size is zero
+                            20033,  # Position is in liquidation
+                        ]
+                        if ret_code in retry_codes and attempt < self.retry_count:
+                            self.rate_limiter.record_error(
+                                "bybit", endpoint, str(ret_code)
+                            )
+                            continue
+
+                        # Создание соответствующего исключения
+                        self.rate_limiter.record_error("bybit", endpoint, str(ret_code))
+
+                        # Записываем ошибку в Key Manager
+                        if auth:
+                            is_auth_error = str(ret_code) in [
+                                "10003",
+                                "10004",
+                                "10005",
+                            ]  # Auth errors
+                            self.key_manager.record_request_failure(
+                                "bybit", str(ret_code), is_auth_error
+                            )
+
+                        raise create_api_error_from_response(
+                            "bybit", f"{method} {endpoint}", response_data, status_code
+                        )
+
+                    # Успешный ответ
+                    self.success_count += 1
+                    self.rate_limiter.record_success("bybit", endpoint, response_time)
+                    if auth:  # Записываем успех только для аутентифицированных запросов
+                        self.key_manager.record_request_success("bybit")
+                    return response_data
+
+                except aiohttp.ClientError as e:
+                    self.rate_limiter.record_error("bybit", endpoint, "CLIENT_ERROR")
+
+                    if attempt < self.retry_count:
+                        continue
+
+                    self.error_count += 1
+                    raise ConnectionError("bybit", reason=str(e))
+
+                except (RateLimitError, AuthenticationError, APIError):
+                    # Эти исключения уже обработаны выше
+                    raise
+
+                except Exception:
+                    self.rate_limiter.record_error("bybit", endpoint, "UNKNOWN_ERROR")
+
+                    if attempt < self.retry_count:
+                        continue
+                    raise
+
+            # Если дошли сюда - все попытки неудачны
+            self.error_count += 1
+            self.rate_limiter.record_error("bybit", endpoint, "ALL_RETRIES_FAILED")
+            raise APIError(
+                "bybit", f"{method} {endpoint}", api_message="All retry attempts failed"
+            )
+
+        except Exception:
+            # Записываем ошибку в rate limiter для случаев, когда блок try не был выполнен
+            rate_limiter.record_error("bybit", endpoint, "UNKNOWN_ERROR")
+            raise
 
     # =================== ИНФОРМАЦИЯ О БИРЖЕ ===================
 
@@ -697,13 +846,11 @@ class BybitClient(BaseExchangeInterface):
 
     # =================== УПРАВЛЕНИЕ ОРДЕРАМИ ===================
 
-    def _get_position_idx(self, side: str, hedge_mode: bool = False) -> int:
+    def _get_position_idx(self, side: str, hedge_mode: Optional[bool] = None) -> int:
         """Определение position index для Bybit API"""
-        if not hedge_mode:
-            return 0  # One-way mode
-        else:
-            # Hedge mode
-            return 1 if side.upper() == "BUY" else 2
+        # ИСПРАВЛЕНО: Аккаунт на самом деле в hedge mode, а не one-way
+        # Hedge mode: 1=Buy/Long, 2=Sell/Short
+        return 1 if side.upper() in ["BUY", "LONG"] else 2
 
     def _map_order_type_to_bybit(self, order_type: OrderType) -> str:
         """Маппинг типов ордеров к формату Bybit"""
@@ -746,16 +893,27 @@ class BybitClient(BaseExchangeInterface):
             symbol = clean_symbol(order_request.symbol)
             position_idx = self._get_position_idx(order_request.side.value)
 
+            # Устанавливаем leverage для символа (если задан)
+            leverage = getattr(order_request, "leverage", self.default_leverage)
+            if leverage and leverage > 0:
+                try:
+                    await self.set_leverage(symbol, leverage)
+                except Exception as e:
+                    self.logger.warning(f"Failed to set leverage for {symbol}: {e}")
+
             # Подготовка параметров
             params = {
-                "category": "linear",
+                "category": self.trading_category,  # Используем category из конфигурации
                 "symbol": symbol,
                 "side": order_request.side.value,
                 "orderType": self._map_order_type_to_bybit(order_request.order_type),
                 "qty": str(order_request.quantity),
                 "timeInForce": order_request.time_in_force.value,
-                "positionIdx": position_idx,
             }
+
+            # Добавляем positionIdx только если не 0 (Bybit игнорирует 0)
+            if position_idx != 0:
+                params["positionIdx"] = position_idx
 
             # Добавляем цену для лимитных ордеров
             if order_request.price is not None:
@@ -785,10 +943,15 @@ class BybitClient(BaseExchangeInterface):
             self.logger.info(
                 f"Placing order: {symbol} {order_request.side.value} {order_request.quantity} {order_request.order_type.value}"
             )
+            self.logger.info(f"Order params: {params}")
 
-            # Выполнение запроса
+            # Выполнение запроса с высоким приоритетом для ордеров
             response = await self._make_request(
-                "POST", "/v5/order/create", params, auth=True
+                "POST",
+                "/v5/order/create",
+                params,
+                auth=True,
+                priority=RequestPriority.HIGH,
             )
 
             result = response.get("result", {})
@@ -824,7 +987,11 @@ class BybitClient(BaseExchangeInterface):
             self.logger.info(f"Cancelling order: {order_id} for {symbol}")
 
             response = await self._make_request(
-                "POST", "/v5/order/cancel", params, auth=True
+                "POST",
+                "/v5/order/cancel",
+                params,
+                auth=True,
+                priority=RequestPriority.HIGH,
             )
             result = response.get("result", {})
 
@@ -861,7 +1028,11 @@ class BybitClient(BaseExchangeInterface):
             )
 
             response = await self._make_request(
-                "POST", "/v5/order/cancel-all", params, auth=True
+                "POST",
+                "/v5/order/cancel-all",
+                params,
+                auth=True,
+                priority=RequestPriority.CRITICAL,
             )
             result = response.get("result", {})
 
@@ -1211,7 +1382,7 @@ class BybitClient(BaseExchangeInterface):
         try:
             symbol = clean_symbol(symbol)
             params = {
-                "category": "linear",
+                "category": self.trading_category,
                 "symbol": symbol,
                 "buyLeverage": str(leverage),
                 "sellLeverage": str(leverage),
@@ -1451,3 +1622,121 @@ class BybitClient(BaseExchangeInterface):
     async def subscribe_positions(self, callback: callable) -> bool:
         """Подписка на позиции - будет реализовано"""
         pass
+
+    # =================== АЛИАСЫ ДЛЯ СОВМЕСТИМОСТИ ===================
+
+    async def fetch_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str = "15m",
+        since: Optional[int] = None,
+        limit: Optional[int] = None,
+        params: Dict = None,
+    ) -> List[List]:
+        """
+        Метод для совместимости с ccxt интерфейсом
+
+        Args:
+            symbol: Торговый символ
+            timeframe: Временной интервал
+            since: Начальная временная метка в миллисекундах
+            limit: Количество свечей
+            params: Дополнительные параметры
+
+        Returns:
+            Список свечей в формате [timestamp, open, high, low, close, volume]
+        """
+        try:
+            # Конвертируем параметры
+            start_time = datetime.fromtimestamp(since / 1000) if since else None
+            end_time = None
+            if limit is None:
+                limit = 500
+
+            # Получаем данные
+            klines = await self.get_klines(
+                symbol=symbol,
+                interval=timeframe,
+                start_time=start_time,
+                end_time=end_time,
+                limit=limit,
+            )
+
+            # Конвертируем в формат ccxt
+            result = []
+            for kline in klines:
+                result.append(
+                    [
+                        int(kline.open_time.timestamp() * 1000),  # timestamp
+                        kline.open_price,  # open
+                        kline.high_price,  # high
+                        kline.low_price,  # low
+                        kline.close_price,  # close
+                        kline.volume,  # volume
+                    ]
+                )
+
+            # Сортируем по времени (от старых к новым)
+            result.sort(key=lambda x: x[0])
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Ошибка fetch_ohlcv для {symbol}: {e}")
+            raise
+
+    # =================== HEALTH MONITORING ===================
+
+    def get_health_status(self) -> Dict[str, Any]:
+        """Получение статуса здоровья биржи"""
+        status = self.health_monitor.get_exchange_status("bybit")
+
+        if not status:
+            return {
+                "exchange": "bybit",
+                "status": "unknown",
+                "message": "Health monitoring not initialized",
+            }
+
+        return {
+            "exchange": "bybit",
+            "status": status.overall_status.value,
+            "uptime": f"{status.uptime_percentage:.1f}%",
+            "avg_latency": f"{status.avg_latency:.1f}ms",
+            "consecutive_failures": status.consecutive_failures,
+            "last_check": status.last_check.isoformat(),
+            "checks": {
+                check_type.value: {
+                    "status": result.status.value,
+                    "latency_ms": result.latency_ms,
+                    "error": result.error_message,
+                }
+                for check_type, result in status.checks.items()
+            },
+            "is_healthy": status.is_healthy,
+        }
+
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """Получение метрик производительности"""
+        rate_limit_stats = self.rate_limiter.get_stats("bybit")
+        key_stats = self.key_manager.get_key_stats("bybit")
+        health_status = self.get_health_status()
+
+        return {
+            "exchange": "bybit",
+            "connection_stats": {
+                "total_requests": self.request_count,
+                "successful_requests": self.success_count,
+                "error_count": self.error_count,
+                "success_rate": f"{(self.success_count / max(self.request_count, 1)) * 100:.1f}%",
+            },
+            "rate_limiting": rate_limit_stats,
+            "api_keys": key_stats,
+            "health": health_status,
+            "capabilities": {
+                "spot_trading": self.capabilities.spot_trading,
+                "futures_trading": self.capabilities.futures_trading,
+                "max_leverage": self.capabilities.max_leverage,
+                "rate_limit_private": self.capabilities.rate_limit_private,
+            },
+        }

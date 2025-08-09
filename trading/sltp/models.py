@@ -37,6 +37,7 @@ class PartialTPLevel:
     price: float  # Цена TP
     quantity: float  # Количество для закрытия
     percentage: float  # Процент от позиции
+    close_ratio: float = 0.0  # Доля позиции для закрытия (0.25 = 25%)
     filled: bool = False  # Исполнен ли уровень
     order_id: Optional[str] = None
     filled_at: Optional[datetime] = None
@@ -60,11 +61,14 @@ class ProfitProtectionConfig:
     """Конфигурация защиты прибыли"""
 
     enabled: bool = False
-    levels: List[Dict[str, float]] = field(default_factory=list)
-    # Пример levels:
-    # [{"profit": 1.0, "protection": 0.5},  # При 1% прибыли защищаем 0.5%
-    #  {"profit": 2.0, "protection": 1.2},  # При 2% прибыли защищаем 1.2%
-    #  {"profit": 3.0, "protection": 2.0}]  # При 3% прибыли защищаем 2.0%
+    breakeven_percent: float = 1.0  # Процент прибыли для активации безубытка
+    breakeven_offset: float = 0.2  # Смещение от цены входа в %
+    lock_percent: List[Dict[str, float]] = field(default_factory=list)
+    # Пример lock_percent:
+    # [{"trigger": 2.0, "lock": 1.0},  # При 2% прибыли защищаем 1%
+    #  {"trigger": 3.0, "lock": 2.0},  # При 3% прибыли защищаем 2%
+    #  {"trigger": 4.0, "lock": 3.0}]  # При 4% прибыли защищаем 3%
+    max_updates: int = 5  # Максимальное количество обновлений
 
 
 @dataclass
@@ -79,6 +83,7 @@ class SLTPConfig:
     trailing_stop: TrailingStopConfig = field(default_factory=TrailingStopConfig)
     partial_tp_enabled: bool = False
     partial_tp_levels: List[PartialTPLevel] = field(default_factory=list)
+    partial_tp_update_sl: bool = True  # Обновлять ли SL после частичного закрытия
     profit_protection: ProfitProtectionConfig = field(
         default_factory=ProfitProtectionConfig
     )

@@ -1,0 +1,122 @@
+{
+  "BTCUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:02.661452"
+  },
+  "ETHUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:03.007099"
+  },
+  "BNBUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:03.350153"
+  },
+  "SOLUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:03.721311"
+  },
+  "XRPUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:04.090452"
+  },
+  "DOGEUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:04.431404"
+  },
+  "ADAUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:04.775986"
+  },
+  "AVAXUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:05.480223"
+  },
+  "DOTUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:06.251470"
+  },
+  "LINKUSDT": {
+    "signal": "NO_SIGNAL",
+    "confidence": 0,
+    "strength": 0,
+    "directions": [
+      "N/A",
+      "N/A",
+      "N/A",
+      "N/A"
+    ],
+    "timestamp": "2025-08-05T14:19:06.596096"
+  }
+}

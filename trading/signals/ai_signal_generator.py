@@ -106,6 +106,7 @@ class AISignalGenerator:
         self.ml_processor: Optional[MLSignalProcessor] = None
         self.indicator_calculator = IndicatorCalculator()
         self.exchange = None
+        self.trading_engine = None  # Ссылка на Trading Engine
 
         # Конфигурация
         self.config = self._load_config()
@@ -175,23 +176,32 @@ class AISignalGenerator:
             ),
         }
 
-        self.exchange = await ExchangeFactory.create_exchange(
-            self.exchange_name, exchange_config
+        factory = ExchangeFactory()
+        self.exchange = await factory.create_and_connect(
+            exchange_type=self.exchange_name,
+            api_key=exchange_config["api_key"],
+            api_secret=exchange_config["api_secret"],
+            sandbox=exchange_config.get("testnet", False),
         )
         await self.exchange.initialize()
 
         # Инициализируем ML компоненты если включены
         if self.config.use_ml_scoring and self.config.ml_model_path:
             try:
-                self.ml_manager = MLManager()
-                await self.ml_manager.initialize()
+                # Используем singleton для MLManager
+                from ml.ml_manager_singleton import get_ml_manager
+
+                self.logger.info("🔄 Получаем MLManager (singleton)...")
+                self.ml_manager = await get_ml_manager(
+                    self.config_manager.get_system_config()
+                )
 
                 self.ml_processor = MLSignalProcessor(
                     ml_manager=self.ml_manager,
                     config=self.config_manager.get_system_config(),
                 )
 
-                self.logger.info("✅ ML система инициализирована")
+                self.logger.info("✅ ML система инициализирована (singleton)")
             except Exception as e:
                 self.logger.warning(f"⚠️ ML система недоступна: {e}")
                 self.config.use_ml_scoring = False
@@ -229,6 +239,11 @@ class AISignalGenerator:
 
         self._signal_tasks.clear()
         self.logger.info("✅ Генерация сигналов остановлена")
+
+    def set_trading_engine(self, trading_engine):
+        """Установка ссылки на Trading Engine"""
+        self.trading_engine = trading_engine
+        self.logger.info("🔗 Trading Engine подключен к AI Signal Generator")
 
     async def _signal_generation_loop(self, symbol: str):
         """Цикл генерации сигналов для одного символа"""
@@ -565,6 +580,10 @@ class AISignalGenerator:
             strategy_name="AISignalGenerator_ML",
             timeframe="15m",
             indicators_used=["ML_PatchTST", "RSI", "EMA", "MACD", "Volume"],
+            reasoning=f"ML confidence: {signal_score.ml_confidence:.2f}, "
+            f"Technical: {signal_score.technical_score:.2f}, "
+            f"Volume: {signal_score.volume_score:.2f}, "
+            f"Momentum: {signal_score.momentum_score:.2f}",
         )
 
         return signal
@@ -576,8 +595,25 @@ class AISignalGenerator:
             f"(уверенность: {signal.confidence:.1f}%, цена: {signal.entry_price:.2f})"
         )
 
-        # TODO: Интеграция с trading engine для обработки сигнала
-        # Пока просто логируем
+        # Отправляем сигнал в Trading Engine
+        if self.trading_engine:
+            try:
+                self.logger.info(
+                    f"📤 Отправка сигнала в Trading Engine: {signal.symbol} {signal.signal_type.value} "
+                    f"(confidence: {signal.confidence}%, price: {signal.entry_price}, "
+                    f"SL: {signal.stop_loss}, TP: {signal.take_profit})"
+                )
+                await self.trading_engine.receive_trading_signal(signal)
+                self.logger.info(
+                    f"✅ Сигнал {signal.symbol} успешно отправлен в Trading Engine"
+                )
+            except Exception as e:
+                self.logger.error(f"❌ Ошибка отправки сигнала в Trading Engine: {e}")
+                import traceback
+
+                traceback.print_exc()
+        else:
+            self.logger.error("❌ Trading Engine не подключен к AI Signal Generator!")
 
     async def _get_candles(
         self, symbol: str, timeframe: str = "15m", limit: int = 200

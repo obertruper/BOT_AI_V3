@@ -85,21 +85,39 @@ class EnhancedSLTPManager:
         partial_tp_settings = sltp_settings.get("partial_take_profit", {})
         if partial_tp_settings.get("enabled", False):
             config.partial_tp_enabled = True
+            config.partial_tp_update_sl = partial_tp_settings.get(
+                "update_sl_after_partial", True
+            )
             levels = partial_tp_settings.get("levels", [])
             for i, level_data in enumerate(levels):
                 level = PartialTPLevel(
                     level=i + 1,
                     price=0,  # Будет рассчитано позже
                     quantity=0,  # Будет рассчитано позже
-                    percentage=level_data.get("percentage", 0),
+                    percentage=level_data.get(
+                        "percent", 0
+                    ),  # Используем percent как в конфиге
                 )
+                # Добавляем close_ratio для совместимости с V2
+                level.close_ratio = level_data.get("close_ratio", 0)
                 config.partial_tp_levels.append(level)
 
         # Защита прибыли
         profit_protection = sltp_settings.get("profit_protection", {})
         if profit_protection.get("enabled", False):
             config.profit_protection.enabled = True
-            config.profit_protection.levels = profit_protection.get("levels", [])
+            config.profit_protection.breakeven_percent = profit_protection.get(
+                "breakeven_percent", 1.0
+            )
+            config.profit_protection.breakeven_offset = profit_protection.get(
+                "breakeven_offset", 0.2
+            )
+            config.profit_protection.lock_percent = profit_protection.get(
+                "lock_percent", []
+            )
+            config.profit_protection.max_updates = profit_protection.get(
+                "max_updates", 5
+            )
 
         # Волатильность
         volatility = sltp_settings.get("volatility_adjustment", {})
@@ -255,24 +273,68 @@ class EnhancedSLTPManager:
             position.entry_price, current_price, position.side
         )
 
-        # Находим подходящий уровень защиты
-        protection_level = None
-        for level in self.config.profit_protection.levels:
-            if profit_pct >= level["profit"]:
-                protection_level = level
+        # Получаем текущий SL
+        current_sl = self._get_active_stop_loss(position.id)
+        current_sl_price = current_sl.trigger_price if current_sl else 0.0
 
-        if not protection_level:
+        new_sl = None
+
+        # Проверяем уровни lock_percent (от большего к меньшему)
+        if self.config.profit_protection.lock_percent:
+            levels = sorted(
+                self.config.profit_protection.lock_percent,
+                key=lambda x: x["trigger"],
+                reverse=True,
+            )
+
+            for level in levels:
+                trigger = level["trigger"]
+                lock = level["lock"]
+
+                if profit_pct >= trigger:
+                    logger.info(
+                        f"Активирован уровень защиты: {trigger}% -> фиксация {lock}%"
+                    )
+
+                    # Рассчитываем новый SL на основе уровня фиксации
+                    if position.side.upper() in ["BUY", "LONG"]:
+                        lock_amount = (current_price - position.entry_price) * (
+                            lock / profit_pct
+                        )
+                        new_sl = position.entry_price + lock_amount
+                    else:  # SELL/SHORT
+                        lock_amount = (position.entry_price - current_price) * (
+                            lock / profit_pct
+                        )
+                        new_sl = position.entry_price - lock_amount
+
+                    break
+
+        # Проверяем условие безубытка, если не нашли уровень защиты
+        if (
+            new_sl is None
+            and profit_pct >= self.config.profit_protection.breakeven_percent
+        ):
+            logger.info(f"Активирован безубыток (профит: {profit_pct:.2f}%)")
+
+            offset = self.config.profit_protection.breakeven_offset / 100.0
+
+            if position.side.upper() in ["BUY", "LONG"]:
+                new_sl = position.entry_price * (1 + offset)
+            else:  # SELL/SHORT
+                new_sl = position.entry_price * (1 - offset)
+
+        if new_sl is None:
             return None
 
-        # Рассчитываем цену защиты
-        protection_price = self._calculate_protection_price(
-            position.entry_price, position.side, protection_level["protection"]
-        )
+        # Округляем цену защиты
+        protection_price = round(
+            new_sl, 6
+        )  # Временно, потом заменим на правильное округление
 
-        # Обновляем SL
-        current_sl = self._get_active_stop_loss(position.id)
+        # Проверяем, улучшает ли новый SL текущий
         if current_sl and self._is_better_stop_loss(
-            current_sl.trigger_price, protection_price, position.side
+            current_sl_price, protection_price, position.side
         ):
             updated_order = await self._update_stop_loss_order(
                 current_sl, protection_price
@@ -283,7 +345,7 @@ class EnhancedSLTPManager:
                     position.id,
                     "update",
                     "profit_protection",
-                    old_price=current_sl.trigger_price,
+                    old_price=current_sl_price,
                     new_price=protection_price,
                     reason=f"Profit protection at {profit_pct:.2f}%",
                 )
@@ -291,6 +353,192 @@ class EnhancedSLTPManager:
             return updated_order
 
         return None
+
+    async def check_partial_tp(
+        self, position: Position, current_price: Optional[float] = None
+    ) -> bool:
+        """
+        Проверяет и выполняет частичное закрытие позиции при достижении уровней TP.
+
+        Args:
+            position: Позиция для проверки
+            current_price: Текущая цена (опционально)
+
+        Returns:
+            bool: True если было выполнено частичное закрытие
+        """
+        if not self.config.partial_tp_enabled or not self.config.partial_tp_levels:
+            return False
+
+        try:
+            # Получаем текущую цену если не передана
+            if not current_price:
+                from exchanges.bybit.client import get_last_price
+
+                current_price = get_last_price(position.symbol)
+
+            if not current_price or current_price <= 0:
+                logger.warning(f"Не удалось получить цену для {position.symbol}")
+                return False
+
+            # Рассчитываем текущий профит
+            profit_percent = self._calculate_profit_percentage(
+                position.entry_price, current_price, position.side
+            )
+
+            if profit_percent <= 0:
+                return False
+
+            # Получаем историю выполненных уровней
+            executed_levels = []
+            sltp_order = self._active_orders.get(position.id, [])
+            for order in sltp_order:
+                if hasattr(order, "extra_data") and order.extra_data:
+                    executed = order.extra_data.get("partial_tp_executed", [])
+                    executed_levels.extend(
+                        [level.get("percent", 0) for level in executed]
+                    )
+
+            # Проверяем каждый уровень частичного TP
+            for level_config in self.config.partial_tp_levels:
+                level_percent = level_config.percentage  # percent из конфига
+
+                # Проверяем, не был ли уровень уже выполнен
+                if level_percent in executed_levels:
+                    continue
+
+                # Проверяем, достигнут ли уровень
+                if profit_percent >= level_percent:
+                    logger.info(
+                        f"Достигнут уровень partial TP {level_percent}% "
+                        f"для {position.symbol} (профит: {profit_percent:.2f}%)"
+                    )
+
+                    # Рассчитываем количество для закрытия
+                    # Используем close_ratio из конфигурации (как в V2)
+                    close_ratio = level_config.close_ratio
+                    close_qty = position.size * close_ratio
+
+                    # Создаем запись в истории
+                    history_entry = {
+                        "trade_id": position.id,
+                        "level": level_config.level,
+                        "percent": level_percent,
+                        "close_ratio": close_ratio,
+                        "close_qty": close_qty,
+                        "price": current_price,
+                        "status": "pending",
+                    }
+
+                    history_id = self._create_partial_tp_history(history_entry)
+
+                    # Создаем ордер для частичного закрытия
+                    if self.exchange_client:
+                        try:
+                            # Определяем сторону закрытия
+                            close_side = "Sell" if position.side == "Buy" else "Buy"
+
+                            # Округляем количество
+                            from exchanges.bybit.utils import round_qty
+
+                            close_qty = round_qty(position.symbol, close_qty)
+
+                            # Создаем reduce-only ордер
+                            response = await self.exchange_client.create_order(
+                                {
+                                    "symbol": position.symbol,
+                                    "side": close_side,
+                                    "order_type": "Market",
+                                    "qty": close_qty,
+                                    "reduce_only": True,
+                                    "position_idx": self._get_position_idx(
+                                        position.side
+                                    ),
+                                }
+                            )
+
+                            if response.success:
+                                order_id = response.order_id
+                                logger.info(
+                                    f"Создан ордер частичного закрытия: {order_id} "
+                                    f"для {close_qty} {position.symbol}"
+                                )
+
+                                # Обновляем историю
+                                history_entry["id"] = history_id
+                                history_entry["order_id"] = order_id
+                                history_entry["status"] = "executed"
+                                self._update_partial_tp_history(history_entry)
+
+                                # Обновляем информацию о выполненных уровнях
+                                self._add_history(
+                                    position.id,
+                                    "trigger",
+                                    "partial_tp",
+                                    reason=f"Partial TP level {level_percent}% executed",
+                                )
+
+                                # Обновляем SL если нужно
+                                if self.config.partial_tp_update_sl:
+                                    await self._update_sl_after_partial_tp(position)
+
+                                return True
+                            else:
+                                # Обновляем историю с ошибкой
+                                history_entry["id"] = history_id
+                                history_entry["status"] = "error"
+                                history_entry["error"] = response.error
+                                self._update_partial_tp_history(history_entry)
+
+                        except Exception as e:
+                            logger.error(f"Ошибка создания частичного TP: {e}")
+                            if history_id:
+                                history_entry["id"] = history_id
+                                history_entry["status"] = "error"
+                                history_entry["error"] = str(e)
+                                self._update_partial_tp_history(history_entry)
+
+        except Exception as e:
+            logger.error(f"Ошибка проверки partial TP: {e}")
+
+        return False
+
+    async def _update_sl_after_partial_tp(self, position: Position) -> bool:
+        """Обновляет SL после частичного закрытия позиции"""
+        try:
+            # Устанавливаем SL в безубыток с небольшим смещением
+            offset = 0.001  # 0.1%
+
+            if position.side == "Buy":
+                new_sl = position.entry_price * (1 + offset)
+            else:
+                new_sl = position.entry_price * (1 - offset)
+
+            # Округляем цену
+            from exchanges.bybit.utils import round_price
+
+            new_sl = round_price(position.symbol, new_sl)
+
+            # Обновляем SL
+            response = await self.exchange_client.set_stop_loss(
+                position.symbol, new_sl, position.size
+            )
+
+            if response.success:
+                logger.info(f"SL обновлен в безубыток после partial TP: {new_sl}")
+                self._add_history(
+                    position.id,
+                    "update",
+                    "stop_loss",
+                    new_price=new_sl,
+                    reason="SL to breakeven after partial TP",
+                )
+                return True
+
+        except Exception as e:
+            logger.error(f"Ошибка обновления SL после partial TP: {e}")
+
+        return False
 
     async def process_partial_tp_fill(
         self, position: Position, filled_order: Order
@@ -701,3 +949,93 @@ class EnhancedSLTPManager:
         if position_id:
             return {position_id: self._active_orders.get(position_id, [])}
         return self._active_orders.copy()
+
+    # Методы для работы с partial_tp_history
+    def _create_partial_tp_history(
+        self, history_entry: Dict[str, Any]
+    ) -> Optional[int]:
+        """Создает запись в таблице partial_tp_history"""
+        try:
+            from database.connections.postgres import get_db_connection
+
+            query = """
+                INSERT INTO partial_tp_history
+                (trade_id, level, percent, close_ratio, close_qty, price, order_id, status, error, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                RETURNING id
+            """
+
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        query,
+                        (
+                            history_entry.get("trade_id"),
+                            history_entry.get("level"),
+                            history_entry.get("percent"),
+                            history_entry.get("close_ratio"),
+                            history_entry.get("close_qty"),
+                            history_entry.get("price"),
+                            history_entry.get("order_id"),
+                            history_entry.get("status", "pending"),
+                            history_entry.get("error"),
+                        ),
+                    )
+                    result = cur.fetchone()
+                    conn.commit()
+                    return result[0] if result else None
+
+        except Exception as e:
+            logger.error(f"Ошибка создания записи partial_tp_history: {e}")
+            return None
+
+    def _update_partial_tp_history(self, history_entry: Dict[str, Any]) -> bool:
+        """Обновляет запись в таблице partial_tp_history"""
+        try:
+            from database.connections.postgres import get_db_connection
+
+            if "id" not in history_entry:
+                logger.error("Нет ID для обновления partial_tp_history")
+                return False
+
+            query = """
+                UPDATE partial_tp_history
+                SET status = %s, order_id = %s, error = %s, close_qty = %s, updated_at = NOW()
+                WHERE id = %s
+            """
+
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        query,
+                        (
+                            history_entry.get("status"),
+                            history_entry.get("order_id"),
+                            history_entry.get("error"),
+                            history_entry.get("close_qty"),
+                            history_entry.get("id"),
+                        ),
+                    )
+                    conn.commit()
+                    return cur.rowcount > 0
+
+        except Exception as e:
+            logger.error(f"Ошибка обновления partial_tp_history: {e}")
+            return False
+
+    def _get_position_idx(self, side: str) -> int:
+        """Определяет правильный positionIdx для hedge/one-way режима"""
+        try:
+            system_config = self.config_manager.get_system_config()
+            trading_config = system_config.get("trading", {})
+            hedge_mode = trading_config.get("hedge_mode", True)
+
+            if hedge_mode:
+                # В hedge режиме: 1=Long/Buy, 2=Short/Sell
+                return 1 if side.upper() in ["BUY", "LONG"] else 2
+            else:
+                # В one-way режиме: всегда 0
+                return 0
+        except Exception as e:
+            logger.error(f"Ошибка определения positionIdx: {e}")
+            return 0

@@ -139,6 +139,7 @@ from web.api.endpoints import (
     strategies_router,
     traders_router,
 )
+from web.api.ml_api import router as ml_router
 
 # Подключаем роутеры к приложению
 app.include_router(monitoring_router)
@@ -146,6 +147,7 @@ app.include_router(traders_router)
 app.include_router(exchanges_router)
 app.include_router(strategies_router)
 app.include_router(auth_router)
+app.include_router(ml_router)
 
 
 # =================== DEPENDENCY INJECTION ===================

@@ -54,12 +54,44 @@ class TestFeatureEngineer:
         """Создает экземпляр FeatureEngineer"""
         config = {
             "features": {
-                "sma_periods": [10, 20],
-                "ema_periods": [10, 20],
-                "rsi_period": 14,
-                "macd_fast": 12,
-                "macd_slow": 26,
-                "macd_signal": 9,
+                "technical": [
+                    {"name": "sma", "periods": [10, 20]},
+                    {"name": "ema", "periods": [10, 20]},
+                    {"name": "rsi", "period": 14},
+                    {"name": "macd", "fast": 12, "slow": 26, "signal": 9},
+                    {"name": "bollinger", "period": 20, "std": 2},
+                    {"name": "atr", "period": 14},
+                    {"name": "stoch", "window": 14, "smooth_window": 3},
+                    {"name": "adx", "period": 14},
+                ],
+                "volume": {
+                    "ma_periods": [5, 10, 20],
+                    "obv": True,
+                    "mfi": True,
+                    "cmf": True,
+                },
+                "statistical": {
+                    "volatility_windows": [5, 10, 20],
+                    "skew_window": 20,
+                    "kurt_window": 20,
+                    "zscore_window": 20,
+                    "max_min_windows": [10, 20, 50],
+                },
+                "microstructure": {
+                    "realized_vol_periods": ["1h", "4h", "12h"],
+                    "amihud_window": 5,
+                    "kyle_lambda_window": 20,
+                },
+                "temporal": {
+                    "hour_encoding": "sincos",
+                    "day_encoding": "sincos",
+                    "sessions": ["asian", "europe", "us"],
+                },
+                "pattern": {
+                    "volatility_squeeze_threshold": 0.5,
+                    "volume_spike_multiplier": 2.0,
+                    "momentum_window": "1h",
+                },
             }
         }
         return FeatureEngineer(config)
@@ -68,8 +100,8 @@ class TestFeatureEngineer:
         """Тест инициализации"""
         assert feature_engineer is not None
         assert feature_engineer.config is not None
-        assert not feature_engineer._initialized
-        assert len(feature_engineer.feature_names) == 0
+        assert feature_engineer.feature_config is not None
+        assert len(feature_engineer.scalers) == 0
 
     def test_safe_divide(self, feature_engineer):
         """Тест безопасного деления"""
@@ -83,7 +115,8 @@ class TestFeatureEngineer:
         # Деление на ноль
         denominator_with_zero = pd.Series([2, 0, 5])
         result = feature_engineer.safe_divide(numerator, denominator_with_zero)
-        assert result[1] == 10 / 1e-8  # Очень большое число, но не inf
+        # Функция ограничивает результат max_value (по умолчанию 1000.0)
+        assert result[1] == 1000.0  # Ограничено max_value
 
         # Деление с inf
         numerator_inf = pd.Series([10, np.inf, 30])
