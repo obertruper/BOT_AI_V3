@@ -1,0 +1,128 @@
+name: Deploy BOT_AI_V3
+
+on:
+  push:
+    branches: [ main, production ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: obertruper
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: bot_trading_v3
+        ports:
+          - 5555:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pip
+          venv
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m venv venv
+        source venv/bin/activate
+        pip install -r requirements.txt
+
+    - name: Run tests
+      env:
+        PGPORT: 5555
+        PGUSER: obertruper
+        PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        PGDATABASE: bot_trading_v3
+      run: |
+        source venv/bin/activate
+        pytest tests/unit/ -v --tb=short
+
+    - name: Check code quality
+      run: |
+        source venv/bin/activate
+        black . --check
+        ruff check .
+        mypy . --ignore-missing-imports || true
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Deploy to staging
+      if: github.ref == 'refs/heads/main'
+      uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_USER }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        port: ${{ secrets.STAGING_PORT }}
+        script: |
+          cd /opt/bot_ai_v3
+          git pull origin main
+          source venv/bin/activate
+          pip install -r requirements.txt
+          alembic upgrade head
+          sudo systemctl restart bot-ai-v3
+          sudo systemctl status bot-ai-v3
+
+    - name: Deploy to production
+      if: github.ref == 'refs/heads/production'
+      uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        port: ${{ secrets.PRODUCTION_PORT }}
+        script: |
+          cd /opt/bot_ai_v3
+          git pull origin production
+          source venv/bin/activate
+          pip install -r requirements.txt
+          alembic upgrade head
+          sudo systemctl restart bot-ai-v3
+          sudo systemctl status bot-ai-v3
+
+    - name: Notify deployment status
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: 'BOT_AI_V3 deployment to ${{ github.ref == "refs/heads/main" && "staging" || "production" }} ${{ job.status }}'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
