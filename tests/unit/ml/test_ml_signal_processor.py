@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
-from database.models.base_models import Signal, SignalType
+from database.models.base_models import SignalType
+from database.models.signal import Signal
 from ml.ml_signal_processor import MLSignalProcessor
 
 

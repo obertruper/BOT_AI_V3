@@ -835,7 +835,9 @@ class BybitClient(BaseExchangeInterface):
                         low_price=float(kline_data[3]),
                         close_price=float(kline_data[4]),
                         volume=float(kline_data[5]),
-                        trades_count=int(kline_data[6]) if len(kline_data) > 6 else 0,
+                        trades_count=int(float(kline_data[6]))
+                        if len(kline_data) > 6
+                        else 0,
                     )
                     klines.append(kline)
 

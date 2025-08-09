@@ -67,6 +67,15 @@ class SignalRepository:
             await self.session.rollback()
             raise DatabaseError(f"Failed to mark signal as processed: {e}")
 
-    async def save_signal(self, signal: Dict[str, Any]) -> None:
+    async def save_signal(self, signal) -> None:
         """Сохраняет сигнал в БД (совместимость с V2)"""
-        await self.create_signal(signal)
+        # Если передан объект Signal, преобразуем в словарь
+        if hasattr(signal, "__dict__") and not isinstance(signal, dict):
+            # Преобразуем объект Signal в словарь
+            signal_dict = {}
+            for key, value in signal.__dict__.items():
+                if not key.startswith("_"):  # Игнорируем приватные атрибуты
+                    signal_dict[key] = value
+            await self.create_signal(signal_dict)
+        else:
+            await self.create_signal(signal)

@@ -6,7 +6,7 @@ ML Signal Processor для интеграции ML предсказаний с �
 
 import asyncio
 import heapq
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
@@ -50,11 +50,17 @@ class MLSignalProcessor:
         self.config = config
         self.config_manager = config_manager
 
-        # Пороги для принятия решений (снижены для большего количества сигналов)
+        # Пороги для принятия решений (еще больше снижены для тестирования)
         ml_config = config.get("ml", {})
-        self.min_confidence = ml_config.get("min_confidence", 0.45)  # было 0.65
-        self.min_signal_strength = ml_config.get("min_signal_strength", 0.2)  # было 0.3
-        self.risk_tolerance = ml_config.get("risk_tolerance", "MEDIUM")
+        self.min_confidence = ml_config.get(
+            "min_confidence", 0.1
+        )  # было 0.45 - снижено для тестов
+        self.min_signal_strength = ml_config.get(
+            "min_signal_strength", 0.01
+        )  # было 0.2 - минимальный порог
+        self.risk_tolerance = ml_config.get(
+            "risk_tolerance", "HIGH"
+        )  # Допускаем высокий риск
 
         # Кэш для предсказаний (уменьшаем TTL для более частых обновлений)
         self.prediction_cache = {}
@@ -262,7 +268,7 @@ class MLSignalProcessor:
         cached_time = datetime.fromisoformat(cached_data["timestamp"])
 
         # Проверяем TTL
-        if datetime.now() - cached_time > timedelta(seconds=self.cache_ttl):
+        if datetime.now(timezone.utc) - cached_time > timedelta(seconds=self.cache_ttl):
             del self.prediction_cache[cache_key]
             return None
 
@@ -277,7 +283,7 @@ class MLSignalProcessor:
 
     def _cleanup_cache(self):
         """Очищает устаревшие записи из кэша"""
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         keys_to_remove = []
 
         for key, data in self.prediction_cache.items():

@@ -21,7 +21,7 @@ from sqlalchemy import and_, select
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
 from database.connections import get_async_db, init_async_db
-from database.models.base_models import Signal
+from database.models.signal import Signal
 from ml.ml_manager import MLManager
 from ml.ml_signal_processor import MLSignalProcessor
 

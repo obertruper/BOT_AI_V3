@@ -114,7 +114,7 @@ class SystemOrchestrator:
                 status[
                     "exchanges"
                 ] = await self.exchange_registry.get_available_exchanges()
-            except:
+            except Exception:
                 pass
 
         # Получаем список стратегий если доступен trader_manager
@@ -124,7 +124,7 @@ class SystemOrchestrator:
                 for trader in active_traders:
                     if hasattr(trader, "strategy_name"):
                         status["strategies"].append(trader.strategy_name)
-            except:
+            except Exception:
                 pass
 
         return status
@@ -518,18 +518,21 @@ class SystemOrchestrator:
             raise ComponentInitializationError("trader_manager", str(e)) from e
 
     async def _initialize_exchange_registry(self) -> None:
-        """Инициализация реестра бирж"""
+        """Инициализация менеджера бирж"""
         try:
-            from exchanges.registry import ExchangeRegistry
+            from exchanges.exchange_manager import ExchangeManager
 
-            # ExchangeRegistry не принимает параметры в __init__
-            self.exchange_registry = ExchangeRegistry()
+            # Получаем конфигурацию системы
+            system_config = self.config_manager.get_config()
+
+            # Создаем ExchangeManager с правильной конфигурацией
+            self.exchange_registry = ExchangeManager(system_config)
             await self.exchange_registry.initialize()
             self.active_components.add("exchange_registry")
-            self.logger.info("✅ Exchange Registry инициализирован")
+            self.logger.info("✅ Exchange Manager инициализирован")
         except Exception as e:
             self.failed_components.add("exchange_registry")
-            self.logger.warning(f"⚠️ Exchange Registry не инициализирован: {e}")
+            self.logger.warning(f"⚠️ Exchange Manager не инициализирован: {e}")
 
     async def _initialize_trading_engine(self) -> None:
         """Инициализация торгового движка"""

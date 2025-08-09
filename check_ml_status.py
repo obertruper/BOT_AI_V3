@@ -1,197 +1,136 @@
 #!/usr/bin/env python3
 """
-Проверка статуса ML предсказаний с актуальными данными
+Проверка статуса ML системы
 """
 
 import asyncio
+import logging
 import os
-import sys
-from datetime import datetime
 
-from dotenv import load_dotenv
+import yaml
 
-# Добавляем путь к проекту
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-load_dotenv()
-
-# Устанавливаем переменные окружения
-os.environ["PGPORT"] = "5555"
-os.environ["PGUSER"] = "obertruper"
-os.environ["PGDATABASE"] = "bot_trading_v3"
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
-async def check_ml_status():
-    """Проверка работы ML с обновленными данными"""
-    print("🤖 Проверка ML системы с актуальными данными...\n")
-
-    from core.config.config_manager import get_global_config_manager
-    from database.connections.postgres import AsyncPGPool
-    from ml.ml_manager import MLManager
-
+async def check_ml_system():
+    """Проверка ML системы"""
     try:
-        # Инициализация
-        config_manager = get_global_config_manager()
-        ml_manager = MLManager(config_manager.get_ml_config())
+        # Загружаем конфигурацию
+        from core.config.config_manager import ConfigManager
+        from ml.ml_manager import MLManager
+        from ml.ml_signal_processor import MLSignalProcessor
 
-        print("1️⃣ Инициализация ML Manager...")
-        await ml_manager.initialize()
-        print("   ✅ ML Manager инициализирован")
+        logger.info("🔍 Проверка ML системы...")
 
-        # Проверка данных
-        print("\n2️⃣ Проверка актуальности данных...")
+        # Инициализация конфигурации
+        config_manager = ConfigManager()
+        config_manager.get_ml_config()  # Проверяем что конфигурация загружается
 
-        pool = await AsyncPGPool.get_pool()
+        # Проверка символов
+        # Получаем полную конфигурацию системы
+        full_config = config_manager._config  # Обращаемся к полной конфигурации
+        traders = full_config.get("traders", [])
 
-        # Получаем последние данные для основных символов
-        symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+        ml_trader = None
+        for trader in traders:
+            if trader.get("id") == "ml_trader_multi_crypto":
+                ml_trader = trader
+                break
 
-        for symbol in symbols:
-            result = await pool.fetchrow(
-                """
-                SELECT
-                    COUNT(*) as count,
-                    MAX(datetime) as latest,
-                    MIN(datetime) as earliest
-                FROM raw_market_data
-                WHERE symbol = $1
-                AND interval_minutes = 15
-                AND datetime > NOW() - INTERVAL '24 hours'
-            """,
-                symbol,
-            )
+        if ml_trader:
+            symbols = ml_trader.get("symbols", [])
+            logger.info(f"✅ ML трейдер найден с {len(symbols)} символами:")
+            for symbol in symbols:
+                logger.info(f"   - {symbol}")
+        else:
+            logger.error("❌ ML трейдер 'ml_trader_multi_crypto' не найден!")
+            return
 
-            if result:
-                print(f"\n   📊 {symbol}:")
-                print(f"      - Свечей за последние 24ч: {result['count']}")
-                print(f"      - Последние данные: {result['latest']}")
+        # Проверка ML Manager
+        logger.info("\n🧠 Инициализация ML Manager...")
+        # ML Manager ожидает полную конфигурацию ML из файла ml_config.yaml
+        ml_config_path = os.path.join(
+            os.path.dirname(__file__), "config", "ml", "ml_config.yaml"
+        )
+        with open(ml_config_path, "r") as f:
+            ml_full_config = yaml.safe_load(f)
+        ml_manager = MLManager(config=ml_full_config)
+        logger.info(f"✅ ML Manager инициализирован на устройстве: {ml_manager.device}")
 
-                # Проверяем актуальность
-                if result["latest"]:
-                    time_diff = (
-                        datetime.now(result["latest"].tzinfo) - result["latest"]
-                    ).total_seconds() / 60
-                    print(
-                        f"      - Отставание от текущего времени: {time_diff:.0f} минут"
-                    )
+        # Проверка модели
+        if hasattr(ml_manager, "model") and ml_manager.model is not None:
+            logger.info("✅ ML модель загружена")
+        else:
+            logger.error("❌ ML модель не загружена!")
 
-                    if time_diff < 60:
-                        print("      - ✅ Данные актуальны!")
-                    else:
-                        print("      - ⚠️ Данные устарели")
+        # Проверка ML Signal Processor
+        logger.info("\n📊 Инициализация ML Signal Processor...")
+        MLSignalProcessor(
+            ml_manager=ml_manager, config={"symbols": symbols}
+        )
+        logger.info("✅ ML Signal Processor инициализирован")
 
-        # Генерация ML предсказаний
-        print("\n3️⃣ Генерация ML предсказаний...")
+        # Генерация тестового сигнала
+        logger.info("\n🎯 Генерация тестового ML сигнала...")
+        import numpy as np
+        import pandas as pd
 
-        # Получаем предсказания для BTCUSDT
-        symbol = "BTCUSDT"
+        from ml.logic.feature_engineering import FeatureEngineer
 
-        # Проверяем, есть ли достаточно данных
-        candle_count = await pool.fetchval(
-            """
-            SELECT COUNT(*) FROM raw_market_data
-            WHERE symbol = $1 AND interval_minutes = 15
-        """,
-            symbol,
+        # Создаем тестовые данные
+        test_data = pd.DataFrame(
+            {
+                "open": np.random.uniform(100, 110, 100),
+                "high": np.random.uniform(110, 120, 100),
+                "low": np.random.uniform(90, 100, 100),
+                "close": np.random.uniform(95, 115, 100),
+                "volume": np.random.uniform(1000, 10000, 100),
+                "timestamp": pd.date_range(
+                    start="2025-08-09", periods=100, freq="15min"
+                ),
+            }
         )
 
-        print(f"\n   Всего свечей для {symbol}: {candle_count}")
+        # Генерируем признаки
+        feature_engineer = FeatureEngineer()
+        features = feature_engineer.engineer_features(test_data)
 
-        if candle_count >= 96:
-            print("   ✅ Достаточно данных для ML предсказаний")
+        if features is not None and not features.empty:
+            logger.info(f"✅ Сгенерировано {features.shape[1]} признаков")
 
-            # Получаем последние 96 свечей
-            candles = await pool.fetch(
-                """
-                SELECT datetime, open, high, low, close, volume
-                FROM raw_market_data
-                WHERE symbol = $1 AND interval_minutes = 15
-                ORDER BY datetime DESC
-                LIMIT 96
-            """,
-                symbol,
-            )
-
-            # Конвертируем в DataFrame
-            import pandas as pd
-
-            df = pd.DataFrame(
-                [
-                    {
-                        "datetime": c["datetime"],
-                        "open": float(c["open"]),
-                        "high": float(c["high"]),
-                        "low": float(c["low"]),
-                        "close": float(c["close"]),
-                        "volume": float(c["volume"]),
-                    }
-                    for c in candles
-                ]
-            )
-
-            # Сортируем по времени (от старых к новым)
-            df = df.sort_values("datetime").reset_index(drop=True)
-
-            # Получаем предсказание
-            prediction = await ml_manager.predict(df)
-
-            if prediction:
-                print(f"\n   🎯 ML предсказание для {symbol}:")
-
-                # Основные метрики
-                if "signal" in prediction:
-                    signal = prediction["signal"]
-                    print(f"      - Направление: {signal}")
-
-                if "confidence" in prediction:
-                    print(f"      - Уверенность: {prediction['confidence']:.2%}")
-
-                if "predicted_returns" in prediction:
-                    returns = prediction["predicted_returns"]
-                    print("\n   📈 Предсказанные доходности:")
-                    print(f"      - 15м: {returns.get('15m', 0):.4f}")
-                    print(f"      - 1ч: {returns.get('1h', 0):.4f}")
-                    print(f"      - 4ч: {returns.get('4h', 0):.4f}")
-
-                if "predicted_directions" in prediction:
-                    directions = prediction["predicted_directions"]
-                    print("\n   🎯 Предсказанные направления:")
-                    print(
-                        f"      - 15м: {'▲ LONG' if directions.get('15m', 0) > 0 else '▼ SHORT'}"
+            # Делаем предсказание
+            try:
+                prediction = await ml_manager.predict(features, symbol="BTCUSDT")
+                if prediction:
+                    logger.info("✅ ML предсказание получено:")
+                    logger.info(
+                        f"   - Signal Type: {prediction.get('signal_type', 'N/A')}"
                     )
-                    print(
-                        f"      - 1ч: {'▲ LONG' if directions.get('1h', 0) > 0 else '▼ SHORT'}"
+                    logger.info(
+                        f"   - Confidence: {prediction.get('confidence', 0):.2%}"
                     )
-                    print(
-                        f"      - 4ч: {'▲ LONG' if directions.get('4h', 0) > 0 else '▼ SHORT'}"
+                    logger.info(
+                        f"   - Risk Level: {prediction.get('risk_level', 'N/A')}"
                     )
-
-                if "volatility" in prediction:
-                    print(f"\n   📊 Волатильность: {prediction['volatility']:.4f}")
-
-                if "risk_metrics" in prediction:
-                    risk = prediction["risk_metrics"]
-                    print("\n   ⚠️ Риск-метрики:")
-                    for key, value in risk.items():
-                        if isinstance(value, float):
-                            print(f"      - {key}: {value:.4f}")
-            else:
-                print("   ❌ Не удалось получить ML предсказание")
+                else:
+                    logger.error("❌ Предсказание не получено")
+            except Exception as e:
+                logger.error(f"❌ Ошибка при предсказании: {e}")
         else:
-            print(f"   ❌ Недостаточно данных: {candle_count} < 96")
+            logger.error("❌ Не удалось сгенерировать признаки")
 
-        print("\n✅ Проверка завершена!")
+        logger.info("\n✨ Проверка завершена!")
 
     except Exception as e:
-        print(f"\n❌ Ошибка: {e}")
+        logger.error(f"❌ Критическая ошибка: {e}")
         import traceback
 
         traceback.print_exc()
 
-    finally:
-        # Закрываем пул соединений
-        await AsyncPGPool.close_pool()
-
 
 if __name__ == "__main__":
-    asyncio.run(check_ml_status())
+    asyncio.run(check_ml_system())

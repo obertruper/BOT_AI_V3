@@ -13,7 +13,8 @@ sys.path.insert(0, "/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3")
 from sqlalchemy import text
 
 from database.connections import get_async_db
-from database.models.base_models import Signal, SignalType
+from database.models.base_models import SignalType
+from database.models.signal import Signal
 from trading.orders.order_manager import OrderManager
 
 

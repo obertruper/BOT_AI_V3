@@ -30,7 +30,8 @@ async def main():
 
         # Инициализируем соединение с БД
         from database.connections import get_async_db
-        from database.models.base_models import Signal, SignalType
+        from database.models.base_models import SignalType
+        from database.models.signal import Signal
         from trading.engine import TradingEngine
 
         print("1️⃣ Создаем ML сигнал в БД:")

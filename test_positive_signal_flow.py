@@ -14,7 +14,8 @@ sys.path.append(str(Path(__file__).parent))
 
 from core.logger import setup_logger
 from database.connections.postgres import AsyncPGPool
-from database.models.base_models import Signal, SignalType
+from database.models.base_models import SignalType
+from database.models.signal import Signal
 from ml.ml_manager import MLManager
 from ml.ml_signal_processor import MLSignalProcessor
 

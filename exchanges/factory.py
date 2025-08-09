@@ -85,7 +85,7 @@ class ExchangeFactory:
             # Bybit
             from .bybit import BybitExchange
 
-            self._exchange_classes[ExchangeType.BYBIT] = BybitExchange
+            ExchangeFactory._exchange_classes[ExchangeType.BYBIT] = BybitExchange
             self.logger.info("Registered Bybit exchange")
 
         except ImportError as e:
@@ -94,7 +94,7 @@ class ExchangeFactory:
         try:
             # Binance (будет добавлен позже)
             # from .binance.client import BinanceClient
-            # self._exchange_classes[ExchangeType.BINANCE] = BinanceClient
+            # ExchangeFactory._exchange_classes[ExchangeType.BINANCE] = BinanceClient
             self.logger.debug("Binance not yet implemented")
 
         except ImportError as e:
@@ -103,7 +103,7 @@ class ExchangeFactory:
         # Аналогично для других бирж...
 
         self.logger.info(
-            f"Exchange factory initialized with {len(self._exchange_classes)} exchanges"
+            f"Exchange factory initialized with {len(ExchangeFactory._exchange_classes)} exchanges"
         )
 
     def create_client(
@@ -144,8 +144,8 @@ class ExchangeFactory:
                 exchange_type = ExchangeType(exchange_type.lower())
 
             # Проверяем поддержку биржи
-            if exchange_type not in self._exchange_classes:
-                available = [e.value for e in self._exchange_classes.keys()]
+            if exchange_type not in ExchangeFactory._exchange_classes:
+                available = [e.value for e in ExchangeFactory._exchange_classes.keys()]
                 raise ExchangeError(
                     exchange_type.value,
                     f"Exchange {exchange_type.value} not supported. Available: {available}",
@@ -164,7 +164,7 @@ class ExchangeFactory:
             self._validate_credentials(api_key, api_secret, exchange_type)
 
             # Получаем класс клиента
-            client_class = self._exchange_classes[exchange_type]
+            client_class = ExchangeFactory._exchange_classes[exchange_type]
 
             # Создаем экземпляр
             client = client_class(
@@ -246,14 +246,14 @@ class ExchangeFactory:
 
     def get_supported_exchanges(self) -> List[str]:
         """Получение списка поддерживаемых бирж"""
-        return [exchange.value for exchange in self._exchange_classes.keys()]
+        return [exchange.value for exchange in ExchangeFactory._exchange_classes.keys()]
 
     def is_exchange_supported(self, exchange_type: Union[str, ExchangeType]) -> bool:
         """Проверка поддержки биржи"""
         try:
             if isinstance(exchange_type, str):
                 exchange_type = ExchangeType(exchange_type.lower())
-            return exchange_type in self._exchange_classes
+            return exchange_type in ExchangeFactory._exchange_classes
         except (ValueError, AttributeError):
             return False
 

@@ -27,7 +27,8 @@ async def main():
     try:
         # Импортируем необходимые модули
         from database.connections import get_async_db
-        from database.models.base_models import Order, Signal, SignalType
+        from database.models.base_models import Order, SignalType
+        from database.models.signal import Signal
         from trading.execution.executor import ExecutionEngine
         from trading.orders.order_manager import OrderManager
         from trading.positions.position_manager import PositionManager

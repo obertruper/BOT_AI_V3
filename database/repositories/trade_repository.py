@@ -38,9 +38,9 @@ class TradeRepository:
         try:
             query = select(
                 func.count(Trade.id).label("total_trades"),
-                func.sum(Trade.profit).label("total_profit"),
-                func.sum(Trade.volume).label("total_volume"),
-                func.avg(Trade.profit).label("avg_profit"),
+                func.sum(Trade.realized_pnl).label("total_profit"),
+                func.sum(Trade.quantity * Trade.price).label("total_volume"),
+                func.avg(Trade.realized_pnl).label("avg_profit"),
             )
 
             if start_date:
@@ -61,7 +61,7 @@ class TradeRepository:
                 }
 
             # Подсчитываем win rate
-            win_query = select(func.count(Trade.id)).where(Trade.profit > 0)
+            win_query = select(func.count(Trade.id)).where(Trade.realized_pnl > 0)
             if start_date:
                 win_query = win_query.where(Trade.created_at >= start_date)
             if end_date:

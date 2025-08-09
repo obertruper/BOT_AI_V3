@@ -17,9 +17,9 @@ from database.models.base_models import (
     OrderSide,
     OrderStatus,
     OrderType,
-    Signal,
     SignalType,
 )
+from database.models.signal import Signal
 
 
 class OrderManager:

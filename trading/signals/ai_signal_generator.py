@@ -8,7 +8,7 @@ AI Signal Generator для BOT_AI_V3
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -276,7 +276,11 @@ class AISignalGenerator:
                 return None
 
             # Создаем базовый сигнал
-            signal_score = SignalScore(symbol=symbol, timestamp=datetime.now())
+            signal_score = SignalScore(
+                symbol=symbol,
+                timestamp=datetime.now(timezone.utc),
+                direction="NEUTRAL",  # Инициализируем нейтральным направлением
+            )
 
             # 1. Технический анализ
             technical_signals = await self._analyze_technical(symbol, candles)

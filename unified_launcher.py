@@ -165,12 +165,15 @@ class UnifiedLauncher:
         default_config = {
             "core": {
                 "enabled": True,
-                "command": f"{sys.executable} main.py",
+                "command": "venv/bin/python main.py",
                 "name": "Core System",
                 "auto_restart": True,
                 "health_check_endpoint": None,
                 "startup_delay": 0,
-                "env": {"UNIFIED_MODE": "true"},
+                "env": {
+                    "UNIFIED_MODE": "true",
+                    "PYTHONPATH": str(Path(__file__).parent),
+                },
             },
             "ml": {
                 "enabled": True,

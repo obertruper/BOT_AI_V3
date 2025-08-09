@@ -22,7 +22,7 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
     """
     # Получаем уровень из переменной окружения или используем INFO по умолчанию
     if level is None:
-        level = os.getenv("LOG_LEVEL", "INFO")
+        level = os.getenv("BOT_AI_V3_LOG_LEVEL", os.getenv("LOG_LEVEL", "INFO"))
 
     # Создаем логгер
     logger = logging.getLogger(name)
@@ -39,15 +39,27 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Оптимизированный форматтер (укороченный timestamp)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%H:%M:%S",  # Укороченный формат времени для экономии места
-    )
+    # Если включен вывод в консоль, используем более детальный формат
+    if os.getenv("BOT_AI_V3_LOG_TO_CONSOLE", "false").lower() == "true":
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    else:
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",  # Полный формат времени для лучшей отладки
+        )
 
-    # Консольный обработчик только для WARNING и выше в production
-    console_level = (
-        logging.WARNING if os.getenv("ENVIRONMENT") == "production" else logging.INFO
-    )
+    # Консольный обработчик - выводим все если установлен BOT_AI_V3_LOG_TO_CONSOLE
+    if os.getenv("BOT_AI_V3_LOG_TO_CONSOLE", "false").lower() == "true":
+        console_level = logger.level  # Используем тот же уровень, что и у логгера
+    else:
+        console_level = (
+            logging.WARNING
+            if os.getenv("ENVIRONMENT") == "production"
+            else logging.INFO
+        )
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(console_level)
     console_handler.setFormatter(formatter)

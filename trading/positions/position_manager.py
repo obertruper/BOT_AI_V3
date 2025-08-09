@@ -358,6 +358,38 @@ class PositionManager:
         except Exception as e:
             self.logger.error(f"Ошибка синхронизации позиций с {exchange_name}: {e}")
 
+    async def sync_positions(self):
+        """Синхронизация позиций со всеми подключенными биржами"""
+        if not self.exchange_registry:
+            self.logger.warning(
+                "Exchange registry не доступен для синхронизации позиций"
+            )
+            return
+
+        try:
+            # Получаем список активных бирж
+            active_exchanges = await self.exchange_registry.get_active_exchanges()
+
+            for exchange_name in active_exchanges:
+                await self.sync_with_exchange(exchange_name)
+
+        except Exception as e:
+            self.logger.error(f"Ошибка синхронизации позиций: {e}")
+
+    async def calculate_total_pnl(self) -> Decimal:
+        """Расчет общего PnL всех позиций"""
+        try:
+            total_pnl = Decimal("0")
+
+            for position in self._positions.values():
+                total_pnl += position.total_pnl
+
+            return total_pnl
+
+        except Exception as e:
+            self.logger.error(f"Ошибка расчета общего PnL: {e}")
+            return Decimal("0")
+
     async def health_check(self) -> bool:
         """Проверка здоровья компонента"""
         return True

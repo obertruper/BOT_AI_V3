@@ -11,7 +11,7 @@ sys.path.append("/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3")
 from sqlalchemy import desc, select
 
 from database.connections import get_async_db
-from database.models.base_models import Signal
+from database.models.signal import Signal
 
 
 async def analyze_signals():

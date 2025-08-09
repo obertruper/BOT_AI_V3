@@ -6,7 +6,7 @@ ML Manager для управления PatchTST моделью в BOT Trading v3
 
 import os
 import pickle
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Union
 
@@ -680,7 +680,7 @@ class MLManager:
                 "directions_by_timeframe": directions.tolist(),  # [15m, 1h, 4h, 12h]
                 "direction_probabilities": [p.tolist() for p in direction_probs],
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     async def update_model(self, new_model_path: str):
