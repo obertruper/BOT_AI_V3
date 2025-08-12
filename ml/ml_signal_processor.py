@@ -195,16 +195,30 @@ class MLSignalProcessor:
 
         # Определяем тип сигнала
         ml_signal_type = prediction.get("signal_type", "NEUTRAL")
+
+        # ИСПРАВЛЕНО: Не отбрасываем NEUTRAL сигналы полностью
+        # Вместо этого применяем более строгие критерии для их обработки
         if ml_signal_type == "NEUTRAL":
-            return None
+            # Для NEUTRAL сигналов требуем высокую уверенность (>70%)
+            if confidence < 0.70:
+                logger.info(
+                    f"🎯 NEUTRAL сигнал с низкой уверенностью {confidence:.1%}, пропускаем"
+                )
+                return None
+            logger.info(
+                f"🎯 NEUTRAL сигнал с высокой уверенностью {confidence:.1%}, обрабатываем"
+            )
 
         # Мапим ML сигнал на торговый SignalType
-        # ИСПРАВЛЕНО: Модель возвращает "LONG"/"SHORT", не "BUY"/"SELL"
+        # ИСПРАВЛЕНО: Модель возвращает "LONG"/"SHORT"/"NEUTRAL"
         if ml_signal_type == "LONG":
             signal_type = SignalType.LONG
         elif ml_signal_type == "SHORT":
             signal_type = SignalType.SHORT
+        elif ml_signal_type == "NEUTRAL":
+            signal_type = SignalType.NEUTRAL
         else:
+            logger.warning(f"Unknown signal type: {ml_signal_type}")
             return None
 
         # Определяем силу сигнала (используем числовое значение 0.0-1.0)
@@ -267,23 +281,27 @@ class MLSignalProcessor:
             self.signal_stats["long_signals"] += 1
         elif signal_type == SignalType.SHORT:
             self.signal_stats["short_signals"] += 1
+        elif signal_type == SignalType.NEUTRAL:
+            self.signal_stats["neutral_signals"] = (
+                self.signal_stats.get("neutral_signals", 0) + 1
+            )
 
         # Проверяем разнообразие каждые 10 сигналов
         if self.signal_stats["total_signals"] % 10 == 0:
             total = self.signal_stats["total_signals"]
             long_pct = (self.signal_stats["long_signals"] / total) * 100
             short_pct = (self.signal_stats["short_signals"] / total) * 100
+            neutral_pct = (self.signal_stats.get("neutral_signals", 0) / total) * 100
 
-            # Предупреждение если более 80% сигналов в одном направлении
-            if long_pct > 80:
+            # Предупреждение если более 70% сигналов в одном направлении (уменьшили с 80%)
+            if long_pct > 70 or short_pct > 70:
                 logger.warning(
-                    f"⚠️ ДИСБАЛАНС СИГНАЛОВ: {long_pct:.1f}% LONG, {short_pct:.1f}% SHORT! "
-                    f"Модель может неправильно интерпретировать рынок."
+                    f"⚠️ ДИСБАЛАНС СИГНАЛОВ: {long_pct:.1f}% LONG, {short_pct:.1f}% SHORT, {neutral_pct:.1f}% NEUTRAL! "
+                    f"Проверьте пороги weighted_direction или калибровку модели."
                 )
-            elif short_pct > 80:
-                logger.warning(
-                    f"⚠️ ДИСБАЛАНС СИГНАЛОВ: {short_pct:.1f}% SHORT, {long_pct:.1f}% LONG! "
-                    f"Модель может неправильно интерпретировать рынок."
+            else:
+                logger.info(
+                    f"📊 Разнообразие сигналов: {long_pct:.1f}% LONG, {short_pct:.1f}% SHORT, {neutral_pct:.1f}% NEUTRAL"
                 )
 
             # Критическое предупреждение если 100% в одном направлении
@@ -526,8 +544,8 @@ class MLSignalProcessor:
             elif ml_signal_type == "SHORT":
                 signal_type = SignalType.SHORT
             else:  # NEUTRAL
-                logger.info("🎯 Нейтральный сигнал, пропускаем")
-                return None
+                logger.info("🎯 Нейтральный сигнал обрабатываем (старый формат)")
+                signal_type = SignalType.NEUTRAL
 
             # Используем готовые значения от ml_manager
             confidence = pred_dict.get("confidence", 0.5)
