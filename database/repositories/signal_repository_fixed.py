@@ -98,21 +98,24 @@ class SignalRepositoryFixed:
             else:
                 signal_data["signal_metadata"] = json.dumps({"hash": signal_hash})
 
-            # Создаем сигнал
+            # Создаем новый сигнал простым INSERT
             signal = Signal(**signal_data)
             self.session.add(signal)
+
+            # Коммитим изменения
             await self.session.commit()
             await self.session.refresh(signal)
 
             logger.info(
-                f"✅ Создан новый сигнал для {signal.symbol} (тип: {signal.signal_type})"
+                f"✅ Сигнал для {signal.symbol} (тип: {signal.signal_type}) создан или обновлен"
             )
             return signal
 
         except Exception as e:
             await self.session.rollback()
             logger.error(f"Ошибка создания сигнала: {e}")
-            raise DatabaseError(f"Failed to create signal: {e}")
+            # Не поднимаем исключение, возвращаем None для совместимости
+            return None
 
     async def _check_existing_signal(self, symbol: str, signal_hash: str) -> bool:
         """

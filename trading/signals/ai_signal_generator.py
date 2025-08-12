@@ -258,7 +258,9 @@ class AISignalGenerator:
                     # Если сигнал достаточно сильный - создаем торговый сигнал
                     if signal_score.should_trade:
                         trading_signal = self._create_trading_signal(signal_score)
-                        await self._emit_signal(trading_signal)
+                        # Проверяем что сигнал не None (может быть для NEUTRAL)
+                        if trading_signal:
+                            await self._emit_signal(trading_signal)
 
                 # Ждем до следующего цикла
                 await asyncio.sleep(self.config.signal_interval)
@@ -561,11 +563,22 @@ class AISignalGenerator:
         signal_score.reasons.append("✅ Все проверки пройдены")
         return True
 
-    def _create_trading_signal(self, signal_score: SignalScore) -> TradingSignal:
+    def _create_trading_signal(
+        self, signal_score: SignalScore
+    ) -> Optional[TradingSignal]:
         """Создание торгового сигнала из оценки"""
-        signal_type = (
-            SignalType.BUY if signal_score.direction == "BUY" else SignalType.SELL
-        )
+        # ИСПРАВЛЕНО: Правильная обработка NEUTRAL сигналов
+        # NEUTRAL сигналы НЕ должны превращаться в торговые сигналы
+        if signal_score.direction == "BUY" or signal_score.direction == "LONG":
+            signal_type = SignalType.BUY
+        elif signal_score.direction == "SELL" or signal_score.direction == "SHORT":
+            signal_type = SignalType.SELL
+        else:
+            # Для NEUTRAL сигналов возвращаем None - не создаем торговый сигнал
+            self.logger.info(
+                f"🔸 NEUTRAL сигнал для {signal_score.symbol} - пропускаем торговлю"
+            )
+            return None
 
         # Получаем текущую цену из кэша
         candles = self._candle_cache.get(f"{signal_score.symbol}_15m")

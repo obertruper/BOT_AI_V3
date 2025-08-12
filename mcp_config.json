@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "mcp-server-postgres",
+      "args": [
+        "postgresql://obertruper:ilpnqw1234@localhost:5555/bot_trading_v3"
+      ],
+      "env": {
+        "PGPORT": "5555"
+      }
+    },
+    "filesystem": {
+      "command": "mcp-server-filesystem",
+      "args": [
+        "/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3"
+      ]
+    }
+  }
+}

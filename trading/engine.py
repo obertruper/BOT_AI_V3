@@ -931,12 +931,22 @@ class TradingEngine:
         if confidence > 1.0:
             confidence = confidence / 100.0
 
-        # Получаем stop_loss и take_profit
+        # Получаем stop_loss и take_profit с учетом типа сигнала
+        signal_type = getattr(trading_signal, "signal_type", None)
+
+        # Дефолтные значения зависят от типа сигнала
+        if signal_type == DBSignalType.SHORT:
+            default_stop_loss = entry_price * 1.02  # Для SHORT: SL выше цены
+            default_take_profit = entry_price * 0.98  # Для SHORT: TP ниже цены
+        else:  # LONG или неопределенный
+            default_stop_loss = entry_price * 0.98  # Для LONG: SL ниже цены
+            default_take_profit = entry_price * 1.02  # Для LONG: TP выше цены
+
         stop_loss = getattr(trading_signal, "stop_loss", None) or getattr(
-            trading_signal, "suggested_stop_loss", entry_price * 0.98
+            trading_signal, "suggested_stop_loss", default_stop_loss
         )
         take_profit = getattr(trading_signal, "take_profit", None) or getattr(
-            trading_signal, "suggested_take_profit", entry_price * 1.02
+            trading_signal, "suggested_take_profit", default_take_profit
         )
 
         # Создаем Signal объект
@@ -1182,9 +1192,19 @@ class TradingEngine:
             # Определяем направление
             from database.models.base_models import OrderSide
 
+            # ИСПРАВЛЕНО: Правильная обработка NEUTRAL сигналов
+            signal_type_lower = signal.signal_type.value.lower()
+
+            # Для NEUTRAL сигналов не создаем ордера
+            if signal_type_lower in ["neutral", "flat"]:
+                self.logger.info(
+                    f"🔸 NEUTRAL сигнал для {signal.symbol} - не создаем ордера"
+                )
+                return []
+
             side = (
                 OrderSide.BUY
-                if signal.signal_type.value.lower() in ["long", "buy"]
+                if signal_type_lower in ["long", "buy"]
                 else OrderSide.SELL
             )
 

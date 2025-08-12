@@ -15,7 +15,9 @@ import pandas as pd
 import torch
 
 from core.logger import setup_logger
-from ml.logic.feature_engineering import FeatureEngineer
+from ml.logic.feature_engineering import (  # Оригинальная версия с 240+ признаками
+    FeatureEngineer,
+)
 from ml.logic.patchtst_model import create_unified_model
 
 logger = setup_logger("ml_manager")
@@ -576,18 +578,63 @@ class MLManager:
         logger.info(f"Signal strength (agreement): {signal_strength:.3f}")
 
         # Определяем тип сигнала на основе взвешенного среднего
-        # ИСПРАВЛЕНО: Правильная интерпретация классов модели + пересмотренные пороги
+        # ИСПРАВЛЕНО: Правильная интерпретация классов модели + улучшенные пороги
         # В обучении: 0=LONG (покупка), 1=SHORT (продажа), 2=FLAT (нейтрально)
         #
-        # ОПТИМИЗИРОВАННАЯ ЛОГИКА ПОРОГОВ НА ОСНОВЕ АНАЛИЗА РАСПРЕДЕЛЕНИЯ:
-        # Анализ показал оптимальные пороги для сбалансированного распределения:
-        # При этом мы получаем ~27% LONG, ~54% SHORT, ~18% NEUTRAL
-        if weighted_direction < 0.6:
-            signal_type = "LONG"  # Суженный диапазон для LONG (только очевидные случаи)
-        elif weighted_direction < 1.4:
-            signal_type = "SHORT"  # Расширенный диапазон для SHORT
+        # НОВАЯ ЛОГИКА С УЧЕТОМ СИЛЫ СИГНАЛА:
+        # weighted_direction находится в диапазоне 0.0 - 2.0
+        # где 0.0 = все LONG, 1.0 = все SHORT, 2.0 = все NEUTRAL
+        #
+        # Используем согласованность как дополнительный фактор
+        # Если большинство таймфреймов согласны - сильный сигнал
+
+        # Считаем голоса за каждое направление
+        long_votes = np.sum(directions == 0)
+        short_votes = np.sum(directions == 1)
+        neutral_votes = np.sum(directions == 2)
+
+        # ИСПРАВЛЕННАЯ ЛОГИКА: Определяем сигнал по большинству голосов
+        if long_votes >= 3:  # 3+ из 4 таймфреймов за LONG
+            signal_type = "LONG"
+        elif short_votes >= 3:  # 3+ из 4 таймфреймов за SHORT
+            signal_type = "SHORT"
+        elif neutral_votes >= 3:  # 3+ из 4 таймфреймов за NEUTRAL
+            signal_type = "NEUTRAL"
         else:
-            signal_type = "NEUTRAL"  # Только высокие scores (>= 1.4)
+            # Нет явного большинства - используем более гибкую логику
+            # Приоритет отдаем торговым сигналам (LONG/SHORT) над NEUTRAL
+
+            if long_votes > short_votes and long_votes > neutral_votes:
+                # LONG больше всего голосов
+                signal_type = "LONG"
+            elif short_votes > long_votes and short_votes > neutral_votes:
+                # SHORT больше всего голосов
+                signal_type = "SHORT"
+            elif long_votes == short_votes and long_votes > neutral_votes:
+                # LONG и SHORT равны, но больше NEUTRAL - используем взвешенное среднее
+                if weighted_direction < 1.0:
+                    signal_type = "LONG"  # Ближе к 0 (LONG)
+                else:
+                    signal_type = "SHORT"  # Ближе к 1 (SHORT)
+            else:
+                # NEUTRAL побеждает или ничья с торговыми сигналами
+                # Используем более мягкие пороги для взвешенного среднего
+                if weighted_direction < 0.5:
+                    signal_type = "LONG"  # Сильный LONG
+                elif weighted_direction > 1.5:
+                    signal_type = "NEUTRAL"  # Сильный NEUTRAL
+                elif weighted_direction > 1.2:
+                    signal_type = "SHORT"  # Умеренный SHORT
+                else:
+                    # Промежуточная зона - решаем по силе сигнала
+                    if signal_strength > 0.4:  # Снижен с 0.6
+                        # При достаточной силе сигнала выбираем торговое направление
+                        if weighted_direction < 1.0:
+                            signal_type = "LONG"
+                        else:
+                            signal_type = "SHORT"
+                    else:
+                        signal_type = "NEUTRAL"
 
         # Рассчитываем уровни SL/TP на основе future_returns
         # future_returns содержит предсказанные доходности для разных таймфреймов
@@ -638,10 +685,27 @@ class MLManager:
         # ИСПРАВЛЕНИЕ: confidence_scores уже содержат вероятности (0-1), не нужен sigmoid
         model_confidence = float(np.mean(confidence_scores))
 
-        # Улучшенная формула комбинированной уверенности
-        # Даем больший вес model_confidence для разнообразия
-        combined_confidence = (
-            signal_strength * 0.3 + model_confidence * 0.5 + (1.0 - avg_risk) * 0.2
+        # ИСПРАВЛЕННАЯ формула комбинированной уверенности
+        # Увеличиваем базовую уверенность для торговых сигналов
+        base_confidence = 0.4 if signal_type in ["LONG", "SHORT"] else 0.2
+
+        # Бонус за согласованность предсказаний
+        consistency_bonus = 0.0
+        max_votes = max(long_votes, short_votes, neutral_votes)
+        if signal_type in ["LONG", "SHORT"]:
+            # Для торговых сигналов даем бонус даже при относительном большинстве
+            consistency_bonus = (
+                max_votes - 1
+            ) * 0.15  # 0.15 за каждый дополнительный голос
+
+        # Комбинированная уверенность с учетом типа сигнала
+        combined_confidence = min(
+            0.95,
+            base_confidence
+            + signal_strength * 0.3
+            + model_confidence * 0.2
+            + (1.0 - avg_risk) * 0.1
+            + consistency_bonus,
         )
 
         # Вероятность успеха

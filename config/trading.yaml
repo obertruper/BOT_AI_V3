@@ -1,13 +1,13 @@
 trading:
   risk_management:
     # Фиксированный баланс для расчета позиций (из V2)
-    fixed_risk_balance: 500      # $500 для production (как COPE в V2)
-    # fixed_risk_balance: 100    # $100 для development (как main в V2)
+    fixed_risk_balance: 100      # УМЕНЬШЕНО до $100 для безопасности
+    # fixed_risk_balance: 500    # $500 для production (как COPE в V2)
     use_fixed_balance: true       # Использовать фиксированный баланс вместо реального
 
-    max_position_size: 5000       # Максимум $5000 на позицию
-    min_position_size: 10         # Минимум $10 на позицию
-    max_open_positions: 5
+    max_position_size: 100        # УМЕНЬШЕНО: Максимум $100 на позицию (было 5000)
+    min_position_size: 5          # УМЕНЬШЕНО: Минимум $5 на позицию (было 10)
+    max_open_positions: 3         # УМЕНЬШЕНО: Максимум 3 позиции одновременно (было 5)
     max_daily_loss: 100
     risk_per_trade: 0.02          # 2% риск на сделку (проверено в V2)
 
@@ -18,7 +18,7 @@ trading:
   orders:
     default_leverage: 5           # 5x для production (как COPE)
     # default_leverage: 10        # 10x для development (как main)
-    min_order_size: 10
+    min_order_size: 5    # Уменьшен минимальный размер ордера (было 10)
     max_slippage: 0.002
   signals:
     process_interval: 5
@@ -46,7 +46,7 @@ risk_management:
   # Параметры из V2 для расчета позиций
   position_sizing:
     method: "fixed_balance"      # Метод из V2: фиксированный баланс
-    fixed_balance: 500           # Баланс для расчетов
+    fixed_balance: 50            # УМЕНЬШЕНО: Баланс для расчетов $50 (было 100)
     use_real_balance: false      # false = используем fixed_balance
 position_management:
   sync_interval: 60

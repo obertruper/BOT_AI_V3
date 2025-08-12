@@ -330,6 +330,7 @@ class BybitClient(BaseExchangeInterface):
                     )
 
                     # Используем ключи из менеджера
+
                     signature = hmac.new(
                         bytes(key_info.api_secret, "utf-8"),
                         bytes(
