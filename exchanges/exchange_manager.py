@@ -43,15 +43,34 @@ class ExchangeManager:
                 # Создаем экземпляр фабрики и используем ее для создания биржи
                 factory = ExchangeFactory()
 
-                # Подготавливаем креденшалы
-                api_key = exchange_config.get("api_key", "")
-                api_secret = exchange_config.get("api_secret", "")
-                testnet = exchange_config.get("testnet", False)
+                # Подготавливаем креденшалы - сначала пробуем из ENV, потом из конфига
+                import os
+
+                env_key_name = f"{exchange_name.upper()}_API_KEY"
+                env_secret_name = f"{exchange_name.upper()}_API_SECRET"
+                env_testnet_name = f"{exchange_name.upper()}_TESTNET"
+
+                api_key = os.getenv(env_key_name) or exchange_config.get("api_key", "")
+                api_secret = os.getenv(env_secret_name) or exchange_config.get(
+                    "api_secret", ""
+                )
+                testnet = os.getenv(
+                    env_testnet_name, "false"
+                ).lower() == "true" or exchange_config.get("testnet", False)
 
                 # Проверяем наличие API ключей
                 if not api_key or not api_secret:
                     self.logger.warning(f"⚠️ Нет API ключей для биржи {exchange_name}")
+                    self.logger.debug(
+                        f"   Проверялись: {env_key_name}, {env_secret_name}"
+                    )
                     continue
+
+                self.logger.info(f"✅ Найдены API ключи для {exchange_name}")
+                self.logger.debug(
+                    f"   API Key: {api_key[:10]}..." if api_key else "NONE"
+                )
+                self.logger.debug(f"   Testnet: {testnet}")
 
                 # Преобразуем строку в ExchangeType
                 try:

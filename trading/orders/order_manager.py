@@ -21,6 +21,8 @@ from database.models.base_models import (
 )
 from database.models.signal import Signal
 
+from .sltp_integration import SLTPIntegration
+
 
 class OrderManager:
     """
@@ -33,11 +35,18 @@ class OrderManager:
     - Отмену и модификацию ордеров
     """
 
-    def __init__(self, exchange_registry, logger: Optional[logging.Logger] = None):
+    def __init__(
+        self,
+        exchange_registry,
+        logger: Optional[logging.Logger] = None,
+        sltp_manager=None,
+    ):
         self.exchange_registry = exchange_registry
         self.logger = logger or logging.getLogger(__name__)
         self._active_orders: Dict[str, Order] = {}
         self._order_locks: Dict[str, asyncio.Lock] = {}
+        # Интеграция с SL/TP Manager
+        self.sltp_integration = SLTPIntegration(sltp_manager) if sltp_manager else None
 
     async def create_order_from_signal(
         self, signal: Signal, trader_id: str
@@ -166,6 +175,33 @@ class OrderManager:
                 await exchange.initialize()
                 self.logger.info(f"🔗 Подключение к бирже {order.exchange} успешно")
 
+                # ВАЖНО: Устанавливаем плечо перед открытием позиции (как в V2)
+                try:
+                    # Получаем плечо из конфигурации
+                    leverage = float(
+                        self.config.get("trading", {})
+                        .get("orders", {})
+                        .get("default_leverage", 5)
+                    )
+
+                    self.logger.info(
+                        f"⚙️ Устанавливаем плечо {leverage}x для {order.symbol}"
+                    )
+                    leverage_set = await exchange.set_leverage(order.symbol, leverage)
+
+                    if leverage_set:
+                        self.logger.info(
+                            f"✅ Плечо {leverage}x успешно установлено для {order.symbol}"
+                        )
+                    else:
+                        self.logger.warning(
+                            f"⚠️ Не удалось установить плечо для {order.symbol}, продолжаем с текущим"
+                        )
+                except Exception as e:
+                    self.logger.warning(
+                        f"⚠️ Ошибка установки плеча: {e}, продолжаем с текущим плечом"
+                    )
+
                 # Отправляем ордер через place_order
                 # Создаем OrderRequest для Bybit
                 from exchanges.base.order_types import (
@@ -185,6 +221,11 @@ class OrderManager:
                     "sell": ExchangeOrderSide.SELL,
                 }
 
+                # Определяем position_idx для hedge mode
+                # TODO: Загрузить из конфига или определить автоматически
+                position_idx = 1 if order.side.value == "buy" else 2  # Для hedge mode
+                # position_idx = 0  # Для one-way mode
+
                 order_request = OrderRequest(
                     symbol=order.symbol,
                     side=order_side_map.get(order.side.value, ExchangeOrderSide.BUY),
@@ -193,6 +234,16 @@ class OrderManager:
                     ),
                     quantity=order.quantity,
                     price=order.price if order.order_type.value == "limit" else None,
+                    # ВАЖНО: Добавляем SL/TP из ордера
+                    stop_loss=order.stop_loss,
+                    take_profit=order.take_profit,
+                    position_idx=position_idx,  # Для правильного режима позиций
+                    # Дополнительные параметры для Bybit
+                    exchange_params={
+                        "tpslMode": "Full",  # Или "Partial" для частичного закрытия
+                        "tpOrderType": "Market",
+                        "slOrderType": "Market",
+                    },
                 )
 
                 # Отправляем ордер
@@ -295,6 +346,29 @@ class OrderManager:
 
             if new_status == OrderStatus.FILLED:
                 order.filled_at = datetime.utcnow()
+
+                # Создаем SL/TP ордера для исполненной позиции
+                if self.sltp_integration:
+                    try:
+                        # Получаем клиент биржи
+                        exchange = await self.exchange_registry.get_exchange(
+                            order.exchange
+                        )
+                        if exchange:
+                            success = await self.sltp_integration.handle_filled_order(
+                                order, exchange
+                            )
+                            if success:
+                                self.logger.info(
+                                    f"✅ SL/TP ордера созданы для {order.symbol}"
+                                )
+                            else:
+                                self.logger.warning(
+                                    f"⚠️ Не удалось создать SL/TP для {order.symbol}"
+                                )
+                    except Exception as e:
+                        self.logger.error(f"Ошибка создания SL/TP: {e}")
+
                 # Удаляем из активных
                 self._active_orders.pop(order_id, None)
                 self._order_locks.pop(order_id, None)

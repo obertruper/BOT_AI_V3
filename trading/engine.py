@@ -11,7 +11,11 @@ from enum import Enum
 from typing import Any, Dict, Optional, Set
 
 from core.signals.unified_signal_processor import UnifiedSignalProcessor as SignalProcessor
-from database.repositories.signal_repository import SignalRepository
+
+# from database.repositories.signal_repository import SignalRepository  # Старый репозиторий с дублированием
+from database.repositories.signal_repository_fixed import (
+    SignalRepositoryFixed as SignalRepository,  # Исправленный
+)
 from database.repositories.trade_repository import TradeRepository
 from exchanges.exchange_manager import ExchangeManager
 from risk_management.manager import RiskManager
@@ -133,6 +137,22 @@ class TradingEngine:
     async def _initialize_components(self):
         """Инициализация основных компонентов"""
 
+        # Enhanced SL/TP Manager - инициализируем первым
+        try:
+            from core.config.config_manager import ConfigManager
+            from trading.sltp.enhanced_manager import EnhancedSLTPManager
+
+            config_manager = ConfigManager()
+            self.enhanced_sltp_manager = EnhancedSLTPManager(
+                config_manager=config_manager
+            )
+            self.logger.info("Enhanced SL/TP Manager инициализирован")
+        except Exception as e:
+            self.logger.warning(
+                f"Не удалось инициализировать Enhanced SL/TP Manager: {e}"
+            )
+            self.enhanced_sltp_manager = None
+
         # Exchange Registry берем из orchestrator если доступен
         if (
             hasattr(self.orchestrator, "exchange_registry")
@@ -144,9 +164,10 @@ class TradingEngine:
             self.exchange_registry = ExchangeManager(self.config)
             await self.exchange_registry.initialize()
 
-        # Order Manager - создаем первым
+        # Order Manager - создаем с поддержкой SL/TP
         self.order_manager = OrderManager(
             exchange_registry=self.exchange_registry,
+            sltp_manager=self.enhanced_sltp_manager,
         )
 
         # Signal Processor - создаем простой обработчик
@@ -178,23 +199,7 @@ class TradingEngine:
             exchange_registry=self.exchange_registry,
             signal_processor=self.signal_processor,
         )
-
-        # Enhanced SL/TP Manager
-        try:
-            from core.config.config_manager import ConfigManager
-            from trading.sltp.enhanced_manager import EnhancedSLTPManager
-
-            config_manager = ConfigManager()
-            self.enhanced_sltp_manager = EnhancedSLTPManager(
-                config_manager=config_manager,
-                api_client=None,  # Будет устанавливаться для каждой биржи отдельно
-            )
-            self.logger.info("Enhanced SL/TP Manager инициализирован")
-        except Exception as e:
-            self.logger.warning(
-                f"Не удалось инициализировать Enhanced SL/TP Manager: {e}"
-            )
-            self.enhanced_sltp_manager = None
+        await self.strategy_manager.initialize()
 
         self.logger.info("Основные компоненты инициализированы")
 
@@ -269,8 +274,9 @@ class TradingEngine:
         if self.risk_manager and hasattr(self.risk_manager, "health_check"):
             checks.append(("Risk Manager", self.risk_manager.health_check()))
 
-        if self.strategy_manager and hasattr(self.strategy_manager, "health_check"):
-            checks.append(("Strategy Manager", self.strategy_manager.health_check()))
+        # Strategy Manager не имеет метода health_check, пропускаем проверку
+        # if self.strategy_manager:
+        #     self.logger.info("Strategy Manager инициализирован")
 
         for name, check in checks:
             try:
@@ -454,6 +460,20 @@ class TradingEngine:
             #     self.logger.warning(f"Сигнал {signal_id} отклонен по риск-менеджменту")
             #     return
 
+            # КРИТИЧНО: Проверяем существующие позиции перед созданием новых ордеров
+            if await self._has_existing_position(signal.symbol, signal.signal_type):
+                self.logger.info(
+                    f"⚠️ Уже есть позиция {signal.signal_type} для {signal.symbol}, пропускаем сигнал"
+                )
+                return
+
+            # Проверяем активные ордера в том же направлении
+            if await self._has_pending_orders(signal.symbol, signal.signal_type):
+                self.logger.info(
+                    f"⚠️ Уже есть активные ордера {signal.signal_type} для {signal.symbol}, пропускаем сигнал"
+                )
+                return
+
             # Создание ордеров напрямую
             self.logger.info(f"📊 Создаем ордера для сигнала {signal.symbol}")
             orders = await self._create_orders_from_signal(signal)
@@ -482,9 +502,9 @@ class TradingEngine:
                         "symbol": signal.symbol,
                         "exchange": signal.exchange,
                         "signal_type": (
-                            signal.signal_type.value
+                            signal.signal_type.value.upper()
                             if hasattr(signal.signal_type, "value")
-                            else signal.signal_type
+                            else str(signal.signal_type).upper()
                         ),
                         "strength": signal.strength,
                         "confidence": signal.confidence,
@@ -549,6 +569,15 @@ class TradingEngine:
 
                 # Синхронизация позиций с биржами
                 await self.position_manager.sync_positions()
+
+                # ДОБАВЛЕНО: Синхронизация статусов ордеров
+                # Исправляет проблему когда ордера остаются в статусе OPEN
+                if self.order_manager:
+                    try:
+                        await self.order_manager.sync_orders_with_exchange("bybit")
+                        self.logger.debug("Синхронизация ордеров выполнена")
+                    except Exception as e:
+                        self.logger.error(f"Ошибка синхронизации ордеров: {e}")
 
                 # Обновление метрик позиций
                 positions = await self.position_manager.get_all_positions()
@@ -920,7 +949,7 @@ class TradingEngine:
             suggested_price=entry_price,
             suggested_stop_loss=stop_loss,
             suggested_take_profit=take_profit,
-            suggested_position_size=getattr(trading_signal, "position_size", 0.01),
+            suggested_quantity=getattr(trading_signal, "suggested_quantity", 0.01),
             strategy_name=getattr(trading_signal, "strategy_name", "Unknown"),
             signal_metadata={
                 "original_signal_type": signal_type_str,
@@ -955,18 +984,48 @@ class TradingEngine:
                 self.logger.warning(f"Слишком низкая уверенность: {signal.confidence}")
                 return False
 
-            # Проверка stop loss и take profit
-            if signal.suggested_stop_loss >= signal.suggested_price:
-                self.logger.warning(
-                    f"Stop loss ({signal.suggested_stop_loss}) >= цены ({signal.suggested_price})"
-                )
-                return False
+            # Проверка stop loss и take profit в зависимости от направления
+            from database.models.signal import SignalType
 
-            if signal.suggested_take_profit <= signal.suggested_price:
-                self.logger.warning(
-                    f"Take profit ({signal.suggested_take_profit}) <= цены ({signal.suggested_price})"
-                )
-                return False
+            if signal.signal_type == SignalType.LONG:
+                # Для LONG: SL должен быть ниже цены, TP выше цены
+                if (
+                    signal.suggested_stop_loss
+                    and signal.suggested_stop_loss >= signal.suggested_price
+                ):
+                    self.logger.warning(
+                        f"LONG: Stop loss ({signal.suggested_stop_loss}) >= цены ({signal.suggested_price})"
+                    )
+                    return False
+
+                if (
+                    signal.suggested_take_profit
+                    and signal.suggested_take_profit <= signal.suggested_price
+                ):
+                    self.logger.warning(
+                        f"LONG: Take profit ({signal.suggested_take_profit}) <= цены ({signal.suggested_price})"
+                    )
+                    return False
+
+            elif signal.signal_type == SignalType.SHORT:
+                # Для SHORT: SL должен быть выше цены, TP ниже цены
+                if (
+                    signal.suggested_stop_loss
+                    and signal.suggested_stop_loss <= signal.suggested_price
+                ):
+                    self.logger.warning(
+                        f"SHORT: Stop loss ({signal.suggested_stop_loss}) <= цены ({signal.suggested_price})"
+                    )
+                    return False
+
+                if (
+                    signal.suggested_take_profit
+                    and signal.suggested_take_profit >= signal.suggested_price
+                ):
+                    self.logger.warning(
+                        f"SHORT: Take profit ({signal.suggested_take_profit}) >= цены ({signal.suggested_price})"
+                    )
+                    return False
 
             return True
 
@@ -1048,6 +1107,73 @@ class TradingEngine:
             return value
         return (value / step).quantize(Decimal("1"), rounding="ROUND_DOWN") * step
 
+    async def _has_existing_position(self, symbol: str, signal_type) -> bool:
+        """Проверка существования позиции в том же направлении"""
+        try:
+            # Получаем позицию с биржи
+            exchange = await self.exchange_registry.get_exchange("bybit")
+            if not exchange:
+                self.logger.warning("Биржа bybit недоступна для проверки позиций")
+                return False
+
+            position = await exchange.get_position(symbol)
+            if not position or position.size == 0:
+                return False
+
+            # Проверяем направление позиции
+            from database.models.base_models import SignalType
+
+            position_long = position.size > 0
+            signal_long = signal_type in [SignalType.LONG, "LONG", "long", "buy", "BUY"]
+
+            # Если направления совпадают - позиция уже есть
+            if position_long == signal_long:
+                self.logger.info(
+                    f"📍 Найдена существующая позиция {symbol}: "
+                    f"размер={position.size}, направление={'LONG' if position_long else 'SHORT'}"
+                )
+                return True
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Ошибка проверки позиции {symbol}: {e}")
+            return False
+
+    async def _has_pending_orders(self, symbol: str, signal_type) -> bool:
+        """Проверка существования активных ордеров в том же направлении"""
+        try:
+            # Получаем активные ордера с биржи
+            exchange = await self.exchange_registry.get_exchange("bybit")
+            if not exchange:
+                self.logger.warning("Биржа bybit недоступна для проверки ордеров")
+                return False
+
+            orders = await exchange.get_open_orders(symbol)
+            if not orders:
+                return False
+
+            # Проверяем направление ордеров
+            from database.models.base_models import OrderSide, SignalType
+
+            signal_long = signal_type in [SignalType.LONG, "LONG", "long", "buy", "BUY"]
+            target_side = OrderSide.BUY if signal_long else OrderSide.SELL
+
+            for order in orders:
+                # Если есть активный ордер в том же направлении
+                if order.side == target_side:
+                    self.logger.info(
+                        f"📋 Найден активный ордер {symbol}: "
+                        f"{order.side} {order.quantity} @ {order.price}"
+                    )
+                    return True
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Ошибка проверки ордеров {symbol}: {e}")
+            return False
+
     async def _create_orders_from_signal(self, signal):
         """Создание ордеров из сигнала"""
         try:
@@ -1058,7 +1184,7 @@ class TradingEngine:
 
             side = (
                 OrderSide.BUY
-                if signal.signal_type.value in ["long", "buy"]
+                if signal.signal_type.value.lower() in ["long", "buy"]
                 else OrderSide.SELL
             )
 
@@ -1070,28 +1196,54 @@ class TradingEngine:
                 )
                 return []
 
-            # Получаем текущий баланс
-            # TODO: Реально получать баланс с биржи
-            balance = Decimal("167")  # Используем реальный баланс
+            # Получаем минимальный объем ордера в USDT из конфигурации
+            min_order_value_usdt = Decimal(
+                str(self.config.get("trading", {}).get("min_order_value_usdt", 5.0))
+            )
 
-            # Рассчитываем размер позиции (1% от баланса)
-            position_size_usd = balance * Decimal("0.01")  # 1% = $1.67
-            quantity = position_size_usd / Decimal(str(signal.suggested_price))
+            # Получаем дефолтный размер позиции из конфигурации или используем suggested_quantity
+            default_sizes = self.config.get("trading", {}).get(
+                "default_position_sizes", {}
+            )
 
-            # Применяем минимальный размер ордера
+            if signal.symbol in default_sizes:
+                # Используем размер из конфигурации
+                quantity = Decimal(str(default_sizes[signal.symbol]))
+                self.logger.info(
+                    f"Используем размер из конфигурации: {quantity} {signal.symbol}"
+                )
+            elif hasattr(signal, "suggested_quantity") and signal.suggested_quantity:
+                # Используем размер из сигнала
+                quantity = Decimal(str(signal.suggested_quantity))
+                self.logger.info(
+                    f"Используем размер из сигнала: {quantity} {signal.symbol}"
+                )
+            else:
+                # Рассчитываем минимальный размер для $5
+                quantity = min_order_value_usdt / Decimal(str(signal.suggested_price))
+                self.logger.info(
+                    f"Рассчитан минимальный размер для ${min_order_value_usdt}: {quantity} {signal.symbol}"
+                )
+
+            # Проверяем минимальный объем в USDT
+            order_value_usdt = quantity * Decimal(str(signal.suggested_price))
+            if order_value_usdt < min_order_value_usdt:
+                # Увеличиваем до минимального объема
+                quantity = min_order_value_usdt / Decimal(str(signal.suggested_price))
+                order_value_usdt = quantity * Decimal(str(signal.suggested_price))
+                self.logger.info(
+                    f"Размер увеличен для минимального объема ${min_order_value_usdt}: "
+                    f"{quantity} {signal.symbol} (${order_value_usdt:.2f})"
+                )
+
+            # Проверяем минимальный размер ордера биржи
             min_qty = Decimal(str(instrument.min_order_qty))
             if quantity < min_qty:
                 quantity = min_qty
+                order_value_usdt = quantity * Decimal(str(signal.suggested_price))
                 self.logger.info(
-                    f"Размер увеличен до минимального: {min_qty} {signal.symbol}"
-                )
-
-            # Проверяем, что не превышаем 5% от баланса
-            max_position_usd = balance * Decimal("0.05")  # 5% = $8.35
-            if quantity * Decimal(str(signal.suggested_price)) > max_position_usd:
-                quantity = max_position_usd / Decimal(str(signal.suggested_price))
-                self.logger.info(
-                    f"Размер уменьшен до 5% от баланса: {quantity} {signal.symbol}"
+                    f"Размер увеличен до минимального биржи: {min_qty} {signal.symbol} "
+                    f"(${order_value_usdt:.2f})"
                 )
 
             # Округляем до qty_step

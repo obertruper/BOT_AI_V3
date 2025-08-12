@@ -69,13 +69,20 @@ class SignalRepository:
 
     async def save_signal(self, signal) -> None:
         """Сохраняет сигнал в БД (совместимость с V2)"""
-        # Если передан объект Signal, преобразуем в словарь
-        if hasattr(signal, "__dict__") and not isinstance(signal, dict):
-            # Преобразуем объект Signal в словарь
-            signal_dict = {}
-            for key, value in signal.__dict__.items():
-                if not key.startswith("_"):  # Игнорируем приватные атрибуты
-                    signal_dict[key] = value
-            await self.create_signal(signal_dict)
-        else:
-            await self.create_signal(signal)
+        try:
+            # Если передан объект Signal, преобразуем в словарь
+            if hasattr(signal, "__dict__") and not isinstance(signal, dict):
+                # Преобразуем объект Signal в словарь
+                signal_dict = {}
+                for key, value in signal.__dict__.items():
+                    if not key.startswith("_"):  # Игнорируем приватные атрибуты
+                        # Особая обработка для enum signal_type
+                        if key == "signal_type" and hasattr(value, "value"):
+                            signal_dict[key] = value.value.upper()
+                        else:
+                            signal_dict[key] = value
+                await self.create_signal(signal_dict)
+            else:
+                await self.create_signal(signal)
+        except Exception as e:
+            raise DatabaseError(f"Failed to save signal: {e}")

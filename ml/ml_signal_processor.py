@@ -65,7 +65,7 @@ class MLSignalProcessor:
         # Кэш для предсказаний (уменьшаем TTL для более частых обновлений)
         self.prediction_cache = {}
         self.cache_ttl = (
-            300  # 5 минут (было 15 минут) - чтобы предсказания обновлялись чаще
+            60  # 1 минута - для уникальных предсказаний каждый символ/минуту
         )
 
         # Инициализируем калькулятор индикаторов с увеличенным TTL
@@ -78,6 +78,14 @@ class MLSignalProcessor:
 
         # Список активных задач
         self._pending_tasks = set()
+
+        # Статистика разнообразия сигналов
+        self.signal_stats = {
+            "total_signals": 0,
+            "long_signals": 0,
+            "short_signals": 0,
+            "last_warning_time": None,
+        }
 
         logger.info("MLSignalProcessor initialized")
 
@@ -102,16 +110,14 @@ class MLSignalProcessor:
         """
         try:
             # ИСПРАВЛЕНО: Создаем уникальный ключ кэша на основе фактических данных
-            # Используем хэш последних 5 свечей для уникальности
-            if len(ohlcv_data) >= 5:
-                # Берем последние 5 строк и создаем хэш из цен закрытия
-                recent_closes = ohlcv_data["close"].tail(5).values
-                data_hash = hash(tuple(recent_closes.astype(str)))
-                cache_key = f"{exchange}:{symbol}:{data_hash}"
-            else:
-                # Для коротких данных используем все доступные цены
-                data_hash = hash(tuple(ohlcv_data["close"].values.astype(str)))
-                cache_key = f"{exchange}:{symbol}:{data_hash}"
+            # Создаем абсолютно уникальный кэш-ключ для каждого символа
+            # ИСПРАВЛЕНО: Убираем data_hash чтобы каждый символ получал уникальные предсказания
+            from datetime import datetime
+
+            current_minute = datetime.utcnow().strftime("%Y%m%d%H%M")  # До минут
+
+            # Простой ключ: биржа:символ:время - гарантирует уникальность для каждого символа
+            cache_key = f"{exchange}:{symbol}:{current_minute}"
 
             logger.debug(f"Cache key для {symbol}: {cache_key}")
 
@@ -193,9 +199,10 @@ class MLSignalProcessor:
             return None
 
         # Мапим ML сигнал на торговый SignalType
-        if ml_signal_type == "BUY":
+        # ИСПРАВЛЕНО: Модель возвращает "LONG"/"SHORT", не "BUY"/"SELL"
+        if ml_signal_type == "LONG":
             signal_type = SignalType.LONG
-        elif ml_signal_type == "SELL":
+        elif ml_signal_type == "SHORT":
             signal_type = SignalType.SHORT
         else:
             return None
@@ -213,8 +220,8 @@ class MLSignalProcessor:
             symbol=symbol,
             exchange=exchange,
             signal_type=signal_type,
-            strength=strength,  # strength уже числовое значение
-            confidence=confidence,
+            strength=strength,  # Точное значение без округления
+            confidence=confidence,  # Точное значение без округления
             strategy_name="PatchTST_ML",
             suggested_price=current_price,
             suggested_stop_loss=prediction.get("stop_loss"),
@@ -240,7 +247,61 @@ class MLSignalProcessor:
             f"with confidence {confidence:.2f} and strength {strength}"
         )
 
+        # Обновляем статистику и проверяем разнообразие сигналов
+        self._update_signal_diversity_stats(signal_type)
+
         return signal
+
+    def _update_signal_diversity_stats(self, signal_type):
+        """
+        Обновляет статистику разнообразия сигналов и предупреждает о дисбалансе.
+
+        Args:
+            signal_type: Тип сигнала (SignalType.LONG или SignalType.SHORT)
+        """
+        from database.models.base_models import SignalType
+
+        # Обновляем счетчики
+        self.signal_stats["total_signals"] += 1
+        if signal_type == SignalType.LONG:
+            self.signal_stats["long_signals"] += 1
+        elif signal_type == SignalType.SHORT:
+            self.signal_stats["short_signals"] += 1
+
+        # Проверяем разнообразие каждые 10 сигналов
+        if self.signal_stats["total_signals"] % 10 == 0:
+            total = self.signal_stats["total_signals"]
+            long_pct = (self.signal_stats["long_signals"] / total) * 100
+            short_pct = (self.signal_stats["short_signals"] / total) * 100
+
+            # Предупреждение если более 80% сигналов в одном направлении
+            if long_pct > 80:
+                logger.warning(
+                    f"⚠️ ДИСБАЛАНС СИГНАЛОВ: {long_pct:.1f}% LONG, {short_pct:.1f}% SHORT! "
+                    f"Модель может неправильно интерпретировать рынок."
+                )
+            elif short_pct > 80:
+                logger.warning(
+                    f"⚠️ ДИСБАЛАНС СИГНАЛОВ: {short_pct:.1f}% SHORT, {long_pct:.1f}% LONG! "
+                    f"Модель может неправильно интерпретировать рынок."
+                )
+
+            # Критическое предупреждение если 100% в одном направлении
+            if long_pct == 100 or short_pct == 100:
+                logger.critical(
+                    f"🚨 КРИТИЧЕСКИЙ ДИСБАЛАНС: ВСЕ {total} сигналов в одном направлении! "
+                    f"Рекомендуется остановить торговлю и проверить модель."
+                )
+                # Сбрасываем статистику после критического предупреждения
+                self.signal_stats["long_signals"] = 0
+                self.signal_stats["short_signals"] = 0
+                self.signal_stats["total_signals"] = 0
+
+            # Логируем текущий баланс
+            logger.info(
+                f"📊 Баланс сигналов (последние {total}): "
+                f"LONG: {long_pct:.1f}%, SHORT: {short_pct:.1f}%"
+            )
 
     def _check_risk_tolerance(self, risk_level: str) -> bool:
         """
@@ -719,9 +780,25 @@ class MLSignalProcessor:
         """
         try:
             async with get_async_db() as db:
+                # Проверяем, существует ли уже такой сигнал
+                existing = await db.execute(
+                    select(Signal).where(
+                        and_(
+                            Signal.symbol == signal.symbol,
+                            Signal.signal_type == signal.signal_type,
+                            Signal.strength == signal.strength,
+                            Signal.confidence == signal.confidence,
+                        )
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    logger.debug(f"Signal already exists for {signal.symbol}, skipping")
+                    return False
+
                 db.add(signal)
                 await db.commit()
                 self._stats["signals_saved"] += 1
+                logger.info(f"✅ Signal saved for {signal.symbol}")
                 return True
         except Exception as e:
             logger.error(f"Error saving signal: {e}")

@@ -106,6 +106,14 @@ class OrderExecutor:
 
                     self.executed_count += 1
                     logger.info(f"✅ Ордер исполнен: {exchange_order.get('id')}")
+
+                    # Устанавливаем SL/TP сразу после создания ордера
+                    if order.stop_loss or order.take_profit:
+                        try:
+                            await self._set_sltp_for_order(order, exchange)
+                        except Exception as e:
+                            logger.error(f"Ошибка установки SL/TP: {e}")
+
                     return True
                 else:
                     await self._reject_order(order, "Биржа не вернула ID ордера")
@@ -181,6 +189,59 @@ class OrderExecutor:
         except Exception as e:
             logger.error(f"Ошибка проверки баланса: {e}")
             return False
+
+    async def _set_sltp_for_order(self, order: Order, exchange):
+        """Установка SL/TP для созданного ордера"""
+        try:
+            logger.info(
+                f"Устанавливаем SL/TP для {order.symbol}: SL={order.stop_loss}, TP={order.take_profit}"
+            )
+
+            # Получаем клиент биржи напрямую
+            if hasattr(exchange, "client"):
+                client = exchange.client
+            else:
+                client = exchange
+
+            # Определяем positionIdx в зависимости от режима
+            position_idx = 0  # One-way mode по умолчанию
+
+            # Проверяем hedge mode из конфигурации
+            if hasattr(client, "trading_config"):
+                hedge_mode = client.trading_config.get("hedge_mode", False)
+                if hedge_mode:
+                    position_idx = 1 if order.side.value.upper() == "BUY" else 2
+
+            params = {
+                "category": "linear",
+                "symbol": order.symbol,
+                "tpslMode": "Full",
+                "positionIdx": position_idx,
+            }
+
+            if order.stop_loss:
+                params["stopLoss"] = str(order.stop_loss)
+
+            if order.take_profit:
+                params["takeProfit"] = str(order.take_profit)
+
+            logger.info(f"Отправляем запрос set_trading_stop с параметрами: {params}")
+
+            # Делаем прямой API запрос
+            response = await client._make_request(
+                "POST", "/v5/position/trading-stop", params, auth=True
+            )
+
+            if response.get("retCode") == 0:
+                logger.info(f"✅ SL/TP успешно установлены для {order.symbol}")
+            else:
+                logger.error(f"❌ Ошибка установки SL/TP: {response.get('retMsg')}")
+
+        except Exception as e:
+            logger.error(f"Ошибка при установке SL/TP: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
 
     async def _reject_order(self, order: Order, reason: str):
         """Отклоняет ордер с указанием причины"""

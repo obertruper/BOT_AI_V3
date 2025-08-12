@@ -2,121 +2,101 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 🚨 КРИТИЧЕСКИ ВАЖНО - ПРОВЕРЯЙ ПЕРЕД КАЖДЫМ ДЕЙСТВИЕМ
+## 🚨 CRITICAL - Always Check Before Actions
 
-1. **PostgreSQL порт 5555** - НЕ 5432! Всегда: `PGPORT=5555`
-2. **Активируй venv первым**: `source venv/bin/activate` перед ЛЮБОЙ командой
-3. **API ключи ТОЛЬКО в .env** - проверяй перед коммитом: `git diff --staged | grep -i "api_key\|secret"`
-4. **Только async/await код** - используй `async def`, `await`, `asyncio`
-5. **TodoWrite обязателен** для задач с 3+ шагами
+1. **PostgreSQL port 5555** - NOT 5432! Always: `PGPORT=5555`
+2. **Activate venv first**: `source venv/bin/activate` before ANY command
+3. **API keys ONLY in .env** - check before commit: `git diff --staged | grep -i "api_key\|secret"`
+4. **Async/await everywhere** - use `async def`, `await`, `asyncio` for all I/O
+5. **TodoWrite required** for tasks with 3+ steps
 
-## О проекте
+## Project Overview
 
-BOT Trading v3 - высокопроизводительная платформа алгоритмической торговли криптовалютами с ML-предсказаниями и мульти-биржевой поддержкой.
+BOT_AI_V3 - High-performance algorithmic cryptocurrency trading platform with ML predictions and multi-exchange support.
 
-**Масштаб**: 673 файла, 207K+ строк, Python 3.8+, PostgreSQL 15+, 7 бирж, 50+ торговых пар
+- **Scale**: 673 files, 207K+ lines, Python 3.8+, PostgreSQL 15+
+- **Exchanges**: 7 exchanges (Bybit, Binance, OKX, Gate.io, KuCoin, HTX, BingX)
+- **Trading**: 50+ pairs, hedge mode, 5x leverage, SL/TP integrated
+- **ML**: UnifiedPatchTST model, 240+ features, GPU optimized (RTX 5090)
 
-**🚀 Главная точка входа**: `python3 unified_launcher.py` (управляет всеми компонентами)
-
-## 🏗️ Архитектура (КРИТИЧНО для понимания)
-
-### Поток выполнения торговых операций
+## Architecture & Core Flow
 
 ```
-1. UnifiedLauncher запускает все процессы
-2. SystemOrchestrator координирует компоненты
-3. Стратегии генерируют сигналы → TradingEngine обрабатывает
-4. RiskManager проверяет → OrderManager создает ордера
-5. ExecutionEngine исполняет → Биржи получают команды
-6. Результаты → База данных (PostgreSQL:5555)
+Entry Point: unified_launcher.py
+     ↓
+1. UnifiedLauncher starts all processes
+2. SystemOrchestrator coordinates components
+3. Strategies generate signals → TradingEngine processes
+4. RiskManager validates → OrderManager creates orders
+5. ExecutionEngine executes → Exchanges receive commands
+6. Results → PostgreSQL:5555 database
 ```
 
-### 5 ключевых файлов для начала работы
+**Key Files:**
 
-| Файл | Назначение | Строка входа |
-|------|------------|--------------|
-| `unified_launcher.py` | Запуск всей системы | :52 class UnifiedLauncher |
-| `main.py` | Торговое ядро | :32 class BotAIV3Application |
-| `core/system/orchestrator.py` | Координация | :44 class SystemOrchestrator |
-| `trading/engine.py` | Торговая логика | :597 class TradingEngine |
-| `database/connections/postgres.py` | БД подключение | Async/sync pools |
+- `unified_launcher.py:52` - System launcher
+- `main.py:33` - Trading core application
+- `core/system/orchestrator.py:44` - Component coordination
+- `trading/engine.py:597` - Trading logic
+- `ml/logic/patchtst_model.py` - ML model architecture
 
-### Асинхронная архитектура
+## Essential Commands
 
-- **Все I/O операции async**: биржи, БД, файлы
-- **Пулы подключений**: asyncpg для PostgreSQL, aiohttp для API
-- **Graceful shutdown**: сохранение состояния при остановке
-
-## 🛠️ Команды для работы
-
-### Первый запуск (3 минуты)
+### Quick Start
 
 ```bash
-# 1. Подготовка окружения
 cd BOT_AI_V3
-python3 -m venv venv && source venv/bin/activate
+source venv/bin/activate  # ALWAYS FIRST!
 pip install -r requirements.txt
-
-# 2. Конфигурация
-cp .env.example .env
-# Редактируй .env - добавь хотя бы один API ключ биржи
-
-# 3. БД уже настроена (PostgreSQL:5555, user: obertruper)
-alembic upgrade head
-
-# 4. Запуск системы
-python3 unified_launcher.py  # Запустит все компоненты
+cp .env.example .env     # Add exchange API keys
+alembic upgrade head     # Setup database
+python3 unified_launcher.py  # Start everything
 ```
 
-### Режимы запуска unified_launcher.py
+### Launch Modes
 
 ```bash
-python3 unified_launcher.py              # Все компоненты (trading + API + frontend)
-python3 unified_launcher.py --mode=core  # Только торговля
-python3 unified_launcher.py --mode=api   # Только API/веб
-python3 unified_launcher.py --mode=ml    # Торговля + ML
-python3 unified_launcher.py --status     # Проверка статуса
-python3 unified_launcher.py --logs       # Следить за логами
+python3 unified_launcher.py              # Full system (trading + API + frontend)
+python3 unified_launcher.py --mode=core  # Trading only
+python3 unified_launcher.py --mode=api   # API/web only
+python3 unified_launcher.py --mode=ml    # Trading + ML predictions
+python3 unified_launcher.py --status     # Check system status
+python3 unified_launcher.py --logs       # Follow logs
 ```
 
-### Тестирование
+### Testing
 
 ```bash
-# Быстрый тест конкретной функции
+# Quick test specific function
 pytest tests/unit/test_trading_engine.py -k "test_signal_processing" -v
 
-# Все unit тесты с покрытием
+# All unit tests with coverage
 pytest tests/unit/ --cov=. --cov-report=term-missing
 
-# Запуск конкретного теста
-pytest path/to/test.py::TestClass::test_method
+# Integration tests
+pytest tests/integration/ -v
 ```
 
-### Качество кода - ЗАПУСКАЙ ПЕРЕД КОММИТОМ
+### Code Quality (RUN BEFORE COMMIT)
 
 ```bash
-# 1. Форматирование (обязательно)
-black . && ruff check --fix .
-
-# 2. Проверка типов
-mypy . --ignore-missing-imports
-
-# 3. Поиск секретов
-git diff --staged | grep -i "api_key\|secret\|password"
+black . && ruff check --fix .           # Format code
+mypy . --ignore-missing-imports          # Type checking
+git diff --staged | grep -i "api_key\|secret\|password"  # Check for secrets
 ```
 
-### База данных PostgreSQL:5555
+### Database Operations
 
 ```bash
-# Быстрая проверка подключения
+# Test connection (port 5555!)
 psql -p 5555 -U obertruper -d bot_trading_v3 -c "SELECT version();"
 
-# Миграции Alembic
-alembic upgrade head                          # Применить все
-alembic revision --autogenerate -m "add_xxx"  # Новая миграция
-alembic downgrade -1                          # Откатить последнюю
+# Alembic migrations
+alembic upgrade head                          # Apply all
+alembic revision --autogenerate -m "desc"     # Create new
+alembic downgrade -1                          # Rollback last
 
-# Прямая работа с БД через asyncpg
+# Direct async query
 python3 -c "
 from database.connections.postgres import AsyncPGPool
 import asyncio
@@ -124,164 +104,89 @@ asyncio.run(AsyncPGPool.fetch('SELECT COUNT(*) FROM orders'))
 "
 ```
 
-### Отладка проблем
+### Debugging & Monitoring
 
 ```bash
-# Смотреть логи в реальном времени
-tail -f data/logs/trading.log | grep ERROR
+# Real-time logs
+tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep ERROR
 
-# Проверить использование портов
+# Check ports
 lsof -i :8080  # API
 lsof -i :5173  # Frontend
 lsof -i :5555  # PostgreSQL
 
-# Мониторинг производительности
-htop -p $(pgrep -f "python.*main.py")
+# Monitor processes
+htop -p $(pgrep -f "python.*unified_launcher")
+
+# Quick monitoring scripts
+./start_with_logs.sh   # Start with log monitoring
+./stop_all.sh          # Stop all components
 ```
 
-## 🚀 Unified Launcher
+## ML Trading System
 
-`unified_launcher.py` управляет всеми компонентами системы с автоперезапуском и health checks.
-
-**Особенности**: Process isolation, автоперезапуск (5 попыток), мониторинг ресурсов, правильный venv
-
-**URLs после запуска**:
-
-- Frontend: <http://localhost:5173>
-- API: <http://localhost:8080>
-- API Docs: <http://localhost:8080/api/docs>
-
-### 🧠 ML Trading Flow (РАБОТАЕТ и ИСПРАВЛЕН!)
+### Signal Flow
 
 ```
-1. ML Manager загружает UnifiedPatchTST модель (GPU RTX 5090)
-2. ML Signal Processor генерирует УНИКАЛЬНЫЕ сигналы каждую минуту
-3. Signal Scheduler отправляет в AI Signal Generator
-4. AI Signal Generator эмитит в Trading Engine
-5. Trading Engine конвертирует и добавляет в очередь
-6. Signal Processor создает ордера с risk management
-7. Order Manager отправляет на биржи
+ML Manager → UnifiedPatchTST model (GPU)
+    ↓
+ML Signal Processor (unique predictions/minute)
+    ↓
+Signal Scheduler → AI Signal Generator
+    ↓
+Trading Engine → Signal queue
+    ↓
+Order Manager → Exchanges
 ```
 
-**Тестирование ML**:
-
-- Проверка flow: `python test_ml_flow_simple.py`
-- Проверка уникальности: `python debug_unique_predictions.py`
-- Мониторинг: `tail -f ./data/logs/bot_trading_*.log | grep -E "signal_type|returns_15m"`
-
-## 📡 MCP серверы и Claude Code хуки
-
-### Активные MCP серверы
-
-- **filesystem** - работа с файлами проекта
-- **postgres** - БД на порту 5555
-- **puppeteer** - браузерная автоматизация
-- **sequential-thinking** - сложные рассуждения
-- **memory** - контекст между сессиями
-- **github** - работа с репозиторием
-- **sonarqube** - качество кода
-
-### Claude Code хуки (.claude/hooks.json)
-
-- **PreToolUse**: защита .env, логирование bash команд
-- **PostToolUse**: автоформатирование (black, ruff), напоминания о тестах
+### ML Testing & Monitoring
 
 ```bash
-claude-code mcp list      # Проверить MCP серверы
-claude-code test-hooks    # Тестировать хуки
+python3 test_ml_uniqueness.py   # Verify unique predictions
+tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep -E "returns_15m"
+python3 quick_uniqueness_check.py  # Analyze predictions
 ```
 
-## 💡 Архитектурные принципы
+## Configuration Files
 
-1. **Async-first**: Все I/O операции через async/await
-2. **Fail-safe**: Graceful degradation при сбоях бирж
-3. **Security-by-default**: Секреты только в .env, валидация входных данных
-4. **Observable**: Структурированные логи (structlog), Prometheus метрики
-5. **Testable**: Dependency injection, моки для внешних сервисов
+### Core Configs
 
-## 🔧 Технологический стек
+- `config/trading.yaml` - Trading parameters (leverage, risk, SL/TP)
+- `config/system.yaml` - System settings (timeouts, intervals)
+- `config/ml/ml_config.yaml` - ML model parameters
 
-**Backend**: Python 3.8+, FastAPI, asyncpg, SQLAlchemy 2.0, ccxt (7 бирж), aiohttp, Redis
-**ML/AI**: PyTorch (UnifiedPatchTST), XGBoost, anthropic SDK, cross-verification (3 AI)
-**Monitoring**: Prometheus:9090, Grafana:3000, Sentry, structlog
-**Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Zustand
-**Performance**: 1000+ сигналов/сек, <50ms API, 240+ ML признаков
+### Environment Variables (.env)
 
-## 🔥 Частые проблемы
+```bash
+# PostgreSQL (CRITICAL: port 5555!)
+PGPORT=5555
+PGUSER=obertruper
+PGDATABASE=bot_trading_v3
 
-**Import errors**: `source venv/bin/activate` + `pip install -r requirements.txt`
+# Exchange API (at least one required)
+BYBIT_API_KEY=xxx
+BYBIT_API_SECRET=xxx
 
-**DB connection failed**: Проверь PostgreSQL на 5555: `psql -p 5555 -U obertruper -d bot_trading_v3`
-
-**WebSocket disconnects**: Увеличь таймауты в `config/system.yaml`
-
-**"position idx not match position mode"**: Несоответствие настроек hedge mode
-
-- Проверь `trading.hedge_mode` в `config/system.yaml` (должно быть `true` для hedge mode)
-- Убедись что на бирже включен hedge mode (не one-way mode)
-- Position indices: 0 = one-way, 1 = buy/long, 2 = sell/short
-- Решение: установи `hedge_mode: true` и перезапусти систему
-
-**ML выдает одинаковые предсказания**: Проблема с кэшированием
-
-- Перезапусти систему: `pkill -f "python.*unified_launcher" && python3 unified_launcher.py`
-- Проверь уникальность: `tail -f ./data/logs/bot_trading_*.log | grep "returns_15m" | uniq`
-- Отладка: `python3 debug_unique_predictions.py`
-
-## ⚡ Правила разработки
-
-1. **Обязательно async/await** для всех I/O операций
-2. **Type hints везде**: `def process_signal(signal: Signal) -> Order:`
-3. **Тесты для новых функций**: минимум 80% покрытие
-4. **Перед коммитом**: `black . && ruff check --fix . && mypy .`
-5. **AI агенты**: используй для code review и генерации тестов
-
-## 📁 Структура проекта
-
+# Trading defaults
+DEFAULT_LEVERAGE=5
+MAX_POSITION_SIZE=1000
+RISK_LIMIT_PERCENTAGE=2
 ```
-BOT_AI_V3/
-├── unified_launcher.py    # 🚀 Главная точка входа
-├── main.py               # Торговое ядро
-├── .env                  # Секреты (НЕ коммитить!)
-├── config/               # YAML конфигурации
-│   ├── ml/ml_config.yaml # ML параметры (240+ features)
-│   └── system.yaml       # Системные настройки
-├── core/                 # Основная бизнес-логика
-│   └── system/          # orchestrator.py, process_manager.py
-├── trading/             # Торговая логика
-│   └── engine.py        # TradingEngine (главный класс)
-├── strategies/          # Торговые стратегии
-├── exchanges/           # Интеграции с биржами (7 бирж)
-├── ml/                  # ML компоненты
-│   └── logic/          # patchtst_model.py, feature_engineering.py
-├── database/            # БД слой
-│   └── connections/    # postgres.py (async/sync pools)
-├── web/                 # API и Frontend
-├── data/               # Runtime данные
-│   └── logs/          # trading.log, error.log
-└── tests/              # Тесты (pytest)
 
-## 🔥 Частые проблемы
+## Database Schema
 
-**Import errors**: `source venv/bin/activate` + `pip install -r requirements.txt`
+### Main Tables
 
-**DB connection failed**: Проверь PostgreSQL на 5555: `psql -p 5555 -U obertruper -d bot_trading_v3`
+- `orders` - Order states (pending, open, filled, cancelled)
+- `trades` - Executed trades with PnL
+- `signals` - Trading signals from strategies/ML
+- `raw_market_data` - OHLCV candle data
+- `processed_market_data` - ML features (240+ indicators)
 
-**WebSocket disconnects**: Увеличь таймауты в `config/system.yaml`
-
-## 💾 База данных
-
-### Основные таблицы
-- **orders**: статусы (pending, open, filled, cancelled)
-- **trades**: исполненные сделки с PnL
-- **signals**: торговые сигналы
-- **raw_market_data**: OHLCV данные
-- **processed_market_data**: ML features (240+)
-
-### Примеры работы с БД
+### Connection Examples
 
 ```python
-# Async подключение (предпочтительно)
+# Async (preferred)
 from database.connections.postgres import AsyncPGPool
 trades = await AsyncPGPool.fetch("SELECT * FROM trades WHERE symbol=$1", "BTCUSDT")
 
@@ -291,95 +196,89 @@ async with get_async_db() as db:
     result = await db.execute(select(Order).where(Order.status == "open"))
 ```
 
-## 🔑 Переменные окружения (.env)
+## Development Standards
+
+### Code Style
+
+- **Async-first**: All I/O operations must be async
+- **Type hints**: Required for all functions
+- **Docstrings**: Google style for public methods
+- **Imports**: Absolute paths from project root
+- **Testing**: 80% coverage minimum for new code
+
+### Pre-commit Checklist
+
+1. `source venv/bin/activate`
+2. `black . && ruff check --fix .`
+3. `mypy . --ignore-missing-imports`
+4. `pytest tests/unit/ -v`
+5. Check for secrets: `git diff --staged | grep -i "api_key\|secret"`
+
+## Common Issues & Fixes
+
+### Import Errors
 
 ```bash
-# PostgreSQL (КРИТИЧНО: порт 5555!)
-PGPORT=5555
-PGUSER=obertruper
-PGDATABASE=bot_trading_v3
-
-# Минимум одна биржа для работы
-BYBIT_API_KEY=xxx
-BYBIT_API_SECRET=xxx
-
-# AI (опционально)
-CLAUDE_API_KEY=xxx
-GITHUB_TOKEN=xxx  # Для MCP
-
-# Торговые настройки
-DEFAULT_LEVERAGE=1
-MAX_POSITION_SIZE=1000
-RISK_LIMIT_PERCENTAGE=2
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## 🧠 ML система (UnifiedPatchTST)
-
-**Модель**: PyTorch Transformer, 240 входов → 20 выходов (направления, уровни, риски)
-**Контекст**: 96 точек (24 часа при 15-мин интервалах)
-**Признаки**: 240+ (технические индикаторы, микроструктура, временные)
-**Производительность**: F1=0.414, предсказания каждую минуту для 50+ пар
-
-### Ключевые ML файлы
-
-- `ml/logic/patchtst_model.py` - архитектура модели
-- `ml/logic/feature_engineering.py` - генерация 240+ признаков
-- `config/ml/ml_config.yaml` - параметры обучения и торговли
-- `docs/ML_SIGNAL_EVALUATION_SYSTEM.md` - 📚 подробное описание системы оценки
-- `docs/ML_TUNING_GUIDE.md` - 🎛️ руководство по настройке параметров
-
-### Запуск ML торговли
+### DB Connection Failed
 
 ```bash
-python3 unified_launcher.py --mode=ml  # Торговля с ML
+# Check PostgreSQL on port 5555
+psql -p 5555 -U obertruper -d bot_trading_v3
 ```
 
-## 🤖 Работа с Claude Code агентами
+### ML Predictions Not Unique
 
-### ✅ ML интеграция ЗАВЕРШЕНА и ИСПРАВЛЕНА
+- Check caching in `ml/ml_signal_processor.py`
+- Cache TTL should be 5 minutes max
+- Verify data hash in cache key
 
-Успешно реализована полная ML система генерации торговых сигналов:
+### Position/Order Issues
 
-- ✅ UnifiedPatchTST модель с GPU оптимизацией (RTX 5090)
-- ✅ Feature Engineering с 240+ индикаторами real-time
-- ✅ Signal flow: ML → AISignalGenerator → TradingEngine → Orders
-- ✅ Thread-safe репозитории (SignalRepository, TradeRepository)
-- ✅ Автоматическая генерация сигналов каждую минуту
-- ✅ Risk management интегрирован в создание ордеров
-- ✅ **ИСПРАВЛЕНО (08.11.2025)**: Уникальные предсказания для каждой криптовалюты
-  - Исправлено кэширование в `ml_signal_processor.py`
-  - Добавлен хэш данных в ключ кэша
-  - TTL кэша уменьшен с 15 до 5 минут
-  - Теперь каждая монета получает индивидуальные предсказания
+- Verify hedge mode: `python3 utils/checks/check_all_positions.py`
+- Check leverage (should be 5x)
+- Ensure SL/TP passed during order creation
 
-### Использование агентов через Task tool
+## Service URLs
 
-Claude Code автоматически выберет нужного агента на основе контекста. Используй Task tool для сложных задач:
+- **Frontend**: <http://localhost:5173>
+- **API**: <http://localhost:8080>
+- **API Docs**: <http://localhost:8080/api/docs>
+- **Prometheus**: <http://localhost:9090>
+- **Grafana**: <http://localhost:3000>
 
-```python
-# Пример вызова агента
-Task(
-    description="Оптимизировать ML торговлю",
-    prompt="Улучши производительность ML предсказаний для 50+ торговых пар",
-    subagent_type="general-purpose"  # Всегда используй general-purpose
-)
+## Project Structure
+
+```
+BOT_AI_V3/
+├── unified_launcher.py    # Main entry point
+├── main.py               # Trading core
+├── .env                  # Secrets (NEVER commit)
+├── config/               # YAML configurations
+├── core/                 # Core business logic
+│   └── system/          # Orchestrator, process manager
+├── trading/             # Trading engine & logic
+├── exchanges/           # Exchange integrations (7)
+├── ml/                  # ML components
+│   └── logic/          # Model & feature engineering
+├── database/            # DB layer
+│   └── connections/    # Async/sync pools
+├── web/                 # API & Frontend
+├── tests/              # Unit & integration tests
+├── scripts/            # Utility scripts
+│   └── deployment/    # Deployment scripts
+├── utils/              # Helper utilities
+│   ├── checks/        # System checks
+│   └── fixes/         # Fix scripts
+└── data/              # Runtime data
+    └── logs/         # Log files
 ```
 
-### Доступные специализированные агенты
+## Version & Status
 
-**Торговля**: trading-core-expert, strategy-optimizer, risk-analyzer, exchange-specialist
-**Разработка**: code-architect, feature-developer, debug-specialist, refactor-expert
-**Инфраструктура**: database-architect, performance-tuner, security-guardian, api-developer
-**ML/AI**: ml-optimizer, test-architect, docs-maintainer, agent-manager
-
-Агенты автоматически используют TodoWrite для планирования и интегрированы с MCP хуками.
-
-## 📊 Версия и статус
-
-**Версия**: 3.0.0-beta
-**Статус**: Active Development - ML интеграция завершена 🎉
-**Последнее обновление**: 8 августа 2025
-
----
-
-*Подробности реализации и исторические изменения см. в документации проекта*
+- **Version**: 3.0.0
+- **Status**: Production Ready
+- **Last Updated**: January 11, 2025

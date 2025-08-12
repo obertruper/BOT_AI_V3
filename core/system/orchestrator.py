@@ -68,6 +68,7 @@ class SystemOrchestrator:
         self.ai_signal_generator = None  # AI генератор сигналов
         self.signal_scheduler = None  # ML Signal Scheduler для real-time генерации
         self.data_update_service = None  # Служба автообновления данных
+        self.data_manager = None  # Менеджер обновления данных
 
         # TODO: Эти компоненты будут добавлены в следующих этапах
         self.system_monitor = None  # Инициализируем как None
@@ -181,7 +182,10 @@ class SystemOrchestrator:
             # Инициализация AI Signal Generator
             await self._initialize_ai_signal_generator()
 
-            # Инициализация Data Update Service
+            # Инициализация Data Manager (основной)
+            await self._initialize_data_manager()
+
+            # Инициализация Data Update Service (legacy)
             await self._initialize_data_update_service()
 
             # Инициализация Data Maintenance Service (legacy)
@@ -251,7 +255,15 @@ class SystemOrchestrator:
                     "🤖 ML Signal Scheduler запущен - генерация сигналов каждую минуту"
                 )
 
-            # Запуск Data Update Service
+            # Запуск Data Manager для автообновления данных
+            if self.data_manager:
+                await self.data_manager.start()
+                self.logger.info(
+                    "🔄 Data Manager запущен - автоматическое обновление данных каждые 15 минут"
+                )
+                self.active_components.add("data_manager")
+
+            # Запуск Data Update Service (legacy)
             if self.data_update_service:
                 await self.data_update_service.start()
                 self.logger.info(
@@ -312,6 +324,11 @@ class SystemOrchestrator:
             if self.signal_scheduler:
                 await self.signal_scheduler.stop()
                 self.active_components.discard("signal_scheduler")
+
+            # Остановка Data Manager
+            if self.data_manager:
+                await self.data_manager.stop()
+                self.active_components.discard("data_manager")
 
             # Остановка Data Update Service
             if self.data_update_service:
@@ -736,8 +753,25 @@ class SystemOrchestrator:
             self.logger.warning(f"⚠️ ML Signal Scheduler не инициализирован: {e}")
             # Не прерываем инициализацию, так как это не критичный компонент
 
+    async def _initialize_data_manager(self) -> None:
+        """Инициализация менеджера обновления данных"""
+        try:
+            # from core.system.data_manager import DataManager  # Старый менеджер
+            from core.system.smart_data_manager import (
+                SmartDataManager as DataManager,  # Используем оптимизированный
+            )
+
+            self.data_manager = DataManager(self.config_manager)
+
+            self.active_components.add("data_manager")
+            self.logger.info("✅ Data Manager инициализирован")
+
+        except Exception as e:
+            self.failed_components.add("data_manager")
+            self.logger.warning(f"⚠️ Data Manager не инициализирован: {e}")
+
     async def _initialize_data_update_service(self) -> None:
-        """Инициализация службы автообновления данных"""
+        """Инициализация службы автообновления данных (legacy)"""
         try:
             from data.data_update_service import DataUpdateService
 

@@ -96,5 +96,34 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
     return logger
 
 
+def setup_risk_management_logger() -> logging.Logger:
+    """Настройка логгера для системы управления рисками"""
+    logger = logging.getLogger("risk_management")
+
+    if not logger.handlers:
+        logger.setLevel(logging.DEBUG)
+
+        # Создаем форматтер с эмодзи и цветами
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - 🛡️ %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+
+        # Файловый обработчик
+        file_handler = logging.FileHandler("logs/risk_management.log")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+
+        # Консольный обработчик
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+
+    return logger
+
+
 # Создаем основной логгер для модуля
 logger = setup_logger(__name__)

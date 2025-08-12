@@ -31,9 +31,9 @@ from database.connections import Base
 class MarketType(enum.Enum):
     """Типы рынков"""
 
-    SPOT = "spot"
-    FUTURES = "futures"
-    PERP = "perpetual"
+    SPOT = "SPOT"
+    FUTURES = "FUTURES"
+    PERP = "PERP"
 
 
 class IntervalType(enum.Enum):
@@ -73,7 +73,9 @@ class RawMarketData(Base):
 
     # Метаданные
     interval_minutes = Column(Integer, nullable=False, default=15)
-    market_type = Column(Enum(MarketType), default=MarketType.SPOT)
+    market_type = Column(
+        Enum(MarketType), default=MarketType.FUTURES
+    )  # Торгуем на фьючерсах
     exchange = Column(String(50), default="bybit")
 
     # Дополнительные поля для futures

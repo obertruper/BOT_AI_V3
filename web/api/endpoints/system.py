@@ -52,6 +52,12 @@ class SystemConfig(BaseModel):
     risk_management: Dict[str, Any]
 
 
+class SystemConfigUpdate(BaseModel):
+    """Запрос на обновление системной конфигурации (плоский верхний уровень system)"""
+
+    updates: Dict[str, Any]
+
+
 @router.get("/status", response_model=SystemStatus)
 async def get_system_status(
     orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
@@ -153,6 +159,74 @@ async def get_system_config(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка получения конфигурации: {str(e)}",
         )
+
+
+@router.post("/config/update")
+async def update_system_config(
+    request: SystemConfigUpdate,
+    config_manager: ConfigManager = Depends(get_config_manager),
+) -> Dict[str, Any]:
+    """
+    Обновить часть системной конфигурации (раздел system) и сохранить изменения.
+
+    Body:
+        {
+          "updates": {"web_interface": {"host": "0.0.0.0"}, "system": {"environment": "development"}}
+        }
+
+    Примечание: обновление плоское (только верхний уровень system). Для вложенных
+    структур передавайте их целиком.
+    """
+    try:
+        new_config = config_manager.update_system_config(request.updates)
+        return {
+            "success": True,
+            "data": new_config,
+            "timestamp": int(datetime.now().timestamp()),
+        }
+    except Exception as e:
+        logger.error(f"Ошибка обновления системной конфигурации: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": int(datetime.now().timestamp()),
+        }
+
+
+@router.get("/config/raw")
+async def get_full_config(
+    config_manager: ConfigManager = Depends(get_config_manager),
+) -> Dict[str, Any]:
+    """Получить всю конфигурацию (без фильтрации), для админских нужд UI."""
+    try:
+        cfg = config_manager.get_config()
+
+        # Убираем секреты если встречаются типичные ключи
+        def _sanitize(d: Dict[str, Any]) -> Dict[str, Any]:
+            redacted = {}
+            for k, v in d.items():
+                lk = k.lower()
+                if any(s in lk for s in ["secret", "api_key", "password", "token"]):
+                    redacted[k] = "***"
+                elif isinstance(v, dict):
+                    redacted[k] = _sanitize(v)
+                else:
+                    redacted[k] = v
+            return redacted
+
+        safe_cfg = _sanitize(cfg if isinstance(cfg, dict) else {})
+        return {
+            "success": True,
+            "data": safe_cfg,
+            "timestamp": int(datetime.now().timestamp()),
+        }
+    except Exception as e:
+        logger.error(f"Ошибка получения полной конфигурации: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": int(datetime.now().timestamp()),
+        }
 
 
 @router.post("/restart")

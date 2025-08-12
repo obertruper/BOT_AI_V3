@@ -108,7 +108,10 @@ class APIClient {
 
   // Методы для работы с позициями
   async getPositions(traderId?: string): Promise<ApiResponse<Position[]>> {
-    const endpoint = traderId ? `/traders/${traderId}/positions` : '/positions';
+    // Используем query-параметр trader_id, так как сервер реализует /api/positions
+    const params = new URLSearchParams();
+    if (traderId) { params.append('trader_id', traderId); }
+    const endpoint = `/positions${params.toString() ? `?${params.toString()}` : ''}`;
     return this.request<Position[]>(endpoint);
   }
 
@@ -156,8 +159,8 @@ class APIClient {
   // Методы для работы со статистикой
   async getTradingStats(traderId?: string, period?: string): Promise<ApiResponse<TradingStats>> {
     const params = new URLSearchParams();
-    if (traderId) {params.append('trader_id', traderId);}
-    if (period) {params.append('period', period);}
+    if (traderId) { params.append('trader_id', traderId); }
+    if (period) { params.append('period', period); }
 
     const query = params.toString();
     const endpoint = `/stats/trading${query ? `?${query}` : ''}`;
@@ -195,8 +198,8 @@ class APIClient {
   // Методы для логов
   async getLogs(lines?: number, filter?: string): Promise<ApiResponse<string[]>> {
     const params = new URLSearchParams();
-    if (lines) {params.append('lines', lines.toString());}
-    if (filter) {params.append('filter', filter);}
+    if (lines) { params.append('lines', lines.toString()); }
+    if (filter) { params.append('filter', filter); }
 
     const query = params.toString();
     const endpoint = `/logs${query ? `?${query}` : ''}`;

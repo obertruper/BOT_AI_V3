@@ -40,20 +40,28 @@ ASYNCPG_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@localhost:{DB_PORT}/{DB_NAM
 # Базовый класс для моделей
 Base = declarative_base()
 
-# Синхронный движок и сессии
+# Синхронный движок и сессии с оптимизированным пулом
 engine = create_engine(
     SYNC_DATABASE_URL,
-    pool_size=20,
-    max_overflow=0,
+    pool_size=10,  # Уменьшаем размер пула для избежания "remaining connection slots"
+    max_overflow=5,  # Разрешаем немного overflow
+    pool_timeout=30,  # Таймаут ожидания соединения
+    pool_recycle=3600,  # Переиспользование соединений каждый час
     pool_pre_ping=True,  # Проверка соединения перед использованием
     echo=False,  # Установите True для отладки SQL запросов
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Асинхронный движок и сессии
+# Асинхронный движок и сессии с оптимизированным пулом
 async_engine = create_async_engine(
-    ASYNC_DATABASE_URL, pool_size=20, max_overflow=0, pool_pre_ping=True, echo=False
+    ASYNC_DATABASE_URL,
+    pool_size=10,  # Уменьшаем размер пула
+    max_overflow=5,  # Разрешаем немного overflow
+    pool_timeout=30,  # Таймаут ожидания соединения
+    pool_recycle=3600,  # Переиспользование соединений каждый час
+    pool_pre_ping=True,
+    echo=False,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -107,11 +115,28 @@ class AsyncPGPool:
     _pool: Optional[asyncpg.Pool] = None
 
     @classmethod
-    async def get_pool(cls) -> asyncpg.Pool:
-        """Получить или создать пул соединений asyncpg"""
+    async def init_pool(cls) -> asyncpg.Pool:
+        """Инициализировать пул соединений asyncpg с оптимизированными параметрами"""
         if cls._pool is None:
             cls._pool = await asyncpg.create_pool(
-                ASYNCPG_URL, min_size=10, max_size=20, command_timeout=60
+                ASYNCPG_URL,
+                min_size=5,  # Уменьшаем минимальный размер
+                max_size=10,  # Уменьшаем максимальный размер для избежания "remaining connection slots"
+                max_inactive_connection_lifetime=300,  # Закрываем неактивные соединения через 5 минут
+                command_timeout=60,
+            )
+        return cls._pool
+
+    @classmethod
+    async def get_pool(cls) -> asyncpg.Pool:
+        """Получить или создать пул соединений asyncpg с оптимизированными параметрами"""
+        if cls._pool is None:
+            cls._pool = await asyncpg.create_pool(
+                ASYNCPG_URL,
+                min_size=5,  # Уменьшаем минимальный размер
+                max_size=10,  # Уменьшаем максимальный размер
+                max_inactive_connection_lifetime=300,  # Закрываем неактивные соединения через 5 минут
+                command_timeout=60,
             )
         return cls._pool
 

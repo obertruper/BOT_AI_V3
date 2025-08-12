@@ -1,0 +1,19 @@
+{
+  "websocket_timeouts": {
+    "connection_timeout": 30,
+    "ping_interval": 25,
+    "ping_timeout": 10,
+    "reconnect_delay": 5,
+    "max_reconnect_attempts": 10
+  },
+  "http_timeouts": {
+    "request_timeout": 30,
+    "connect_timeout": 10,
+    "read_timeout": 20
+  },
+  "async_operations": {
+    "task_timeout": 60,
+    "max_concurrent_tasks": 50,
+    "retry_attempts": 3
+  }
+}

@@ -358,37 +358,87 @@ class PositionManager:
         except Exception as e:
             self.logger.error(f"Ошибка синхронизации позиций с {exchange_name}: {e}")
 
-    async def sync_positions(self):
-        """Синхронизация позиций со всеми подключенными биржами"""
-        if not self.exchange_registry:
-            self.logger.warning(
-                "Exchange registry не доступен для синхронизации позиций"
-            )
-            return
-
+    async def sync_positions(self) -> None:
+        """Синхронизация позиций с биржей"""
         try:
-            # Получаем список активных бирж
-            active_exchanges = await self.exchange_registry.get_active_exchanges()
+            if not self.exchange_registry:
+                self.logger.warning(
+                    "Exchange registry не доступен для синхронизации позиций"
+                )
+                return
 
-            for exchange_name in active_exchanges:
-                await self.sync_with_exchange(exchange_name)
+            # Получаем все активные биржи
+            exchanges = self.exchange_registry.get_active_exchanges()
+
+            for exchange_name, exchange in exchanges.items():
+                try:
+                    # Получаем позиции с биржи
+                    positions = await exchange.get_positions()
+
+                    # Обновляем локальные позиции
+                    for position in positions:
+                        await self.update_position(
+                            symbol=position.symbol,
+                            size=position.size,
+                            entry_price=position.entry_price,
+                            unrealized_pnl=position.unrealized_pnl,
+                            exchange=exchange_name,
+                        )
+
+                    self.logger.debug(
+                        f"Синхронизированы позиции с {exchange_name}: {len(positions)} позиций"
+                    )
+
+                except Exception as e:
+                    self.logger.error(
+                        f"Ошибка синхронизации позиций с {exchange_name}: {e}"
+                    )
 
         except Exception as e:
             self.logger.error(f"Ошибка синхронизации позиций: {e}")
 
-    async def calculate_total_pnl(self) -> Decimal:
-        """Расчет общего PnL всех позиций"""
+    async def calculate_total_pnl(self) -> Dict[str, float]:
+        """Расчет общего PnL по всем позициям"""
         try:
-            total_pnl = Decimal("0")
+            total_pnl = {
+                "unrealized_pnl": 0.0,
+                "realized_pnl": 0.0,
+                "total_pnl": 0.0,
+                "positions_count": 0,
+            }
 
-            for position in self._positions.values():
-                total_pnl += position.total_pnl
+            # Получаем все позиции
+            positions = await self.get_all_positions()
+
+            for position in positions:
+                if position.size != 0:  # Только активные позиции
+                    total_pnl["unrealized_pnl"] += position.unrealized_pnl or 0.0
+                    total_pnl["positions_count"] += 1
+
+            # Получаем реализованный PnL из истории сделок
+            try:
+                from database.repositories.trade_repository import TradeRepository
+
+                trade_repo = TradeRepository()
+                realized_pnl = await trade_repo.get_total_realized_pnl()
+                total_pnl["realized_pnl"] = realized_pnl or 0.0
+            except Exception as e:
+                self.logger.warning(f"Не удалось получить реализованный PnL: {e}")
+
+            total_pnl["total_pnl"] = (
+                total_pnl["unrealized_pnl"] + total_pnl["realized_pnl"]
+            )
 
             return total_pnl
 
         except Exception as e:
             self.logger.error(f"Ошибка расчета общего PnL: {e}")
-            return Decimal("0")
+            return {
+                "unrealized_pnl": 0.0,
+                "realized_pnl": 0.0,
+                "total_pnl": 0.0,
+                "positions_count": 0,
+            }
 
     async def health_check(self) -> bool:
         """Проверка здоровья компонента"""

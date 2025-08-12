@@ -134,15 +134,15 @@ class UniversalRateLimiter:
     def _init_exchange_configs(self):
         """Инициализация стандартных конфигураций для бирж"""
 
-        # Bybit
+        # Bybit - уменьшаем лимиты для предотвращения rate limit errors
         self.exchange_configs["bybit"] = ExchangeRateLimit(
-            public_limit=120,
-            private_limit=120,
-            order_limit=60,
-            position_limit=30,
-            balance_limit=10,
-            burst_allowance=5,
-            penalty_multiplier=1.5,
+            public_limit=30,  # Было 120 - снижаем в 4 раза
+            private_limit=20,  # Было 120 - снижаем в 6 раз
+            order_limit=5,  # Было 60 - снижаем в 12 раз
+            position_limit=5,  # Было 30 - снижаем в 6 раз
+            balance_limit=2,  # Было 10 - снижаем в 5 раз
+            burst_allowance=2,  # Было 5 - снижаем
+            penalty_multiplier=3.0,  # Было 1.5 - увеличиваем штраф
         )
 
         # Binance

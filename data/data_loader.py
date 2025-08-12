@@ -388,7 +388,7 @@ class DataLoader:
                         'turnover': Decimal(str(candle[5] * candle[4])) if len(candle) > 5 else Decimal('0'),
                         'interval_minutes': interval_minutes,
                         'exchange': exchange,
-                        'market_type': MarketType.SPOT.value
+                        'market_type': MarketType.FUTURES.value  # Торгуем на фьючерсах!
                     })
                 
                 # Используем upsert для обновления существующих записей

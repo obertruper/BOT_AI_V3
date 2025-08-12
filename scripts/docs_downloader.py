@@ -309,7 +309,7 @@ class DocumentationDownloader:
         for i, url in enumerate(source["urls"]):
             content = await self.download_content(url)
             if content:
-                all_content.append(f"## Документ {i+1}: {url}")
+                all_content.append(f"## Документ {i + 1}: {url}")
                 all_content.append("")
                 all_content.append(content)
                 all_content.append("")

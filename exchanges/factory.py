@@ -188,6 +188,21 @@ class ExchangeFactory:
             self.logger.error(error_msg)
             raise ExchangeError(str(exchange_type), error_msg)
 
+    def create_exchange(
+        self, exchange_type: Union[str, ExchangeType], **kwargs
+    ) -> BaseExchangeInterface:
+        """
+        Создание клиента биржи (алиас для create_client для совместимости)
+
+        Args:
+            exchange_type: Тип биржи
+            **kwargs: Дополнительные параметры
+
+        Returns:
+            Клиент биржи
+        """
+        return self.create_client(exchange_type, **kwargs)
+
     def create_from_config(
         self,
         config: ExchangeConfig,
@@ -283,9 +298,52 @@ class ExchangeFactory:
             for key in keys_to_remove:
                 del self._client_cache[key]
 
-            self.logger.info(
-                f"Cleared {len(keys_to_remove)} {exchange_type} clients from cache"
-            )
+    @staticmethod
+    async def create_exchange_client(exchange_name: str) -> Optional[Any]:
+        """Статический метод для создания клиента биржи"""
+        import os
+
+        factory = get_exchange_factory()
+        exchange_name = exchange_name.lower()
+
+        try:
+            if exchange_name == "bybit":
+                # Получаем креденшалы из переменных окружения
+                api_key = os.getenv("BYBIT_API_KEY")
+                api_secret = os.getenv("BYBIT_API_SECRET")
+                testnet = os.getenv("BYBIT_TESTNET", "false").lower() == "true"
+
+                if not api_key or not api_secret:
+                    factory.logger.error(
+                        "Bybit credentials not available in environment"
+                    )
+                    return None
+
+                client = factory.create_client(
+                    ExchangeType.BYBIT,
+                    api_key=api_key,
+                    api_secret=api_secret,
+                    sandbox=testnet,
+                )
+
+                # Тестируем подключение
+                try:
+                    # Проверяем авторизацию
+                    await client.get_account_info()
+                    factory.logger.info("✅ Bybit client authenticated successfully")
+                    return client
+                except Exception as e:
+                    factory.logger.error(f"❌ Bybit authentication failed: {e}")
+                    await client.close()
+                    return None
+
+            else:
+                factory.logger.error(f"Unknown exchange: {exchange_name}")
+                return None
+
+        except Exception as e:
+            factory.logger.error(f"Failed to create {exchange_name} client: {e}")
+            return None
 
     async def disconnect_all(self):
         """Отключение всех кешированных клиентов"""
@@ -379,6 +437,9 @@ def create_binance_client(
     )
 
 
+# Глобальный экземпляр фабрики
+exchange_factory = get_exchange_factory()
+
 # Экспорт
 __all__ = [
     "ExchangeFactory",
@@ -386,6 +447,7 @@ __all__ = [
     "ExchangeCredentials",
     "ExchangeConfig",
     "get_exchange_factory",
+    "exchange_factory",
     "create_bybit_client",
     "create_binance_client",
 ]

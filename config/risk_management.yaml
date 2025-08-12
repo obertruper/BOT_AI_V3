@@ -1,268 +1,200 @@
-# Risk Management Configuration
-# Глобальные настройки управления рисками для BOT_Trading v3
+# Конфигурация управления рисками BOT Trading v3
+# Адаптировано из BOT_AI_V2
 
-# Глобальные лимиты риска
-global_limits:
-  max_total_risk: 0.1         # 10% максимальный риск от общего капитала
-  max_daily_loss: 0.05        # 5% максимальная дневная потеря
-  max_weekly_loss: 0.15       # 15% максимальная недельная потеря
-  max_monthly_loss: 0.25      # 25% максимальная месячная потеря
-
-  # Лимиты позиций
-  max_open_positions: 10      # Максимум открытых позиций
-  max_positions_per_symbol: 1 # Максимум позиций на один символ
-  max_correlated_positions: 5 # Максимум коррелированных позиций
-
-  # Лимиты на размер позиций
-  max_position_size_pct: 0.1  # 10% максимальный размер одной позиции
-  min_position_size_usdt: 10  # Минимальный размер позиции $10
-
-# Риск на позицию
-position_risk:
-  # Базовые параметры
-  default_risk_per_trade: 0.02    # 2% риск на сделку
-  max_risk_per_trade: 0.03        # 3% максимальный риск
-
-  # Stop Loss параметры
-  stop_loss:
-    default_pct: 0.02             # 2% стоп-лосс по умолчанию
-    max_pct: 0.05                 # 5% максимальный стоп-лосс
-    min_pct: 0.005                # 0.5% минимальный стоп-лосс
-    use_atr: true                 # Использовать ATR для расчета
-    atr_multiplier: 2.0           # Множитель ATR
-
-  # Take Profit параметры
-  take_profit:
-    default_pct: 0.04             # 4% тейк-профит по умолчанию
-    risk_reward_ratio: 2.0        # Соотношение риск/прибыль
-    partial_targets:              # Частичные цели
-      - level: 0.02               # 2% - закрыть 30%
-        close_pct: 0.3
-      - level: 0.03               # 3% - закрыть еще 30%
-        close_pct: 0.3
-      - level: 0.04               # 4% - закрыть остаток
-        close_pct: 0.4
-
-# Trailing Stop параметры
-trailing_stop:
+risk_management:
   enabled: true
-  activation_profit: 0.01         # Активация при 1% прибыли
-  trailing_distance: 0.005        # 0.5% расстояние трейлинга
 
-  # Адаптивный трейлинг
-  adaptive:
-    enabled: true
-    volatility_based: true        # Базируется на волатильности
-    min_distance: 0.003           # 0.3% минимум
-    max_distance: 0.02            # 2% максимум
+  # Основные параметры риска
+  risk_per_trade: 0.02  # 2% от баланса на сделку
+  fixed_risk_balance: 500  # Фиксированный баланс для расчета риска
+  max_total_risk: 0.10  # Максимальный общий риск 10%
+  max_positions: 10  # Максимальное количество позиций
 
-# Управление корреляцией
-correlation_management:
-  enabled: true
-  max_correlation: 0.7            # Максимальная корреляция между активами
+  # Параметры плеча
+  default_leverage: 5
+  max_leverage: 20
+  min_notional: 5.0
 
-  # Группы коррелированных активов
-  correlation_groups:
-    crypto_majors:
-      symbols:
-        - BTCUSDT
-        - ETHUSDT
-      correlation_limit: 0.5      # Лимит для группы
+  # Профили риска
+  risk_profiles:
+    standard:
+      risk_multiplier: 1.0
+      confidence_threshold: 0.6
+      max_position_size: 1000
+    conservative:
+      risk_multiplier: 0.7
+      confidence_threshold: 0.7
+      max_position_size: 700
+    very_conservative:
+      risk_multiplier: 0.5
+      confidence_threshold: 0.8
+      max_position_size: 500
 
-    defi_tokens:
-      symbols:
-        - LINKUSDT
-        - AAVEUSDT
-        - UNIUSDT
-      correlation_limit: 0.3
-
+  # Категории активов (из V2)
+  asset_categories:
     meme_coins:
       symbols:
-        - DOGEUSDT
-        - SHIBUSDT
-        - PEPEUSDT
-      correlation_limit: 0.2      # Строгий лимит для мем-коинов
+        - DOGE
+        - SHIB
+        - PEPE
+        - BONK
+        - FLOKI
+        - MEME
+        - TRUMP
+        - POPCAT
+        - FARTCOIN
+        - 1000PEPE
+        - ZEREBRO
+        - PNUT
+      risk_multiplier: 0.8  # Сниженный риск для мемкоинов
+      max_leverage: 10
+    stable_coins:
+      symbols:
+        - BTC
+        - ETH
+        - SOL
+        - BNB
+        - XRP
+        - ADA
+        - DOT
+        - LINK
+      risk_multiplier: 1.0  # Стандартный риск
+      max_leverage: 20
 
-# Адаптация к волатильности
-volatility_adjustment:
+# Улучшенная система SL/TP (адаптировано из V2)
+enhanced_sltp:
   enabled: true
 
-  # Низкая волатильность
-  low_volatility:
-    threshold: 0.01               # < 1% дневная волатильность
-    position_size_multiplier: 1.2 # Увеличить размер на 20%
-    stop_loss_multiplier: 0.8     # Уменьшить SL на 20%
-
-  # Нормальная волатильность
-  normal_volatility:
-    threshold: 0.03               # 1-3% дневная волатильность
-    position_size_multiplier: 1.0
-    stop_loss_multiplier: 1.0
-
-  # Высокая волатильность
-  high_volatility:
-    threshold: 0.05               # > 5% дневная волатильность
-    position_size_multiplier: 0.5 # Уменьшить размер на 50%
-    stop_loss_multiplier: 1.5     # Увеличить SL на 50%
-
-# Защита от экстремальных событий
-extreme_events_protection:
-  enabled: true
-
-  # Flash crash защита
-  flash_crash:
+  # Синхронизация с биржей
+  synchronization:
     enabled: true
-    threshold_pct: -0.1           # -10% за 5 минут
-    action: "close_all"           # Закрыть все позиции
-    cooldown_minutes: 60          # Пауза 60 минут
+    interval: 30  # секунды
+    max_attempts: 5
+    priority: "exchange"
 
-  # Gap protection
-  gap_protection:
+  # Трейлинг-стоп
+  trailing_stop:
     enabled: true
-    max_gap_pct: 0.05             # 5% максимальный гэп
-    action: "reduce_position"     # Уменьшить позицию
+    activation_percent: 1.0  # Активируется при 1% прибыли
+    step_percent: 0.5  # Шаг трейлинга 0.5%
+    min_distance: 0.3  # Минимальное расстояние от цены
+    use_adaptive_step: true
+    volatility_factor: 1.0
+    max_updates: 15
 
-  # Black swan события
-  black_swan:
-    daily_volatility_spike: 3.0   # 3x нормальная волатильность
-    action: "emergency_exit"      # Экстренный выход
-
-# Временные ограничения
-time_restrictions:
-  # Торговые часы
-  trading_hours:
-    enabled: false                # Круглосуточная торговля для крипто
-
-  # Ограничения по дням
-  weekend_trading:
-    enabled: true
-    position_size_multiplier: 0.8 # Уменьшить размер на 20% в выходные
-
-  # Праздники и события
-  major_events:
-    fed_meetings:
+    # Адаптивные настройки
+    adaptive:
       enabled: true
-      hours_before: 4
-      hours_after: 4
-      position_size_multiplier: 0.5
+      max_step: 2.0
+      min_step: 0.3
 
-    crypto_events:
-      bitcoin_halving:
-        enabled: true
-        days_before: 7
-        days_after: 7
-        volatility_expected: "high"
-
-# ML-специфичные параметры риска
-ml_risk_parameters:
-  # Доверие к ML сигналам
-  confidence_thresholds:
-    min_confidence: 0.45          # Минимальная уверенность для торговли
-    high_confidence: 0.7          # Высокая уверенность
-
-  # Адаптация размера по уверенности
-  confidence_sizing:
+  # Защита прибыли
+  profit_protection:
     enabled: true
-    low_confidence_multiplier: 0.5   # 50% размера при низкой уверенности
-    high_confidence_multiplier: 1.2  # 120% при высокой уверенности
+    breakeven_percent: 0.5  # Безубыток при 0.5% прибыли
+    breakeven_offset: 0.1  # Смещение от цены входа
 
-  # Проверка ML производительности
-  ml_performance_check:
+    # Уровни фиксации прибыли
+    levels:
+      - trigger: 1.0  # При 1% прибыли
+        lock: 0.5     # Фиксируем 0.5% прибыли
+      - trigger: 2.0  # При 2% прибыли
+        lock: 1.0     # Фиксируем 1% прибыли
+      - trigger: 3.0  # При 3% прибыли
+        lock: 1.5     # Фиксируем 1.5% прибыли
+    max_updates: 5
+
+  # Частичное закрытие
+  partial_take_profit:
     enabled: true
-    lookback_trades: 100          # Последние 100 сделок
-    min_win_rate: 0.45            # Минимум 45% win rate
-    min_profit_factor: 1.2        # Минимум 1.2 profit factor
+    levels:
+      - percent: 1.0  # При 1% прибыли
+        close_ratio: 0.3  # Закрываем 30% позиции
+      - percent: 2.0  # При 2% прибыли
+        close_ratio: 0.3  # Закрываем еще 30% позиции
+      - percent: 3.0  # При 3% прибыли
+        close_ratio: 0.4  # Закрываем оставшиеся 40% позиции
+    update_sl_after_partial: true
+    move_sl_to_breakeven: true
 
-  # Отключение ML при плохой производительности
-  ml_circuit_breaker:
-    enabled: true
-    max_consecutive_losses: 7     # 7 убытков подряд
-    daily_loss_threshold: 0.03    # 3% дневной убыток от ML
-    cooldown_hours: 24            # Пауза 24 часа
+  # Корректировка на основе волатильности
+  volatility_adjustment:
+    enabled: false  # Отключено для тестирования
+    atr_period: 14
+    sl_multiplier: 1.5
+    tp_multiplier: 2.5
 
-# Portfolio risk metrics
-portfolio_metrics:
-  # Value at Risk (VaR)
-  var_calculation:
-    enabled: true
-    confidence_level: 0.95        # 95% уровень доверия
-    lookback_days: 30
-    max_var_pct: 0.05             # 5% максимальный VaR
+  # Временная корректировка
+  time_based_adjustment:
+    enabled: false  # Отключено для тестирования
+    time_thresholds:
+      - hours: 4
+        sl_tighten: 0.3
+        tp_extension: 0.0
+      - hours: 12
+        sl_tighten: 0.5
+        tp_extension: 0.0
+      - hours: 24
+        sl_tighten: 0.8
+        tp_extension: 0.0
 
-  # Sharpe Ratio мониторинг
-  sharpe_monitoring:
-    enabled: true
-    min_sharpe: 1.0               # Минимальный Sharpe ratio
-    calculation_period: 30        # дней
+# ML-интеграция (из V2)
+ml_integration:
+  enabled: true
 
-  # Maximum Drawdown
-  drawdown_limits:
-    max_drawdown: 0.15            # 15% максимальная просадка
-    recovery_required: true       # Требуется восстановление
-    reduction_after_dd: 0.5       # Уменьшить размер на 50% после DD
+  # Пороги для ML-сигналов
+  thresholds:
+    buy_profit: 0.65
+    buy_loss: 0.35
+    sell_profit: 0.65
+    sell_loss: 0.35
 
-# Алерты и уведомления
-alerts:
-  # Критические алерты
-  critical:
-    - type: "position_loss"
-      threshold: -0.05            # -5% на позиции
-      action: "notify_and_close"
+  # Факторы корректировки
+  confidence_factor: 1.0
+  loss_probability_factor: 1.0
 
-    - type: "daily_loss"
-      threshold: -0.03            # -3% дневной убыток
-      action: "notify_and_pause"
+  # Модели покупки/продажи
+  buy_model:
+    standard:
+      profit_probability_min: 0.50
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.60
+    conservative:
+      profit_probability_min: 0.52
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.58
+    very_conservative:
+      profit_probability_min: 0.54
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.55
 
-    - type: "margin_level"
-      threshold: 1.5              # Margin level < 150%
-      action: "reduce_positions"
+  sell_model:
+    standard:
+      profit_probability_min: 0.53
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.49
+    conservative:
+      profit_probability_min: 0.55
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.47
+    very_conservative:
+      profit_probability_min: 0.55
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.45
 
-  # Предупреждения
-  warnings:
-    - type: "high_correlation"
-      threshold: 0.8
-      action: "notify"
-
-    - type: "ml_performance"
-      win_rate: 0.4               # Win rate < 40%
-      action: "notify"
-
-  # Информационные
-  info:
-    - type: "new_high"
-      action: "log"
-
-    - type: "streak"
-      wins: 5                     # 5 побед подряд
-      action: "notify"
-
-# Настройки для разных режимов рынка
-market_regimes:
-  # Bull market
-  bull_market:
-    indicators:
-      - btc_above_200ma: true
-      - market_cap_growth: 0.2    # 20% рост за 30 дней
-    adjustments:
-      position_size_multiplier: 1.2
-      long_bias: 0.7              # 70% лонгов
-
-  # Bear market
-  bear_market:
-    indicators:
-      - btc_below_200ma: true
-      - market_cap_decline: -0.2  # -20% за 30 дней
-    adjustments:
-      position_size_multiplier: 0.7
-      short_bias: 0.6             # 60% шортов
-      max_positions: 5            # Меньше позиций
-
-  # Sideways market
-  sideways_market:
-    indicators:
-      - volatility: "low"
-      - trend_strength: "weak"
-    adjustments:
-      position_size_multiplier: 0.8
-      range_trading: true
-      breakout_confirmation: 2    # Нужно 2 подтверждения
+# Мониторинг и алерты
+monitoring:
+  accuracy_alert_threshold: 5.0
+  expected_buy_accuracy: 63.04
+  expected_sell_accuracy: 60.0
+  ml_buy_profit_threshold: 0.1
+  ml_buy_loss_threshold: 0.1
+  ml_sell_profit_threshold: 0.1
+  ml_sell_loss_threshold: 0.1
+  monitor_history_days: 14

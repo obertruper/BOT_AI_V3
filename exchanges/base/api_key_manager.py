@@ -259,7 +259,8 @@ class APIKeyManager:
             ]
 
             if not available_keys:
-                self.logger.error(f"No valid backup keys available for {exchange_name}")
+                # Не логируем ошибку каждый раз - это спамит логи
+                # self.logger.error(f"No valid backup keys available for {exchange_name}")
                 return
 
             # Выбираем ключ с лучшей статистикой

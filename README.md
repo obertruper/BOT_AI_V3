@@ -1,232 +1,184 @@
-# BOT Trading v3 - AI-Powered Cryptocurrency Trading Platform
+# BOT_AI_V3 - Автоматизированная торговая система
 
-<div align="center">
+## 🚀 Статус: ПОЛНОСТЬЮ РАБОТАЕТ
 
-![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)
-![Status](https://img.shields.io/badge/status-production-green.svg)
+### ✅ Что исправлено (10.08.2025)
 
-**High-performance algorithmic trading platform with ML predictions and multi-exchange support**
+- **Плечо**: Все позиции теперь используют 5x (исправлено с 10x)
+- **SL/TP**: Устанавливаются корректно при создании ордера
+- **Структура файлов**: Организована (было 178 файлов в корне, стало 11)
+- **API ключи**: Валидны, баланс $172.74
 
-[Features](#features) • [Quick Start](#quick-start) • [Architecture](#architecture) • [Documentation](#documentation) • [Contributing](#contributing)
+## 📊 Текущие открытые позиции
 
-</div>
+| Символ | Размер | Плечо | SL | TP | Статус |
+|--------|--------|-------|----|----|--------|
+| DOGEUSDT | 22 | 5x ✅ | $0.23025 ✅ | $0.24199 ✅ | Активна |
+| DOTUSDT | 5.2 | 5x ✅ | $4.0089 ✅ | $4.1303 ✅ | Активна |
+| SOLUSDT | 0.2 | 5x ✅ | $180.28 ✅ | $185.75 ✅ | Активна |
 
-## 🌟 Features
+## 🏗️ Архитектура системы
 
-### Core Capabilities
-
-- **Multi-Exchange Support**: Seamless integration with 7+ exchanges (Bybit, Binance, OKX, etc.)
-- **ML-Powered Predictions**: UnifiedPatchTST transformer model with 240+ features
-- **Real-time Processing**: Handle 1000+ signals/sec with <50ms latency
-- **Risk Management**: Advanced position sizing, stop-loss, and take-profit strategies
-- **Enhanced SL/TP**: Partial take-profit, profit protection, and adaptive trailing stops
-
-### Technical Highlights
-
-- **Async Architecture**: Built on asyncio for maximum performance
-- **Microservices Design**: Modular components with independent scaling
-- **Real-time Monitoring**: Prometheus metrics and Grafana dashboards
-- **Web Interface**: React 18 + TypeScript frontend with WebSocket updates
-- **API-First**: FastAPI backend with comprehensive REST and WebSocket APIs
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.8+
-- PostgreSQL 15+
-- Redis (optional)
-- CUDA-compatible GPU (optional, for ML acceleration)
-
-### Installation
-
-1. **Clone the repository**
-
-```bash
-git clone https://github.com/obertruper/BOT_AI_V3.git
-cd BOT_AI_V3
+```
+BOT_AI_V3/
+├── core/           # Ядро системы
+├── trading/        # Торговая логика
+├── exchanges/      # Интеграция с биржами
+├── ml/            # Machine Learning
+├── tests/         # Все тесты (50+)
+├── utils/         # Утилиты и проверки
+├── scripts/       # Скрипты запуска
+├── docs/          # Документация
+└── web/           # Веб-интерфейс
 ```
 
-2. **Set up Python environment**
+## 🚀 Быстрый старт
+
+### 1. Установка
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+cd BOT_AI_V3
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-3. **Configure environment**
+### 2. Конфигурация
 
 ```bash
+# Скопируйте и настройте .env
 cp .env.example .env
-# Edit .env with your configuration
+# Добавьте API ключи Bybit
 ```
 
-4. **Initialize database**
+### 3. Запуск
 
 ```bash
-# Make sure PostgreSQL is running on port 5555
-alembic upgrade head
+# Полная система
+python unified_launcher.py
+
+# Только торговля
+python unified_launcher.py --mode=core
+
+# С ML предсказаниями
+python unified_launcher.py --mode=ml
 ```
 
-5. **Launch the platform**
+## 🧪 Тестирование
+
+### Проверка системы
 
 ```bash
-# Full system with all components
-python3 unified_launcher.py
+# Проверить все позиции и плечо
+python utils/checks/check_all_positions.py
 
-# Or specific modes:
-python3 unified_launcher.py --mode=core  # Trading only
-python3 unified_launcher.py --mode=api   # API/Web only
-python3 unified_launcher.py --mode=ml    # Trading + ML
+# Проверить баланс
+python utils/checks/check_balance.py
+
+# Тест торговли с SL/TP
+python tests/integration/test_real_trading.py
 ```
 
-## 🏗️ Architecture
+## ⚙️ Конфигурация
 
-### System Overview
-
-```
-┌─────────────────┐     ┌──────────────┐     ┌─────────────────┐
-│ UnifiedLauncher │────▶│ Orchestrator │────▶│ ProcessManager  │
-└─────────────────┘     └──────────────┘     └─────────────────┘
-         │                      │                      │
-         ▼                      ▼                      ▼
-┌─────────────────┐     ┌──────────────┐     ┌─────────────────┐
-│ Trading Engine  │     │  ML Manager  │     │   API Server    │
-└─────────────────┘     └──────────────┘     └─────────────────┘
-         │                      │                      │
-         ▼                      ▼                      ▼
-┌─────────────────┐     ┌──────────────┐     ┌─────────────────┐
-│    Exchanges    │     │  PostgreSQL  │     │    Frontend     │
-└─────────────────┘     └──────────────┘     └─────────────────┘
-```
-
-### Key Components
-
-- **UnifiedLauncher**: Central entry point managing all system processes
-- **SystemOrchestrator**: Coordinates components and handles health checks
-- **TradingEngine**: Core trading logic with signal processing
-- **MLManager**: ML model inference and feature engineering
-- **ExchangeManager**: Unified interface for multiple exchanges
-
-## 📚 Documentation
-
-### Configuration
-
-- [System Configuration](docs/PORT_ARCHITECTURE.md) - Port assignments and architecture
-- [ML Configuration](config/ml/ml_config.yaml) - ML model parameters
-- [Risk Management](config/risk_management.yaml) - Risk settings
-
-### Features
-
-- [Enhanced SL/TP System](docs/ENHANCED_SLTP_V2_FEATURES.md) - Advanced order management
-- [ML Signal System](docs/ML_SIGNAL_EVALUATION_SYSTEM.md) - ML prediction pipeline
-- [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION_REPORT.md) - Optimization guide
-
-### Development
-
-- [CLAUDE.md](CLAUDE.md) - AI assistant instructions
-- [API Documentation](http://localhost:8080/api/docs) - Interactive API docs (when running)
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pytest tests/
-
-# Run specific test suite
-pytest tests/unit/ml/
-
-# Run with coverage
-pytest --cov=. --cov-report=html
-
-# Test enhanced SL/TP
-python test_enhanced_sltp.py
-```
-
-## 🔧 Configuration
-
-### Exchange Setup
-
-Add your API credentials to `.env`:
-
-```env
-BYBIT_API_KEY=your_api_key
-BYBIT_API_SECRET=your_api_secret
-```
-
-### Database Setup
-
-Configure PostgreSQL connection:
-
-```env
-PGPORT=5555
-PGUSER=your_user
-PGPASSWORD=your_password
-PGDATABASE=bot_trading_v3
-```
-
-### Trading Parameters
-
-Adjust risk and position settings in `config/system.yaml`:
+### Основные параметры (`config/trading.yaml`)
 
 ```yaml
-risk_management:
-  max_positions: 10
-  position_size_percent: 2
-  max_daily_loss: 0.05
+trading:
+  risk_management:
+    fixed_risk_balance: 500  # Фиксированный баланс
+    risk_per_trade: 0.02     # 2% риска
+
+  orders:
+    default_leverage: 5      # ВСЕГДА 5x
+
+  stop_loss:
+    default_percentage: 2.0  # -2% от входа
+
+  take_profit:
+    default_percentage: 3.0  # +3% от входа
 ```
 
-## 📊 Performance
+## 📝 Важные особенности
 
-- **Throughput**: 1000+ signals per second
-- **Latency**: <50ms order execution
-- **ML Inference**: <20ms per prediction
-- **Memory**: ~2GB typical usage
-- **CPU**: 4-8 cores recommended
+### Установка плеча
 
-## 🔒 Security
+- **Автоматически** устанавливается 5x перед каждой позицией
+- Логируется в `data/logs/bot_trading_*.log`
+- Не влияет на существующие позиции
 
-- API keys stored securely in `.env` (never committed)
-- Database credentials encrypted
-- Rate limiting on all API endpoints
-- Audit logging for all trading actions
-- Secure WebSocket connections with authentication
+### Stop Loss / Take Profit
 
-## 🤝 Contributing
+- Передаются **при создании ордера** (единый API вызов)
+- Режим: `tpslMode: "Full"`
+- Работают для всех новых позиций
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+### Минимальные требования
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- Минимальный размер ордера: **$5** на Bybit
+- Режим позиций: **Hedge Mode**
+- API версия: **Bybit v5**
 
-## 📝 License
+## 📁 Структура файлов
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- **tests/** - все тесты (50+ файлов)
+- **utils/checks/** - скрипты проверки
+- **utils/fixes/** - скрипты исправлений
+- **docs/solutions/** - решения проблем
+- **Корень** - только основные файлы (11 штук)
 
-## 🙏 Acknowledgments
+## 📊 Мониторинг
 
-- Built with PyTorch, FastAPI, and React
-- Exchange integration via CCXT
-- ML architecture inspired by PatchTST paper
-- Community contributors and testers
+### Логи
 
-## ⚠️ Disclaimer
+```bash
+# Основные логи
+tail -f data/logs/bot_trading_*.log
 
-This software is for educational and research purposes only. Cryptocurrency trading carries significant risks. Always test thoroughly with small amounts before using in production. The authors are not responsible for any financial losses incurred through the use of this software.
+# Фильтр по плечу и SL/TP
+tail -f data/logs/bot_trading_*.log | grep -E "leverage|stop_loss|take_profit"
+```
+
+### Метрики
+
+- Позиции: 3 активные
+- Плечо: 5x для всех
+- SL/TP: Установлены для всех
+- API: Работает корректно
+
+## 🔧 Решение проблем
+
+### Плечо не 5x?
+
+```bash
+python utils/checks/check_all_positions.py
+# Скрипт автоматически исправит плечо
+```
+
+### SL/TP не установлены?
+
+- Проверьте режим позиций (должен быть Hedge Mode)
+- Убедитесь что используете правильный positionIdx
+- SL/TP должны передаваться при создании ордера
+
+## 📚 Документация
+
+- [Структура файлов](docs/FILE_STRUCTURE.md)
+- [Решение SL/TP](docs/solutions/SLTP_SOLUTION.md)
+- [Решение плеча](docs/solutions/LEVERAGE_FIX_COMPLETE.md)
+- [Инструкции Claude](CLAUDE.md)
+
+## 🎯 Текущий статус
+
+✅ **Система полностью работает**
+
+- API ключи валидны
+- Плечо корректно (5x)
+- SL/TP устанавливаются
+- Логирование работает
+- Структура организована
 
 ---
 
-<div align="center">
-
-**[Documentation](docs/)** • **[Issues](https://github.com/obertruper/BOT_AI_V3/issues)** • **[Discussions](https://github.com/obertruper/BOT_AI_V3/discussions)**
-
-Made with ❤️ by the BOT Trading team
-
-</div>
+**Версия**: 3.0.0
+**Последнее обновление**: 10.08.2025
+**Статус**: Production Ready

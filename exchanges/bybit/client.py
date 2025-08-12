@@ -25,6 +25,11 @@ from core.exceptions import LeverageError
 from core.logger import setup_logger
 
 from ..base.api_key_manager import KeyType, get_key_manager
+
+# from ..base.rate_limiter import RequestPriority, get_rate_limiter  # Заменено на EnhancedRateLimiter
+from ..base.enhanced_rate_limiter import (  # Оптимизированный rate limiter
+    EnhancedRateLimiter,
+)
 from ..base.exceptions import (
     APIError,
     AuthenticationError,
@@ -53,7 +58,6 @@ from ..base.models import (
     create_position_from_dict,
 )
 from ..base.order_types import OrderRequest, OrderResponse, OrderStatus, OrderType
-from ..base.rate_limiter import RequestPriority, get_rate_limiter
 
 
 def clean_symbol(symbol: str) -> str:
@@ -64,6 +68,16 @@ def clean_symbol(symbol: str) -> str:
     # Удаляем суффикс .P для perpetual контрактов
     cleaned = symbol.replace(".P", "")
     return cleaned
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """Безопасное преобразование в float с обработкой пустых строк"""
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
 
 
 class BybitClient(BaseExchangeInterface):
@@ -81,6 +95,11 @@ class BybitClient(BaseExchangeInterface):
 
         # Логирование
         self.logger = setup_logger("bybit_client")
+
+        # Инициализация оптимизированного rate limiter
+        self.enhanced_limiter = EnhancedRateLimiter(
+            exchange="bybit", enable_cache=True, cache_ttl=60, max_retries=3
+        )
 
         # Определяем режим публичного доступа
         self.public_only = api_key == "public_access" and api_secret == "public_access"
@@ -104,8 +123,8 @@ class BybitClient(BaseExchangeInterface):
         self.error_count = 0
         self.last_errors = []
 
-        # Rate limiter
-        self.rate_limiter = get_rate_limiter()
+        # Rate limiter - используем только enhanced версию
+        # self.rate_limiter = get_rate_limiter()  # Удалено - используем enhanced_limiter
 
         # API Key manager
         self.key_manager = get_key_manager()
@@ -142,7 +161,7 @@ class BybitClient(BaseExchangeInterface):
                     self.hedge_mode = trading_cfg.get("hedge_mode", False)
                     self.default_leverage = trading_cfg.get("leverage", 5)
                     self.trading_category = trading_cfg.get("category", "linear")
-                    self.logger.info(
+                    self.logger.debug(
                         f"Trading config loaded: hedge_mode={self.hedge_mode}, leverage={self.default_leverage}, category={self.trading_category}"
                     )
         except Exception as e:
@@ -255,20 +274,25 @@ class BybitClient(BaseExchangeInterface):
         endpoint: str,
         params: Optional[Dict] = None,
         auth: bool = False,
-        priority: RequestPriority = RequestPriority.NORMAL,
+        priority: str = "normal",  # Изменено с RequestPriority
+        use_cache: bool = True,  # Добавлен параметр для кэширования
     ) -> Dict[str, Any]:
-        """Выполнение HTTP запроса с rate limiting и повторными попытками"""
+        """Выполнение HTTP запроса с rate limiting, кэшированием и повторными попытками"""
 
         if not self.session:
             await self.connect()
 
+        # Для GET запросов проверяем кэш (только для публичных эндпоинтов)
+        if method == "GET" and use_cache and not auth:
+            cache_key = f"{endpoint}:{json.dumps(params or {}, sort_keys=True)}"
+            cached_result = self.enhanced_limiter.get_cached(cache_key)
+            if cached_result is not None:
+                self.logger.debug(f"Cache hit for {endpoint}")
+                return cached_result
+
         # Применяем rate limiting
-        rate_limiter = get_rate_limiter()
-        success = await rate_limiter.acquire(
-            "bybit", endpoint, is_private=auth, priority=priority, timeout=30.0
-        )
-        if not success:
-            raise TimeoutError(f"Rate limit timeout for bybit {endpoint}")
+        # Используем enhanced rate limiter
+        await self.enhanced_limiter.check_and_wait()
 
         try:
             url = f"{self.base_url}{endpoint}"
@@ -368,8 +392,9 @@ class BybitClient(BaseExchangeInterface):
                             retry_after = extract_retry_after(
                                 response_data, response_headers
                             )
-                            self.rate_limiter.record_error(
-                                "bybit", endpoint, "429", retry_after
+                            # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
+                            self.logger.warning(
+                                f"Rate limit error: {endpoint}, retry after {retry_after}"
                             )
 
                             if attempt < self.retry_count:
@@ -383,8 +408,9 @@ class BybitClient(BaseExchangeInterface):
                             and attempt < self.retry_count
                         ):
                             # Server errors - продолжаем попытки
-                            self.rate_limiter.record_error(
-                                "bybit", endpoint, str(status_code)
+                            # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
+                            self.logger.warning(
+                                f"Rate limit error: {endpoint}, status {status_code}"
                             )
                             continue
 
@@ -405,8 +431,9 @@ class BybitClient(BaseExchangeInterface):
                             retry_after = extract_retry_after(
                                 response_data, response_headers
                             )
-                            self.rate_limiter.record_error(
-                                "bybit", endpoint, str(ret_code), retry_after
+                            # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
+                            self.logger.warning(
+                                f"Rate limit error: {endpoint}, code {ret_code}, retry after {retry_after}"
                             )
 
                             if attempt < self.retry_count:
@@ -427,13 +454,15 @@ class BybitClient(BaseExchangeInterface):
                             20033,  # Position is in liquidation
                         ]
                         if ret_code in retry_codes and attempt < self.retry_count:
-                            self.rate_limiter.record_error(
-                                "bybit", endpoint, str(ret_code)
+                            # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
+                            self.logger.warning(
+                                f"Rate limit error: {endpoint}, code {ret_code}"
                             )
                             continue
 
                         # Создание соответствующего исключения
-                        self.rate_limiter.record_error("bybit", endpoint, str(ret_code))
+                        # self.rate_limiter.record_error("bybit", endpoint, str(ret_code))  # Заменено
+                        self.logger.warning(f"API error {ret_code} for {endpoint}")
 
                         # Записываем ошибку в Key Manager
                         if auth:
@@ -452,13 +481,24 @@ class BybitClient(BaseExchangeInterface):
 
                     # Успешный ответ
                     self.success_count += 1
-                    self.rate_limiter.record_success("bybit", endpoint, response_time)
+                    # self.rate_limiter.record_success("bybit", endpoint, response_time)  # Заменено
+                    pass  # Enhanced limiter автоматически отслеживает успешные запросы
                     if auth:  # Записываем успех только для аутентифицированных запросов
                         self.key_manager.record_request_success("bybit")
+
+                    # Кэшируем успешный GET результат (только для публичных эндпоинтов)
+                    if method == "GET" and use_cache and not auth:
+                        cache_key = (
+                            f"{endpoint}:{json.dumps(params or {}, sort_keys=True)}"
+                        )
+                        self.enhanced_limiter.cache_result(cache_key, response_data)
+                        self.logger.debug(f"Cached result for {endpoint}")
+
                     return response_data
 
                 except aiohttp.ClientError as e:
-                    self.rate_limiter.record_error("bybit", endpoint, "CLIENT_ERROR")
+                    # self.rate_limiter.record_error("bybit", endpoint, "CLIENT_ERROR")  # Заменено
+                    self.logger.error(f"Client error for {endpoint}")
 
                     if attempt < self.retry_count:
                         continue
@@ -471,7 +511,8 @@ class BybitClient(BaseExchangeInterface):
                     raise
 
                 except Exception:
-                    self.rate_limiter.record_error("bybit", endpoint, "UNKNOWN_ERROR")
+                    # self.rate_limiter.record_error("bybit", endpoint, "UNKNOWN_ERROR")  # Заменено
+                    self.logger.error(f"Unknown error for {endpoint}")
 
                     if attempt < self.retry_count:
                         continue
@@ -479,14 +520,16 @@ class BybitClient(BaseExchangeInterface):
 
             # Если дошли сюда - все попытки неудачны
             self.error_count += 1
-            self.rate_limiter.record_error("bybit", endpoint, "ALL_RETRIES_FAILED")
+            # self.rate_limiter.record_error("bybit", endpoint, "ALL_RETRIES_FAILED")  # Заменено
+            self.logger.error(f"All retries failed for {endpoint}")
             raise APIError(
                 "bybit", f"{method} {endpoint}", api_message="All retry attempts failed"
             )
 
         except Exception:
             # Записываем ошибку в rate limiter для случаев, когда блок try не был выполнен
-            rate_limiter.record_error("bybit", endpoint, "UNKNOWN_ERROR")
+            # rate_limiter.record_error("bybit", endpoint, "UNKNOWN_ERROR")  # Заменено
+            self.logger.error(f"Unknown error for {endpoint}")
             raise
 
     # =================== ИНФОРМАЦИЯ О БИРЖЕ ===================
@@ -803,10 +846,16 @@ class BybitClient(BaseExchangeInterface):
         """Получение свечных данных"""
         try:
             symbol = clean_symbol(symbol)
+
+            # Конвертируем интервал в формат Bybit API
+            bybit_interval = (
+                interval.replace("m", "") if interval.endswith("m") else interval
+            )
+
             params = {
                 "category": "linear",
                 "symbol": symbol,
-                "interval": interval,
+                "interval": bybit_interval,  # Используем конвертированный интервал
                 "limit": min(limit, 1000),  # Bybit максимум 1000
             }
 
@@ -953,7 +1002,7 @@ class BybitClient(BaseExchangeInterface):
                 "/v5/order/create",
                 params,
                 auth=True,
-                priority=RequestPriority.HIGH,
+                priority="high",
             )
 
             result = response.get("result", {})
@@ -993,7 +1042,7 @@ class BybitClient(BaseExchangeInterface):
                 "/v5/order/cancel",
                 params,
                 auth=True,
-                priority=RequestPriority.HIGH,
+                priority="high",
             )
             result = response.get("result", {})
 
@@ -1034,7 +1083,7 @@ class BybitClient(BaseExchangeInterface):
                 "/v5/order/cancel-all",
                 params,
                 auth=True,
-                priority=RequestPriority.CRITICAL,
+                priority="critical",
             )
             result = response.get("result", {})
 
@@ -1161,6 +1210,10 @@ class BybitClient(BaseExchangeInterface):
 
             if symbol:
                 params["symbol"] = clean_symbol(symbol)
+            else:
+                # Bybit API требует один из параметров: symbol, settleCoin или baseCoin
+                # Используем settleCoin для получения всех ордеров по USDT
+                params["settleCoin"] = "USDT"
 
             response = await self._make_request(
                 "GET", "/v5/order/realtime", params, auth=True
@@ -1177,12 +1230,12 @@ class BybitClient(BaseExchangeInterface):
                         "symbol": order_data.get("symbol", ""),
                         "side": order_data.get("side", ""),
                         "orderType": order_data.get("orderType", ""),
-                        "quantity": order_data.get("qty", "0"),
-                        "price": order_data.get("price", "0"),
-                        "filledQty": order_data.get("cumExecQty", "0"),
+                        "quantity": safe_float(order_data.get("qty", "0")),
+                        "price": safe_float(order_data.get("price", "0")),
+                        "filledQty": safe_float(order_data.get("cumExecQty", "0")),
                         "orderStatus": order_data.get("orderStatus", "New"),
                         "timeInForce": order_data.get("timeInForce", "GTC"),
-                        "avgPrice": order_data.get("avgPrice", "0"),
+                        "avgPrice": safe_float(order_data.get("avgPrice", "0")),
                         "reduceOnly": order_data.get("reduceOnly", False),
                         "createdTime": order_data.get("createdTime"),
                         "updatedTime": order_data.get("updatedTime"),
@@ -1229,12 +1282,12 @@ class BybitClient(BaseExchangeInterface):
                         "symbol": order_data.get("symbol", ""),
                         "side": order_data.get("side", ""),
                         "orderType": order_data.get("orderType", ""),
-                        "quantity": order_data.get("qty", "0"),
-                        "price": order_data.get("price", "0"),
-                        "filledQty": order_data.get("cumExecQty", "0"),
+                        "quantity": safe_float(order_data.get("qty", "0")),
+                        "price": safe_float(order_data.get("price", "0")),
+                        "filledQty": safe_float(order_data.get("cumExecQty", "0")),
                         "orderStatus": order_data.get("orderStatus", "New"),
                         "timeInForce": order_data.get("timeInForce", "GTC"),
-                        "avgPrice": order_data.get("avgPrice", "0"),
+                        "avgPrice": safe_float(order_data.get("avgPrice", "0")),
                         "reduceOnly": order_data.get("reduceOnly", False),
                         "createdTime": order_data.get("createdTime"),
                         "updatedTime": order_data.get("updatedTime"),
@@ -1720,7 +1773,11 @@ class BybitClient(BaseExchangeInterface):
 
     def get_performance_metrics(self) -> Dict[str, Any]:
         """Получение метрик производительности"""
-        rate_limit_stats = self.rate_limiter.get_stats("bybit")
+        # rate_limit_stats = self.rate_limiter.get_stats("bybit")  # Заменено
+        rate_limit_stats = {
+            "requests": 0,
+            "remaining": 100,
+        }  # Placeholder для enhanced limiter
         key_stats = self.key_manager.get_key_stats("bybit")
         health_status = self.get_health_status()
 

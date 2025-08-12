@@ -1,0 +1,19 @@
+{
+  "async_operation_config": {
+    "default_task_timeout": 60,
+    "max_concurrent_tasks": 50,
+    "task_cleanup_interval": 30,
+    "deadlock_detection_timeout": 300
+  },
+  "error_handling": {
+    "retry_attempts": 3,
+    "retry_delay": 1,
+    "exponential_backoff": true,
+    "max_retry_delay": 60
+  },
+  "monitoring": {
+    "task_monitoring_enabled": true,
+    "memory_monitoring_enabled": true,
+    "performance_monitoring_enabled": true
+  }
+}

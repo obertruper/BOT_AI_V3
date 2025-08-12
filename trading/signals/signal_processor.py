@@ -162,11 +162,30 @@ class SignalProcessor:
                 # Конвертируем доллары в количество актива
                 quantity = position_size / entry_price
 
-            # Минимальные требования Bybit для BTC: 0.001 (~$100)
-            # Для других активов будут другие минимумы, но используем общий подход
-            min_quantity = Decimal("0.001")  # Минимум для BTC
+            # Проверяем минимальный размер ордера в долларах (Bybit требует минимум $5)
+            min_order_value_usd = Decimal("5")
+            order_value_usd = quantity * entry_price
 
-            # Если количество меньше минимального, увеличиваем до минимума
+            # Если размер ордера меньше минимума, корректируем количество
+            if order_value_usd < min_order_value_usd:
+                old_quantity = quantity
+                quantity = min_order_value_usd / entry_price
+                self.logger.info(
+                    f"📊 Корректировка размера: {old_quantity:.6f} → {quantity:.6f} "
+                    f"(минимум ${min_order_value_usd})"
+                )
+
+            # Дополнительная проверка минимального количества для разных активов
+            # Минимальные требования Bybit (примерные)
+            symbol_upper = signal.symbol.upper()
+            if "BTC" in symbol_upper:
+                min_quantity = Decimal("0.001")  # Минимум для BTC
+            elif "ETH" in symbol_upper:
+                min_quantity = Decimal("0.01")  # Минимум для ETH
+            else:
+                min_quantity = Decimal("0.01")  # Общий минимум
+
+            # Если количество все еще меньше минимального, увеличиваем
             if quantity < min_quantity:
                 self.logger.warning(
                     f"Количество {quantity} меньше минимального {min_quantity}, "
@@ -225,26 +244,69 @@ class SignalProcessor:
             return []
 
     async def _calculate_position_size(self, signal: Signal) -> Decimal:
-        """Расчет размера позиции на основе сигнала и риск-менеджмента"""
+        """Расчет размера позиции на основе сигнала и риск-менеджмента (метод из V2)"""
         try:
             # Если размер указан в сигнале - используем его
             if signal.suggested_position_size and signal.suggested_position_size > 0:
                 size = Decimal(str(signal.suggested_position_size))
             else:
-                # Иначе используем дефолтный размер с учетом силы сигнала
-                base_size = self.default_position_size
+                # Используем метод расчета из V2: fixed_balance * risk_per_trade * leverage
+                # Это базовый размер позиции в USD
+                fixed_balance = Decimal(
+                    str(
+                        self.config.get("trading", {})
+                        .get("risk_management", {})
+                        .get("fixed_risk_balance", 500)
+                    )
+                )
+                risk_per_trade = Decimal(
+                    str(
+                        self.config.get("trading", {})
+                        .get("risk_management", {})
+                        .get("risk_per_trade", 0.02)
+                    )
+                )
+                leverage = Decimal(str(self.default_leverage))
 
-                # Корректируем размер на основе силы сигнала
-                if signal.strength:
-                    size = base_size * Decimal(str(signal.strength))
+                # Формула из V2: position_value = fixed_balance * risk_per_trade * leverage
+                position_value_usd = fixed_balance * risk_per_trade * leverage
+
+                self.logger.debug(
+                    f"📊 Расчет позиции V2 style: "
+                    f"Fixed Balance: ${fixed_balance}, "
+                    f"Risk: {risk_per_trade * 100}%, "
+                    f"Leverage: {leverage}x, "
+                    f"Position Value: ${position_value_usd}"
+                )
+
+                # Корректируем на основе силы сигнала (если есть)
+                if signal.strength and signal.strength > 0:
+                    strength_factor = Decimal(str(signal.strength))
+                    # Ограничиваем коэффициент силы от 0.5 до 1.5
+                    strength_factor = max(
+                        Decimal("0.5"), min(Decimal("1.5"), strength_factor)
+                    )
+                    size = position_value_usd * strength_factor
                 else:
-                    size = base_size
+                    size = position_value_usd
 
             # Ограничиваем максимальным размером
             size = min(size, self.max_position_size)
 
+            # Проверяем минимальный размер
+            min_size = Decimal(
+                str(
+                    self.config.get("trading", {})
+                    .get("risk_management", {})
+                    .get("min_position_size", 10)
+                )
+            )
+            size = max(size, min_size)
+
             # Округляем до разумной точности
-            size = size.quantize(Decimal("0.001"))
+            size = size.quantize(Decimal("0.01"))
+
+            self.logger.info(f"💰 Итоговый размер позиции: ${size} USD")
 
             return size
 

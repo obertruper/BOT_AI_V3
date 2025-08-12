@@ -477,6 +477,76 @@ async def get_positions(
         )
 
 
+@app.get("/api/system/config/raw")
+async def get_system_config_raw():
+    """Безопасная выдача полной конфигурации (секреты редактируются)."""
+    try:
+        cfg_manager: Optional[ConfigManager] = _config_manager
+        if not cfg_manager:
+            cfg_manager = ConfigManager()
+            await cfg_manager.initialize()
+        raw_cfg = cfg_manager.get_config()
+
+        def _sanitize(d: Any):
+            if isinstance(d, dict):
+                red = {}
+                for k, v in d.items():
+                    lk = k.lower()
+                    if any(s in lk for s in ["secret", "api_key", "password", "token"]):
+                        red[k] = "***"
+                    else:
+                        red[k] = _sanitize(v)
+                return red
+            elif isinstance(d, list):
+                return [_sanitize(x) for x in d]
+            return d
+
+        safe_cfg = _sanitize(raw_cfg if isinstance(raw_cfg, dict) else {})
+        return {
+            "success": True,
+            "data": safe_cfg,
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+    except Exception as e:
+        logger = logging.getLogger("web_api")
+        logger.error(f"Failed to get system config: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+
+
+@app.post("/api/system/config/update")
+async def update_system_config(body: dict):
+    """Обновление раздела system в конфигурации. Ожидает {"updates": {...}}"""
+    try:
+        updates = body.get("updates", {})
+        if not isinstance(updates, dict):
+            raise ValueError("updates must be a dict")
+
+        cfg_manager: Optional[ConfigManager] = _config_manager
+        if not cfg_manager:
+            cfg_manager = ConfigManager()
+            await cfg_manager.initialize()
+
+        # Обновляем и сохраняем конфигурацию
+        new_cfg = cfg_manager.update_system_config(updates)
+        return {
+            "success": True,
+            "data": new_cfg,
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+    except Exception as e:
+        logger = logging.getLogger("web_api")
+        logger.error(f"Failed to update system config: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+
+
 # =================== ОБРАБОТКА ОШИБОК ===================
 
 

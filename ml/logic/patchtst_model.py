@@ -475,9 +475,11 @@ class DirectionalMultiTaskLoss(nn.Module):
 
         # CrossEntropy с весами
         self.cross_entropy_loss = nn.CrossEntropyLoss(
-            weight=self.class_weights.cuda()
-            if torch.cuda.is_available()
-            else self.class_weights,
+            weight=(
+                self.class_weights.cuda()
+                if torch.cuda.is_available()
+                else self.class_weights
+            ),
             reduction="none",
         )
 
@@ -658,3 +660,15 @@ def load_model_safe(
     )
 
     return model
+
+
+# Экспорт для совместимости
+UnifiedPatchTST = UnifiedPatchTSTForTrading
+
+__all__ = [
+    "UnifiedPatchTST",
+    "UnifiedPatchTSTForTrading",
+    "create_unified_model",
+    "load_model_safe",
+    "DirectionalMultiTaskLoss",
+]

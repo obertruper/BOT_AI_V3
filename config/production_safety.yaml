@@ -1,0 +1,69 @@
+# Настройки безопасности для боевого режима BOT_AI_V3
+
+risk_management:
+  # Максимальный размер позиции в USDT
+  max_position_size_usdt: 100  # Начните с малого!
+
+  # Максимальное количество открытых позиций
+  max_open_positions: 3
+
+  # Максимальный риск на сделку (% от баланса)
+  max_risk_per_trade: 1.0
+
+  # Максимальный общий риск (% от баланса)
+  max_total_risk: 3.0
+
+  # Обязательный stop-loss (% от входа)
+  mandatory_stop_loss: 2.0
+
+  # Максимальное плечо
+  max_leverage: 2  # Для боевого режима начните с малого!
+
+safety_checks:
+  # Проверка цены перед исполнением
+  price_deviation_check: true
+  max_price_deviation_pct: 0.5
+
+  # Проверка баланса
+  min_balance_usdt: 50
+
+  # Защита от двойных ордеров
+  duplicate_order_protection: true
+  duplicate_check_window_seconds: 60
+
+  # Пауза после ошибки (секунды)
+  error_cooldown_seconds: 300
+
+  # Максимум ошибок подряд до остановки
+  max_consecutive_errors: 5
+
+trading_limits:
+  # Символы для торговли (ограничьте список!)
+  allowed_symbols:
+    - BTCUSDT
+    - ETHUSDT
+    - SOLUSDT
+
+  # Минимальная уверенность для сигнала
+  min_signal_confidence: 0.7  # Повысьте для боевого режима!
+
+  # Таймауты
+  order_timeout_seconds: 30
+  position_check_interval: 10
+
+notifications:
+  # Telegram уведомления
+  telegram_enabled: true
+  notify_on:
+    - order_placed
+    - order_filled
+    - position_closed
+    - stop_loss_triggered
+    - error_occurred
+    - daily_summary
+
+# Режим тестирования перед боевым запуском
+dry_run:
+  enabled: false  # Установите true для тестов без реальных ордеров
+  simulate_fills: true
+  log_all_actions: true

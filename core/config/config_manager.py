@@ -110,11 +110,17 @@ class ConfigManager:
             except Exception as e:
                 errors.append(f"Ошибка загрузки {config_path}: {e}")
 
+        # Загрузка дополнительных конфигурационных файлов и слияние
+        await self._load_and_merge_configs()
+
         # Загрузка PostgreSQL конфигурации
         await self._load_postgres_config()
 
         # Загрузка traders.yaml если есть
         await self._load_traders_yaml()
+
+        # Загрузка risk_management.yaml
+        await self._load_risk_management_config()
 
         # Создание информации о конфигурации
         self._config_info = ConfigInfo(
@@ -177,6 +183,69 @@ class ConfigManager:
             trader_id = trader_config.get("id")
             if trader_id:
                 self._trader_configs[trader_id] = trader_config
+
+    async def _load_risk_management_config(self) -> None:
+        """Загрузка конфигурации управления рисками"""
+        if self._config_path:
+            config_dir = os.path.dirname(self._config_path)
+            risk_config_path = os.path.join(config_dir, "risk_management.yaml")
+
+            if os.path.exists(risk_config_path):
+                try:
+                    risk_config = await self._load_yaml_file(risk_config_path)
+                    if "risk_management" in risk_config:
+                        self._config["risk_management"] = risk_config["risk_management"]
+                    if "enhanced_sltp" in risk_config:
+                        self._config["enhanced_sltp"] = risk_config["enhanced_sltp"]
+                    if "ml_integration" in risk_config:
+                        self._config["ml_integration"] = risk_config["ml_integration"]
+                    if "monitoring" in risk_config:
+                        self._config["monitoring"] = risk_config["monitoring"]
+                    print(
+                        f"✅ Загружена конфигурация управления рисками из {risk_config_path}"
+                    )
+                except Exception as e:
+                    print(f"Ошибка загрузки risk_management.yaml: {e}")
+            else:
+                print(
+                    f"⚠️ Файл risk_management.yaml не найден по пути: {risk_config_path}"
+                )
+
+    async def _load_and_merge_configs(self) -> None:
+        """Загрузка и слияние всех конфигурационных файлов"""
+        if not self._config_path:
+            return
+
+        config_dir = os.path.dirname(self._config_path)
+
+        # Список файлов для загрузки и слияния
+        config_files = [
+            "system.yaml",
+            "trading.yaml",
+            "ml/ml_config.yaml",
+            "database.yaml",
+            "exchanges.yaml",
+        ]
+
+        for config_file in config_files:
+            config_path = os.path.join(config_dir, config_file)
+
+            if os.path.exists(config_path):
+                try:
+                    additional_config = await self._load_yaml_file(config_path)
+                    # Слияние конфигураций (новые ключи добавляются, существующие обновляются)
+                    self._merge_configs(self._config, additional_config)
+                    print(f"✅ Загружена конфигурация из {config_file}")
+                except Exception as e:
+                    print(f"⚠️ Ошибка загрузки {config_file}: {e}")
+
+    def _merge_configs(self, base: Dict[str, Any], update: Dict[str, Any]) -> None:
+        """Рекурсивное слияние конфигураций"""
+        for key, value in update.items():
+            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                self._merge_configs(base[key], value)
+            else:
+                base[key] = value
 
     async def _load_yaml_file(self, file_path: str) -> Dict[str, Any]:
         """Асинхронная загрузка YAML файла"""
@@ -300,6 +369,42 @@ class ConfigManager:
         """Получение системной конфигурации"""
         return self._config.get("system", {})
 
+    # Новые методы: обновление и сохранение системной конфигурации
+    def update_system_config(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Обновляет раздел system в конфигурации и возвращает актуальные данные.
+
+        Примечание: метод выполняет in-memory обновление и пытается сохранить
+        изменения в исходный YAML файл, если путь известен.
+        """
+        current = self._config.get("system", {})
+        # Глубокое обновление верхнего уровня system
+        if not isinstance(current, dict):
+            current = {}
+        if not isinstance(updates, dict):
+            raise ConfigurationError("Обновление конфигурации должно быть словарём")
+        # Плоское объединение (без рекурсивного мерджа для простоты и предсказуемости)
+        current.update(updates)
+        self._config["system"] = current
+        # Пытаемся сохранить на диск (best effort)
+        try:
+            self.save_system_config()
+        except Exception:
+            # Не прерываем выполнение, сохранение best-effort
+            pass
+        return current
+
+    def save_system_config(self) -> None:
+        """Сохраняет текущую конфигурацию в YAML файл, если путь известен."""
+        if not self._config_path:
+            raise ConfigurationError(
+                "Неизвестен путь к конфигурационному файлу для сохранения"
+            )
+
+        # Безопасная запись YAML
+        data_to_write = self._config.copy()
+        with open(self._config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data_to_write, f, allow_unicode=True, sort_keys=False)
+
     def get_database_config(self) -> Dict[str, Any]:
         """Получение конфигурации базы данных"""
         # Приоритет: database > postgres (обратная совместимость)
@@ -318,8 +423,43 @@ class ConfigManager:
         return self._config.get("redis", {})
 
     def get_ml_config(self) -> Dict[str, Any]:
-        """Получение конфигурации ML системы"""
-        return self._config.get("ml", {})
+        """Получение ML конфигурации"""
+        return self.get_config("ml", {})
+
+    def get_risk_management_config(self) -> Dict[str, Any]:
+        """Получение конфигурации управления рисками"""
+        return self.get_config("risk_management", {})
+
+    def get_enhanced_sltp_config(self) -> Dict[str, Any]:
+        """Получение конфигурации улучшенного SL/TP"""
+        return self.get_config("enhanced_sltp", {})
+
+    def get_ml_integration_config(self) -> Dict[str, Any]:
+        """Получение конфигурации ML-интеграции"""
+        return self.get_config("ml_integration", {})
+
+    def get_monitoring_config(self) -> Dict[str, Any]:
+        """Получение конфигурации мониторинга"""
+        return self.get_config("monitoring", {})
+
+    def get_risk_profile(self, profile_name: str = "standard") -> Dict[str, Any]:
+        """Получение профиля риска по имени"""
+        risk_config = self.get_risk_management_config()
+        risk_profiles = risk_config.get("risk_profiles", {})
+        return risk_profiles.get(profile_name, {})
+
+    def get_asset_category(self, symbol: str) -> Dict[str, Any]:
+        """Получение категории актива по символу"""
+        risk_config = self.get_risk_management_config()
+        asset_categories = risk_config.get("asset_categories", {})
+
+        for category_name, category_config in asset_categories.items():
+            symbols = category_config.get("symbols", [])
+            if symbol in symbols:
+                return category_config
+
+        # Возвращаем стандартную категорию если не найдена
+        return asset_categories.get("stable_coins", {})
 
     def get_exchange_config(
         self, exchange_name: Optional[str] = None

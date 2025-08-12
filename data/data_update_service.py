@@ -46,10 +46,12 @@ class DataUpdateService:
         self.config = config_manager.get_config()
         self.exchanges: Dict[str, any] = {}
         
-        # Настройки обновления
-        self.update_interval = 60  # Секунды между обновлениями
-        self.min_candles_for_ml = 96  # Минимум для ML (24 часа * 4 = 96 при 15мин)
-        self.max_gap_hours = 2  # Максимальный пропуск в часах
+        # Настройки обновления из конфигурации
+        data_config = self.config.get('data_management', {})
+        self.update_interval = data_config.get('update_interval', 60)  # Секунды между обновлениями
+        self.min_candles_for_ml = data_config.get('min_candles_for_ml', 96)  # Минимум для ML
+        self.max_gap_hours = data_config.get('max_gap_hours', 2)  # Максимальный пропуск в часах
+        self.auto_update = data_config.get('auto_update', True)  # Автообновление включено
         
         # Кэш статусов
         self.data_status_cache: Dict[str, DataStatus] = {}
@@ -67,8 +69,12 @@ class DataUpdateService:
         if self.is_running:
             logger.warning("DataUpdateService уже запущен")
             return
+        
+        if not self.auto_update:
+            logger.info("DataUpdateService отключен в конфигурации (auto_update=false)")
+            return
             
-        logger.info("Запуск DataUpdateService...")
+        logger.info("🔄 Запуск DataUpdateService (автообновление каждые %.1f минут)...", self.update_interval / 60)
         
         try:
             # Инициализация подключений к биржам

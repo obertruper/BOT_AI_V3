@@ -44,6 +44,11 @@ class Signal(BaseModel):
         """Alias для обратной совместимости"""
         return self.suggested_quantity
 
+    @suggested_position_size.setter
+    def suggested_position_size(self, value):
+        """Сеттер для suggested_position_size"""
+        self.suggested_quantity = value
+
     # Источник сигнала
     strategy_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     timeframe: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)

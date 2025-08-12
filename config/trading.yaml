@@ -1,11 +1,23 @@
 trading:
   risk_management:
-    max_position_size: 1000
+    # Фиксированный баланс для расчета позиций (из V2)
+    fixed_risk_balance: 500      # $500 для production (как COPE в V2)
+    # fixed_risk_balance: 100    # $100 для development (как main в V2)
+    use_fixed_balance: true       # Использовать фиксированный баланс вместо реального
+
+    max_position_size: 5000       # Максимум $5000 на позицию
+    min_position_size: 10         # Минимум $10 на позицию
     max_open_positions: 5
     max_daily_loss: 100
-    risk_per_trade: 0.02
+    risk_per_trade: 0.02          # 2% риск на сделку (проверено в V2)
+
+    # Формула расчета позиции из V2:
+    # position_size = (fixed_risk_balance * risk_per_trade * leverage) / entry_price
+    # Пример: ($500 * 0.02 * 5) / $50000 = 0.001 BTC
+
   orders:
-    default_leverage: 5
+    default_leverage: 5           # 5x для production (как COPE)
+    # default_leverage: 10        # 10x для development (как main)
     min_order_size: 10
     max_slippage: 0.002
   signals:
@@ -26,13 +38,26 @@ trading:
     initial_balance: 10000
 risk_management:
   enabled: true
-  max_risk_per_trade: 0.02
-  max_total_risk: 0.1
-  max_positions: 10
-  max_leverage: 10
+  max_risk_per_trade: 0.02       # 2% максимальный риск на сделку
+  max_total_risk: 0.1            # 10% общий риск портфеля
+  max_positions: 10              # Максимум открытых позиций
+  max_leverage: 10               # Максимальное плечо (для development)
+
+  # Параметры из V2 для расчета позиций
+  position_sizing:
+    method: "fixed_balance"      # Метод из V2: фиксированный баланс
+    fixed_balance: 500           # Баланс для расчетов
+    use_real_balance: false      # false = используем fixed_balance
 position_management:
   sync_interval: 60
   max_positions_per_symbol: 2
 signal_processing:
   confidence_threshold: 0.6
   min_volume: 100000
+
+  # Специфичные настройки для ML сигналов (из V2)
+  ml_thresholds:
+    buy_profit: 0.65             # Минимальная вероятность прибыли для покупки
+    buy_loss: 0.35               # Максимальная вероятность убытка для покупки
+    sell_profit: 0.65            # Минимальная вероятность прибыли для продажи
+    sell_loss: 0.35              # Максимальная вероятность убытка для продажи

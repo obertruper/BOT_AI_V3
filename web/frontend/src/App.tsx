@@ -1,20 +1,21 @@
-import React, { useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
-import { useTradingStore } from '@/store/tradingStore'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { useTradingStore } from '@/store/tradingStore';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
-// Страницы (пока заглушки)
-import Dashboard from '@/pages/Dashboard'
-import Traders from '@/pages/Traders'
-import Positions from '@/pages/Positions'
-import Orders from '@/pages/Orders'
-import Analytics from '@/pages/Analytics'
-import Settings from '@/pages/Settings'
+// Страницы и компоненты
+import Dashboard from '@/pages/Dashboard';
+import Traders from '@/pages/Traders';
+import Positions from '@/pages/Positions';
+import Orders from '@/pages/Orders';
+import Analytics from '@/pages/Analytics';
+import Settings from '@/pages/Settings';
+import Navigation from '@/components/Navigation';
 
-import './App.css'
+import './App.css';
 
 // Создаем клиент React Query
 const queryClient = new QueryClient({
@@ -25,7 +26,7 @@ const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000, // 5 минут
     },
   },
-})
+});
 
 function App() {
   const {
@@ -38,69 +39,72 @@ function App() {
     updateSystemStatusFromWS,
     autoRefresh,
     refreshInterval,
-  } = useTradingStore()
+  } = useTradingStore();
 
   // WebSocket для системных обновлений
   const { isConnected: systemWsConnected } = useWebSocket('system_updates', {
     onMessage: (event) => {
       switch (event.type) {
         case 'system_status':
-          updateSystemStatusFromWS(event.data)
-          break
+          updateSystemStatusFromWS(event.data);
+          break;
         case 'trader_status':
-          updateTraderFromWS(event.data)
-          break
+          updateTraderFromWS(event.data);
+          break;
         case 'position_update':
-          updatePositionFromWS(event.data)
-          break
+          updatePositionFromWS(event.data);
+          break;
         case 'order_update':
-          updateOrderFromWS(event.data)
-          break
+          updateOrderFromWS(event.data);
+          break;
       }
     },
     onConnect: () => {
-      setWsConnected(true)
+      setWsConnected(true);
     },
     onDisconnect: () => {
-      setWsConnected(false)
+      setWsConnected(false);
     },
-  })
+  });
 
   // Начальная загрузка данных
   useEffect(() => {
-    fetchSystemStatus()
-    fetchTraders()
-  }, [fetchSystemStatus, fetchTraders])
+    fetchSystemStatus();
+    fetchTraders();
+  }, [fetchSystemStatus, fetchTraders]);
 
   // Автообновление данных
   useEffect(() => {
-    if (!autoRefresh || systemWsConnected) return
+    if (!autoRefresh || systemWsConnected) {return;}
 
     const interval = setInterval(() => {
-      fetchSystemStatus()
-      fetchTraders()
-    }, refreshInterval)
+      fetchSystemStatus();
+      fetchTraders();
+    }, refreshInterval);
 
-    return () => clearInterval(interval)
-  }, [autoRefresh, systemWsConnected, refreshInterval, fetchSystemStatus, fetchTraders])
+    return () => clearInterval(interval);
+  }, [autoRefresh, systemWsConnected, refreshInterval, fetchSystemStatus, fetchTraders]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <div className="min-h-screen bg-background">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/traders" element={<Traders />} />
-            <Route path="/positions" element={<Positions />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          <Navigation />
+          <main className="py-6">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/traders" element={<Traders />} />
+              <Route path="/positions" element={<Positions />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </main>
         </div>
       </Router>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
-  )
+  );
 }
 
-export default App
+export default App;

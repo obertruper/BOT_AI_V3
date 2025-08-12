@@ -56,7 +56,7 @@ def find_processes_using_port(port: int) -> List[Dict[str, Any]]:
 
     for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            for conn in proc.connections():
+            for conn in proc.net_connections():
                 if conn.laddr and conn.laddr.port == port:
                     processes.append(
                         {

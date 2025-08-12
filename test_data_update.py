@@ -4,143 +4,157 @@
 """
 
 import asyncio
-import os
 import sys
+from datetime import datetime
+from pathlib import Path
+
+# Добавляем корневую директорию в путь
+sys.path.insert(0, str(Path(__file__).parent))
 
 from dotenv import load_dotenv
 
-# Добавляем путь к проекту
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config.config_manager import ConfigManager
+from database.connections.postgres import AsyncPGPool
 
+# Загружаем переменные окружения
 load_dotenv()
 
-# Устанавливаем переменные окружения
-os.environ["PGPORT"] = "5555"
-os.environ["PGUSER"] = "obertruper"
-os.environ["PGDATABASE"] = "bot_trading_v3"
 
+async def test_data_updates():
+    """Проверка системы автоматического обновления данных"""
 
-async def test_data_update():
-    """Тестирование автообновления данных"""
-    print("🧪 Тестирование системы автообновления данных...\n")
+    print("=" * 60)
+    print("🔍 ПРОВЕРКА СИСТЕМЫ АВТООБНОВЛЕНИЯ ДАННЫХ")
+    print("=" * 60)
 
-    from core.config.config_manager import get_global_config_manager
-    from data.data_update_service import DataUpdateService
-    from database.connections.postgres import AsyncPGPool
+    # Загружаем конфигурацию
+    config_manager = ConfigManager()
+    config = config_manager.get_config()
+    data_config = config.get("data_management", {})
 
-    # Инициализация
-    config_manager = get_global_config_manager()
-    data_service = DataUpdateService(config_manager)
+    print("\n📋 Конфигурация data_management:")
+    print(f"   • auto_update: {data_config.get('auto_update', False)}")
+    print(
+        f"   • update_interval: {data_config.get('update_interval', 60)} сек ({data_config.get('update_interval', 60) / 60:.1f} мин)"
+    )
+    print(f"   • initial_load_days: {data_config.get('initial_load_days', 7)} дней")
+    print(
+        f"   • min_candles_for_ml: {data_config.get('min_candles_for_ml', 96)} свечей"
+    )
+    print(f"   • check_on_startup: {data_config.get('check_on_startup', True)}")
 
-    print("1️⃣ Инициализация DataUpdateService...")
+    # Проверяем данные в БД
+    print("\n📊 Проверка данных в базе:")
 
     try:
-        # Запуск службы
-        await data_service.start()
-        print("   ✅ Служба запущена")
+        # Проверка общего количества данных
+        total = await AsyncPGPool.fetch("SELECT COUNT(*) as cnt FROM raw_market_data")
+        print(f"   • Всего записей: {total[0]['cnt']}")
 
-        # Получение статуса данных
-        print("\n2️⃣ Проверка статуса данных...")
+        # Проверка свежих данных (последний час)
+        fresh_1h = await AsyncPGPool.fetch(
+            """SELECT COUNT(*) as cnt, COUNT(DISTINCT symbol) as symbols
+               FROM raw_market_data
+               WHERE timestamp > EXTRACT(EPOCH FROM NOW() - INTERVAL '1 hour') * 1000"""
+        )
+        print(
+            f"   • За последний час: {fresh_1h[0]['cnt']} записей ({fresh_1h[0]['symbols']} символов)"
+        )
 
-        data_status = await data_service.get_data_status(force_refresh=True)
+        # Проверка данных за последние 24 часа
+        fresh_24h = await AsyncPGPool.fetch(
+            """SELECT COUNT(*) as cnt, COUNT(DISTINCT symbol) as symbols
+               FROM raw_market_data
+               WHERE timestamp > EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours') * 1000"""
+        )
+        print(
+            f"   • За последние 24 часа: {fresh_24h[0]['cnt']} записей ({fresh_24h[0]['symbols']} символов)"
+        )
 
-        print(f"   Найдено конфигураций: {len(data_status)}")
+        # Проверка последнего обновления по символам
+        last_updates = await AsyncPGPool.fetch(
+            """SELECT symbol,
+                      MAX(timestamp) as last_timestamp,
+                      COUNT(*) as candle_count
+               FROM raw_market_data
+               GROUP BY symbol
+               ORDER BY last_timestamp DESC
+               LIMIT 5"""
+        )
 
-        # Анализ по каждому символу
-        for key, status in data_status.items():
-            print(f"\n   📊 {status.symbol} ({status.interval_minutes} мин):")
-            print(f"      - Свечей в БД: {status.candles_count}")
-            print(f"      - Последние данные: {status.latest_timestamp}")
-            print(
-                f"      - Готов для ML: {'✅' if status.is_sufficient_for_ml else '❌'}"
+        print("\n   📈 Последние обновления по символам:")
+        for row in last_updates:
+            # Конвертируем timestamp из миллисекунд
+            last_time = (
+                datetime.fromtimestamp(row["last_timestamp"] / 1000)
+                if row["last_timestamp"]
+                else None
             )
-            print(f"      - Пропусков: {len(status.gaps)}")
+            if last_time:
+                age = datetime.now() - last_time
+                age_str = (
+                    f"{age.days}д {age.seconds // 3600}ч"
+                    if age.days > 0
+                    else f"{age.seconds // 3600}ч {(age.seconds % 3600) // 60}м"
+                )
+                print(
+                    f"      • {row['symbol']}: {row['candle_count']} свечей, последняя {age_str} назад"
+                )
+            else:
+                print(f"      • {row['symbol']}: {row['candle_count']} свечей")
 
-            if status.gaps:
-                for gap in status.gaps[:2]:  # Показываем первые 2 пропуска
-                    print(
-                        f"        Gap: {gap.start_time} - {gap.end_time} ({gap.expected_candles} свечей)"
-                    )
-
-        # Проверка обновления данных
-        print("\n3️⃣ Тестирование обновления данных...")
-
-        # Получаем количество данных до обновления
-        pool = await AsyncPGPool.get_pool()
-        before_count = await pool.fetchval(
-            """
-            SELECT COUNT(*) FROM raw_market_data
-            WHERE symbol = 'BTCUSDT'
-            AND interval_minutes = 15
-            AND datetime > NOW() - INTERVAL '1 hour'
-        """
+        # Проверка готовности для ML (минимум 96 свечей)
+        ml_ready = await AsyncPGPool.fetch(
+            """SELECT symbol, COUNT(*) as cnt
+               FROM raw_market_data
+               GROUP BY symbol
+               HAVING COUNT(*) >= 96"""
         )
-
-        print(f"   Свечей за последний час ДО обновления: {before_count}")
-
-        # Ждем одно обновление (60 секунд)
-        print("\n   ⏳ Ждем автоматического обновления (60 сек)...")
-        await asyncio.sleep(65)
-
-        # Проверяем после обновления
-        after_count = await pool.fetchval(
-            """
-            SELECT COUNT(*) FROM raw_market_data
-            WHERE symbol = 'BTCUSDT'
-            AND interval_minutes = 15
-            AND datetime > NOW() - INTERVAL '1 hour'
-        """
-        )
-
-        print(f"   Свечей за последний час ПОСЛЕ обновления: {after_count}")
-
-        if after_count > before_count:
-            print(
-                f"   ✅ Данные обновились! Добавлено {after_count - before_count} новых свечей"
-            )
-        else:
-            print("   ⚠️ Новых данных не появилось (возможно, рынок закрыт)")
-
-        # Проверка работы с биржей
-        print("\n4️⃣ Тестирование получения данных с биржи...")
-
-        from exchanges.bybit.bybit_exchange import BybitExchange
-
-        exchange = BybitExchange(
-            api_key=os.getenv("BYBIT_API_KEY"),
-            api_secret=os.getenv("BYBIT_API_SECRET"),
-            sandbox=False,
-        )
-
-        # Получаем последние свечи
-        candles = await exchange.get_recent_candles(
-            symbol="BTCUSDT", interval_minutes=15, count=5
-        )
-
-        print(f"   Получено {len(candles)} свечей с биржи:")
-        for candle in candles[-3:]:  # Показываем последние 3
-            print(
-                f"      {candle.timestamp}: O={candle.open_price} H={candle.high_price} "
-                f"L={candle.low_price} C={candle.close_price} V={candle.volume}"
-            )
-
-        # Остановка службы
-        print("\n5️⃣ Остановка службы...")
-        await data_service.stop()
-        print("   ✅ Служба остановлена")
-
-        print("\n✅ Тестирование завершено успешно!")
+        print(f"\n   🤖 Символов готовых для ML (≥96 свечей): {len(ml_ready)}")
 
     except Exception as e:
-        print(f"\n❌ Ошибка при тестировании: {e}")
-        import traceback
+        print(f"   ❌ Ошибка проверки БД: {e}")
 
-        traceback.print_exc()
+    # Проверка DataUpdateService
+    print("\n🔄 Проверка DataUpdateService:")
+    try:
+        from data.data_update_service import DataUpdateService
 
-        # Убедимся что служба остановлена
-        if data_service.is_running:
-            await data_service.stop()
+        service = DataUpdateService(config_manager)
+        print("   ✅ DataUpdateService инициализирован")
+        print(
+            f"   • Интервал обновления: {service.update_interval} сек ({service.update_interval / 60:.1f} мин)"
+        )
+        print(
+            f"   • Автообновление: {'Включено' if service.auto_update else 'Отключено'}"
+        )
+
+    except Exception as e:
+        print(f"   ❌ Ошибка инициализации DataUpdateService: {e}")
+
+    print("\n" + "=" * 60)
+    print("📌 РЕЗЮМЕ:")
+
+    if data_config.get("auto_update", False):
+        interval_min = data_config.get("update_interval", 60) / 60
+        print(f"✅ Автообновление ВКЛЮЧЕНО (каждые {interval_min:.1f} минут)")
+    else:
+        print("⚠️ Автообновление ОТКЛЮЧЕНО")
+
+    if fresh_1h[0]["cnt"] > 0:
+        print("✅ Есть свежие данные (за последний час)")
+    else:
+        print("⚠️ Нет свежих данных - требуется загрузка")
+
+    print("\n🚀 При запуске через ./start_with_logs.sh:")
+    print("   1. Автоматически проверит свежесть данных")
+    print("   2. Загрузит недостающие данные если нужно")
+    print(
+        f"   3. Запустит автообновление каждые {data_config.get('update_interval', 60) / 60:.1f} минут"
+    )
+
+    print("=" * 60)
 
 
 if __name__ == "__main__":
-    asyncio.run(test_data_update())
+    asyncio.run(test_data_updates())

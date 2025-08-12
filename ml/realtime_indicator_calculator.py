@@ -449,34 +449,58 @@ class RealTimeIndicatorCalculator:
         if len(ohlcv_df) < lookback:  # Минимум нужно lookback свечей
             raise ValueError(f"Недостаточно данных: {len(ohlcv_df)} < {lookback}")
 
-        # Рассчитываем признаки для всего датасета сразу
-        all_features = await self.get_features_for_ml(symbol, ohlcv_df)
+        # ПРАВИЛЬНОЕ ИСПРАВЛЕНИЕ: Рассчитываем признаки для всего DataFrame сразу
+        # FeatureEngineer уже правильно рассчитывает признаки с rolling windows
+        logger.info(f"🔄 Расчет признаков для {symbol}, данных: {len(ohlcv_df)}")
 
-        if len(all_features) == 0:
-            raise ValueError("Не удалось получить признаки")
+        # Подготавливаем DataFrame
+        df = self._prepare_dataframe(ohlcv_df, symbol)
 
-        # all_features может быть словарь или numpy array
-        if isinstance(all_features, dict):
-            feature_names = list(all_features.keys())
-            feature_values = list(all_features.values())
-            features_array = np.array(feature_values).reshape(1, -1)  # [1, features]
-        elif isinstance(all_features, np.ndarray):
-            # Если это уже массив, используем как есть
-            features_array = (
-                all_features.reshape(1, -1) if all_features.ndim == 1 else all_features
-            )
-            feature_names = [f"feature_{i}" for i in range(features_array.shape[1])]
+        # Рассчитываем признаки для всего DataFrame
+        # FeatureEngineer возвращает массив (n_samples, n_features)
+        features_result = self.feature_engineer.create_features(df)
+
+        if isinstance(features_result, pd.DataFrame):
+            # Если DataFrame, берем числовые колонки
+            numeric_cols = features_result.select_dtypes(
+                include=[np.number]
+            ).columns.tolist()
+            features_array = features_result[numeric_cols].values
+        elif isinstance(features_result, np.ndarray):
+            features_array = features_result
         else:
-            raise ValueError(f"Неожиданный тип all_features: {type(all_features)}")
+            raise ValueError(f"Неожиданный тип результата: {type(features_result)}")
 
-        # Создаем последовательность из lookback точек (дублируем для симуляции временной последовательности)
-        # В реальной реализации здесь должны быть признаки для каждого временного шага
-        features_sequence = np.tile(
-            features_array, (lookback, 1)
-        )  # [lookback, features]
-        features_array = features_sequence.reshape(
-            1, lookback, -1
-        )  # [1, lookback, features]
+        # Проверяем размерность
+        if features_array.ndim != 2:
+            raise ValueError(
+                f"Неправильная размерность признаков: {features_array.shape}"
+            )
+
+        # Берем последние lookback точек
+        if len(features_array) < lookback:
+            # Если данных меньше чем нужно, дополняем первыми значениями
+            padding_size = lookback - len(features_array)
+            padding = np.tile(features_array[0], (padding_size, 1))
+            features_array = np.vstack([padding, features_array])
+        else:
+            # Берем последние lookback точек
+            features_array = features_array[-lookback:]
+
+        # Добавляем batch dimension: (lookback, features) -> (1, lookback, features)
+        features_array = features_array.reshape(1, lookback, -1)
+
+        # Проверяем дисперсию признаков
+        feature_std = np.std(features_array[0], axis=0)
+        non_zero_std = np.sum(feature_std > 1e-6)
+
+        logger.info(f"📊 ML признаки для {symbol}: shape={features_array.shape}")
+        logger.info(
+            f"   Признаков с ненулевой дисперсией: {non_zero_std}/{features_array.shape[2]}"
+        )
+        logger.debug(
+            f"   Дисперсия: min={feature_std.min():.6f}, max={feature_std.max():.6f}, mean={feature_std.mean():.6f}"
+        )
 
         # Метаданные
         metadata = {
@@ -485,6 +509,7 @@ class RealTimeIndicatorCalculator:
             "last_price": float(ohlcv_df["close"].iloc[-1]),
             "lookback": lookback,
             "features_count": features_array.shape[2],
+            "non_zero_variance_features": int(non_zero_std),
         }
 
         return features_array, metadata

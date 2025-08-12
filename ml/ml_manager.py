@@ -309,11 +309,9 @@ class MLManager:
                     raise ValueError(
                         f"Expected shape ({self.context_length}, {self.num_features}), got {input_data.shape}"
                     )
-                # ИСПРАВЛЕНИЕ: Отключаем scaler и для numpy array данных
-                features_scaled = input_data
-                logger.info(
-                    "⚠️ Scaler отключен для numpy array - используем данные как есть"
-                )
+                # Нормализуем numpy array с помощью scaler
+                features_scaled = self.scaler.transform(input_data)
+                logger.info("✅ Numpy array нормализован с помощью scaler")
 
             # Если это DataFrame - обрабатываем как OHLCV данные
             else:
@@ -386,13 +384,9 @@ class MLManager:
                     padding = np.zeros((padding_size, features_array.shape[1]))
                     features = np.vstack([padding, features_array])
 
-                # ВРЕМЕННО ОТКЛЮЧЕНО: Нормализуем данные
-                # features_scaled = self.scaler.transform(features)
-                # ИСПРАВЛЕНИЕ: Используем данные как есть (FeatureEngineer уже нормализовал)
-                features_scaled = features
-                logger.info(
-                    "⚠️ Scaler временно отключен - используем данные от FeatureEngineer как есть"
-                )
+                # Нормализуем данные с помощью загруженного scaler
+                features_scaled = self.scaler.transform(features)
+                logger.info("✅ Данные нормализованы с помощью scaler")
 
             # Преобразуем в тензор
             x = torch.FloatTensor(features_scaled).unsqueeze(0).to(self.device)
@@ -502,9 +496,16 @@ class MLManager:
         # Конвертируем предсказанные доходности в проценты для SL/TP
         long_levels = future_returns  # Используем future returns как базу для уровней
         short_levels = -future_returns  # Инвертируем для коротких позиций
-        confidence_scores = (
-            risk_metrics  # Используем risk metrics как proxy для confidence
-        )
+
+        # ИСПРАВЛЕНИЕ: Не используем risk_metrics как confidence_scores
+        # Вместо этого используем вероятности направлений как индикатор уверенности
+        # Максимальная вероятность среди классов показывает уверенность модели
+        confidence_scores = np.zeros(4)
+        for i in range(4):
+            logits = direction_logits[i * 3 : (i + 1) * 3]
+            probs = np.exp(logits) / np.sum(np.exp(logits))
+            # Используем максимальную вероятность как уверенность
+            confidence_scores[i] = np.max(probs)
 
         # ДИАГНОСТИЧЕСКОЕ ЛОГИРОВАНИЕ
         logger.warning(
@@ -522,7 +523,7 @@ class MLManager:
 
 🎯 Direction Logits (4-15) - 12 значений:
    Raw logits: {direction_logits}
-   Структура: 4 таймфрейма × 3 класса (SHORT=0, NEUTRAL=1, LONG=2)
+   Структура: 4 таймфрейма × 3 класса (LONG=0, SHORT=1, NEUTRAL=2)
 
 ⚡ Risk Metrics (16-19):
    {risk_metrics}
@@ -546,7 +547,7 @@ class MLManager:
             probs = exp_logits / exp_logits.sum()
             direction_probs.append(probs)
 
-            # Argmax для получения класса (0=SHORT, 1=NEUTRAL, 2=LONG)
+            # Argmax для получения класса (0=LONG, 1=SHORT, 2=NEUTRAL)
             direction_class = np.argmax(probs)
             directions.append(direction_class)
 
@@ -570,18 +571,19 @@ class MLManager:
 
         logger.info(f"Weighted direction: {weighted_direction:.3f}")
         logger.info(
-            f"Direction counts: SHORT={direction_counts[0]}, NEUTRAL={direction_counts[1]}, LONG={direction_counts[2]}"
+            f"Direction counts: LONG={direction_counts[0]}, SHORT={direction_counts[1]}, NEUTRAL={direction_counts[2]}"
         )
         logger.info(f"Signal strength (agreement): {signal_strength:.3f}")
 
         # Определяем тип сигнала на основе взвешенного среднего
-        # 0=SHORT, 1=NEUTRAL, 2=LONG
+        # ИСПРАВЛЕНО: Правильная интерпретация классов модели
+        # В обучении: 0=LONG (покупка), 1=SHORT (продажа), 2=FLAT (нейтрально)
         if weighted_direction < 0.5:
-            signal_type = "SHORT"
-        elif weighted_direction > 1.5:
-            signal_type = "LONG"
+            signal_type = "LONG"  # Класс 0 = LONG
+        elif weighted_direction < 1.5:
+            signal_type = "SHORT"  # Класс 1 = SHORT
         else:
-            signal_type = "NEUTRAL"
+            signal_type = "NEUTRAL"  # Класс 2 = FLAT/NEUTRAL
 
         # Рассчитываем уровни SL/TP на основе future_returns
         # future_returns содержит предсказанные доходности для разных таймфреймов
@@ -629,14 +631,13 @@ class MLManager:
         # 2. Confidence scores от модели
         # 3. Риск метрик
 
-        # Средняя уверенность из confidence_scores
-        model_confidence = float(
-            np.mean(1.0 / (1.0 + np.exp(-confidence_scores)))
-        )  # Sigmoid
+        # ИСПРАВЛЕНИЕ: confidence_scores уже содержат вероятности (0-1), не нужен sigmoid
+        model_confidence = float(np.mean(confidence_scores))
 
-        # Комбинированная уверенность
+        # Улучшенная формула комбинированной уверенности
+        # Даем больший вес model_confidence для разнообразия
         combined_confidence = (
-            signal_strength * 0.4 + model_confidence * 0.4 + (1.0 - avg_risk) * 0.2
+            signal_strength * 0.3 + model_confidence * 0.5 + (1.0 - avg_risk) * 0.2
         )
 
         # Вероятность успеха
