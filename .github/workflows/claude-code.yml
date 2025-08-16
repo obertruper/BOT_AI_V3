@@ -47,50 +47,15 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Claude Code Action
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@main
         with:
           # Authentication
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
           # Model configuration
-          model: claude-3-5-sonnet-20241022
-          max_tokens: 8192
-          temperature: 0
-
-          # Behavior configuration
-          auto_review: true
-          review_scope: changed_files
-
-          # Tools and MCP configuration
-          mcp_enabled: true
-          mcp_config: |
-            {
-              "mcpServers": {
-                "filesystem": {
-                  "command": "npx",
-                  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/workspace"]
-                },
-                "sequential-thinking": {
-                  "command": "npx",
-                  "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
-                },
-                "memory": {
-                  "command": "npx",
-                  "args": ["-y", "@modelcontextprotocol/server-memory"]
-                },
-                "github": {
-                  "command": "npx",
-                  "args": ["-y", "@modelcontextprotocol/server-github"],
-                  "env": {
-                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
-                  }
-                }
-              }
-            }
-
-          # Allowed tools pattern
-          allowed_tools: "*"
+          model: claude-3-5-sonnet-latest
+          max_tokens: 4096
 
           # Custom instructions for the project
           custom_instructions: |
@@ -119,12 +84,6 @@ jobs:
 
           # Review settings
           review_language: en
-          review_detail_level: detailed
-
-          # Performance settings
-          timeout_seconds: 300
-          retry_on_error: true
-          max_retries: 3
 
   # Separate job for automatic PR review
   claude-auto-review:
@@ -158,7 +117,7 @@ jobs:
 
       - name: Claude PR Review
         if: steps.changed-files.outputs.any_changed == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@main
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -223,7 +182,7 @@ jobs:
             });
 
       - name: Claude Comprehensive Analysis
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@main
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

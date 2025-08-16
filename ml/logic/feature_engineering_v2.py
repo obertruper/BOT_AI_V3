@@ -273,6 +273,42 @@ class FeatureEngineer:
         for period in returns_periods:
             df[f"returns_{period}"] = np.log(df["close"] / df["close"].shift(period))
 
+        # Волатильность за разные периоды (ДОБАВЛЕНО для REQUIRED_FEATURES_240)
+        volatility_periods = [5, 10, 15, 20, 30, 45, 60, 90]
+        for period in volatility_periods:
+            df[f"volatility_{period}"] = df["returns"].rolling(period, min_periods=max(1, period//2)).std()
+
+        # Микроструктурные признаки (ДОБАВЛЕНО для REQUIRED_FEATURES_240)
+        # Спред high-low (bid-ask spread аппроксимация)
+        df["spread"] = self.safe_divide(df["high"] - df["low"], df["close"], fill_value=0.0)
+        df["spread_ma_10"] = df["spread"].rolling(10, min_periods=5).mean()
+        df["spread_std_10"] = df["spread"].rolling(10, min_periods=5).std()
+
+        # Order imbalance (дисбаланс ордеров) - аппроксимация через направление цены и объем
+        df["price_direction"] = np.sign(df["close"] - df["open"])
+        df["order_imbalance"] = df["volume"] * df["price_direction"]
+        df["order_imbalance_ma_10"] = df["order_imbalance"].rolling(10, min_periods=5).mean()
+        df["order_imbalance_std_10"] = df["order_imbalance"].rolling(10, min_periods=5).std()
+
+        # Buy/Sell pressure (давление покупателей/продавцов)
+        # Позитивное движение = давление покупателей
+        df["buy_pressure"] = np.where(df["price_direction"] > 0, df["volume"], 0)
+        df["sell_pressure"] = np.where(df["price_direction"] < 0, df["volume"], 0)
+        df["net_pressure"] = df["buy_pressure"] - df["sell_pressure"]
+        
+        df["buy_pressure_ma_10"] = df["buy_pressure"].rolling(10, min_periods=5).mean()
+        df["sell_pressure_ma_10"] = df["sell_pressure"].rolling(10, min_periods=5).mean()
+        df["net_pressure_ma_10"] = df["net_pressure"].rolling(10, min_periods=5).mean()
+
+        # Order flow признаки
+        for period in [5, 10, 20]:
+            df[f"order_flow_{period}"] = df["order_imbalance"].rolling(period, min_periods=max(1, period//2)).sum()
+            # Order flow ratio
+            total_volume = df["volume"].rolling(period, min_periods=max(1, period//2)).sum()
+            df[f"order_flow_ratio_{period}"] = self.safe_divide(
+                df[f"order_flow_{period}"], total_volume, fill_value=0.0
+            )
+
         # Ценовые соотношения
         df["high_low_ratio"] = df["high"] / df["low"]
         df["close_open_ratio"] = df["close"] / df["open"]
@@ -1500,8 +1536,20 @@ class FeatureEngineer:
         df["day"] = df["datetime"].dt.day
         df["month"] = df["datetime"].dt.month
 
+        # Дополнительные циклические признаки (ДОБАВЛЕНО для REQUIRED_FEATURES_240)
+        df["day_sin"] = np.sin(2 * np.pi * df["day"] / 31)  # Day of month
+        df["day_cos"] = np.cos(2 * np.pi * df["day"] / 31)
+        
+        df["week_sin"] = np.sin(2 * np.pi * df["datetime"].dt.isocalendar().week / 52)  # Week of year
+        df["week_cos"] = np.cos(2 * np.pi * df["datetime"].dt.isocalendar().week / 52)
+
         df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
         df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
+
+        # Дополнительные временные признаки (ДОБАВЛЕНО для REQUIRED_FEATURES_240)
+        df["is_month_start"] = (df["day"] <= 3).astype(int)  # Первые 3 дня месяца
+        df["is_month_end"] = (df["day"] >= 28).astype(int)   # Последние дни месяца
+        df["is_quarter_end"] = df["datetime"].dt.month.isin([3, 6, 9, 12]).astype(int)
 
         # Торговые сессии
         df["asian_session"] = ((df["hour"] >= 0) & (df["hour"] < 8)).astype(int)
