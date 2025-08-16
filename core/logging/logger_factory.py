@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 
 @dataclass
@@ -26,17 +26,17 @@ class LoggerConfig:
     """Конфигурация логгера"""
 
     name: str
-    level: Union[int, str] = logging.INFO
+    level: int | str = logging.INFO
     format_type: str = "standard"  # standard, detailed, json
-    file_path: Optional[str] = None
+    file_path: str | None = None
     console_output: bool = True
     rotation: str = "size"  # size, time, none
     max_bytes: int = 10 * 1024 * 1024  # 10MB
     backup_count: int = 5
     when: str = "midnight"  # for time rotation
-    trader_id: Optional[str] = None
-    session_id: Optional[str] = None
-    extra_fields: Dict[str, Any] = field(default_factory=dict)
+    trader_id: str | None = None
+    session_id: str | None = None
+    extra_fields: dict[str, Any] = field(default_factory=dict)
 
 
 class TraderLogFormatter(logging.Formatter):
@@ -45,8 +45,8 @@ class TraderLogFormatter(logging.Formatter):
     def __init__(
         self,
         format_string: str,
-        trader_id: Optional[str] = None,
-        session_id: Optional[str] = None,
+        trader_id: str | None = None,
+        session_id: str | None = None,
     ):
         super().__init__(format_string, datefmt="%Y-%m-%d %H:%M:%S")
         self.trader_id = trader_id
@@ -70,9 +70,7 @@ class TraderLogFormatter(logging.Formatter):
 class JSONFormatter(logging.Formatter):
     """JSON форматтер для structured logging"""
 
-    def __init__(
-        self, trader_id: Optional[str] = None, session_id: Optional[str] = None
-    ):
+    def __init__(self, trader_id: str | None = None, session_id: str | None = None):
         super().__init__()
         self.trader_id = trader_id
         self.session_id = session_id
@@ -135,18 +133,16 @@ class LoggerFactory:
     }
 
     def __init__(self):
-        self._loggers: Dict[str, logging.Logger] = {}
-        self._configs: Dict[str, LoggerConfig] = {}
-        self._lock = (
-            asyncio.Lock() if asyncio.iscoroutinefunction(self.__init__) else None
-        )
+        self._loggers: dict[str, logging.Logger] = {}
+        self._configs: dict[str, LoggerConfig] = {}
+        self._lock = asyncio.Lock() if asyncio.iscoroutinefunction(self.__init__) else None
 
     def get_logger(
         self,
         name: str,
-        trader_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        config: Optional[LoggerConfig] = None,
+        trader_id: str | None = None,
+        session_id: str | None = None,
+        config: LoggerConfig | None = None,
     ) -> logging.Logger:
         """
         Получение логгера с поддержкой мульти-трейдеров
@@ -173,9 +169,7 @@ class LoggerFactory:
 
         return logger
 
-    def _make_logger_key(
-        self, name: str, trader_id: Optional[str], session_id: Optional[str]
-    ) -> str:
+    def _make_logger_key(self, name: str, trader_id: str | None, session_id: str | None) -> str:
         """Создание уникального ключа логгера"""
         parts = [name]
         if trader_id:
@@ -187,9 +181,9 @@ class LoggerFactory:
     def _create_logger(
         self,
         name: str,
-        trader_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        config: Optional[LoggerConfig] = None,
+        trader_id: str | None = None,
+        session_id: str | None = None,
+        config: LoggerConfig | None = None,
     ) -> logging.Logger:
         """Создание и настройка нового логгера"""
 
@@ -212,9 +206,7 @@ class LoggerFactory:
 
         # Добавляем console handler если нужен
         if config.console_output:
-            console_handler = self._create_console_handler(
-                config, trader_id, session_id
-            )
+            console_handler = self._create_console_handler(config, trader_id, session_id)
             logger.addHandler(console_handler)
 
         # Добавляем file handler если указан путь
@@ -231,16 +223,14 @@ class LoggerFactory:
         return logger
 
     def _create_console_handler(
-        self, config: LoggerConfig, trader_id: Optional[str], session_id: Optional[str]
+        self, config: LoggerConfig, trader_id: str | None, session_id: str | None
     ) -> logging.StreamHandler:
         """Создание console handler"""
         handler = logging.StreamHandler(sys.stdout)
 
         # Выбираем формат в зависимости от наличия trader_id
         if trader_id and session_id:
-            format_name = (
-                "trader_detailed" if config.format_type == "detailed" else "trader"
-            )
+            format_name = "trader_detailed" if config.format_type == "detailed" else "trader"
         elif trader_id:
             format_name = "trader"
         else:
@@ -257,7 +247,7 @@ class LoggerFactory:
         return handler
 
     def _create_file_handler(
-        self, config: LoggerConfig, trader_id: Optional[str], session_id: Optional[str]
+        self, config: LoggerConfig, trader_id: str | None, session_id: str | None
     ) -> logging.Handler:
         """Создание file handler с поддержкой ротации"""
 
@@ -300,8 +290,8 @@ class LoggerFactory:
     def get_trader_logger(
         self,
         trader_id: str,
-        session_id: Optional[str] = None,
-        log_file: Optional[str] = None,
+        session_id: str | None = None,
+        log_file: str | None = None,
     ) -> logging.Logger:
         """
         Создание специального логгера для трейдера
@@ -325,9 +315,7 @@ class LoggerFactory:
 
         return self.get_logger("trader", trader_id, session_id, config)
 
-    def set_level(
-        self, level: Union[int, str], logger_pattern: Optional[str] = None
-    ) -> None:
+    def set_level(self, level: int | str, logger_pattern: str | None = None) -> None:
         """
         Установка уровня логирования
 
@@ -351,7 +339,7 @@ class LoggerFactory:
     def add_file_handler_to_all(
         self,
         log_file: str,
-        level: Optional[Union[int, str]] = None,
+        level: int | str | None = None,
         format_type: str = "detailed",
     ) -> None:
         """Добавление file handler ко всем существующим логгерам"""
@@ -392,9 +380,7 @@ class LoggerFactory:
                 if config and config.format_type == "json":
                     formatter = JSONFormatter(config.trader_id, config.session_id)
                 else:
-                    format_string = self.FORMATS.get(
-                        format_type, self.FORMATS["detailed"]
-                    )
+                    format_string = self.FORMATS.get(format_type, self.FORMATS["detailed"])
                     trader_id = config.trader_id if config else None
                     session_id = config.session_id if config else None
                     formatter = TraderLogFormatter(format_string, trader_id, session_id)
@@ -405,8 +391,8 @@ class LoggerFactory:
     def remove_logger(
         self,
         name: str,
-        trader_id: Optional[str] = None,
-        session_id: Optional[str] = None,
+        trader_id: str | None = None,
+        session_id: str | None = None,
     ) -> None:
         """Удаление логгера"""
         logger_key = self._make_logger_key(name, trader_id, session_id)
@@ -423,16 +409,16 @@ class LoggerFactory:
             if logger_key in self._configs:
                 del self._configs[logger_key]
 
-    def get_all_loggers(self) -> Dict[str, logging.Logger]:
+    def get_all_loggers(self) -> dict[str, logging.Logger]:
         """Получение всех зарегистрированных логгеров"""
         return self._loggers.copy()
 
     def get_logger_config(
         self,
         name: str,
-        trader_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-    ) -> Optional[LoggerConfig]:
+        trader_id: str | None = None,
+        session_id: str | None = None,
+    ) -> LoggerConfig | None:
         """Получение конфигурации логгера"""
         logger_key = self._make_logger_key(name, trader_id, session_id)
         return self._configs.get(logger_key)
@@ -449,7 +435,7 @@ class LoggerFactory:
 
 
 # Глобальный экземпляр фабрики для обратной совместимости
-_global_logger_factory: Optional[LoggerFactory] = None
+_global_logger_factory: LoggerFactory | None = None
 
 
 def get_global_logger_factory() -> LoggerFactory:
@@ -461,9 +447,7 @@ def get_global_logger_factory() -> LoggerFactory:
 
 
 # Функции обратной совместимости с v1.0/v2.0
-def get_logger(
-    name: str, level: Optional[int] = None, detailed: bool = False
-) -> logging.Logger:
+def get_logger(name: str, level: int | None = None, detailed: bool = False) -> logging.Logger:
     """Получение логгера (совместимость с v1.0/v2.0)"""
     factory = get_global_logger_factory()
 
@@ -476,7 +460,7 @@ def get_logger(
     return factory.get_logger(name, config=config)
 
 
-def set_level(level: int, logger_name: Optional[str] = None):
+def set_level(level: int, logger_name: str | None = None):
     """Установка уровня логирования (совместимость с v1.0/v2.0)"""
     factory = get_global_logger_factory()
     factory.set_level(level, logger_name)
@@ -484,8 +468,8 @@ def set_level(level: int, logger_name: Optional[str] = None):
 
 def add_file_handler(
     log_file: str,
-    level: Optional[int] = None,
-    logger_name: Optional[str] = None,
+    level: int | None = None,
+    logger_name: str | None = None,
     detailed: bool = True,
     rotate: bool = True,
     max_bytes: int = 10 * 1024 * 1024,
@@ -521,9 +505,7 @@ def add_file_handler(
             logger.addHandler(handler)
     else:
         # Для всех логгеров
-        factory.add_file_handler_to_all(
-            log_file, level, "detailed" if detailed else "standard"
-        )
+        factory.add_file_handler_to_all(log_file, level, "detailed" if detailed else "standard")
 
 
 def get_level_name(level: int) -> str:
@@ -532,7 +514,7 @@ def get_level_name(level: int) -> str:
 
 
 def set_logger_properties(
-    logger_name: str, propagate: bool = False, level: Optional[int] = None
+    logger_name: str, propagate: bool = False, level: int | None = None
 ) -> None:
     """Установка свойств логгера (совместимость с v1.0/v2.0)"""
     logger = logging.getLogger(logger_name)

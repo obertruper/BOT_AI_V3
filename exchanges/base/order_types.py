@@ -8,7 +8,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class OrderType(Enum):
@@ -105,17 +105,17 @@ class OrderRequest:
     quantity: float  # Количество
 
     # Цены
-    price: Optional[float] = None  # Цена (для лимитных ордеров)
-    stop_price: Optional[float] = None  # Стоп цена
-    trigger_price: Optional[float] = None  # Цена триггера
+    price: float | None = None  # Цена (для лимитных ордеров)
+    stop_price: float | None = None  # Стоп цена
+    trigger_price: float | None = None  # Цена триггера
 
     # Время действия
     time_in_force: TimeInForce = TimeInForce.GTC
-    expire_time: Optional[datetime] = None  # Время истечения для GTD
+    expire_time: datetime | None = None  # Время истечения для GTD
 
     # Клиентские идентификаторы
-    client_order_id: Optional[str] = None  # Клиентский ID
-    order_link_id: Optional[str] = None  # ID связанного ордера
+    client_order_id: str | None = None  # Клиентский ID
+    order_link_id: str | None = None  # ID связанного ордера
 
     # Специальные параметры
     reduce_only: bool = False  # Только уменьшение позиции
@@ -123,24 +123,24 @@ class OrderRequest:
     position_idx: int = 0  # Индекс позиции (для hedge mode)
 
     # SL/TP параметры
-    stop_loss: Optional[float] = None  # Stop Loss цена
-    take_profit: Optional[float] = None  # Take Profit цена
-    sl_trigger_by: Optional[str] = None  # Триггер SL (LastPrice/IndexPrice/MarkPrice)
-    tp_trigger_by: Optional[str] = None  # Триггер TP
+    stop_loss: float | None = None  # Stop Loss цена
+    take_profit: float | None = None  # Take Profit цена
+    sl_trigger_by: str | None = None  # Триггер SL (LastPrice/IndexPrice/MarkPrice)
+    tp_trigger_by: str | None = None  # Триггер TP
 
     # Трейлинг стоп
-    trailing_stop: Optional[float] = None  # Трейлинг стоп
-    trailing_stop_pct: Optional[float] = None  # Трейлинг стоп в процентах
-    active_price: Optional[float] = None  # Цена активации
+    trailing_stop: float | None = None  # Трейлинг стоп
+    trailing_stop_pct: float | None = None  # Трейлинг стоп в процентах
+    active_price: float | None = None  # Цена активации
 
     # Дополнительные параметры
-    margin_mode: Optional[str] = None  # Режим маржи (ISOLATED/CROSS)
-    leverage: Optional[float] = None  # Плечо
+    margin_mode: str | None = None  # Режим маржи (ISOLATED/CROSS)
+    leverage: float | None = None  # Плечо
 
     # Метаданные
-    exchange_params: Dict[str, Any] = field(default_factory=dict)
+    exchange_params: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование в словарь"""
         data = {
             "symbol": self.symbol,
@@ -176,7 +176,7 @@ class OrderRequest:
 
         return data
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """Валидация запроса ордера"""
         errors = []
 
@@ -196,9 +196,7 @@ class OrderRequest:
 
         if self.order_type in [OrderType.STOP_MARKET, OrderType.STOP_LIMIT]:
             if self.stop_price is None or self.stop_price <= 0:
-                errors.append(
-                    f"{self.order_type.value} order requires valid stop price"
-                )
+                errors.append(f"{self.order_type.value} order requires valid stop price")
 
         if self.time_in_force == TimeInForce.GTD and self.expire_time is None:
             errors.append("GTD order requires expire time")
@@ -219,34 +217,34 @@ class OrderResponse:
     """
 
     success: bool  # Успешность операции
-    order_id: Optional[str] = None  # ID ордера
-    client_order_id: Optional[str] = None  # Клиентский ID
+    order_id: str | None = None  # ID ордера
+    client_order_id: str | None = None  # Клиентский ID
 
     # Статус ордера
-    status: Optional[OrderStatus] = None
-    message: Optional[str] = None  # Сообщение об ошибке
+    status: OrderStatus | None = None
+    message: str | None = None  # Сообщение об ошибке
 
     # Параметры ордера
-    symbol: Optional[str] = None
-    side: Optional[OrderSide] = None
-    order_type: Optional[OrderType] = None
-    quantity: Optional[float] = None
-    price: Optional[float] = None
-    filled_quantity: Optional[float] = None
-    avg_price: Optional[float] = None
+    symbol: str | None = None
+    side: OrderSide | None = None
+    order_type: OrderType | None = None
+    quantity: float | None = None
+    price: float | None = None
+    filled_quantity: float | None = None
+    avg_price: float | None = None
 
     # Время
-    created_time: Optional[datetime] = None
-    updated_time: Optional[datetime] = None
+    created_time: datetime | None = None
+    updated_time: datetime | None = None
 
     # Комиссии
-    commission: Optional[float] = None
-    commission_asset: Optional[str] = None
+    commission: float | None = None
+    commission_asset: str | None = None
 
     # Дополнительная информация
-    exchange_data: Dict[str, Any] = field(default_factory=dict)
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
+    exchange_data: dict[str, Any] = field(default_factory=dict)
+    error_code: str | None = None
+    error_message: str | None = None
 
     @classmethod
     def success_response(
@@ -272,7 +270,7 @@ class OrderResponse:
 
     @classmethod
     def error_response(
-        cls, error_message: str, error_code: Optional[str] = None, **kwargs
+        cls, error_message: str, error_code: str | None = None, **kwargs
     ) -> "OrderResponse":
         """Создание ответа с ошибкой"""
         return cls(
@@ -283,7 +281,7 @@ class OrderResponse:
             **kwargs,
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование в словарь"""
         return {
             "success": self.success,
@@ -318,8 +316,8 @@ class ConditionalOrderParams:
     trigger_by: str = "LastPrice"  # Тип цены для триггера
 
     # OCO параметры
-    oco_stop_price: Optional[float] = None  # Стоп цена для OCO
-    oco_limit_price: Optional[float] = None  # Лимит цена для OCO
+    oco_stop_price: float | None = None  # Стоп цена для OCO
+    oco_limit_price: float | None = None  # Лимит цена для OCO
     oco_time_in_force: TimeInForce = TimeInForce.GTC
 
 
@@ -492,16 +490,12 @@ def create_market_sell_order(symbol: str, quantity: float, **kwargs) -> OrderReq
     return OrderBuilder(symbol).sell(quantity).market().build()
 
 
-def create_limit_buy_order(
-    symbol: str, quantity: float, price: float, **kwargs
-) -> OrderRequest:
+def create_limit_buy_order(symbol: str, quantity: float, price: float, **kwargs) -> OrderRequest:
     """Создание лимитного ордера на покупку"""
     return OrderBuilder(symbol).buy(quantity).limit(price).build()
 
 
-def create_limit_sell_order(
-    symbol: str, quantity: float, price: float, **kwargs
-) -> OrderRequest:
+def create_limit_sell_order(symbol: str, quantity: float, price: float, **kwargs) -> OrderRequest:
     """Создание лимитного ордера на продажу"""
     return OrderBuilder(symbol).sell(quantity).limit(price).build()
 
@@ -514,9 +508,7 @@ def create_stop_loss_order(
     return OrderBuilder(symbol).side(side).stop_market(stop_price).reduce_only().build()
 
 
-def create_take_profit_order(
-    symbol: str, quantity: float, price: float, **kwargs
-) -> OrderRequest:
+def create_take_profit_order(symbol: str, quantity: float, price: float, **kwargs) -> OrderRequest:
     """Создание Take Profit ордера"""
     side = OrderSide.SELL if quantity > 0 else OrderSide.BUY
     return OrderBuilder(symbol).side(side).limit(price).reduce_only().build()
@@ -527,9 +519,9 @@ def validate_order_params(
     side: OrderSide,
     order_type: OrderType,
     quantity: float,
-    price: Optional[float] = None,
-    stop_price: Optional[float] = None,
-) -> List[str]:
+    price: float | None = None,
+    stop_price: float | None = None,
+) -> list[str]:
     """Валидация параметров ордера"""
     errors = []
 
@@ -584,7 +576,7 @@ def normalize_order_status(exchange_status: str, exchange_name: str) -> OrderSta
     return status_map.get(normalized, OrderStatus.NEW)
 
 
-def get_order_type_mapping(exchange_name: str) -> Dict[OrderType, str]:
+def get_order_type_mapping(exchange_name: str) -> dict[OrderType, str]:
     """Получение маппинга типов ордеров для конкретной биржи"""
     if exchange_name.lower() == "bybit":
         return {

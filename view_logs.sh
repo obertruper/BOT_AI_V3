@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Переменные
 PROJECT_ROOT="/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3"
-LOG_DIR="$PROJECT_ROOT/logs"
+LOG_DIR="$PROJECT_ROOT/data/logs"
 
 # Функция для вывода заголовка
 print_header() {
@@ -58,51 +58,78 @@ main() {
     # Меню выбора
     while true; do
         echo -e "${PURPLE}Выберите действие:${NC}"
-        echo "1) Просмотр логов Core System в реальном времени"
-        echo "2) Просмотр логов API Backend в реальном времени"
-        echo "3) Просмотр логов Web Frontend в реальном времени"
-        echo "4) Показать последние записи всех логов"
+        echo "1) Просмотр логов Trading System в реальном времени"
+        echo "2) Просмотр логов API (фильтрованные)"
+        echo "3) Информация о Frontend"
+        echo "4) Показать последние записи логов"
         echo "5) Поиск в логах"
         echo "6) Очистить логи"
         echo "7) Экспорт логов"
-        echo "8) Выход"
+        echo "8) Показать ERROR и WARNING"
+        echo "9) Выход"
         read -p "Ваш выбор (1-8): " choice
 
         case $choice in
             1)
                 echo -e "\n${GREEN}📋 Логи Core System (Ctrl+C для остановки):${NC}\n"
-                tail -f "$LOG_DIR/core.log"
+                # Ищем последний файл лога
+                LATEST_LOG=$(ls -t "$LOG_DIR"/bot_trading_*.log 2>/dev/null | head -1)
+                if [ -f "$LATEST_LOG" ]; then
+                    tail -f "$LATEST_LOG"
+                else
+                    echo -e "${RED}Лог файл не найден${NC}"
+                fi
                 ;;
 
             2)
                 echo -e "\n${GREEN}📋 Логи API Backend (Ctrl+C для остановки):${NC}\n"
-                tail -f "$LOG_DIR/api.log"
+                # Пробуем найти процесс API и его логи
+                if pgrep -f "uvicorn" > /dev/null; then
+                    LATEST_LOG=$(ls -t "$LOG_DIR"/bot_trading_*.log 2>/dev/null | head -1)
+                    if [ -f "$LATEST_LOG" ]; then
+                        tail -f "$LATEST_LOG" | grep -E "(API|uvicorn|FastAPI)"
+                    else
+                        echo -e "${YELLOW}API запущен, но логи не найдены${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}API не запущен${NC}"
+                fi
                 ;;
 
             3)
                 echo -e "\n${GREEN}📋 Логи Web Frontend (Ctrl+C для остановки):${NC}\n"
-                tail -f "$LOG_DIR/frontend.log"
+                # Frontend обычно логирует в консоль npm
+                if pgrep -f "vite" > /dev/null; then
+                    echo -e "${YELLOW}Frontend запущен. Логи доступны в консоли npm run dev${NC}"
+                else
+                    echo -e "${YELLOW}Frontend не запущен${NC}"
+                fi
                 ;;
 
             4)
                 echo -e "\n${BLUE}📊 Последние записи всех логов:${NC}\n"
-                show_recent_logs "$LOG_DIR/core.log" "Core System" 30
-                show_recent_logs "$LOG_DIR/api.log" "API Backend" 30
-                show_recent_logs "$LOG_DIR/frontend.log" "Web Frontend" 30
+                # Показываем последний лог файл
+                LATEST_LOG=$(ls -t "$LOG_DIR"/bot_trading_*.log 2>/dev/null | head -1)
+                if [ -f "$LATEST_LOG" ]; then
+                    echo -e "${CYAN}Файл: $(basename "$LATEST_LOG")${NC}"
+                    show_recent_logs "$LATEST_LOG" "Trading System" 50
+                else
+                    echo -e "${RED}Логи не найдены${NC}"
+                fi
                 ;;
 
             5)
                 read -p "Введите строку для поиска: " search_term
                 echo -e "\n${BLUE}🔍 Поиск '$search_term' в логах:${NC}\n"
 
-                echo -e "${YELLOW}Core System:${NC}"
-                grep -n "$search_term" "$LOG_DIR/core.log" 2>/dev/null || echo "Не найдено"
-
-                echo -e "\n${YELLOW}API Backend:${NC}"
-                grep -n "$search_term" "$LOG_DIR/api.log" 2>/dev/null || echo "Не найдено"
-
-                echo -e "\n${YELLOW}Web Frontend:${NC}"
-                grep -n "$search_term" "$LOG_DIR/frontend.log" 2>/dev/null || echo "Не найдено"
+                # Ищем во всех логах
+                for log_file in "$LOG_DIR"/bot_trading_*.log; do
+                    if [ -f "$log_file" ]; then
+                        echo -e "${YELLOW}$(basename "$log_file"):${NC}"
+                        grep --color=always -n "$search_term" "$log_file" 2>/dev/null || echo "Не найдено"
+                        echo ""
+                    fi
+                done
                 echo ""
                 ;;
 
@@ -110,9 +137,12 @@ main() {
                 echo -e "\n${YELLOW}⚠️ Очистка логов удалит всю историю!${NC}"
                 read -p "Вы уверены? (y/N): " confirm
                 if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                    > "$LOG_DIR/core.log"
-                    > "$LOG_DIR/api.log"
-                    > "$LOG_DIR/frontend.log"
+                    # Очищаем все логи
+                    for log_file in "$LOG_DIR"/bot_trading_*.log; do
+                        if [ -f "$log_file" ]; then
+                            > "$log_file"
+                        fi
+                    done
                     echo -e "${GREEN}✅ Логи очищены${NC}"
                 fi
                 ;;
@@ -133,6 +163,19 @@ main() {
                 ;;
 
             8)
+                echo -e "\n${RED}📋 Ошибки и предупреждения:${NC}\n"
+                LATEST_LOG=$(ls -t "$LOG_DIR"/bot_trading_*.log 2>/dev/null | head -1)
+                if [ -f "$LATEST_LOG" ]; then
+                    echo -e "${YELLOW}Последние ERROR:${NC}"
+                    grep -E "ERROR" "$LATEST_LOG" | tail -20
+                    echo -e "\n${YELLOW}Последние WARNING:${NC}"
+                    grep -E "WARNING" "$LATEST_LOG" | tail -20
+                else
+                    echo -e "${RED}Лог файл не найден${NC}"
+                fi
+                ;;
+
+            9)
                 echo -e "${GREEN}👋 До свидания!${NC}"
                 exit 0
                 ;;

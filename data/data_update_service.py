@@ -2,15 +2,15 @@
 Служба автоматического обновления рыночных данных
 """
 
-from typing import List, Dict, Optional, Set
 import asyncio
-from datetime import datetime, timedelta
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Dict, List, Optional, Set
 
-from database.connections.postgres import AsyncPGPool
 from core.config.config_manager import ConfigManager
+from database.connections.postgres import AsyncPGPool
 
 logger = logging.getLogger(__name__)
 
@@ -166,8 +166,9 @@ class DataUpdateService:
         for exchange_name in active_exchanges:
             try:
                 # Используем ExchangeFactory из системы
-                from exchanges.factory import ExchangeFactory
                 import os
+
+                from exchanges.factory import ExchangeFactory
                 factory = ExchangeFactory()
                 
                 # Получаем учетные данные из переменных окружения

@@ -68,9 +68,7 @@ async def check_api_keys():
             print(f"   Открытых позиций: {len(positions)}")
             for pos in positions:
                 if pos["contracts"] > 0:
-                    print(
-                        f"   - {pos['symbol']}: {pos['side']} {pos['contracts']} контрактов"
-                    )
+                    print(f"   - {pos['symbol']}: {pos['side']} {pos['contracts']} контрактов")
         else:
             print("   Нет открытых позиций")
 
@@ -103,9 +101,7 @@ async def check_api_keys():
         except Exception as e:
             if "expired" in str(e).lower():
                 print("❌ API ключ истек!")
-                print(
-                    "   Создайте новый ключ на https://www.bybit.com/app/user/api-management"
-                )
+                print("   Создайте новый ключ на https://www.bybit.com/app/user/api-management")
             elif "invalid" in str(e).lower():
                 print("❌ API ключ недействителен!")
                 print("   Проверьте правильность ключа и секрета")

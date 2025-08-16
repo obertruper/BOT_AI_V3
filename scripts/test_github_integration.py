@@ -12,9 +12,9 @@ from pathlib import Path
 
 def print_header(text):
     """Печать заголовка"""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {text}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 def check_git_status():
@@ -23,17 +23,13 @@ def check_git_status():
 
     try:
         # Проверка что мы в git репозитории
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-dir"], capture_output=True, text=True
-        )
+        result = subprocess.run(["git", "rev-parse", "--git-dir"], capture_output=True, text=True)
         if result.returncode != 0:
             print("❌ Not in a git repository!")
             return False
 
         # Текущая ветка
-        result = subprocess.run(
-            ["git", "branch", "--show-current"], capture_output=True, text=True
-        )
+        result = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True)
         current_branch = result.stdout.strip()
         print(f"📍 Current branch: {current_branch}")
 
@@ -45,9 +41,7 @@ def check_git_status():
         print(f"🌐 Remote URL: {remote_url}")
 
         # Статус
-        result = subprocess.run(
-            ["git", "status", "--porcelain"], capture_output=True, text=True
-        )
+        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
         if result.stdout:
             print("⚠️  You have uncommitted changes:")
             print(result.stdout)
@@ -70,9 +64,7 @@ def check_github_workflows():
         print("❌ No .github/workflows directory found!")
         return False
 
-    workflow_files = list(workflows_dir.glob("*.yml")) + list(
-        workflows_dir.glob("*.yaml")
-    )
+    workflow_files = list(workflows_dir.glob("*.yml")) + list(workflows_dir.glob("*.yaml"))
     if not workflow_files:
         print("❌ No workflow files found!")
         return False
@@ -81,7 +73,7 @@ def check_github_workflows():
 
     for workflow in workflow_files:
         print(f"\n  📄 {workflow.name}")
-        with open(workflow, "r") as f:
+        with open(workflow) as f:
             content = f.read()
 
         # Проверка основных полей
@@ -199,9 +191,7 @@ def create_test_instructions():
 
 def main():
     """Основная функция"""
-    print(
-        f"🤖 GitHub Integration Test - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    )
+    print(f"🤖 GitHub Integration Test - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     checks = [
         check_git_status,

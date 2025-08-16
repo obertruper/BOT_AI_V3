@@ -6,7 +6,7 @@
 import logging
 from abc import abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -28,7 +28,7 @@ class MarketRegime(str):
 class IndicatorStrategyBase(StrategyABC):
     """Базовый класс для стратегий на основе технических индикаторов"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Инициализация индикаторной стратегии
 
@@ -43,13 +43,13 @@ class IndicatorStrategyBase(StrategyABC):
         self.risk_config = config.get("risk_management", {})
 
         # История данных для расчета индикаторов
-        self.market_data_history: Dict[str, pd.DataFrame] = {}
+        self.market_data_history: dict[str, pd.DataFrame] = {}
         self.max_history_length = config.get("max_history_length", 500)
 
         # Кэш рассчитанных индикаторов
-        self.indicator_cache: Dict[str, Dict[str, Any]] = {}
+        self.indicator_cache: dict[str, dict[str, Any]] = {}
         self.cache_ttl_seconds = config.get("cache_ttl_seconds", 60)
-        self.last_cache_update: Dict[str, datetime] = {}
+        self.last_cache_update: dict[str, datetime] = {}
 
         # Веса для скоринга
         self.base_weights = self.scoring_config.get(
@@ -87,7 +87,7 @@ class IndicatorStrategyBase(StrategyABC):
         """Инициализация специфичных для стратегии индикаторов"""
         pass
 
-    async def analyze(self, market_data: MarketData) -> Optional[TradingSignal]:
+    async def analyze(self, market_data: MarketData) -> TradingSignal | None:
         """
         Анализ рыночных данных с использованием индикаторов
 
@@ -162,10 +162,7 @@ class IndicatorStrategyBase(StrategyABC):
         Returns:
             Режим рынка
         """
-        if (
-            symbol not in self.market_data_history
-            or len(self.market_data_history[symbol]) < 50
-        ):
+        if symbol not in self.market_data_history or len(self.market_data_history[symbol]) < 50:
             return MarketRegime.RANGING
 
         df = self.market_data_history[symbol].tail(50)
@@ -189,9 +186,7 @@ class IndicatorStrategyBase(StrategyABC):
             return MarketRegime.RANGING
 
     @abstractmethod
-    async def _calculate_all_indicators(
-        self, symbol: str
-    ) -> Dict[str, Dict[str, float]]:
+    async def _calculate_all_indicators(self, symbol: str) -> dict[str, dict[str, float]]:
         """
         Расчет всех индикаторов для символа
 
@@ -201,7 +196,7 @@ class IndicatorStrategyBase(StrategyABC):
         pass
 
     def _calculate_total_score(
-        self, indicators: Dict[str, Dict[str, float]], market_regime: MarketRegime
+        self, indicators: dict[str, dict[str, float]], market_regime: MarketRegime
     ) -> float:
         """
         Расчет общего скора на основе индикаторов и режима рынка
@@ -227,7 +222,7 @@ class IndicatorStrategyBase(StrategyABC):
         # Ограничение диапазона
         return max(min(total_score, 100), -100)
 
-    def _get_adaptive_weights(self, market_regime: MarketRegime) -> Dict[str, float]:
+    def _get_adaptive_weights(self, market_regime: MarketRegime) -> dict[str, float]:
         """Получение адаптивных весов для режима рынка"""
         weights = self.base_weights.copy()
 
@@ -244,7 +239,7 @@ class IndicatorStrategyBase(StrategyABC):
 
         return weights
 
-    def _calculate_category_score(self, category_indicators: Dict[str, float]) -> float:
+    def _calculate_category_score(self, category_indicators: dict[str, float]) -> float:
         """Расчет скора для категории индикаторов"""
         if not category_indicators:
             return 0.0
@@ -259,8 +254,8 @@ class IndicatorStrategyBase(StrategyABC):
         return np.mean(scores) if scores else 0.0
 
     def _generate_signal_from_score(
-        self, market_data: MarketData, total_score: float, indicators: Dict[str, Any]
-    ) -> Optional[TradingSignal]:
+        self, market_data: MarketData, total_score: float, indicators: dict[str, Any]
+    ) -> TradingSignal | None:
         """
         Генерация торгового сигнала на основе общего скора
 
@@ -318,8 +313,7 @@ class IndicatorStrategyBase(StrategyABC):
             timeframe=market_data.timeframe,
             indicators_used=self._get_active_indicators(indicators),
             reasoning=self._generate_reasoning(total_score, indicators),
-            risk_reward_ratio=abs(take_profit - entry_price)
-            / abs(entry_price - stop_loss),
+            risk_reward_ratio=abs(take_profit - entry_price) / abs(entry_price - stop_loss),
         )
 
         return signal
@@ -333,7 +327,7 @@ class IndicatorStrategyBase(StrategyABC):
         position_size = base_size + (max_size_pct - base_size) * confidence_factor
         return min(position_size, max_size_pct)
 
-    def _get_active_indicators(self, indicators: Dict[str, Any]) -> List[str]:
+    def _get_active_indicators(self, indicators: dict[str, Any]) -> list[str]:
         """Получение списка активных индикаторов"""
         active = []
         for category, category_indicators in indicators.items():
@@ -341,9 +335,7 @@ class IndicatorStrategyBase(StrategyABC):
                 active.append(f"{category}.{indicator_name}")
         return active
 
-    def _generate_reasoning(
-        self, total_score: float, indicators: Dict[str, Any]
-    ) -> str:
+    def _generate_reasoning(self, total_score: float, indicators: dict[str, Any]) -> str:
         """Генерация объяснения для сигнала"""
         direction = "бычий" if total_score > 0 else "медвежий"
         strength = "сильный" if abs(total_score) > 70 else "умеренный"
@@ -362,7 +354,7 @@ class IndicatorStrategyBase(StrategyABC):
 
         return reasoning
 
-    def validate_config(self) -> Tuple[bool, Optional[str]]:
+    def validate_config(self) -> tuple[bool, str | None]:
         """Валидация конфигурации стратегии"""
         # Проверка базовых параметров
         if not self.symbols:

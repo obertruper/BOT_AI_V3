@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Генератор тестовых торговых сигналов для проверки SL/TP
 """
@@ -168,9 +167,7 @@ async def generate_signal(
             logger.info(f"   Биржа: {exchange}")
             logger.info(f"   Цена входа: {current_price}")
             logger.info(f"   Количество: {quantity}")
-            logger.info(
-                f"   Stop Loss: {stop_loss} ({'-2%' if signal_type == 'LONG' else '+2%'})"
-            )
+            logger.info(f"   Stop Loss: {stop_loss} ({'-2%' if signal_type == 'LONG' else '+2%'})")
             logger.info(
                 f"   Take Profit: {take_profit} ({'+4%' if signal_type == 'LONG' else '-4%'})"
             )
@@ -178,12 +175,8 @@ async def generate_signal(
             logger.info("   Частичные TP: 25% на +1%, +2%, +3%, +4%")
             logger.info("   Защита прибыли: ✅ (активация при +1.5%)")
 
-            logger.info(
-                "\n🚀 Сигнал отправлен в систему и будет обработан автоматически!"
-            )
-            logger.info(
-                "💡 Используйте ./monitor_signals.sh для отслеживания обработки"
-            )
+            logger.info("\n🚀 Сигнал отправлен в систему и будет обработан автоматически!")
+            logger.info("💡 Используйте ./monitor_signals.sh для отслеживания обработки")
 
             return test_signal
 
@@ -209,9 +202,7 @@ async def main():
     parser.add_argument(
         "--symbol", default="SOLUSDT", help="Торговый символ (по умолчанию SOLUSDT)"
     )
-    parser.add_argument(
-        "--exchange", default="bybit", help="Биржа (по умолчанию bybit)"
-    )
+    parser.add_argument("--exchange", default="bybit", help="Биржа (по умолчанию bybit)")
 
     args = parser.parse_args()
 

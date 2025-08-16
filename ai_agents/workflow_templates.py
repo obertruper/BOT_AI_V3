@@ -7,7 +7,6 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List
 
 
 class TaskType(Enum):
@@ -31,10 +30,10 @@ class WorkflowTemplate:
     task_type: TaskType
     description: str
     prompt_template: str
-    ai_systems: List[str]
+    ai_systems: list[str]
     max_iterations: int
-    specific_config: Dict
-    follow_up_questions: List[str]
+    specific_config: dict
+    follow_up_questions: list[str]
 
 
 class WorkflowTemplates:
@@ -270,7 +269,7 @@ class WorkflowTemplates:
         )
 
     @staticmethod
-    def get_all_templates() -> Dict[TaskType, WorkflowTemplate]:
+    def get_all_templates() -> dict[TaskType, WorkflowTemplate]:
         """Получить все доступные шаблоны"""
         return {
             TaskType.STRATEGY_DEVELOPMENT: WorkflowTemplates.get_strategy_development_template(),

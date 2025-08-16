@@ -9,7 +9,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # =================== БАЗОВЫЕ ТИПЫ ===================
 
@@ -40,10 +40,10 @@ class Instrument:
     is_tradable: bool = True  # Доступен для торговли
 
     # Дополнительная информация
-    contract_type: Optional[str] = None  # Тип контракта (для фьючерсов)
-    settlement_coin: Optional[str] = None  # Валюта расчетов
-    launch_time: Optional[datetime] = None  # Время запуска
-    delivery_time: Optional[datetime] = None  # Время поставки
+    contract_type: str | None = None  # Тип контракта (для фьючерсов)
+    settlement_coin: str | None = None  # Валюта расчетов
+    launch_time: datetime | None = None  # Время запуска
+    delivery_time: datetime | None = None  # Время поставки
 
     # Маржинальная торговля
     margin_trading: bool = False  # Поддержка маржинальной торговли
@@ -87,7 +87,7 @@ class Candle:
             )
 
     # Метаданные
-    exchange_info: Dict[str, Any] = field(default_factory=dict)
+    exchange_info: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -106,7 +106,7 @@ class Balance:
 
     # Метаданные
     account_type: str = "spot"  # Тип аккаунта
-    last_update: Optional[datetime] = None
+    last_update: datetime | None = None
 
     @property
     def free(self) -> float:
@@ -142,21 +142,21 @@ class Position:
     maintenance_margin: float = 0.0  # Поддерживающая маржа
 
     # Ликвидация
-    liq_price: Optional[float] = None  # Цена ликвидации
-    bust_price: Optional[float] = None  # Цена банкротства
+    liq_price: float | None = None  # Цена ликвидации
+    bust_price: float | None = None  # Цена банкротства
 
     # Stop Loss / Take Profit
-    stop_loss: Optional[float] = None  # Stop Loss цена
-    take_profit: Optional[float] = None  # Take Profit цена
-    trailing_stop: Optional[float] = None  # Trailing Stop
+    stop_loss: float | None = None  # Stop Loss цена
+    take_profit: float | None = None  # Take Profit цена
+    trailing_stop: float | None = None  # Trailing Stop
 
     # Режимы
     position_mode: str = "MergedSingle"  # Режим позиции
     auto_add_margin: bool = False  # Автодобавление маржи
 
     # Время
-    created_time: Optional[datetime] = None
-    updated_time: Optional[datetime] = None
+    created_time: datetime | None = None
+    updated_time: datetime | None = None
 
     # Метаданные
     position_idx: int = 0  # Индекс позиции (для hedge mode)
@@ -189,7 +189,7 @@ class Order:
     """Торговый ордер"""
 
     order_id: str  # ID ордера
-    client_order_id: Optional[str]  # Клиентский ID ордера
+    client_order_id: str | None  # Клиентский ID ордера
     symbol: str  # Символ инструмента
     side: str  # Сторона (Buy/Sell)
     order_type: str  # Тип ордера (Market/Limit/etc)
@@ -209,18 +209,18 @@ class Order:
     cumulative_quote_qty: float = 0.0  # Накопленная сумма в котируемой валюте
 
     # Условные ордеры
-    stop_price: Optional[float] = None  # Стоп-цена
-    trigger_price: Optional[float] = None  # Цена срабатывания
-    trigger_direction: Optional[str] = None  # Направление триггера
+    stop_price: float | None = None  # Стоп-цена
+    trigger_price: float | None = None  # Цена срабатывания
+    trigger_direction: str | None = None  # Направление триггера
 
     # Комиссии
     commission: float = 0.0  # Комиссия
     commission_asset: str = ""  # Валюта комиссии
 
     # Время
-    created_time: Optional[datetime] = None
-    updated_time: Optional[datetime] = None
-    filled_time: Optional[datetime] = None
+    created_time: datetime | None = None
+    updated_time: datetime | None = None
+    filled_time: datetime | None = None
 
     # Дополнительные параметры
     reduce_only: bool = False  # Только уменьшение позиции
@@ -228,8 +228,8 @@ class Order:
     position_idx: int = 0  # Индекс позиции
 
     # Метаданные биржи
-    exchange_order_id: Optional[str] = None
-    exchange_data: Dict[str, Any] = field(default_factory=dict)
+    exchange_order_id: str | None = None
+    exchange_data: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_filled(self) -> bool:
@@ -283,7 +283,7 @@ class Ticker:
     spread_percentage: float = 0.0  # Спред в процентах
 
     # Время
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
 
     @property
     def price(self) -> float:
@@ -293,11 +293,7 @@ class Ticker:
     @property
     def mid_price(self) -> float:
         """Средняя цена между bid и ask"""
-        return (
-            (self.bid_price + self.ask_price) / 2
-            if self.bid_price and self.ask_price
-            else 0.0
-        )
+        return (self.bid_price + self.ask_price) / 2 if self.bid_price and self.ask_price else 0.0
 
 
 @dataclass
@@ -318,17 +314,17 @@ class OrderBook:
     """Стакан ордеров"""
 
     symbol: str  # Символ инструмента
-    bids: List[OrderBookEntry]  # Заявки на покупку
-    asks: List[OrderBookEntry]  # Заявки на продажу
-    timestamp: Optional[datetime] = None
+    bids: list[OrderBookEntry]  # Заявки на покупку
+    asks: list[OrderBookEntry]  # Заявки на продажу
+    timestamp: datetime | None = None
 
     @property
-    def best_bid(self) -> Optional[OrderBookEntry]:
+    def best_bid(self) -> OrderBookEntry | None:
         """Лучшая цена покупки"""
         return self.bids[0] if self.bids else None
 
     @property
-    def best_ask(self) -> Optional[OrderBookEntry]:
+    def best_ask(self) -> OrderBookEntry | None:
         """Лучшая цена продажи"""
         return self.asks[0] if self.asks else None
 
@@ -428,12 +424,12 @@ class AccountInfo:
     can_deposit: bool = True  # Может вносить
 
     # Время обновления
-    last_update: Optional[datetime] = None
+    last_update: datetime | None = None
 
     # Дополнительная информация
     borrow_enabled: bool = False  # Заимствование включено
     multi_assets_margin: bool = False  # Мультиактивная маржа
-    trade_group_id: Optional[int] = None  # ID торговой группы
+    trade_group_id: int | None = None  # ID торговой группы
 
 
 @dataclass
@@ -445,21 +441,21 @@ class ExchangeInfo:
     server_time: datetime  # Время сервера
 
     # Лимиты API
-    rate_limits: List[Dict[str, Any]] = field(default_factory=list)
+    rate_limits: list[dict[str, Any]] = field(default_factory=list)
 
     # Фильтры для символов
-    exchange_filters: List[Dict[str, Any]] = field(default_factory=list)
+    exchange_filters: list[dict[str, Any]] = field(default_factory=list)
 
     # Поддерживаемые возможности
-    supported_order_types: List[str] = field(default_factory=list)
-    supported_time_in_force: List[str] = field(default_factory=list)
+    supported_order_types: list[str] = field(default_factory=list)
+    supported_time_in_force: list[str] = field(default_factory=list)
 
     # Статус биржи
     status: str = "NORMAL"  # Статус работы биржи
 
     # Дополнительная информация
-    permissions: List[str] = field(default_factory=list)
-    symbols: List[Instrument] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
+    symbols: list[Instrument] = field(default_factory=list)
 
 
 # =================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===================
@@ -467,12 +463,10 @@ class ExchangeInfo:
 
 def create_empty_position(symbol: str) -> Position:
     """Создание пустой позиции"""
-    return Position(
-        symbol=symbol, side="None", size=0.0, entry_price=0.0, mark_price=0.0
-    )
+    return Position(symbol=symbol, side="None", size=0.0, entry_price=0.0, mark_price=0.0)
 
 
-def create_order_from_dict(order_data: Dict[str, Any]) -> Order:
+def create_order_from_dict(order_data: dict[str, Any]) -> Order:
     """Создание ордера из словаря данных"""
     return Order(
         order_id=order_data.get("orderId", ""),
@@ -493,7 +487,7 @@ def create_order_from_dict(order_data: Dict[str, Any]) -> Order:
     )
 
 
-def create_position_from_dict(position_data: Dict[str, Any]) -> Position:
+def create_position_from_dict(position_data: dict[str, Any]) -> Position:
     """Создание позиции из словаря данных"""
     return Position(
         symbol=position_data.get("symbol", ""),
@@ -504,16 +498,10 @@ def create_position_from_dict(position_data: Dict[str, Any]) -> Position:
         unrealised_pnl=float(position_data.get("unrealisedPnl", 0)),
         leverage=float(position_data.get("leverage", 1)),
         margin=float(position_data.get("positionMargin", 0)),
-        liq_price=float(position_data.get("liqPrice"))
-        if position_data.get("liqPrice")
-        else None,
-        stop_loss=float(position_data.get("stopLoss"))
-        if position_data.get("stopLoss")
-        else None,
+        liq_price=float(position_data.get("liqPrice")) if position_data.get("liqPrice") else None,
+        stop_loss=float(position_data.get("stopLoss")) if position_data.get("stopLoss") else None,
         take_profit=(
-            float(position_data.get("takeProfit"))
-            if position_data.get("takeProfit")
-            else None
+            float(position_data.get("takeProfit")) if position_data.get("takeProfit") else None
         ),
         position_mode=position_data.get("positionMode", "MergedSingle"),
         auto_add_margin=position_data.get("autoAddMargin", False),

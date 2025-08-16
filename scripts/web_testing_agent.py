@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Web Testing Agent для BOT_AI_V3
 
@@ -16,7 +15,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -40,7 +39,7 @@ class WebTestingAgent:
     def __init__(self):
         self.base_url = "http://localhost:5173"
         self.api_url = "http://localhost:8080"
-        self.test_results: List[Dict[str, Any]] = []
+        self.test_results: list[dict[str, Any]] = []
         self.screenshots_dir = Path("test_results/screenshots")
         self.screenshots_dir.mkdir(parents=True, exist_ok=True)
 
@@ -49,7 +48,7 @@ class WebTestingAgent:
         logger.info("🤖 Web Testing Agent инициализирован")
         logger.info(f"📂 Скриншоты будут сохранены в: {self.screenshots_dir}")
 
-    async def test_page_load(self, url: str, page_name: str) -> Dict[str, Any]:
+    async def test_page_load(self, url: str, page_name: str) -> dict[str, Any]:
         """
         Тест загрузки страницы
 
@@ -94,7 +93,7 @@ class WebTestingAgent:
         self.test_results.append(result)
         return result
 
-    async def test_dashboard_elements(self) -> Dict[str, Any]:
+    async def test_dashboard_elements(self) -> dict[str, Any]:
         """Тест элементов dashboard"""
         result = {
             "test": "Dashboard Elements",
@@ -159,7 +158,7 @@ class WebTestingAgent:
         self.test_results.append(result)
         return result
 
-    async def test_trader_interaction(self) -> Dict[str, Any]:
+    async def test_trader_interaction(self) -> dict[str, Any]:
         """Тест взаимодействия с трейдерами"""
         result = {
             "test": "Trader Interaction",
@@ -235,7 +234,7 @@ class WebTestingAgent:
         self.test_results.append(result)
         return result
 
-    async def test_api_integration(self) -> Dict[str, Any]:
+    async def test_api_integration(self) -> dict[str, Any]:
         """Тест интеграции с API"""
         result = {
             "test": "API Integration",
@@ -281,7 +280,7 @@ class WebTestingAgent:
         self.test_results.append(result)
         return result
 
-    async def test_responsive_design(self) -> Dict[str, Any]:
+    async def test_responsive_design(self) -> dict[str, Any]:
         """Тест адаптивного дизайна"""
         result = {
             "test": "Responsive Design",
@@ -355,15 +354,9 @@ class WebTestingAgent:
 
         # Подсчет статистики
         total_tests = len(self.test_results)
-        passed_tests = sum(
-            1 for test in self.test_results if test["status"] == "passed"
-        )
-        failed_tests = sum(
-            1 for test in self.test_results if test["status"] == "failed"
-        )
-        partial_tests = sum(
-            1 for test in self.test_results if test["status"] == "partial"
-        )
+        passed_tests = sum(1 for test in self.test_results if test["status"] == "passed")
+        failed_tests = sum(1 for test in self.test_results if test["status"] == "failed")
+        partial_tests = sum(1 for test in self.test_results if test["status"] == "partial")
 
         report = {
             "timestamp": datetime.now().isoformat(),
@@ -373,9 +366,7 @@ class WebTestingAgent:
                 "failed": failed_tests,
                 "partial": partial_tests,
                 "success_rate": (
-                    f"{(passed_tests / total_tests * 100):.1f}%"
-                    if total_tests > 0
-                    else "0%"
+                    f"{(passed_tests / total_tests * 100):.1f}%" if total_tests > 0 else "0%"
                 ),
             },
             "test_results": self.test_results,

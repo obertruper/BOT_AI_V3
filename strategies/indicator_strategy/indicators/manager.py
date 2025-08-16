@@ -5,7 +5,7 @@
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 import pandas as pd
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class IndicatorManager:
     """Менеджер для управления всеми индикаторами"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Инициализация менеджера
 
@@ -25,7 +25,7 @@ class IndicatorManager:
             config: Конфигурация индикаторов
         """
         self.config = config
-        self.indicators: Dict[str, Dict[str, IndicatorBase]] = {
+        self.indicators: dict[str, dict[str, IndicatorBase]] = {
             "trend": {},
             "momentum": {},
             "volume": {},
@@ -73,7 +73,7 @@ class IndicatorManager:
                 except Exception as e:
                     logger.error(f"Failed to initialize {indicator_name}: {e}")
 
-    def _get_indicator_classes(self) -> Dict[str, Type[IndicatorBase]]:
+    def _get_indicator_classes(self) -> dict[str, type[IndicatorBase]]:
         """Получение классов индикаторов (будет дополнено)"""
         classes = {}
 
@@ -125,9 +125,7 @@ class IndicatorManager:
 
         return classes
 
-    async def calculate_all_indicators(
-        self, data: pd.DataFrame
-    ) -> Dict[str, Dict[str, Any]]:
+    async def calculate_all_indicators(self, data: pd.DataFrame) -> dict[str, dict[str, Any]]:
         """
         Асинхронный расчет всех активных индикаторов
 
@@ -141,24 +139,24 @@ class IndicatorManager:
         tasks = []
 
         for category, indicators in self.indicators.items():
-            category_task = self._calculate_category_indicators(
-                category, indicators, data
-            )
+            category_task = self._calculate_category_indicators(category, indicators, data)
             tasks.append(category_task)
 
         # Параллельное выполнение
         category_results = await asyncio.gather(*tasks)
 
         # Объединение результатов
-        for category, category_result in zip(self.indicators.keys(), category_results):
+        for category, category_result in zip(
+            self.indicators.keys(), category_results, strict=False
+        ):
             if category_result:
                 results[category] = category_result
 
         return results
 
     async def _calculate_category_indicators(
-        self, category: str, indicators: Dict[str, IndicatorBase], data: pd.DataFrame
-    ) -> Dict[str, Any]:
+        self, category: str, indicators: dict[str, IndicatorBase], data: pd.DataFrame
+    ) -> dict[str, Any]:
         """Расчет индикаторов категории"""
         if not indicators:
             return {}
@@ -171,9 +169,7 @@ class IndicatorManager:
 
         for name, indicator in indicators.items():
             if indicator.enabled:
-                task = loop.run_in_executor(
-                    self.executor, indicator.safe_calculate, data
-                )
+                task = loop.run_in_executor(self.executor, indicator.safe_calculate, data)
                 tasks.append((name, task))
 
         # Ожидание результатов
@@ -187,33 +183,27 @@ class IndicatorManager:
 
         return results
 
-    async def calculate_trend_indicators(self, data: pd.DataFrame) -> Dict[str, Any]:
+    async def calculate_trend_indicators(self, data: pd.DataFrame) -> dict[str, Any]:
         """Расчет трендовых индикаторов"""
-        return await self._calculate_category_indicators(
-            "trend", self.indicators["trend"], data
-        )
+        return await self._calculate_category_indicators("trend", self.indicators["trend"], data)
 
-    async def calculate_momentum_indicators(self, data: pd.DataFrame) -> Dict[str, Any]:
+    async def calculate_momentum_indicators(self, data: pd.DataFrame) -> dict[str, Any]:
         """Расчет импульсных индикаторов"""
         return await self._calculate_category_indicators(
             "momentum", self.indicators["momentum"], data
         )
 
-    async def calculate_volume_indicators(self, data: pd.DataFrame) -> Dict[str, Any]:
+    async def calculate_volume_indicators(self, data: pd.DataFrame) -> dict[str, Any]:
         """Расчет объемных индикаторов"""
-        return await self._calculate_category_indicators(
-            "volume", self.indicators["volume"], data
-        )
+        return await self._calculate_category_indicators("volume", self.indicators["volume"], data)
 
-    async def calculate_volatility_indicators(
-        self, data: pd.DataFrame
-    ) -> Dict[str, Any]:
+    async def calculate_volatility_indicators(self, data: pd.DataFrame) -> dict[str, Any]:
         """Расчет индикаторов волатильности"""
         return await self._calculate_category_indicators(
             "volatility", self.indicators["volatility"], data
         )
 
-    def get_indicators(self) -> List[str]:
+    def get_indicators(self) -> list[str]:
         """Получение списка всех индикаторов"""
         all_indicators = []
 
@@ -223,7 +213,7 @@ class IndicatorManager:
 
         return all_indicators
 
-    def get_enabled_indicators(self) -> List[str]:
+    def get_enabled_indicators(self) -> list[str]:
         """Получение списка активных индикаторов"""
         enabled = []
 
@@ -265,11 +255,9 @@ class IndicatorManager:
             for indicator in indicators.values():
                 indicator.reset_cache()
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Получение статистики менеджера"""
-        total_indicators = sum(
-            len(indicators) for indicators in self.indicators.values()
-        )
+        total_indicators = sum(len(indicators) for indicators in self.indicators.values())
         enabled_indicators = len(self.get_enabled_indicators())
 
         return {
@@ -285,10 +273,10 @@ class IndicatorManager:
 
 
 # Синглтон для глобального менеджера
-_indicator_manager: Optional[IndicatorManager] = None
+_indicator_manager: IndicatorManager | None = None
 
 
-def get_indicator_manager(config: Dict[str, Any]) -> IndicatorManager:
+def get_indicator_manager(config: dict[str, Any]) -> IndicatorManager:
     """Получение или создание глобального менеджера индикаторов"""
     global _indicator_manager
 

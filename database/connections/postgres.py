@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 PostgreSQL подключение для BOT Trading v3
 
@@ -9,7 +8,6 @@ PostgreSQL подключение для BOT Trading v3
 
 import os
 from contextlib import asynccontextmanager, contextmanager
-from typing import Optional
 
 import asyncpg
 from dotenv import load_dotenv
@@ -30,9 +28,7 @@ DB_PORT = os.getenv("PGPORT", "5555")
 # Connection strings для локального подключения (без host!)
 # Обратите внимание на формат: @ без хоста означает Unix socket
 SYNC_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@:{DB_PORT}/{DB_NAME}"
-ASYNC_DATABASE_URL = (
-    f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@:{DB_PORT}/{DB_NAME}"
-)
+ASYNC_DATABASE_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@:{DB_PORT}/{DB_NAME}"
 
 # Для прямого подключения через asyncpg (без SQLAlchemy)
 ASYNCPG_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@localhost:{DB_PORT}/{DB_NAME}"
@@ -64,9 +60,7 @@ async_engine = create_async_engine(
     echo=False,
 )
 
-AsyncSessionLocal = async_sessionmaker(
-    async_engine, class_=AsyncSession, expire_on_commit=False
-)
+AsyncSessionLocal = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
 
 
 @contextmanager
@@ -112,7 +106,7 @@ async def get_async_db():
 class AsyncPGPool:
     """Пул соединений для прямой работы с asyncpg (без SQLAlchemy)"""
 
-    _pool: Optional[asyncpg.Pool] = None
+    _pool: asyncpg.Pool | None = None
 
     @classmethod
     async def init_pool(cls) -> asyncpg.Pool:

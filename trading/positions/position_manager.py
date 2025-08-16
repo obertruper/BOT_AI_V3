@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Менеджер позиций
 
@@ -11,7 +10,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 from database.models import OrderSide, Trade
 
@@ -30,7 +28,7 @@ class Position:
     unrealized_pnl: Decimal = Decimal("0")
     fees_paid: Decimal = Decimal("0")
     opened_at: datetime = field(default_factory=datetime.utcnow)
-    trades: List[Trade] = field(default_factory=list)
+    trades: list[Trade] = field(default_factory=list)
 
     @property
     def total_pnl(self) -> Decimal:
@@ -61,11 +59,11 @@ class PositionManager:
     - Расчет риск-метрик
     """
 
-    def __init__(self, exchange_registry, logger: Optional[logging.Logger] = None):
+    def __init__(self, exchange_registry, logger: logging.Logger | None = None):
         self.exchange_registry = exchange_registry
         self.logger = logger or logging.getLogger(__name__)
-        self._positions: Dict[str, Position] = {}  # key: f"{exchange}_{symbol}"
-        self._position_locks: Dict[str, asyncio.Lock] = {}
+        self._positions: dict[str, Position] = {}  # key: f"{exchange}_{symbol}"
+        self._position_locks: dict[str, asyncio.Lock] = {}
 
     async def open_position(self, trade: Trade) -> Position:
         """
@@ -101,8 +99,8 @@ class PositionManager:
             return position
 
     async def close_position(
-        self, exchange: str, symbol: str, quantity: Optional[Decimal] = None
-    ) -> Optional[Position]:
+        self, exchange: str, symbol: str, quantity: Decimal | None = None
+    ) -> Position | None:
         """
         Закрытие позиции (полное или частичное)
 
@@ -158,12 +156,12 @@ class PositionManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def get_position(self, exchange: str, symbol: str) -> Optional[Position]:
+    async def get_position(self, exchange: str, symbol: str) -> Position | None:
         """Получить позицию"""
         position_key = f"{exchange}_{symbol}"
         return self._positions.get(position_key)
 
-    async def get_all_positions(self, exchange: Optional[str] = None) -> List[Position]:
+    async def get_all_positions(self, exchange: str | None = None) -> list[Position]:
         """Получить все открытые позиции"""
         positions = list(self._positions.values())
 
@@ -172,9 +170,7 @@ class PositionManager:
 
         return positions
 
-    async def get_total_exposure(
-        self, exchange: Optional[str] = None
-    ) -> Dict[str, Decimal]:
+    async def get_total_exposure(self, exchange: str | None = None) -> dict[str, Decimal]:
         """Получить общую экспозицию"""
         long_exposure = Decimal("0")
         short_exposure = Decimal("0")
@@ -194,9 +190,7 @@ class PositionManager:
             "total": long_exposure + short_exposure,
         }
 
-    async def get_portfolio_pnl(
-        self, exchange: Optional[str] = None
-    ) -> Dict[str, Decimal]:
+    async def get_portfolio_pnl(self, exchange: str | None = None) -> dict[str, Decimal]:
         """Получить общий PnL портфеля"""
         realized = Decimal("0")
         unrealized = Decimal("0")
@@ -243,14 +237,10 @@ class PositionManager:
 
         if is_opening:
             # Добавление к позиции
-            total_value = (
-                position.quantity * position.entry_price + trade_quantity * trade_price
-            )
+            total_value = position.quantity * position.entry_price + trade_quantity * trade_price
             position.quantity += trade_quantity
             position.entry_price = (
-                total_value / position.quantity
-                if position.quantity > 0
-                else Decimal("0")
+                total_value / position.quantity if position.quantity > 0 else Decimal("0")
             )
         else:
             # Частичное закрытие
@@ -311,9 +301,7 @@ class PositionManager:
                     position.side == "short" and trade.side == OrderSide.SELL
                 ):
                     total_quantity += Decimal(str(trade.quantity))
-                    total_value += Decimal(str(trade.quantity)) * Decimal(
-                        str(trade.price)
-                    )
+                    total_value += Decimal(str(trade.quantity)) * Decimal(str(trade.price))
 
             if total_quantity > 0:
                 position.entry_price = total_value / total_quantity
@@ -337,9 +325,7 @@ class PositionManager:
                     position = self._positions[position_key]
                     position.quantity = Decimal(str(ex_pos["contracts"]))
                     position.current_price = Decimal(str(ex_pos["markPrice"]))
-                    position.unrealized_pnl = Decimal(
-                        str(ex_pos.get("unrealizedPnl", 0))
-                    )
+                    position.unrealized_pnl = Decimal(str(ex_pos.get("unrealizedPnl", 0)))
 
                 else:
                     # Создаем новую позицию из данных биржи
@@ -362,9 +348,7 @@ class PositionManager:
         """Синхронизация позиций с биржей"""
         try:
             if not self.exchange_registry:
-                self.logger.warning(
-                    "Exchange registry не доступен для синхронизации позиций"
-                )
+                self.logger.warning("Exchange registry не доступен для синхронизации позиций")
                 return
 
             # Получаем все активные биржи
@@ -390,14 +374,12 @@ class PositionManager:
                     )
 
                 except Exception as e:
-                    self.logger.error(
-                        f"Ошибка синхронизации позиций с {exchange_name}: {e}"
-                    )
+                    self.logger.error(f"Ошибка синхронизации позиций с {exchange_name}: {e}")
 
         except Exception as e:
             self.logger.error(f"Ошибка синхронизации позиций: {e}")
 
-    async def calculate_total_pnl(self) -> Dict[str, float]:
+    async def calculate_total_pnl(self) -> dict[str, float]:
         """Расчет общего PnL по всем позициям"""
         try:
             total_pnl = {
@@ -425,9 +407,7 @@ class PositionManager:
             except Exception as e:
                 self.logger.warning(f"Не удалось получить реализованный PnL: {e}")
 
-            total_pnl["total_pnl"] = (
-                total_pnl["unrealized_pnl"] + total_pnl["realized_pnl"]
-            )
+            total_pnl["total_pnl"] = total_pnl["unrealized_pnl"] + total_pnl["realized_pnl"]
 
             return total_pnl
 

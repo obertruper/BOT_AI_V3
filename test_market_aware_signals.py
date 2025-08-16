@@ -86,12 +86,9 @@ async def simulate_market_conditions():
                     signal_counts[signal_type] += 1
 
                 # Детальное логирование для анализа
-                directions = prediction.get("predictions", {}).get(
-                    "directions_by_timeframe", []
-                )
+                directions = prediction.get("predictions", {}).get("directions_by_timeframe", [])
                 logger.debug(
-                    f"  {symbol}: {signal_type} (conf: {confidence:.2f}) "
-                    f"directions: {directions}"
+                    f"  {symbol}: {signal_type} (conf: {confidence:.2f}) directions: {directions}"
                 )
 
             except Exception as e:

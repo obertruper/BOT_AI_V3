@@ -7,7 +7,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 
@@ -20,9 +20,9 @@ class MCPServerConfig:
 
     name: str
     enabled: bool
-    config: Dict[str, Any]
+    config: dict[str, Any]
 
-    def get_tool_names(self) -> List[str]:
+    def get_tool_names(self) -> list[str]:
         """Получить имена инструментов для этого MCP сервера"""
         tool_mapping = {
             "filesystem": [
@@ -72,14 +72,14 @@ class MCPServerConfig:
 class MCPManager:
     """Менеджер MCP серверов"""
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         if config_path is None:
             config_path = Path(__file__).parent.parent / "configs" / "mcp_servers.yaml"
 
         self.config_path = config_path
-        self.servers: Dict[str, MCPServerConfig] = {}
-        self.agent_profiles: Dict[str, Dict[str, Any]] = {}
-        self.global_settings: Dict[str, Any] = {}
+        self.servers: dict[str, MCPServerConfig] = {}
+        self.agent_profiles: dict[str, dict[str, Any]] = {}
+        self.global_settings: dict[str, Any] = {}
 
         self._load_config()
 
@@ -89,7 +89,7 @@ class MCPManager:
             logger.warning(f"MCP config not found at {self.config_path}")
             return
 
-        with open(self.config_path, "r", encoding="utf-8") as f:
+        with open(self.config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         # Загружаем серверы
@@ -110,15 +110,15 @@ class MCPManager:
             f"Loaded {len(self.servers)} MCP servers and {len(self.agent_profiles)} agent profiles"
         )
 
-    def get_server(self, name: str) -> Optional[MCPServerConfig]:
+    def get_server(self, name: str) -> MCPServerConfig | None:
         """Получить конфигурацию сервера по имени"""
         return self.servers.get(name)
 
-    def get_enabled_servers(self) -> List[MCPServerConfig]:
+    def get_enabled_servers(self) -> list[MCPServerConfig]:
         """Получить список включенных серверов"""
         return [s for s in self.servers.values() if s.enabled]
 
-    def get_tools_for_agent(self, agent_type: str) -> List[str]:
+    def get_tools_for_agent(self, agent_type: str) -> list[str]:
         """Получить список инструментов для типа агента"""
         profile = self.agent_profiles.get(agent_type)
         if not profile:
@@ -141,7 +141,7 @@ class MCPManager:
         profile = self.agent_profiles.get(agent_type)
         return profile.get("priority", "balanced") if profile else "balanced"
 
-    def build_mcp_env(self, agent_type: str) -> Dict[str, str]:
+    def build_mcp_env(self, agent_type: str) -> dict[str, str]:
         """Построить переменные окружения для MCP"""
         env = {}
 
@@ -152,14 +152,12 @@ class MCPManager:
                 env["GITHUB_TOKEN"] = github_token
 
         # Другие переменные окружения для MCP
-        env["MCP_TELEMETRY"] = str(
-            self.global_settings.get("telemetry_enabled", True)
-        ).lower()
+        env["MCP_TELEMETRY"] = str(self.global_settings.get("telemetry_enabled", True)).lower()
         env["MCP_LOG_LEVEL"] = self.global_settings.get("log_level", "INFO")
 
         return env
 
-    def validate_environment(self) -> Dict[str, bool]:
+    def validate_environment(self) -> dict[str, bool]:
         """Проверить готовность окружения для MCP"""
         checks = {
             "claude_cli": self._check_claude_cli(),
@@ -180,9 +178,7 @@ class MCPManager:
         try:
             import subprocess
 
-            result = subprocess.run(
-                ["claude", "--version"], capture_output=True, text=True
-            )
+            result = subprocess.run(["claude", "--version"], capture_output=True, text=True)
             return result.returncode == 0
         except:
             return False

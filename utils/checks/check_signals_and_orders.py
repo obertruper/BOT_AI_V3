@@ -127,13 +127,9 @@ async def check_signals_and_orders():
                 if order["order_type"] == "LIMIT":
                     print(f"      Цена: ${order['price']}")
                 print(f"      Статус: {order['status']}")
-                print(
-                    f"      Время создания: {order['created_at'].strftime('%H:%M:%S')}"
-                )
+                print(f"      Время создания: {order['created_at'].strftime('%H:%M:%S')}")
                 if order["filled_at"]:
-                    print(
-                        f"      Время исполнения: {order['filled_at'].strftime('%H:%M:%S')}"
-                    )
+                    print(f"      Время исполнения: {order['filled_at'].strftime('%H:%M:%S')}")
         else:
             print("   ❌ Нет ордеров за последние 24 часа")
 
@@ -200,12 +196,8 @@ async def check_signals_and_orders():
         trading_config = config.get("trading", {})
         order_config = trading_config.get("order_execution", {})
 
-        print(
-            f"   Тип ордеров по умолчанию: {order_config.get('default_order_type', 'MARKET')}"
-        )
-        print(
-            f"   Использовать лимитные ордера: {order_config.get('use_limit_orders', False)}"
-        )
+        print(f"   Тип ордеров по умолчанию: {order_config.get('default_order_type', 'MARKET')}")
+        print(f"   Использовать лимитные ордера: {order_config.get('use_limit_orders', False)}")
         print(
             f"   Отступ для лимитных ордеров: {order_config.get('limit_order_offset', 0.0001):.4f}"
         )
@@ -219,9 +211,7 @@ async def check_signals_and_orders():
 
         if ml_strategy_config:
             print("\n   📊 Настройки ML стратегии:")
-            print(
-                f"      Интервал сигналов: {ml_strategy_config.get('signal_interval', 60)} сек"
-            )
+            print(f"      Интервал сигналов: {ml_strategy_config.get('signal_interval', 60)} сек")
             print(
                 f"      Минимальная уверенность: {ml_strategy_config.get('min_confidence', 0.6):.0%}"
             )

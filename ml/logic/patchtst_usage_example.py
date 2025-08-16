@@ -123,9 +123,7 @@ def integration_example():
     with torch.no_grad():
         # Подготовка данных из торговой системы
         # В реальности это будут данные из market_data
-        market_data = torch.randn(
-            1, 96, 240
-        )  # 1 пример, 96 временных шагов, 240 признаков
+        market_data = torch.randn(1, 96, 240)  # 1 пример, 96 временных шагов, 240 признаков
 
         # Предсказание
         predictions = model(market_data)

@@ -28,9 +28,7 @@ async def check_balance():
 
     # Проверяем длину ключей
     if len(api_key) < 18:
-        print(
-            f"⚠️ ВНИМАНИЕ: API ключ слишком короткий ({len(api_key)} символов, ожидается 18-20)"
-        )
+        print(f"⚠️ ВНИМАНИЕ: API ключ слишком короткий ({len(api_key)} символов, ожидается 18-20)")
     if len(api_secret) < 40:
         print(
             f"⚠️ ВНИМАНИЕ: API секрет слишком короткий ({len(api_secret)} символов, ожидается 40-44)"
@@ -80,9 +78,7 @@ async def check_balance():
             if open_positions:
                 print(f"Найдено {len(open_positions)} открытых позиций:")
                 for pos in open_positions:
-                    print(
-                        f"  • {pos.get('symbol')}: {pos.get('size')} @ {pos.get('avg_price')}"
-                    )
+                    print(f"  • {pos.get('symbol')}: {pos.get('size')} @ {pos.get('avg_price')}")
             else:
                 print("Нет открытых позиций")
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Анализ ML предсказаний и причин отсутствия сигналов
 """
@@ -77,9 +76,7 @@ class MLPredictionAnalyzer:
             logger.info(f"\n🎯 Анализ {symbol}...")
 
             # Получаем предсказание напрямую
-            signal = await signal_processor.process_realtime_signal(
-                symbol=symbol, exchange="bybit"
-            )
+            signal = await signal_processor.process_realtime_signal(symbol=symbol, exchange="bybit")
 
             # Даже если сигнал не прошел фильтры, получаем raw предсказание
             # через прямой вызов ML Manager
@@ -132,9 +129,7 @@ class MLPredictionAnalyzer:
                                 "signal_type": prediction["signal_type"],
                                 "confidence": prediction["confidence"],
                                 "strength": prediction["signal_strength"],
-                                "success_probability": prediction[
-                                    "success_probability"
-                                ],
+                                "success_probability": prediction["success_probability"],
                                 "risk_level": prediction["risk_level"],
                                 "predictions": prediction["predictions"],
                                 "passed_filters": signal is not None,
@@ -168,9 +163,7 @@ class MLPredictionAnalyzer:
         logger.info(f"\n📈 Распределение сигналов (всего {total}):")
         logger.info(f"   BUY:     {buy_signals} ({buy_signals / total * 100:.1f}%)")
         logger.info(f"   SELL:    {sell_signals} ({sell_signals / total * 100:.1f}%)")
-        logger.info(
-            f"   NEUTRAL: {neutral_signals} ({neutral_signals / total * 100:.1f}%)"
-        )
+        logger.info(f"   NEUTRAL: {neutral_signals} ({neutral_signals / total * 100:.1f}%)")
 
         # Анализ по символам
         logger.info("\n📊 Детали по символам:")
@@ -186,23 +179,17 @@ class MLPredictionAnalyzer:
             logger.info(f"   Вероятность успеха: {pred['success_probability']:.1%}")
             logger.info(f"   Риск: {pred['risk_level']}")
             logger.info(f"   Направления: {pred['predictions']['raw_directions']}")
-            logger.info(
-                f"   Прошел фильтры: {'✅' if pred['passed_filters'] else '❌'}"
-            )
+            logger.info(f"   Прошел фильтры: {'✅' if pred['passed_filters'] else '❌'}")
 
         # Анализ причин фильтрации
         logger.info("\n🚫 Причины отсутствия сигналов:")
 
         filtered_by_type = sum(1 for p in predictions if p["signal_type"] == "NEUTRAL")
         filtered_by_confidence = sum(
-            1
-            for p in predictions
-            if p["signal_type"] != "NEUTRAL" and p["confidence"] < min_conf
+            1 for p in predictions if p["signal_type"] != "NEUTRAL" and p["confidence"] < min_conf
         )
         filtered_by_strength = sum(
-            1
-            for p in predictions
-            if p["signal_type"] != "NEUTRAL" and p["strength"] < min_strength
+            1 for p in predictions if p["signal_type"] != "NEUTRAL" and p["strength"] < min_strength
         )
 
         logger.info(f"   NEUTRAL сигналы: {filtered_by_type}")
@@ -280,28 +267,22 @@ class MLPredictionAnalyzer:
         if predictions:
             avg_confidence = np.mean([p["confidence"] for p in predictions])
             avg_strength = np.mean([p["strength"] for p in predictions])
-            neutral_pct = sum(
-                1 for p in predictions if p["signal_type"] == "NEUTRAL"
-            ) / len(predictions)
+            neutral_pct = sum(1 for p in predictions if p["signal_type"] == "NEUTRAL") / len(
+                predictions
+            )
 
             logger.info("\n1. Пороги:")
             logger.info(f"   Средняя уверенность: {avg_confidence:.3f}")
-            logger.info(
-                f"   Рекомендуемый порог confidence: {max(0.3, avg_confidence * 0.7):.3f}"
-            )
+            logger.info(f"   Рекомендуемый порог confidence: {max(0.3, avg_confidence * 0.7):.3f}")
             logger.info(f"   Средняя сила: {avg_strength:.3f}")
-            logger.info(
-                f"   Рекомендуемый порог strength: {max(0.1, avg_strength * 0.7):.3f}"
-            )
+            logger.info(f"   Рекомендуемый порог strength: {max(0.1, avg_strength * 0.7):.3f}")
 
             logger.info("\n2. Модель:")
             if neutral_pct > 0.8:
                 logger.info("   ⚠️ Модель генерирует слишком много NEUTRAL сигналов")
                 logger.info("   - Снизьте порог направления в ML Manager с 0.1 до 0.05")
                 logger.info("   - Проверьте качество входных данных")
-                logger.info(
-                    "   - Рассмотрите переобучение модели на более волатильных данных"
-                )
+                logger.info("   - Рассмотрите переобучение модели на более волатильных данных")
 
             logger.info("\n3. Конфигурация:")
             logger.info("   Обновите config/system.yaml:")
@@ -323,17 +304,13 @@ class MLPredictionAnalyzer:
             # 1. Распределение типов сигналов
             signal_types = [p["signal_type"] for p in predictions]
             type_counts = pd.Series(signal_types).value_counts()
-            axes[0, 0].pie(
-                type_counts.values, labels=type_counts.index, autopct="%1.1f%%"
-            )
+            axes[0, 0].pie(type_counts.values, labels=type_counts.index, autopct="%1.1f%%")
             axes[0, 0].set_title("Распределение типов сигналов")
 
             # 2. Распределение уверенности
             confidences = [p["confidence"] for p in predictions]
             axes[0, 1].hist(confidences, bins=20, alpha=0.7, color="blue")
-            axes[0, 1].axvline(
-                x=0.45, color="red", linestyle="--", label="Текущий порог"
-            )
+            axes[0, 1].axvline(x=0.45, color="red", linestyle="--", label="Текущий порог")
             axes[0, 1].set_xlabel("Уверенность")
             axes[0, 1].set_ylabel("Количество")
             axes[0, 1].set_title("Распределение уверенности")
@@ -342,9 +319,7 @@ class MLPredictionAnalyzer:
             # 3. Распределение силы сигнала
             strengths = [p["strength"] for p in predictions]
             axes[1, 0].hist(strengths, bins=20, alpha=0.7, color="green")
-            axes[1, 0].axvline(
-                x=0.2, color="red", linestyle="--", label="Текущий порог"
-            )
+            axes[1, 0].axvline(x=0.2, color="red", linestyle="--", label="Текущий порог")
             axes[1, 0].set_xlabel("Сила сигнала")
             axes[1, 0].set_ylabel("Количество")
             axes[1, 0].set_title("Распределение силы сигнала")

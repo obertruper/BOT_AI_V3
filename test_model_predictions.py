@@ -101,9 +101,7 @@ async def test_predictions():
                 # Энтропия Шеннона
                 entropy = -np.sum(p * np.log(p + 1e-10))
                 max_entropy = np.log(3)  # Максимальная энтропия для 3 классов
-                uncertainty = (
-                    entropy / max_entropy
-                )  # Нормализованная неуверенность (0-1)
+                uncertainty = entropy / max_entropy  # Нормализованная неуверенность (0-1)
                 print(f"  {tf}: неуверенность = {uncertainty:.1%}")
 
             # Если все вероятности близки к 33%, это признак проблемы
@@ -114,9 +112,7 @@ async def test_predictions():
                 print("  Это означает, что модель по сути случайно угадывает.")
                 print("\n  Возможные причины:")
                 print("  1. Модель не была правильно обучена")
-                print(
-                    "  2. Входные признаки не соответствуют тем, на которых обучалась модель"
-                )
+                print("  2. Входные признаки не соответствуют тем, на которых обучалась модель")
                 print("  3. Проблемы с нормализацией данных (scaler)")
                 print("  4. Модель находится в режиме 'случайных' предсказаний")
 
@@ -138,18 +134,12 @@ async def test_predictions():
         # Нормализуем
         normalized = ml_manager.scaler.transform(test_features)
 
-        print(
-            f"До нормализации: mean={test_features.mean():.3f}, std={test_features.std():.3f}"
-        )
-        print(
-            f"После нормализации: mean={normalized.mean():.3f}, std={normalized.std():.3f}"
-        )
+        print(f"До нормализации: mean={test_features.mean():.3f}, std={test_features.std():.3f}")
+        print(f"После нормализации: mean={normalized.mean():.3f}, std={normalized.std():.3f}")
 
         # Проверяем, что scaler правильно работает
         if np.abs(normalized.mean()) > 0.1 or np.abs(normalized.std() - 1.0) > 0.1:
-            print(
-                "⚠️ Возможна проблема с scaler - данные не стандартизированы правильно"
-            )
+            print("⚠️ Возможна проблема с scaler - данные не стандартизированы правильно")
 
     await AsyncPGPool.close()
 

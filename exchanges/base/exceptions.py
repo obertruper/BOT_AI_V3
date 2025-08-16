@@ -9,10 +9,13 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Импортируем базовые исключения из core
-from core.exceptions import ErrorCategory, ErrorSeverity
+from core.exceptions import (
+    ErrorCategory,
+    ErrorSeverity,
+)
 from core.exceptions import ExchangeError as CoreExchangeError
 from core.exceptions import NetworkError as CoreNetworkError
 
@@ -24,9 +27,9 @@ class ExchangeError(CoreExchangeError):
         self,
         message: str,
         exchange_name: str,
-        endpoint: Optional[str] = None,
-        status_code: Optional[int] = None,
-        response_data: Optional[Dict[str, Any]] = None,
+        endpoint: str | None = None,
+        status_code: int | None = None,
+        response_data: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(message, exchange_name, **kwargs)
@@ -46,8 +49,8 @@ class ConnectionError(ExchangeError):
     def __init__(
         self,
         exchange_name: str,
-        endpoint: Optional[str] = None,
-        timeout: Optional[float] = None,
+        endpoint: str | None = None,
+        timeout: float | None = None,
         **kwargs,
     ):
         message = f"Failed to connect to {exchange_name}"
@@ -94,9 +97,9 @@ class APIError(ExchangeError):
         self,
         exchange_name: str,
         api_method: str,
-        error_code: Optional[str] = None,
-        api_message: Optional[str] = None,
-        status_code: Optional[int] = None,
+        error_code: str | None = None,
+        api_message: str | None = None,
+        status_code: int | None = None,
         **kwargs,
     ):
         message = f"API error in {exchange_name}.{api_method}"
@@ -123,9 +126,9 @@ class RateLimitError(ExchangeError):
         self,
         exchange_name: str,
         limit_type: str = "requests",
-        retry_after: Optional[int] = None,
-        current_usage: Optional[int] = None,
-        limit_value: Optional[int] = None,
+        retry_after: int | None = None,
+        current_usage: int | None = None,
+        limit_value: int | None = None,
         **kwargs,
     ):
         message = f"Rate limit exceeded for {exchange_name} ({limit_type})"
@@ -134,9 +137,7 @@ class RateLimitError(ExchangeError):
         if current_usage and limit_value:
             message += f" (usage: {current_usage}/{limit_value})"
 
-        super().__init__(
-            message, exchange_name, severity=ErrorSeverity.MEDIUM, **kwargs
-        )
+        super().__init__(message, exchange_name, severity=ErrorSeverity.MEDIUM, **kwargs)
 
         self.context.update(
             {
@@ -187,9 +188,9 @@ class OrderError(ExchangeError):
         self,
         exchange_name: str,
         operation: str,
-        order_id: Optional[str] = None,
-        symbol: Optional[str] = None,
-        reason: Optional[str] = None,
+        order_id: str | None = None,
+        symbol: str | None = None,
+        reason: str | None = None,
         **kwargs,
     ):
         message = f"Order {operation} failed on {exchange_name}"
@@ -215,9 +216,7 @@ class OrderError(ExchangeError):
 class OrderNotFoundError(OrderError):
     """Ордер не найден"""
 
-    def __init__(
-        self, exchange_name: str, order_id: str, symbol: Optional[str] = None, **kwargs
-    ):
+    def __init__(self, exchange_name: str, order_id: str, symbol: str | None = None, **kwargs):
         super().__init__(
             exchange_name,
             "lookup",
@@ -236,7 +235,7 @@ class OrderRejectedError(OrderError):
         exchange_name: str,
         symbol: str,
         rejection_reason: str,
-        order_data: Optional[Dict[str, Any]] = None,
+        order_data: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -255,7 +254,7 @@ class PositionError(ExchangeError):
         exchange_name: str,
         operation: str,
         symbol: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
         **kwargs,
     ):
         message = f"Position {operation} failed on {exchange_name} for {symbol}"
@@ -264,18 +263,14 @@ class PositionError(ExchangeError):
 
         super().__init__(message, exchange_name, **kwargs)
 
-        self.context.update(
-            {"operation": operation, "symbol": symbol, "reason": reason}
-        )
+        self.context.update({"operation": operation, "symbol": symbol, "reason": reason})
 
 
 class PositionNotFoundError(PositionError):
     """Позиция не найдена"""
 
     def __init__(self, exchange_name: str, symbol: str, **kwargs):
-        super().__init__(
-            exchange_name, "lookup", symbol, reason="Position not found", **kwargs
-        )
+        super().__init__(exchange_name, "lookup", symbol, reason="Position not found", **kwargs)
 
 
 class LeverageError(ExchangeError):
@@ -286,11 +281,13 @@ class LeverageError(ExchangeError):
         exchange_name: str,
         symbol: str,
         requested_leverage: float,
-        max_leverage: Optional[float] = None,
-        reason: Optional[str] = None,
+        max_leverage: float | None = None,
+        reason: str | None = None,
         **kwargs,
     ):
-        message = f"Leverage operation failed on {exchange_name} for {symbol}: {requested_leverage}x"
+        message = (
+            f"Leverage operation failed on {exchange_name} for {symbol}: {requested_leverage}x"
+        )
         if max_leverage:
             message += f" (max allowed: {max_leverage}x)"
         if reason:
@@ -315,8 +312,8 @@ class MarketDataError(ExchangeError):
         self,
         exchange_name: str,
         data_type: str,
-        symbol: Optional[str] = None,
-        reason: Optional[str] = None,
+        symbol: str | None = None,
+        reason: str | None = None,
         **kwargs,
     ):
         message = f"Failed to get {data_type} from {exchange_name}"
@@ -327,9 +324,7 @@ class MarketDataError(ExchangeError):
 
         super().__init__(message, exchange_name, **kwargs)
 
-        self.context.update(
-            {"data_type": data_type, "symbol": symbol, "reason": reason}
-        )
+        self.context.update({"data_type": data_type, "symbol": symbol, "reason": reason})
 
 
 class WebSocketError(CoreNetworkError):
@@ -339,8 +334,8 @@ class WebSocketError(CoreNetworkError):
         self,
         exchange_name: str,
         operation: str,
-        ws_url: Optional[str] = None,
-        reason: Optional[str] = None,
+        ws_url: str | None = None,
+        reason: str | None = None,
         **kwargs,
     ):
         message = f"WebSocket {operation} failed for {exchange_name}"
@@ -366,8 +361,8 @@ class SubscriptionError(WebSocketError):
         self,
         exchange_name: str,
         channel: str,
-        symbol: Optional[str] = None,
-        reason: Optional[str] = None,
+        symbol: str | None = None,
+        reason: str | None = None,
         **kwargs,
     ):
         message = f"Failed to subscribe to {channel}"
@@ -398,9 +393,7 @@ class ValidationError(ExchangeError):
     ):
         message = f"Validation failed for {validation_type} on {exchange_name}: {field}={value}, expected {expected}"
 
-        super().__init__(
-            message, exchange_name, category=ErrorCategory.VALIDATION, **kwargs
-        )
+        super().__init__(message, exchange_name, category=ErrorCategory.VALIDATION, **kwargs)
 
         self.context.update(
             {
@@ -419,7 +412,7 @@ class SymbolNotFoundError(ExchangeError):
         self,
         exchange_name: str,
         symbol: str,
-        available_symbols: Optional[list] = None,
+        available_symbols: list | None = None,
         **kwargs,
     ):
         message = f"Symbol '{symbol}' not found on {exchange_name}"
@@ -431,9 +424,7 @@ class SymbolNotFoundError(ExchangeError):
         self.context.update(
             {
                 "symbol": symbol,
-                "available_symbols_count": len(available_symbols)
-                if available_symbols
-                else 0,
+                "available_symbols_count": len(available_symbols) if available_symbols else 0,
             }
         )
 
@@ -445,7 +436,7 @@ class ExchangeMaintenanceError(ExchangeError):
         self,
         exchange_name: str,
         maintenance_type: str = "scheduled",
-        estimated_end_time: Optional[datetime] = None,
+        estimated_end_time: datetime | None = None,
         **kwargs,
     ):
         message = f"{exchange_name} is under {maintenance_type} maintenance"
@@ -470,8 +461,8 @@ class ExchangeMaintenanceError(ExchangeError):
 def create_api_error_from_response(
     exchange_name: str,
     api_method: str,
-    response_data: Dict[str, Any],
-    status_code: Optional[int] = None,
+    response_data: dict[str, Any],
+    status_code: int | None = None,
 ) -> APIError:
     """Создание APIError из ответа биржи"""
 
@@ -532,8 +523,8 @@ def is_maintenance_error(error_code: str, exchange_name: str) -> bool:
 
 
 def extract_retry_after(
-    response_data: Dict[str, Any], headers: Optional[Dict[str, str]] = None
-) -> Optional[int]:
+    response_data: dict[str, Any], headers: dict[str, str] | None = None
+) -> int | None:
     """Извлечение времени retry из ответа биржи"""
 
     # Проверяем заголовки HTTP

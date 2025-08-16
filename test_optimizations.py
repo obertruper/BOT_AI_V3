@@ -50,9 +50,7 @@ async def test_smart_data_manager():
         for symbol in test_symbols:
             data = await smart_dm.get_data(symbol)
             if data is not None:
-                print(
-                    f"   {Fore.GREEN}✓{Style.RESET_ALL} {symbol}: {len(data)} свечей в кеше"
-                )
+                print(f"   {Fore.GREEN}✓{Style.RESET_ALL} {symbol}: {len(data)} свечей в кеше")
             else:
                 print(f"   {Fore.RED}✗{Style.RESET_ALL} {symbol}: нет данных")
 
@@ -112,9 +110,7 @@ async def test_enhanced_rate_limiter():
             print(f"   • {key}: {value}")
 
         if stats["cache_hits"] > 0:
-            print(
-                f"\n{Fore.GREEN}✅ EnhancedRateLimiter работает корректно{Style.RESET_ALL}"
-            )
+            print(f"\n{Fore.GREEN}✅ EnhancedRateLimiter работает корректно{Style.RESET_ALL}")
             return True
         else:
             print(f"\n{Fore.YELLOW}⚠️ Кеш не использовался{Style.RESET_ALL}")
@@ -128,9 +124,7 @@ async def test_enhanced_rate_limiter():
 async def test_signal_deduplication():
     """Тест защиты от дублирования сигналов"""
     print(f"\n{Fore.CYAN}{'=' * 60}{Style.RESET_ALL}")
-    print(
-        f"{Fore.CYAN}🔧 Тестирование защиты от дублирования сигналов{Style.RESET_ALL}"
-    )
+    print(f"{Fore.CYAN}🔧 Тестирование защиты от дублирования сигналов{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'=' * 60}{Style.RESET_ALL}\n")
 
     try:
@@ -157,9 +151,7 @@ async def test_signal_deduplication():
             # Первая попытка создания
             signal1 = await repo.create_signal(signal_data.copy())
             if signal1:
-                print(
-                    f"   {Fore.GREEN}✓{Style.RESET_ALL} Первый сигнал создан (ID: {signal1.id})"
-                )
+                print(f"   {Fore.GREEN}✓{Style.RESET_ALL} Первый сигнал создан (ID: {signal1.id})")
             else:
                 print(f"   {Fore.YELLOW}⚠{Style.RESET_ALL} Первый сигнал не создан")
 
@@ -170,9 +162,7 @@ async def test_signal_deduplication():
                     f"   {Fore.RED}✗{Style.RESET_ALL} Дублирующий сигнал создан (ID: {signal2.id}) - ОШИБКА!"
                 )
             else:
-                print(
-                    f"   {Fore.GREEN}✓{Style.RESET_ALL} Дублирующий сигнал заблокирован"
-                )
+                print(f"   {Fore.GREEN}✓{Style.RESET_ALL} Дублирующий сигнал заблокирован")
 
             # Третья попытка с другим символом (должна пройти)
             signal_data["symbol"] = "TESTUSDT2"
@@ -193,9 +183,7 @@ async def test_signal_deduplication():
 
             await session.commit()
 
-        print(
-            f"\n{Fore.GREEN}✅ Защита от дублирования работает корректно{Style.RESET_ALL}"
-        )
+        print(f"\n{Fore.GREEN}✅ Защита от дублирования работает корректно{Style.RESET_ALL}")
         return True
 
     except Exception as e:

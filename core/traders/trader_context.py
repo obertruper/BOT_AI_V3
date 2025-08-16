@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.config.config_manager import ConfigManager
 from core.exceptions import TraderConfigurationError, TraderInitializationError
@@ -48,7 +48,7 @@ class TraderMetrics:
     profit_loss: float = 0.0
     max_drawdown: float = 0.0
     current_positions: int = 0
-    last_trade_time: Optional[datetime] = None
+    last_trade_time: datetime | None = None
     uptime_seconds: float = 0.0
     errors_count: int = 0
 
@@ -94,12 +94,12 @@ class TraderContext:
         self.session_id = generate_id("session")
 
         # Основные компоненты
-        self._config: Dict[str, Any] = {}
-        self._logger: Optional[logging.Logger] = None
+        self._config: dict[str, Any] = {}
+        self._logger: logging.Logger | None = None
         self._state = TraderState.CREATED
         self._created_at = datetime.now()
-        self._started_at: Optional[datetime] = None
-        self._stopped_at: Optional[datetime] = None
+        self._started_at: datetime | None = None
+        self._stopped_at: datetime | None = None
 
         # Метрики и ресурсы
         self.metrics = TraderMetrics()
@@ -113,10 +113,10 @@ class TraderContext:
         self.risk_manager = None
 
         # Состояние и данные
-        self._positions: Dict[str, Any] = {}
-        self._orders: Dict[str, Any] = {}
-        self._signals: List[Dict[str, Any]] = []
-        self._errors: List[Dict[str, Any]] = []
+        self._positions: dict[str, Any] = {}
+        self._orders: dict[str, Any] = {}
+        self._signals: list[dict[str, Any]] = []
+        self._errors: list[dict[str, Any]] = []
 
         # Флаги управления
         self._is_initialized = False
@@ -162,9 +162,7 @@ class TraderContext:
         # Получение конфигурации из ConfigManager
         trader_config = self.config_manager.get_trader_config(self.trader_id)
         if not trader_config:
-            raise TraderConfigurationError(
-                f"Конфигурация для трейдера {self.trader_id} не найдена"
-            )
+            raise TraderConfigurationError(f"Конфигурация для трейдера {self.trader_id} не найдена")
 
         # Слияние с системной конфигурацией
         system_config = self.config_manager.get_system_config()
@@ -199,9 +197,7 @@ class TraderContext:
         errors = [r for r in validation_results if r.level.value == "error"]
         if errors:
             error_messages = [f"{r.field}: {r.message}" for r in errors]
-            raise TraderConfigurationError(
-                f"Ошибки конфигурации: {'; '.join(error_messages)}"
-            )
+            raise TraderConfigurationError(f"Ошибки конфигурации: {'; '.join(error_messages)}")
 
         # Логирование предупреждений
         warnings = [r for r in validation_results if r.level.value == "warning"]
@@ -215,9 +211,7 @@ class TraderContext:
                 await self.initialize()
 
             if self._state != TraderState.READY:
-                raise ValueError(
-                    f"Трейдер не готов к запуску. Текущее состояние: {self._state}"
-                )
+                raise ValueError(f"Трейдер не готов к запуску. Текущее состояние: {self._state}")
 
             try:
                 self._state = TraderState.RUNNING
@@ -363,7 +357,7 @@ class TraderContext:
             if hasattr(self.metrics, key):
                 setattr(self.metrics, key, value)
 
-    def add_error(self, error: str, details: Optional[Dict[str, Any]] = None) -> None:
+    def add_error(self, error: str, details: dict[str, Any] | None = None) -> None:
         """Добавление ошибки в историю"""
         error_record = {
             "timestamp": datetime.now(),
@@ -378,7 +372,7 @@ class TraderContext:
         if len(self._errors) > 100:
             self._errors = self._errors[-50:]  # Оставляем последние 50
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Получение полного статуса трейдера"""
         uptime = 0
         if self._started_at:
@@ -410,9 +404,7 @@ class TraderContext:
                 "memory_usage_mb": self.resources.memory_usage_mb,
                 "cpu_usage_percent": self.resources.cpu_usage_percent,
             },
-            "last_errors": self._errors[-5:]
-            if self._errors
-            else [],  # Последние 5 ошибок
+            "last_errors": self._errors[-5:] if self._errors else [],  # Последние 5 ошибок
         }
 
     @property
@@ -431,7 +423,7 @@ class TraderContext:
         return self._should_stop
 
     @property
-    def logger(self) -> Optional[logging.Logger]:
+    def logger(self) -> logging.Logger | None:
         """Логгер трейдера"""
         return self._logger
 

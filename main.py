@@ -10,7 +10,6 @@ import signal
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -34,8 +33,8 @@ class BotAIV3Application:
     """Основное приложение торгового бота"""
 
     def __init__(self):
-        self.orchestrator: Optional[SystemOrchestrator] = None
-        self.config_manager: Optional[ConfigManager] = None
+        self.orchestrator: SystemOrchestrator | None = None
+        self.config_manager: ConfigManager | None = None
         self.shutdown_event = asyncio.Event()
 
     async def initialize(self):

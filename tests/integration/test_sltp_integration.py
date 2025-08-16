@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Тест интеграции SL/TP с торговой системой
 """
@@ -39,9 +38,7 @@ async def test_sltp_integration():
         sltp_manager = EnhancedSLTPManager(config_manager=config_manager)
 
         # Order Manager с SL/TP
-        order_manager = OrderManager(
-            exchange_registry=exchange_manager, sltp_manager=sltp_manager
-        )
+        order_manager = OrderManager(exchange_registry=exchange_manager, sltp_manager=sltp_manager)
 
         logger.info("✅ Компоненты инициализированы")
 

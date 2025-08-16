@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Тестовый скрипт для проверки улучшенной системы управления рисками
 """
@@ -51,9 +50,7 @@ async def test_risk_management():
     for profile in profiles:
         profile_config = risk_manager.get_risk_profile(profile)
         if profile_config:
-            print(
-                f"   {profile}: множитель {profile_config.get('risk_multiplier', 1.0)}"
-            )
+            print(f"   {profile}: множитель {profile_config.get('risk_multiplier', 1.0)}")
 
     # Тестирование категорий активов
     print("\n5. Тестирование категорий активов...")
@@ -116,9 +113,7 @@ async def test_risk_management():
         print(
             f"   Ожидаемая точность продажи: {monitoring_config.get('expected_sell_accuracy', 0)}%"
         )
-        print(
-            f"   Порог алерта: {monitoring_config.get('accuracy_alert_threshold', 0)}%"
-        )
+        print(f"   Порог алерта: {monitoring_config.get('accuracy_alert_threshold', 0)}%")
 
     print("\n" + "=" * 60)
     print("✅ Тестирование завершено успешно!")

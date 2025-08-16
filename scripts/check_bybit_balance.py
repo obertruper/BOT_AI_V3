@@ -95,9 +95,7 @@ async def check_bybit():
                     print(f"  Сторона: {trade['side']}")
                     print(f"  Цена: {trade['price']}")
                     print(f"  Количество: {trade['amount']}")
-                    print(
-                        f"  Комиссия: {trade['fee']['cost']} {trade['fee']['currency']}"
-                    )
+                    print(f"  Комиссия: {trade['fee']['cost']} {trade['fee']['currency']}")
             else:
                 print("Нет недавних сделок")
         except Exception as e:

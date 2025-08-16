@@ -14,10 +14,11 @@ import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -55,13 +56,13 @@ class WebSocketMessage:
 
     message_type: MessageType
     channel: str
-    symbol: Optional[str] = None
+    symbol: str | None = None
     data: Any = None
     timestamp: datetime = field(default_factory=datetime.now)
-    raw_data: Optional[Dict[str, Any]] = None
-    exchange_name: Optional[str] = None
+    raw_data: dict[str, Any] | None = None
+    exchange_name: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование в словарь"""
         return {
             "type": self.message_type.value,
@@ -78,13 +79,13 @@ class Subscription:
     """Подписка WebSocket"""
 
     channel: str
-    symbol: Optional[str]
+    symbol: str | None
     callback: Callable[[WebSocketMessage], None]
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
     is_active: bool = False
     subscription_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=datetime.now)
-    last_message_at: Optional[datetime] = None
+    last_message_at: datetime | None = None
     message_count: int = 0
 
 
@@ -103,8 +104,8 @@ class BaseWebSocketClient(ABC):
         self,
         exchange_name: str,
         base_url: str,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
         timeout: int = 30,
         ping_interval: int = 20,
         max_reconnect_attempts: int = 10,
@@ -121,23 +122,23 @@ class BaseWebSocketClient(ABC):
 
         # Состояние соединения
         self.state = WebSocketState.DISCONNECTED
-        self.websocket: Optional[websockets.WebSocketServerProtocol] = None
-        self.connection_url: Optional[str] = None
+        self.websocket: websockets.WebSocketServerProtocol | None = None
+        self.connection_url: str | None = None
 
         # Подписки
-        self.subscriptions: Dict[str, Subscription] = {}
-        self.pending_subscriptions: List[Subscription] = []
+        self.subscriptions: dict[str, Subscription] = {}
+        self.pending_subscriptions: list[Subscription] = []
 
         # Задачи и управление
-        self.listen_task: Optional[asyncio.Task] = None
-        self.ping_task: Optional[asyncio.Task] = None
-        self.reconnect_task: Optional[asyncio.Task] = None
+        self.listen_task: asyncio.Task | None = None
+        self.ping_task: asyncio.Task | None = None
+        self.reconnect_task: asyncio.Task | None = None
 
         # Метрики
         self.connection_attempts = 0
         self.reconnect_attempts = 0
-        self.last_ping_time: Optional[datetime] = None
-        self.last_pong_time: Optional[datetime] = None
+        self.last_ping_time: datetime | None = None
+        self.last_pong_time: datetime | None = None
         self.messages_received = 0
         self.messages_sent = 0
 
@@ -145,9 +146,9 @@ class BaseWebSocketClient(ABC):
         self.logger = logging.getLogger(f"websocket.{exchange_name}")
 
         # События
-        self.on_connect_callback: Optional[Callable] = None
-        self.on_disconnect_callback: Optional[Callable] = None
-        self.on_error_callback: Optional[Callable] = None
+        self.on_connect_callback: Callable | None = None
+        self.on_disconnect_callback: Callable | None = None
+        self.on_error_callback: Callable | None = None
 
     # =================== АБСТРАКТНЫЕ МЕТОДЫ ===================
 
@@ -157,32 +158,32 @@ class BaseWebSocketClient(ABC):
         pass
 
     @abstractmethod
-    def build_auth_message(self) -> Optional[Dict[str, Any]]:
+    def build_auth_message(self) -> dict[str, Any] | None:
         """Построение сообщения аутентификации"""
         pass
 
     @abstractmethod
-    def build_subscribe_message(self, subscription: Subscription) -> Dict[str, Any]:
+    def build_subscribe_message(self, subscription: Subscription) -> dict[str, Any]:
         """Построение сообщения подписки"""
         pass
 
     @abstractmethod
-    def build_unsubscribe_message(self, subscription: Subscription) -> Dict[str, Any]:
+    def build_unsubscribe_message(self, subscription: Subscription) -> dict[str, Any]:
         """Построение сообщения отписки"""
         pass
 
     @abstractmethod
-    def build_ping_message(self) -> Dict[str, Any]:
+    def build_ping_message(self) -> dict[str, Any]:
         """Построение ping сообщения"""
         pass
 
     @abstractmethod
-    def parse_message(self, raw_message: str) -> Optional[WebSocketMessage]:
+    def parse_message(self, raw_message: str) -> WebSocketMessage | None:
         """Парсинг входящего сообщения"""
         pass
 
     @abstractmethod
-    def is_pong_message(self, message: Dict[str, Any]) -> bool:
+    def is_pong_message(self, message: dict[str, Any]) -> bool:
         """Проверка, является ли сообщение pong"""
         pass
 
@@ -274,7 +275,7 @@ class BaseWebSocketClient(ABC):
         self,
         channel: str,
         callback: Callable[[WebSocketMessage], None],
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
         **params,
     ) -> str:
         """Подписка на канал"""
@@ -292,9 +293,7 @@ class BaseWebSocketClient(ABC):
             # Иначе добавляем в очередь
             self.pending_subscriptions.append(subscription)
 
-        self.logger.info(
-            f"Subscribed to {channel}" + (f" for {symbol}" if symbol else "")
-        )
+        self.logger.info(f"Subscribed to {channel}" + (f" for {symbol}" if symbol else ""))
         return subscription_id
 
     async def unsubscribe(self, subscription_id: str) -> bool:
@@ -376,7 +375,7 @@ class BaseWebSocketClient(ABC):
                     # Парсинг и обработка
                     await self._handle_raw_message(raw_message)
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.warning("No message received within timeout")
                     continue
 
@@ -488,9 +487,7 @@ class BaseWebSocketClient(ABC):
                 2 ** (self.reconnect_attempts - 1)
             )  # Exponential backoff
 
-            self.logger.info(
-                f"Reconnecting in {delay} seconds (attempt {self.reconnect_attempts})"
-            )
+            self.logger.info(f"Reconnecting in {delay} seconds (attempt {self.reconnect_attempts})")
             await asyncio.sleep(delay)
 
             try:
@@ -498,9 +495,7 @@ class BaseWebSocketClient(ABC):
                 return  # Успешное переподключение
 
             except Exception as e:
-                self.logger.warning(
-                    f"Reconnection attempt {self.reconnect_attempts} failed: {e}"
-                )
+                self.logger.warning(f"Reconnection attempt {self.reconnect_attempts} failed: {e}")
 
         # Превышено максимальное количество попыток
         self.state = WebSocketState.ERROR
@@ -527,19 +522,15 @@ class BaseWebSocketClient(ABC):
             subscription.is_active = True
 
         except Exception as e:
-            self.logger.error(
-                f"Failed to send subscription for {subscription.channel}: {e}"
-            )
+            self.logger.error(f"Failed to send subscription for {subscription.channel}: {e}")
             raise SubscriptionError(
                 self.exchange_name, subscription.channel, subscription.symbol, str(e)
             )
 
-    async def _send_message(self, message: Dict[str, Any]) -> None:
+    async def _send_message(self, message: dict[str, Any]) -> None:
         """Отправка сообщения"""
         if not self.websocket or self.state != WebSocketState.CONNECTED:
-            raise WebSocketError(
-                self.exchange_name, "send_message", reason="Not connected"
-            )
+            raise WebSocketError(self.exchange_name, "send_message", reason="Not connected")
 
         try:
             message_str = json.dumps(message)
@@ -571,7 +562,7 @@ class BaseWebSocketClient(ABC):
         """Происходит ли переподключение"""
         return self.state == WebSocketState.RECONNECTING
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Получение статистики WebSocket"""
         return {
             "state": self.state.value,
@@ -579,24 +570,18 @@ class BaseWebSocketClient(ABC):
             "reconnect_attempts": self.reconnect_attempts,
             "messages_received": self.messages_received,
             "messages_sent": self.messages_sent,
-            "active_subscriptions": len(
-                [s for s in self.subscriptions.values() if s.is_active]
-            ),
+            "active_subscriptions": len([s for s in self.subscriptions.values() if s.is_active]),
             "total_subscriptions": len(self.subscriptions),
-            "last_ping": self.last_ping_time.isoformat()
-            if self.last_ping_time
-            else None,
-            "last_pong": self.last_pong_time.isoformat()
-            if self.last_pong_time
-            else None,
+            "last_ping": self.last_ping_time.isoformat() if self.last_ping_time else None,
+            "last_pong": self.last_pong_time.isoformat() if self.last_pong_time else None,
             "connection_url": self.connection_url,
         }
 
     def set_callbacks(
         self,
-        on_connect: Optional[Callable] = None,
-        on_disconnect: Optional[Callable] = None,
-        on_error: Optional[Callable] = None,
+        on_connect: Callable | None = None,
+        on_disconnect: Callable | None = None,
+        on_error: Callable | None = None,
     ):
         """Установка callback функций"""
         if on_connect:
@@ -621,7 +606,7 @@ class BaseWebSocketClient(ABC):
 # =================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===================
 
 
-def create_subscription_id(channel: str, symbol: Optional[str] = None) -> str:
+def create_subscription_id(channel: str, symbol: str | None = None) -> str:
     """Создание ID подписки"""
     parts = [channel]
     if symbol:
@@ -629,7 +614,7 @@ def create_subscription_id(channel: str, symbol: Optional[str] = None) -> str:
     return "_".join(parts) + "_" + str(uuid.uuid4())[:8]
 
 
-async def test_websocket_connection(ws_client: BaseWebSocketClient) -> Dict[str, Any]:
+async def test_websocket_connection(ws_client: BaseWebSocketClient) -> dict[str, Any]:
     """Тестирование WebSocket соединения"""
     test_result = {
         "exchange": ws_client.exchange_name,

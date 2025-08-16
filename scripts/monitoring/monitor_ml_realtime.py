@@ -107,9 +107,7 @@ async def monitor_ml_pipeline():
 
             print("   📊 Данные после масштабирования:")
             print(f"   Shape: {features_scaled.shape}")
-            print(
-                f"   Range: [{features_scaled.min():.3f}, {features_scaled.max():.3f}]"
-            )
+            print(f"   Range: [{features_scaled.min():.3f}, {features_scaled.max():.3f}]")
 
             # Прямое предсказание через ML Manager
             prediction = await ml_manager.predict(features_window)
@@ -144,9 +142,7 @@ async def monitor_ml_pipeline():
 
                 if "ml_predictions" in indicators:
                     ml_pred = indicators["ml_predictions"]
-                    print(
-                        f"   • Direction Score: {ml_pred.get('direction_score', 0):.3f}"
-                    )
+                    print(f"   • Direction Score: {ml_pred.get('direction_score', 0):.3f}")
                     print(f"   • Raw Directions: {ml_pred.get('raw_directions', [])}")
 
                 if "technical_indicators" in indicators:
@@ -163,9 +159,7 @@ async def monitor_ml_pipeline():
 
     print("🔍 Ключевые отличия найдены:")
     print("\n1. ПРОБЛЕМА С DIRECTION HEAD:")
-    print(
-        "   • LLM TRANSFORM: direction_head выдает 12 значений (3 класса × 4 таймфрейма)"
-    )
+    print("   • LLM TRANSFORM: direction_head выдает 12 значений (3 класса × 4 таймфрейма)")
     print("   • BOT_AI_V3: ожидает только 4 значения направлений")
     print("   • Модель выдает [2.0, 2.0, 2.0, 2.0] из-за неправильной интерпретации")
 

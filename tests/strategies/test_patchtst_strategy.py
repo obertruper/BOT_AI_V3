@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Unit тесты для PatchTST ML стратегии
 """
@@ -166,9 +165,7 @@ class TestPatchTSTStrategy:
             mock_fe.create_features.return_value = pd.DataFrame(
                 np.random.randn(100, 240), columns=[f"feature_{i}" for i in range(240)]
             )
-            mock_fe.get_feature_names.return_value = [
-                f"feature_{i}" for i in range(240)
-            ]
+            mock_fe.get_feature_names.return_value = [f"feature_{i}" for i in range(240)]
 
             features_df = strategy._prepare_features()
 
@@ -336,9 +333,7 @@ class TestPatchTSTStrategy:
             confidence=0.8,
         )
 
-        position_size = await strategy.calculate_position_size(
-            signal, Decimal("10000.00")
-        )
+        position_size = await strategy.calculate_position_size(signal, Decimal("10000.00"))
 
         # 2% * strength(1.0) = 2% от баланса
         assert position_size == Decimal("200.00")
@@ -352,9 +347,7 @@ class TestPatchTSTStrategy:
         # Тест для LONG
         current_price = 50000.0
         risk_values = np.array([0.01, 0.015])  # 1% и 1.5% риск
-        profit_probs = np.array(
-            [0.6, 0.8, 0.7, 0.5]
-        )  # Макс вероятность для 2% (индекс 1)
+        profit_probs = np.array([0.6, 0.8, 0.7, 0.5])  # Макс вероятность для 2% (индекс 1)
 
         stop_loss, take_profit = strategy._calculate_levels(
             "LONG", current_price, risk_values, profit_probs
@@ -362,9 +355,7 @@ class TestPatchTSTStrategy:
 
         assert stop_loss < current_price
         assert take_profit > current_price
-        assert (take_profit - current_price) >= 2 * (
-            current_price - stop_loss
-        )  # RR >= 2
+        assert (take_profit - current_price) >= 2 * (current_price - stop_loss)  # RR >= 2
 
     @pytest.mark.asyncio
     async def test_full_analyze_flow(self, strategy_params, market_data):

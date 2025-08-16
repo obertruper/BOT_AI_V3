@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Скрипт проверки готовности BOT Trading v3 к запуску
 """
@@ -130,7 +129,7 @@ class ReadinessChecker:
         system_config_path = self.base_path / "config" / "system.yaml"
         if system_config_path.exists():
             try:
-                with open(system_config_path, "r") as f:
+                with open(system_config_path) as f:
                     config = yaml.safe_load(f)
 
                 # Проверяем основные секции
@@ -146,18 +145,14 @@ class ReadinessChecker:
                     if section in config:
                         self._check_passed(f"Секция {section} в system.yaml")
                     else:
-                        self._check_failed(
-                            f"Секция {section} отсутствует в system.yaml"
-                        )
+                        self._check_failed(f"Секция {section} отсутствует в system.yaml")
 
                 # Проверяем порт БД
                 db_port = config.get("database", {}).get("port")
                 if db_port == 5555:
                     self._check_passed("Порт БД = 5555")
                 else:
-                    self._check_failed(
-                        f"Неверный порт БД: {db_port} (должен быть 5555)"
-                    )
+                    self._check_failed(f"Неверный порт БД: {db_port} (должен быть 5555)")
 
             except Exception as e:
                 self._check_failed(f"Ошибка чтения system.yaml: {e}")
@@ -169,9 +164,7 @@ class ReadinessChecker:
         if traders_dir.exists():
             trader_configs = list(traders_dir.glob("*.yaml"))
             if trader_configs:
-                self._check_passed(
-                    f"Найдено {len(trader_configs)} конфигураций трейдеров"
-                )
+                self._check_passed(f"Найдено {len(trader_configs)} конфигураций трейдеров")
             else:
                 self._check_failed("Нет конфигураций трейдеров")
 
@@ -223,7 +216,7 @@ class ReadinessChecker:
                 self._check_failed("Не найдена конфигурация БД")
                 return
 
-            with open(system_config_path, "r") as f:
+            with open(system_config_path) as f:
                 config = yaml.safe_load(f)
 
             db_config = config.get("database", {})
@@ -273,9 +266,7 @@ class ReadinessChecker:
         logger.info("\n🤖 Проверка ML моделей...")
 
         # Проверяем PatchTST модель
-        model_path = (
-            self.base_path / "models" / "saved" / "best_model_20250728_215703.pth"
-        )
+        model_path = self.base_path / "models" / "saved" / "best_model_20250728_215703.pth"
         if model_path.exists():
             self._check_passed("PatchTST модель")
             # Проверяем размер файла
@@ -331,9 +322,7 @@ class ReadinessChecker:
         for endpoint_file in endpoint_files:
             full_path = self.base_path / endpoint_file
             if full_path.exists():
-                self._check_passed(
-                    f"Endpoint: {endpoint_file.split('/')[-1].replace('.py', '')}"
-                )
+                self._check_passed(f"Endpoint: {endpoint_file.split('/')[-1].replace('.py', '')}")
             else:
                 self._check_failed(f"Endpoint не найден: {endpoint_file}")
 
@@ -365,9 +354,7 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Проверка готовности BOT Trading v3")
-    parser.add_argument(
-        "--path", type=str, default=".", help="Путь к корневой директории v3"
-    )
+    parser.add_argument("--path", type=str, default=".", help="Путь к корневой директории v3")
 
     args = parser.parse_args()
 

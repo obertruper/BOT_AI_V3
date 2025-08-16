@@ -4,7 +4,7 @@
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,7 @@ class SignalRepository:
     def __init__(self, db_session: AsyncSession):
         self.session = db_session
 
-    async def get_active_signals(self, exchange: Optional[str] = None) -> List[Signal]:
+    async def get_active_signals(self, exchange: str | None = None) -> list[Signal]:
         """Получает активные сигналы"""
         try:
             query = select(Signal).where(Signal.status == "active")
@@ -31,17 +31,13 @@ class SignalRepository:
         except Exception as e:
             raise DatabaseError(f"Failed to get active signals: {e}")
 
-    async def create_signal(self, signal_data: Dict[str, Any]) -> Signal:
+    async def create_signal(self, signal_data: dict[str, Any]) -> Signal:
         """Создает новый сигнал"""
         try:
             # Конвертируем indicators и extra_data в JSON строки
-            if "indicators" in signal_data and isinstance(
-                signal_data["indicators"], dict
-            ):
+            if "indicators" in signal_data and isinstance(signal_data["indicators"], dict):
                 signal_data["indicators"] = json.dumps(signal_data["indicators"])
-            if "extra_data" in signal_data and isinstance(
-                signal_data["extra_data"], dict
-            ):
+            if "extra_data" in signal_data and isinstance(signal_data["extra_data"], dict):
                 signal_data["extra_data"] = json.dumps(signal_data["extra_data"])
 
             signal = Signal(**signal_data)

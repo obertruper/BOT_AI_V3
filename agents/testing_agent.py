@@ -22,7 +22,6 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
 
 import psutil
 
@@ -31,9 +30,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler(
-            "/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/testing_agent.log"
-        ),
+        logging.FileHandler("/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/testing_agent.log"),
         logging.StreamHandler(),
     ],
 )
@@ -98,8 +95,8 @@ class TestingAgent:
         self.project_root = Path(project_root)
         self.venv_python = self.project_root / "venv/bin/python"
         self.logs_dir = self.project_root / "data/logs"
-        self.processes: Dict[str, subprocess.Popen] = {}
-        self.error_history: List[Dict] = []
+        self.processes: dict[str, subprocess.Popen] = {}
+        self.error_history: list[dict] = []
         self.running = False
 
         # Создаем директории если их нет
@@ -215,9 +212,7 @@ class TestingAgent:
         """Проверка состояния процессов"""
         for name, process in list(self.processes.items()):
             if process.poll() is not None:
-                logger.warning(
-                    f"Процесс {name} завершился с кодом {process.returncode}"
-                )
+                logger.warning(f"Процесс {name} завершился с кодом {process.returncode}")
 
                 # Читаем ошибки
                 if process.stderr:
@@ -231,7 +226,7 @@ class TestingAgent:
     async def _analyze_log_file(self, log_file: Path):
         """Анализ отдельного лог файла"""
         try:
-            with open(log_file, "r", encoding="utf-8") as f:
+            with open(log_file, encoding="utf-8") as f:
                 # Читаем только новые строки
                 f.seek(0, 2)  # Идем в конец файла
                 size = f.tell()
@@ -248,7 +243,7 @@ class TestingAgent:
         except Exception as e:
             logger.error(f"Ошибка при анализе {log_file}: {e}")
 
-    async def analyze_errors(self, log_content: str) -> List[Dict]:
+    async def analyze_errors(self, log_content: str) -> list[dict]:
         """Анализ ошибок в логах"""
         errors_found = []
 
@@ -277,17 +272,13 @@ class TestingAgent:
                             "type": error_type,
                             "pattern": pattern,
                             "line": line.strip(),
-                            "match": match.groups()
-                            if match.groups()
-                            else match.group(0),
+                            "match": match.groups() if match.groups() else match.group(0),
                             "timestamp": datetime.now().isoformat(),
                         }
                         errors_found.append(error_info)
                         self.error_history.append(error_info)
 
-                        logger.warning(
-                            f"Обнаружена ошибка типа {error_type}: {line.strip()}"
-                        )
+                        logger.warning(f"Обнаружена ошибка типа {error_type}: {line.strip()}")
 
                         # Автоматическое исправление
                         await self._auto_fix_error(error_info)
@@ -295,7 +286,7 @@ class TestingAgent:
 
         return errors_found
 
-    async def _auto_fix_error(self, error_info: Dict):
+    async def _auto_fix_error(self, error_info: dict):
         """Автоматическое исправление ошибки"""
         error_type = error_info["type"]
 
@@ -339,9 +330,7 @@ class TestingAgent:
 
                         # Не убиваем критические системные процессы
                         if process_name in ["postgres", "systemd", "init"]:
-                            logger.info(
-                                f"Пропускаем системный процесс {process_name} (PID: {pid})"
-                            )
+                            logger.info(f"Пропускаем системный процесс {process_name} (PID: {pid})")
                             continue
 
                         logger.info(
@@ -365,7 +354,7 @@ class TestingAgent:
                     except Exception as e:
                         logger.error(f"Ошибка при завершении процесса {pid}: {e}")
 
-    async def _find_processes_on_port(self, port: int) -> List[int]:
+    async def _find_processes_on_port(self, port: int) -> list[int]:
         """Найти процессы, использующие порт"""
         processes = []
 
@@ -378,7 +367,7 @@ class TestingAgent:
 
         return processes
 
-    async def fix_import_errors(self, error_info: Dict):
+    async def fix_import_errors(self, error_info: dict):
         """Исправление ошибок импорта"""
         logger.info("Исправляем ошибки импорта...")
 
@@ -412,21 +401,17 @@ class TestingAgent:
             logger.info(f"Устанавливаем недостающий модуль: {install_package}")
 
             cmd = [str(self.venv_python), "-m", "pip", "install", install_package]
-            process = subprocess.run(
-                cmd, capture_output=True, text=True, cwd=self.project_root
-            )
+            process = subprocess.run(cmd, capture_output=True, text=True, cwd=self.project_root)
 
             if process.returncode == 0:
                 logger.info(f"Модуль {install_package} успешно установлен")
             else:
-                logger.error(
-                    f"Ошибка при установке {install_package}: {process.stderr}"
-                )
+                logger.error(f"Ошибка при установке {install_package}: {process.stderr}")
 
         except Exception as e:
             logger.error(f"Ошибка при установке модуля {install_package}: {e}")
 
-    async def fix_connection_errors(self, error_info: Dict):
+    async def fix_connection_errors(self, error_info: dict):
         """Исправление ошибок подключения"""
         logger.info("Исправляем ошибки подключения...")
 
@@ -439,7 +424,7 @@ class TestingAgent:
         elif "websocket" in line.lower():
             await self._check_websocket_endpoints()
 
-    async def fix_database_errors(self, error_info: Dict):
+    async def fix_database_errors(self, error_info: dict):
         """Исправление ошибок базы данных"""
         logger.info("Исправляем ошибки базы данных...")
 
@@ -450,7 +435,7 @@ class TestingAgent:
         elif "relation" in line and "does not exist" in line:
             await self._run_migrations()
 
-    async def fix_ml_errors(self, error_info: Dict):
+    async def fix_ml_errors(self, error_info: dict):
         """Исправление ошибок ML"""
         logger.info("Исправляем ошибки ML...")
 
@@ -463,7 +448,7 @@ class TestingAgent:
         elif "cuda" in line.lower():
             await self._setup_cuda()
 
-    async def fix_permission_errors(self, error_info: Dict):
+    async def fix_permission_errors(self, error_info: dict):
         """Исправление ошибок доступа"""
         logger.info("Исправляем ошибки доступа...")
 
@@ -562,9 +547,7 @@ class TestingAgent:
         """Запуск миграций"""
         try:
             cmd = [str(self.venv_python), "-m", "alembic", "upgrade", "head"]
-            process = subprocess.run(
-                cmd, capture_output=True, text=True, cwd=self.project_root
-            )
+            process = subprocess.run(cmd, capture_output=True, text=True, cwd=self.project_root)
 
             if process.returncode == 0:
                 logger.info("Миграции успешно применены")
@@ -586,9 +569,7 @@ class TestingAgent:
                 "torchvision",
                 "torchaudio",
             ]
-            process = subprocess.run(
-                cmd, capture_output=True, text=True, cwd=self.project_root
-            )
+            process = subprocess.run(cmd, capture_output=True, text=True, cwd=self.project_root)
 
             if process.returncode == 0:
                 logger.info("PyTorch успешно установлен")
@@ -676,9 +657,7 @@ class TestingAgent:
         else:
             logger.info("Все необходимые файлы присутствуют")
 
-    async def call_specialized_agent(
-        self, agent_type: str, task_description: str
-    ) -> bool:
+    async def call_specialized_agent(self, agent_type: str, task_description: str) -> bool:
         """Вызов специализированного агента"""
         logger.info(f"Вызываем агента {agent_type} для задачи: {task_description}")
 
@@ -735,7 +714,7 @@ class TestingAgent:
         # Здесь интеграция с performance_tuner
         return True
 
-    def get_error_report(self) -> Dict:
+    def get_error_report(self) -> dict:
         """Получить отчет об ошибках"""
         return {
             "total_errors": len(self.error_history),
@@ -744,7 +723,7 @@ class TestingAgent:
             "timestamp": datetime.now().isoformat(),
         }
 
-    def _count_error_types(self) -> Dict[str, int]:
+    def _count_error_types(self) -> dict[str, int]:
         """Подсчет ошибок по типам"""
         counts = {}
         for error in self.error_history:
@@ -784,9 +763,7 @@ async def main():
 
             # Получаем отчет
             report = agent.get_error_report()
-            logger.info(
-                f"Отчет об ошибках: {json.dumps(report, indent=2, ensure_ascii=False)}"
-            )
+            logger.info(f"Отчет об ошибках: {json.dumps(report, indent=2, ensure_ascii=False)}")
         else:
             logger.error("Не удалось запустить систему")
 

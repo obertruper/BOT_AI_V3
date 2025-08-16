@@ -10,7 +10,7 @@ Configuration Validation для BOT_Trading v3.0
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class ValidationLevel(Enum):
@@ -28,7 +28,7 @@ class ValidationResult:
     level: ValidationLevel
     field: str
     message: str
-    suggestion: Optional[str] = None
+    suggestion: str | None = None
 
 
 class ConfigValidator:
@@ -72,7 +72,7 @@ class ConfigValidator:
         self.min_balance = 10.0
         self.max_position_size = 10000.0
 
-    def validate_system_config(self, config: Dict[str, Any]) -> List[ValidationResult]:
+    def validate_system_config(self, config: dict[str, Any]) -> list[ValidationResult]:
         """Валидация системной конфигурации"""
         results = []
 
@@ -101,9 +101,7 @@ class ConfigValidator:
 
         return results
 
-    def validate_database_config(
-        self, config: Dict[str, Any]
-    ) -> List[ValidationResult]:
+    def validate_database_config(self, config: dict[str, Any]) -> list[ValidationResult]:
         """Валидация конфигурации базы данных"""
         results = []
 
@@ -152,8 +150,8 @@ class ConfigValidator:
         return results
 
     def validate_trader_config(
-        self, trader_id: str, config: Dict[str, Any]
-    ) -> List[ValidationResult]:
+        self, trader_id: str, config: dict[str, Any]
+    ) -> list[ValidationResult]:
         """Валидация конфигурации трейдера"""
         results = []
 
@@ -219,8 +217,8 @@ class ConfigValidator:
         return results
 
     def validate_exchange_config(
-        self, exchange: str, config: Dict[str, Any]
-    ) -> List[ValidationResult]:
+        self, exchange: str, config: dict[str, Any]
+    ) -> list[ValidationResult]:
         """Валидация конфигурации биржи"""
         results = []
 
@@ -270,7 +268,7 @@ class ConfigValidator:
 
         return results
 
-    def _validate_system_limits(self, limits: Dict[str, Any]) -> List[ValidationResult]:
+    def _validate_system_limits(self, limits: dict[str, Any]) -> list[ValidationResult]:
         """Валидация системных лимитов"""
         results = []
 
@@ -309,9 +307,7 @@ class ConfigValidator:
 
         return results
 
-    def _validate_performance_config(
-        self, performance: Dict[str, Any]
-    ) -> List[ValidationResult]:
+    def _validate_performance_config(self, performance: dict[str, Any]) -> list[ValidationResult]:
         """Валидация настроек производительности"""
         results = []
 
@@ -338,7 +334,7 @@ class ConfigValidator:
 
         return results
 
-    def _validate_connection_pool(self, pool: Dict[str, Any]) -> List[ValidationResult]:
+    def _validate_connection_pool(self, pool: dict[str, Any]) -> list[ValidationResult]:
         """Валидация настроек пула соединений"""
         results = []
 
@@ -368,8 +364,8 @@ class ConfigValidator:
         return results
 
     def _validate_exchange_config(
-        self, trader_id: str, config: Dict[str, Any]
-    ) -> List[ValidationResult]:
+        self, trader_id: str, config: dict[str, Any]
+    ) -> list[ValidationResult]:
         """Валидация конфигурации биржи для трейдера"""
         results = []
 
@@ -389,8 +385,8 @@ class ConfigValidator:
         return results
 
     def _validate_risk_management(
-        self, trader_id: str, config: Dict[str, Any]
-    ) -> List[ValidationResult]:
+        self, trader_id: str, config: dict[str, Any]
+    ) -> list[ValidationResult]:
         """Валидация настроек управления рисками"""
         results = []
 
@@ -450,7 +446,7 @@ class ConfigValidator:
 
         return not any(pattern in api_key.lower() for pattern in placeholder_patterns)
 
-    def validate_all(self, config: Dict[str, Any]) -> List[ValidationResult]:
+    def validate_all(self, config: dict[str, Any]) -> list[ValidationResult]:
         """Полная валидация всей конфигурации"""
         results = []
 
@@ -472,7 +468,7 @@ class ConfigValidator:
 
         return results
 
-    def get_validation_summary(self, results: List[ValidationResult]) -> Dict[str, int]:
+    def get_validation_summary(self, results: list[ValidationResult]) -> dict[str, int]:
         """Получение сводки по результатам валидации"""
         summary = {
             "errors": len([r for r in results if r.level == ValidationLevel.ERROR]),

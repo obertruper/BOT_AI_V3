@@ -213,9 +213,7 @@ async def check_table_sizes():
         # Проверяем количество записей
         for table in ["raw_market_data", "processed_market_data", "signals"]:
             try:
-                count_result = await session.execute(
-                    text(f"SELECT COUNT(*) FROM {table}")
-                )
+                count_result = await session.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 count = count_result.scalar()
                 logger.info(f"  {table:25} | Записей: {count:>10,}")
             except Exception as e:
@@ -306,9 +304,7 @@ async def check_performance():
             logger.info(f"  ✅ Тест выборки данных: {elapsed:.2f} мс")
 
             if elapsed > 50:
-                logger.warning(
-                    "  ⚠️ Выборка занимает более 50мс, рекомендуется оптимизация"
-                )
+                logger.warning("  ⚠️ Выборка занимает более 50мс, рекомендуется оптимизация")
 
         except Exception as e:
             logger.error(f"  ❌ Ошибка теста производительности: {e}")

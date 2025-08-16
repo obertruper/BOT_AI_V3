@@ -4,7 +4,7 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from strategies.base import MarketData, SignalType, TradingSignal
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class SignalGenerator:
     """Генератор торговых сигналов на основе скоринга индикаторов"""
 
-    def __init__(self, risk_config: Dict[str, Any], signal_threshold: float = 50):
+    def __init__(self, risk_config: dict[str, Any], signal_threshold: float = 50):
         """
         Инициализация генератора сигналов
 
@@ -33,17 +33,15 @@ class SignalGenerator:
 
         # Параметры для multi-level TP
         self.tp_levels = risk_config.get("tp_levels", [1.5, 3.0, 5.0])
-        self.partial_close_pcts = risk_config.get(
-            "partial_close_pcts", [0.33, 0.33, 0.34]
-        )
+        self.partial_close_pcts = risk_config.get("partial_close_pcts", [0.33, 0.33, 0.34])
 
     def generate_signal(
         self,
         market_data: MarketData,
         total_score: float,
-        indicators: Dict[str, Any],
+        indicators: dict[str, Any],
         market_regime: str,
-    ) -> Optional[TradingSignal]:
+    ) -> TradingSignal | None:
         """
         Генерация торгового сигнала
 
@@ -73,14 +71,10 @@ class SignalGenerator:
         )
 
         # Расчет размера позиции
-        position_size = self._calculate_position_size(
-            abs(total_score), market_regime, indicators
-        )
+        position_size = self._calculate_position_size(abs(total_score), market_regime, indicators)
 
         # Оценка ожидаемой длительности
-        expected_duration = self._estimate_trade_duration(
-            market_regime, abs(total_score)
-        )
+        expected_duration = self._estimate_trade_duration(market_regime, abs(total_score))
 
         # Создание сигнала
         signal = TradingSignal(
@@ -96,15 +90,12 @@ class SignalGenerator:
             timeframe=market_data.timeframe,
             indicators_used=self._get_active_indicators(indicators),
             reasoning=self._generate_reasoning(total_score, indicators, market_regime),
-            risk_reward_ratio=abs(take_profit - entry_price)
-            / abs(entry_price - stop_loss),
+            risk_reward_ratio=abs(take_profit - entry_price) / abs(entry_price - stop_loss),
             expected_duration_hours=expected_duration,
             metadata={
                 "market_regime": market_regime,
                 "score_breakdown": self._get_score_breakdown(indicators),
-                "tp_levels": self._calculate_tp_levels(
-                    signal_type, entry_price, take_profit
-                ),
+                "tp_levels": self._calculate_tp_levels(signal_type, entry_price, take_profit),
             },
         )
 
@@ -123,9 +114,9 @@ class SignalGenerator:
         self,
         signal_type: SignalType,
         entry_price: float,
-        indicators: Dict[str, Any],
+        indicators: dict[str, Any],
         market_regime: str,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """
         Расчет уровней Stop Loss и Take Profit
 
@@ -163,7 +154,7 @@ class SignalGenerator:
         return stop_loss, take_profit
 
     def _calculate_position_size(
-        self, confidence: float, market_regime: str, indicators: Dict[str, Any]
+        self, confidence: float, market_regime: str, indicators: dict[str, Any]
     ) -> float:
         """
         Расчет размера позиции с учетом уверенности и режима рынка
@@ -224,7 +215,7 @@ class SignalGenerator:
 
     def _calculate_tp_levels(
         self, signal_type: SignalType, entry_price: float, final_tp: float
-    ) -> List[Dict[str, float]]:
+    ) -> list[dict[str, float]]:
         """
         Расчет уровней частичного закрытия позиции
 
@@ -237,16 +228,12 @@ class SignalGenerator:
         tp_distance = abs(final_tp - entry_price)
 
         for i, (level_multiplier, close_pct) in enumerate(
-            zip(self.tp_levels, self.partial_close_pcts)
+            zip(self.tp_levels, self.partial_close_pcts, strict=False)
         ):
             if signal_type == SignalType.BUY:
-                tp_price = entry_price + (
-                    tp_distance * level_multiplier / max(self.tp_levels)
-                )
+                tp_price = entry_price + (tp_distance * level_multiplier / max(self.tp_levels))
             else:
-                tp_price = entry_price - (
-                    tp_distance * level_multiplier / max(self.tp_levels)
-                )
+                tp_price = entry_price - (tp_distance * level_multiplier / max(self.tp_levels))
 
             levels.append(
                 {
@@ -259,7 +246,7 @@ class SignalGenerator:
 
         return levels
 
-    def _get_active_indicators(self, indicators: Dict[str, Any]) -> List[str]:
+    def _get_active_indicators(self, indicators: dict[str, Any]) -> list[str]:
         """Получение списка активных индикаторов"""
         active = []
 
@@ -271,7 +258,7 @@ class SignalGenerator:
 
         return active
 
-    def _get_score_breakdown(self, indicators: Dict[str, Any]) -> Dict[str, float]:
+    def _get_score_breakdown(self, indicators: dict[str, Any]) -> dict[str, float]:
         """Получение разбивки скора по категориям"""
         breakdown = {}
 
@@ -290,7 +277,7 @@ class SignalGenerator:
         return breakdown
 
     def _generate_reasoning(
-        self, total_score: float, indicators: Dict[str, Any], market_regime: str
+        self, total_score: float, indicators: dict[str, Any], market_regime: str
     ) -> str:
         """Генерация объяснения для сигнала"""
         direction = "бычий" if total_score > 0 else "медвежий"
@@ -302,20 +289,14 @@ class SignalGenerator:
         # Добавление ключевых факторов
         breakdown = self._get_score_breakdown(indicators)
         if breakdown:
-            top_factors = sorted(
-                breakdown.items(), key=lambda x: abs(x[1]), reverse=True
-            )[:3]
-            factors_str = ", ".join(
-                [f"{cat}: {score:.1f}" for cat, score in top_factors]
-            )
+            top_factors = sorted(breakdown.items(), key=lambda x: abs(x[1]), reverse=True)[:3]
+            factors_str = ", ".join([f"{cat}: {score:.1f}" for cat, score in top_factors])
             reasoning += f"Ключевые факторы: {factors_str}. "
 
         # Рекомендация по времени удержания
         if market_regime == "trending":
             reasoning += "Рекомендуется удерживать позицию дольше в трендовом рынке."
         elif market_regime == "high_volatility":
-            reasoning += (
-                "Рекомендуется более короткое удержание из-за высокой волатильности."
-            )
+            reasoning += "Рекомендуется более короткое удержание из-за высокой волатильности."
 
         return reasoning

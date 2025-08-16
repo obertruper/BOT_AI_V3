@@ -19,9 +19,7 @@ from core.traders.trader_manager import TraderManager
 from strategies.ml_strategy.patchtst_strategy import PatchTSTStrategy
 
 # Настройка логирования
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 

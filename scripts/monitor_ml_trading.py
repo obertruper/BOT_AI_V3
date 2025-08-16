@@ -35,7 +35,9 @@ async def monitor_system():
             # 1. Проверка БД подключения
             print(f"{Fore.GREEN}📊 DATABASE STATUS:")
             try:
-                query = "SELECT COUNT(*) FROM ml_signals WHERE created_at > NOW() - INTERVAL '1 hour'"
+                query = (
+                    "SELECT COUNT(*) FROM ml_signals WHERE created_at > NOW() - INTERVAL '1 hour'"
+                )
                 result = await AsyncPGPool.fetchval(query)
                 print("  ✅ База данных: ПОДКЛЮЧЕНА")
                 print(f"  📈 ML сигналов за час: {result}")
@@ -140,9 +142,7 @@ async def monitor_system():
 
                     print(f"  📊 Сделок сегодня: {stats['trades_count']}")
                     print(f"  🎯 Win Rate: {win_rate:.1f}%")
-                    print(
-                        f"  💰 Total PnL: {pnl_color}${total_pnl:.2f}{Style.RESET_ALL}"
-                    )
+                    print(f"  💰 Total PnL: {pnl_color}${total_pnl:.2f}{Style.RESET_ALL}")
                     print(f"  📈 Avg PnL: ${avg_pnl:.2f}")
                 else:
                     print(f"  {Fore.YELLOW}⚠️  Нет сделок сегодня")

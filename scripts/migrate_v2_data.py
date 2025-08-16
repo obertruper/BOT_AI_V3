@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Script to migrate data from BOT Trading v2 to v3
 
@@ -12,7 +11,6 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Optional
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,7 +30,7 @@ logger = logging.getLogger(__name__)
 class V2ToV3Migrator:
     """Handles migration of data from v2 to v3 schema"""
 
-    def __init__(self, v2_db_url: Optional[str] = None):
+    def __init__(self, v2_db_url: str | None = None):
         """
         Initialize migrator
 
@@ -60,9 +58,7 @@ class V2ToV3Migrator:
         with get_db() as db:
             # Get total count
             count_result = db.execute(
-                text(
-                    "SELECT COUNT(*) FROM trades WHERE extra_data->>'v2_migrated' IS NULL"
-                )
+                text("SELECT COUNT(*) FROM trades WHERE extra_data->>'v2_migrated' IS NULL")
             ).scalar()
 
             logger.info(f"Found {count_result} v2 trades to migrate")
@@ -124,9 +120,7 @@ class V2ToV3Migrator:
             stop_loss=v2_trade.stop_loss,
             take_profit=v2_trade.take_profit,
             created_at=datetime.fromisoformat(v2_trade.created_at),
-            updated_at=datetime.fromisoformat(
-                v2_trade.closed_at or v2_trade.created_at
-            ),
+            updated_at=datetime.fromisoformat(v2_trade.closed_at or v2_trade.created_at),
             strategy_name=v2_trade.model_name,
             extra_data={
                 "v2_trade_id": v2_trade.id,
@@ -238,12 +232,8 @@ def main():
     """Main migration script"""
     parser = argparse.ArgumentParser(description="Migrate BOT Trading v2 data to v3")
     parser.add_argument("--v2-db-url", help="V2 database connection URL")
-    parser.add_argument(
-        "--batch-size", type=int, default=100, help="Batch size for migration"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Perform dry run without committing"
-    )
+    parser.add_argument("--batch-size", type=int, default=100, help="Batch size for migration")
+    parser.add_argument("--dry-run", action="store_true", help="Perform dry run without committing")
 
     args = parser.parse_args()
 

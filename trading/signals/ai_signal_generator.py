@@ -8,8 +8,8 @@ AI Signal Generator для BOT_AI_V3
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pandas as pd
 
@@ -25,7 +25,7 @@ from strategies.base.strategy_abc import SignalStrength, SignalType, TradingSign
 class AISignalConfig:
     """Конфигурация для AI генератора сигналов"""
 
-    symbols: List[str] = field(default_factory=list)
+    symbols: list[str] = field(default_factory=list)
     signal_interval: int = 60  # секунд
     min_confidence: float = 0.6  # минимальная уверенность
     min_profit_probability: float = 0.65  # минимальная вероятность прибыли
@@ -33,14 +33,14 @@ class AISignalConfig:
 
     # ML параметры
     use_ml_scoring: bool = True
-    ml_model_path: Optional[str] = None
+    ml_model_path: str | None = None
     feature_lookback: int = 96  # свечей для ML модели
 
     # Индикаторы для базового анализа
-    indicators: List[Dict[str, Any]] = field(default_factory=list)
+    indicators: list[dict[str, Any]] = field(default_factory=list)
 
     # Пороги для принятия решений
-    thresholds: Dict[str, float] = field(
+    thresholds: dict[str, float] = field(
         default_factory=lambda: {
             "buy_profit": 0.65,
             "buy_loss": 0.35,
@@ -75,13 +75,13 @@ class SignalScore:
     should_trade: bool = False
 
     # Рекомендуемые уровни
-    suggested_sl: Optional[float] = None
-    suggested_tp: Optional[float] = None
-    suggested_size: Optional[float] = None
+    suggested_sl: float | None = None
+    suggested_tp: float | None = None
+    suggested_size: float | None = None
 
     # Детали для логирования
-    reasons: List[str] = field(default_factory=list)
-    ml_predictions: Optional[Dict[str, float]] = None
+    reasons: list[str] = field(default_factory=list)
+    ml_predictions: dict[str, float] | None = None
 
 
 class AISignalGenerator:
@@ -97,13 +97,17 @@ class AISignalGenerator:
     """
 
     def __init__(self, config_manager: ConfigManager, exchange_name: str = "bybit"):
+        # Импортируем SignalDeduplicator
+        from core.system.signal_deduplicator import signal_deduplicator
+
+        self.signal_deduplicator = signal_deduplicator
         self.config_manager = config_manager
         self.exchange_name = exchange_name
         self.logger = logging.getLogger(__name__)
 
         # Компоненты системы
-        self.ml_manager: Optional[MLManager] = None
-        self.ml_processor: Optional[MLSignalProcessor] = None
+        self.ml_manager: MLManager | None = None
+        self.ml_processor: MLSignalProcessor | None = None
         self.indicator_calculator = IndicatorCalculator()
         self.exchange = None
         self.trading_engine = None  # Ссылка на Trading Engine
@@ -113,9 +117,9 @@ class AISignalGenerator:
 
         # Состояние
         self._running = False
-        self._signal_tasks: Dict[str, asyncio.Task] = {}
-        self._last_signals: Dict[str, SignalScore] = {}
-        self._candle_cache: Dict[str, pd.DataFrame] = {}
+        self._signal_tasks: dict[str, asyncio.Task] = {}
+        self._last_signals: dict[str, SignalScore] = {}
+        self._candle_cache: dict[str, pd.DataFrame] = {}
 
     def _load_config(self) -> AISignalConfig:
         """Загрузка конфигурации из config manager"""
@@ -133,9 +137,7 @@ class AISignalGenerator:
 
         if not multi_crypto_trader:
             # Конфигурация по умолчанию
-            return AISignalConfig(
-                symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"], signal_interval=60
-            )
+            return AISignalConfig(symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"], signal_interval=60)
 
         # Создаем конфигурацию из настроек трейдера
         strategy_config = multi_crypto_trader.get("strategy_config", {})
@@ -145,9 +147,7 @@ class AISignalGenerator:
             signal_interval=strategy_config.get("signal_interval", 60),
             indicators=strategy_config.get("indicators", []),
             use_ml_scoring=True,
-            ml_model_path=full_config.get("ml_models", {})
-            .get("patchtst", {})
-            .get("model_path"),
+            ml_model_path=full_config.get("ml_models", {}).get("patchtst", {}).get("model_path"),
         )
 
         # ML пороги
@@ -168,12 +168,8 @@ class AISignalGenerator:
         # Создаем exchange
         exchange_config = {
             "api_key": self.config_manager.get_exchange_config("bybit").get("api_key"),
-            "api_secret": self.config_manager.get_exchange_config("bybit").get(
-                "api_secret"
-            ),
-            "testnet": self.config_manager.get_exchange_config("bybit").get(
-                "testnet", False
-            ),
+            "api_secret": self.config_manager.get_exchange_config("bybit").get("api_secret"),
+            "testnet": self.config_manager.get_exchange_config("bybit").get("testnet", False),
         }
 
         factory = ExchangeFactory()
@@ -192,9 +188,7 @@ class AISignalGenerator:
                 from ml.ml_manager_singleton import get_ml_manager
 
                 self.logger.info("🔄 Получаем MLManager (singleton)...")
-                self.ml_manager = await get_ml_manager(
-                    self.config_manager.get_system_config()
-                )
+                self.ml_manager = await get_ml_manager(self.config_manager.get_system_config())
 
                 self.ml_processor = MLSignalProcessor(
                     ml_manager=self.ml_manager,
@@ -206,12 +200,8 @@ class AISignalGenerator:
                 self.logger.warning(f"⚠️ ML система недоступна: {e}")
                 self.config.use_ml_scoring = False
 
-        self.logger.info(
-            f"📊 Настроено {len(self.config.symbols)} символов для отслеживания"
-        )
-        self.logger.info(
-            f"⏱️ Интервал генерации сигналов: {self.config.signal_interval} сек"
-        )
+        self.logger.info(f"📊 Настроено {len(self.config.symbols)} символов для отслеживания")
+        self.logger.info(f"⏱️ Интервал генерации сигналов: {self.config.signal_interval} сек")
 
     async def start(self):
         """Запуск генерации сигналов"""
@@ -269,7 +259,7 @@ class AISignalGenerator:
                 self.logger.error(f"❌ Ошибка генерации сигнала для {symbol}: {e}")
                 await asyncio.sleep(self.config.signal_interval)
 
-    async def _generate_and_score_signal(self, symbol: str) -> Optional[SignalScore]:
+    async def _generate_and_score_signal(self, symbol: str) -> SignalScore | None:
         """Генерация и оценка сигнала для символа"""
         try:
             # Получаем свечные данные
@@ -280,7 +270,7 @@ class AISignalGenerator:
             # Создаем базовый сигнал
             signal_score = SignalScore(
                 symbol=symbol,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 direction="NEUTRAL",  # Инициализируем нейтральным направлением
             )
 
@@ -318,9 +308,7 @@ class AISignalGenerator:
             signal_score.total_score = self._calculate_total_score(signal_score)
 
             # 6. Определение силы сигнала
-            signal_score.signal_strength = self._determine_signal_strength(
-                signal_score.total_score
-            )
+            signal_score.signal_strength = self._determine_signal_strength(signal_score.total_score)
 
             # 7. Решение о торговле
             signal_score.should_trade = self._should_trade(signal_score)
@@ -334,7 +322,7 @@ class AISignalGenerator:
             self.logger.error(f"Ошибка оценки сигнала {symbol}: {e}")
             return None
 
-    async def _analyze_technical(self, symbol: str, candles: pd.DataFrame) -> Dict:
+    async def _analyze_technical(self, symbol: str, candles: pd.DataFrame) -> dict:
         """Технический анализ с индикаторами"""
         results = {"score": 0.0, "direction": "NEUTRAL", "signals": {}}
 
@@ -360,14 +348,10 @@ class AISignalGenerator:
 
                 elif indicator_type == "EMA":
                     ema_short = (
-                        candles["close"]
-                        .ewm(span=indicator_config.get("short_period", 9))
-                        .mean()
+                        candles["close"].ewm(span=indicator_config.get("short_period", 9)).mean()
                     )
                     ema_long = (
-                        candles["close"]
-                        .ewm(span=indicator_config.get("long_period", 21))
-                        .mean()
+                        candles["close"].ewm(span=indicator_config.get("long_period", 21)).mean()
                     )
 
                     # Проверка пересечения
@@ -393,7 +377,7 @@ class AISignalGenerator:
 
         return results
 
-    async def _analyze_volume(self, symbol: str, candles: pd.DataFrame) -> Dict:
+    async def _analyze_volume(self, symbol: str, candles: pd.DataFrame) -> dict:
         """Анализ объемов"""
         results = {"score": 0.0, "signals": {}}
 
@@ -415,18 +399,14 @@ class AISignalGenerator:
 
         return results
 
-    async def _analyze_momentum(self, symbol: str, candles: pd.DataFrame) -> Dict:
+    async def _analyze_momentum(self, symbol: str, candles: pd.DataFrame) -> dict:
         """Анализ моментума"""
         results = {"score": 0.0, "signals": {}}
 
         try:
             # Изменение цены за последние N свечей
-            price_change_5 = (
-                candles["close"].iloc[-1] / candles["close"].iloc[-5] - 1
-            ) * 100
-            price_change_10 = (
-                candles["close"].iloc[-1] / candles["close"].iloc[-10] - 1
-            ) * 100
+            price_change_5 = (candles["close"].iloc[-1] / candles["close"].iloc[-5] - 1) * 100
+            price_change_10 = (candles["close"].iloc[-1] / candles["close"].iloc[-10] - 1) * 100
 
             # Сильный моментум
             if abs(price_change_5) > 2:
@@ -442,9 +422,7 @@ class AISignalGenerator:
 
         return results
 
-    async def _evaluate_with_ml(
-        self, symbol: str, candles: pd.DataFrame, direction: str
-    ) -> Dict:
+    async def _evaluate_with_ml(self, symbol: str, candles: pd.DataFrame, direction: str) -> dict:
         """Оценка сигнала с помощью ML модели"""
         evaluation = {
             "confidence": 0.0,
@@ -467,13 +445,9 @@ class AISignalGenerator:
 
                 # Извлекаем ключевые метрики
                 evaluation["confidence"] = predictions.get("confidence", 0.0)
-                evaluation["profit_probability"] = predictions.get(
-                    "profit_probability", 0.0
-                )
+                evaluation["profit_probability"] = predictions.get("profit_probability", 0.0)
                 evaluation["expected_return"] = predictions.get("expected_return", 0.0)
-                evaluation["risk_score"] = predictions.get("risk_metrics", {}).get(
-                    "max_risk", 0.0
-                )
+                evaluation["risk_score"] = predictions.get("risk_metrics", {}).get("max_risk", 0.0)
                 evaluation["predictions"] = predictions
 
                 # Рекомендуемые уровни
@@ -555,17 +529,13 @@ class AISignalGenerator:
 
             # Проверка риска
             if signal_score.ml_risk_score > self.config.max_risk:
-                signal_score.reasons.append(
-                    f"Высокий риск: {signal_score.ml_risk_score:.2%}"
-                )
+                signal_score.reasons.append(f"Высокий риск: {signal_score.ml_risk_score:.2%}")
                 return False
 
         signal_score.reasons.append("✅ Все проверки пройдены")
         return True
 
-    def _create_trading_signal(
-        self, signal_score: SignalScore
-    ) -> Optional[TradingSignal]:
+    def _create_trading_signal(self, signal_score: SignalScore) -> TradingSignal | None:
         """Создание торгового сигнала из оценки"""
         # ИСПРАВЛЕНО: Правильная обработка NEUTRAL сигналов
         # NEUTRAL сигналы НЕ должны превращаться в торговые сигналы
@@ -575,9 +545,7 @@ class AISignalGenerator:
             signal_type = SignalType.SELL
         else:
             # Для NEUTRAL сигналов возвращаем None - не создаем торговый сигнал
-            self.logger.info(
-                f"🔸 NEUTRAL сигнал для {signal_score.symbol} - пропускаем торговлю"
-            )
+            self.logger.info(f"🔸 NEUTRAL сигнал для {signal_score.symbol} - пропускаем торговлю")
             return None
 
         # Получаем текущую цену из кэша
@@ -592,8 +560,7 @@ class AISignalGenerator:
             entry_price=current_price,
             stop_loss=signal_score.suggested_sl or current_price * 0.98,
             take_profit=signal_score.suggested_tp or current_price * 1.058,
-            position_size=signal_score.suggested_size
-            or 0.02,  # 2% от баланса по умолчанию
+            position_size=signal_score.suggested_size or 0.02,  # 2% от баланса по умолчанию
             strategy_name="AISignalGenerator_ML",
             timeframe="15m",
             indicators_used=["ML_PatchTST", "RSI", "EMA", "MACD", "Volume"],
@@ -607,8 +574,27 @@ class AISignalGenerator:
 
     async def _emit_signal(self, signal: TradingSignal):
         """Отправка сигнала в систему"""
+
+        # Проверяем на дубликат через SignalDeduplicator
+        signal_data = {
+            "symbol": signal.symbol,
+            "direction": signal.signal_type.value,
+            "strategy": signal.strategy_name,
+            "timestamp": signal.timestamp,
+            "signal_strength": signal.confidence / 100.0,  # Конвертируем в 0-1
+            "price_level": signal.entry_price,
+        }
+
+        is_unique = await self.signal_deduplicator.check_and_register_signal(signal_data)
+
+        if not is_unique:
+            self.logger.debug(
+                f"🔄 Дубликат сигнала пропущен: {signal.symbol} {signal.signal_type.value}"
+            )
+            return
+
         self.logger.info(
-            f"📡 Новый AI сигнал: {signal.symbol} {signal.signal_type.value} "
+            f"📡 Новый уникальный AI сигнал: {signal.symbol} {signal.signal_type.value} "
             f"(уверенность: {signal.confidence:.1f}%, цена: {signal.entry_price:.2f})"
         )
 
@@ -621,9 +607,7 @@ class AISignalGenerator:
                     f"SL: {signal.stop_loss}, TP: {signal.take_profit})"
                 )
                 await self.trading_engine.receive_trading_signal(signal)
-                self.logger.info(
-                    f"✅ Сигнал {signal.symbol} успешно отправлен в Trading Engine"
-                )
+                self.logger.info(f"✅ Сигнал {signal.symbol} успешно отправлен в Trading Engine")
             except Exception as e:
                 self.logger.error(f"❌ Ошибка отправки сигнала в Trading Engine: {e}")
                 import traceback
@@ -634,7 +618,7 @@ class AISignalGenerator:
 
     async def _get_candles(
         self, symbol: str, timeframe: str = "15m", limit: int = 200
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Получение свечных данных"""
         try:
             # Проверяем кэш
@@ -683,9 +667,7 @@ class AISignalGenerator:
                 # Выводим статистику каждые 5 минут
                 await asyncio.sleep(300)
 
-                active_signals = len(
-                    [s for s in self._last_signals.values() if s.should_trade]
-                )
+                active_signals = len([s for s in self._last_signals.values() if s.should_trade])
                 total_signals = len(self._last_signals)
 
                 self.logger.info(
@@ -698,6 +680,6 @@ class AISignalGenerator:
             except Exception as e:
                 self.logger.error(f"Ошибка мониторинга: {e}")
 
-    async def get_current_signals(self) -> Dict[str, SignalScore]:
+    async def get_current_signals(self) -> dict[str, SignalScore]:
         """Получение текущих сигналов"""
         return self._last_signals.copy()

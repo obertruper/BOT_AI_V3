@@ -111,9 +111,7 @@ async def main():
     print("✅ Перезапуск завершен")
     print("\n📊 Команды для мониторинга:")
     print("  # Следить за сигналами:")
-    print(
-        "  tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep -E 'signal|Signal'"
-    )
+    print("  tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep -E 'signal|Signal'")
     print("\n  # Проверить статус:")
     print("  python3 unified_launcher.py --status")
     print("\n  # Мониторинг ML сигналов:")

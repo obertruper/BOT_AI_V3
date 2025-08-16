@@ -14,7 +14,7 @@ Exchange Registry для BOT_Trading v3.0
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -48,11 +48,11 @@ class ExchangeMetadata:
     # Технические характеристики
     capabilities: ExchangeCapabilities
     default_timeout: int = 30
-    rate_limits: Dict[str, int] = field(default_factory=dict)
+    rate_limits: dict[str, int] = field(default_factory=dict)
 
     # Поддерживаемые регионы
-    supported_regions: List[str] = field(default_factory=list)
-    restricted_regions: List[str] = field(default_factory=list)
+    supported_regions: list[str] = field(default_factory=list)
+    restricted_regions: list[str] = field(default_factory=list)
 
     # Дополнительные настройки
     sandbox_available: bool = True
@@ -60,8 +60,8 @@ class ExchangeMetadata:
     supports_websocket: bool = True
 
     # Дата добавления и обновления
-    added_date: Optional[datetime] = None
-    updated_date: Optional[datetime] = None
+    added_date: datetime | None = None
+    updated_date: datetime | None = None
 
 
 class ExchangeRegistry:
@@ -78,7 +78,7 @@ class ExchangeRegistry:
         self.logger = logger_factory.get_logger("exchange_registry")
 
         # Реестр бирж
-        self._exchanges: Dict[ExchangeType, ExchangeMetadata] = {}
+        self._exchanges: dict[ExchangeType, ExchangeMetadata] = {}
 
         # Инициализация
         self._initialize_exchanges()
@@ -213,19 +213,17 @@ class ExchangeRegistry:
             updated_date=datetime.now(),
         )
 
-        self.logger.info(
-            f"Initialized exchange registry with {len(self._exchanges)} exchanges"
-        )
+        self.logger.info(f"Initialized exchange registry with {len(self._exchanges)} exchanges")
 
-    def get_exchange(self, exchange_type: ExchangeType) -> Optional[ExchangeMetadata]:
+    def get_exchange(self, exchange_type: ExchangeType) -> ExchangeMetadata | None:
         """Получение метаданных биржи"""
         return self._exchanges.get(exchange_type)
 
-    def get_all_exchanges(self) -> Dict[ExchangeType, ExchangeMetadata]:
+    def get_all_exchanges(self) -> dict[ExchangeType, ExchangeMetadata]:
         """Получение всех бирж"""
         return self._exchanges.copy()
 
-    def get_active_exchanges(self) -> Dict[ExchangeType, ExchangeMetadata]:
+    def get_active_exchanges(self) -> dict[ExchangeType, ExchangeMetadata]:
         """Получение только активных бирж"""
         return {
             exchange_type: metadata
@@ -235,7 +233,7 @@ class ExchangeRegistry:
 
     def get_exchanges_by_status(
         self, status: ExchangeStatus
-    ) -> Dict[ExchangeType, ExchangeMetadata]:
+    ) -> dict[ExchangeType, ExchangeMetadata]:
         """Получение бирж по статусу"""
         return {
             exchange_type: metadata
@@ -251,9 +249,7 @@ class ExchangeRegistry:
 
         return metadata.status in [ExchangeStatus.ACTIVE, ExchangeStatus.BETA]
 
-    def get_exchange_capabilities(
-        self, exchange_type: ExchangeType
-    ) -> Optional[ExchangeCapabilities]:
+    def get_exchange_capabilities(self, exchange_type: ExchangeType) -> ExchangeCapabilities | None:
         """Получение возможностей биржи"""
         metadata = self.get_exchange(exchange_type)
         return metadata.capabilities if metadata else None
@@ -266,12 +262,12 @@ class ExchangeRegistry:
 
         return getattr(capabilities, feature, False)
 
-    def get_rate_limits(self, exchange_type: ExchangeType) -> Dict[str, int]:
+    def get_rate_limits(self, exchange_type: ExchangeType) -> dict[str, int]:
         """Получение лимитов запросов"""
         metadata = self.get_exchange(exchange_type)
         return metadata.rate_limits if metadata else {}
 
-    def search_exchanges(self, **criteria) -> List[ExchangeMetadata]:
+    def search_exchanges(self, **criteria) -> list[ExchangeMetadata]:
         """
         Поиск бирж по критериям
 
@@ -312,7 +308,7 @@ class ExchangeRegistry:
         """Проверка здоровья компонента"""
         return True
 
-    def get_exchange_summary(self) -> Dict[str, Any]:
+    def get_exchange_summary(self) -> dict[str, Any]:
         """Получение сводки по биржам"""
         status_counts = {}
         for status in ExchangeStatus:
@@ -346,8 +342,8 @@ class ExchangeRegistry:
         }
 
     def validate_exchange_config(
-        self, exchange_type: ExchangeType, config: Dict[str, Any]
-    ) -> List[str]:
+        self, exchange_type: ExchangeType, config: dict[str, Any]
+    ) -> list[str]:
         """
         Валидация конфигурации биржи
 
@@ -383,7 +379,7 @@ class ExchangeRegistry:
 
 
 # Глобальный экземпляр реестра
-_global_registry: Optional[ExchangeRegistry] = None
+_global_registry: ExchangeRegistry | None = None
 
 
 def get_exchange_registry() -> ExchangeRegistry:
@@ -395,7 +391,7 @@ def get_exchange_registry() -> ExchangeRegistry:
 
 
 # Convenience функции
-def get_supported_exchanges() -> List[str]:
+def get_supported_exchanges() -> list[str]:
     """Получение списка поддерживаемых бирж"""
     registry = get_exchange_registry()
     return [e.name for e in registry.get_active_exchanges().values()]
@@ -411,7 +407,7 @@ def is_exchange_supported(exchange_name: str) -> bool:
         return False
 
 
-def get_exchange_info(exchange_name: str) -> Optional[Dict[str, Any]]:
+def get_exchange_info(exchange_name: str) -> dict[str, Any] | None:
     """Получение информации о бирже"""
     try:
         exchange_type = ExchangeType(exchange_name.lower())
@@ -447,11 +443,11 @@ def get_exchange_info(exchange_name: str) -> Optional[Dict[str, Any]]:
 
 # Экспорт
 __all__ = [
-    "ExchangeRegistry",
     "ExchangeMetadata",
+    "ExchangeRegistry",
     "ExchangeStatus",
+    "get_exchange_info",
     "get_exchange_registry",
     "get_supported_exchanges",
     "is_exchange_supported",
-    "get_exchange_info",
 ]

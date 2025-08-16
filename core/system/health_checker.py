@@ -12,7 +12,7 @@ Health Checker для системы BOT_Trading v3.0
 import asyncio
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import asyncpg
 import psutil
@@ -35,7 +35,7 @@ class HealthChecker:
     - Критические внутренние компоненты
     """
 
-    def __init__(self, config_manager: Optional[ConfigManager] = None):
+    def __init__(self, config_manager: ConfigManager | None = None):
         self.config_manager = config_manager or get_global_config_manager()
         self.logger_factory = get_global_logger_factory()
         self.logger = self.logger_factory.get_logger("health_checker")
@@ -55,7 +55,7 @@ class HealthChecker:
         self.disk_threshold = self.health_config.get("disk_threshold", 95.0)
 
         # Кеш результатов проверок
-        self._cache: Dict[str, Tuple[str, datetime]] = {}
+        self._cache: dict[str, tuple[str, datetime]] = {}
         self._cache_ttl = timedelta(seconds=self.health_config.get("cache_ttl", 30))
 
         # Компоненты для проверки
@@ -63,15 +63,13 @@ class HealthChecker:
         self._trader_manager = None
         self._strategy_manager = None
 
-    def set_components(
-        self, exchange_registry=None, trader_manager=None, strategy_manager=None
-    ):
+    def set_components(self, exchange_registry=None, trader_manager=None, strategy_manager=None):
         """Установка компонентов для проверки"""
         self._exchange_registry = exchange_registry
         self._trader_manager = trader_manager
         self._strategy_manager = strategy_manager
 
-    async def check_all_components(self) -> Dict[str, str]:
+    async def check_all_components(self) -> dict[str, str]:
         """
         Проверка всех компонентов системы
 
@@ -99,7 +97,7 @@ class HealthChecker:
         )
 
         # Обрабатываем результаты
-        for (name, _), result in zip(checks, check_results):
+        for (name, _), result in zip(checks, check_results, strict=False):
             if isinstance(result, Exception):
                 self.logger.error(f"Ошибка проверки {name}: {result}")
                 results[name] = "critical"
@@ -165,9 +163,7 @@ class HealthChecker:
                 max_connections = await conn.fetchval("SHOW max_connections")
 
                 # Проверяем размер БД
-                db_size = await conn.fetchval(
-                    f"SELECT pg_database_size('{db_config['database']}')"
-                )
+                db_size = await conn.fetchval(f"SELECT pg_database_size('{db_config['database']}')")
 
                 self.logger.debug(
                     "Статус PostgreSQL",
@@ -180,9 +176,7 @@ class HealthChecker:
                 )
 
                 # Определяем статус
-                if response_time > 2.0:
-                    return self._cache_result("database", "warning")
-                elif active_connections > int(max_connections) * 0.8:
+                if response_time > 2.0 or active_connections > int(max_connections) * 0.8:
                     return self._cache_result("database", "warning")
                 else:
                     return self._cache_result("database", "healthy")
@@ -190,7 +184,7 @@ class HealthChecker:
             finally:
                 await conn.close()
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.logger.error("Таймаут подключения к PostgreSQL")
             return self._cache_result("database", "critical")
         except Exception as e:
@@ -259,7 +253,7 @@ class HealthChecker:
             else:
                 return self._cache_result("redis", "healthy")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.logger.error("Таймаут подключения к Redis")
             return self._cache_result("redis", "critical")
         except Exception as e:
@@ -293,9 +287,7 @@ class HealthChecker:
                     start_time = time.time()
 
                     # Пытаемся получить баланс как тест подключения
-                    await asyncio.wait_for(
-                        exchange.fetch_balance(), timeout=self.exchange_timeout
-                    )
+                    await asyncio.wait_for(exchange.fetch_balance(), timeout=self.exchange_timeout)
 
                     latency = (time.time() - start_time) * 1000
 
@@ -311,7 +303,7 @@ class HealthChecker:
                         }
                     )
 
-                except (asyncio.TimeoutError, CCXTNetworkError) as e:
+                except (TimeoutError, CCXTNetworkError) as e:
                     self.logger.warning(f"Проблема с биржей {exchange_name}: {e}")
                     results.append(
                         {
@@ -422,9 +414,7 @@ class HealthChecker:
             # Получаем статистику стратегий
             active_strategies = await self._strategy_manager.get_active_strategies()
 
-            self.logger.debug(
-                "Статус стратегий", extra={"active": len(active_strategies)}
-            )
+            self.logger.debug("Статус стратегий", extra={"active": len(active_strategies)})
 
             return "healthy"
 
@@ -432,7 +422,7 @@ class HealthChecker:
             self.logger.error(f"Ошибка проверки стратегий: {e}")
             return "warning"
 
-    def _get_cached_result(self, component: str) -> Optional[str]:
+    def _get_cached_result(self, component: str) -> str | None:
         """Получение результата из кеша"""
         if component in self._cache:
             status, timestamp = self._cache[component]
@@ -445,7 +435,7 @@ class HealthChecker:
         self._cache[component] = (status, datetime.now())
         return status
 
-    async def get_detailed_report(self) -> Dict[str, Any]:
+    async def get_detailed_report(self) -> dict[str, Any]:
         """
         Получение детального отчета о здоровье системы
 
@@ -474,10 +464,7 @@ class HealthChecker:
                 },
                 "memory": {
                     "total_gb": psutil.virtual_memory().total / 1024 / 1024 / 1024,
-                    "available_gb": psutil.virtual_memory().available
-                    / 1024
-                    / 1024
-                    / 1024,
+                    "available_gb": psutil.virtual_memory().available / 1024 / 1024 / 1024,
                     "percent": psutil.virtual_memory().percent,
                 },
                 "disk": {
@@ -491,7 +478,7 @@ class HealthChecker:
 
         return report
 
-    def _calculate_overall_status(self, component_statuses: Dict[str, str]) -> str:
+    def _calculate_overall_status(self, component_statuses: dict[str, str]) -> str:
         """Расчет общего статуса системы"""
         if any(status == "critical" for status in component_statuses.values()):
             return "critical"

@@ -7,6 +7,7 @@
 ## Исходные данные
 
 ### BOT Trading v2 (старая версия)
+
 - **Путь**: `/BOT_AI_V2/BOT_Trading/`
 - **Архитектура**: Монолитная с базовой модульностью
 - **База данных**: PostgreSQL с простой схемой
@@ -17,6 +18,7 @@
   - Основные риск-менеджмент функции
 
 ### BOT Trading v3 (новая версия)
+
 - **Путь**: `/BOT_AI_V3/`
 - **Архитектура**: Микросервисная с полной асинхронностью
 - **База данных**: PostgreSQL с Alembic миграциями
@@ -41,6 +43,7 @@
 ```
 
 **Как проверять**:
+
 1. Сравни файлы `BOT_AI_V2/BOT_Trading/trading/sltp/enhanced.py` и `BOT_AI_V3/trading/sltp/enhanced_manager.py`
 2. Убедись что все методы перенесены: `check_partial_tp()`, `update_profit_protection()`, `calculate_trailing_stop()`
 3. Проверь что конфигурация `enhanced_sltp` в v3 содержит все параметры из v2
@@ -49,8 +52,8 @@
 
 ```sql
 -- Проверь что все таблицы из v2 есть в v3
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
 ORDER BY table_name;
 
 -- Проверь наличие критических таблиц
@@ -60,6 +63,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'posit
 ```
 
 **Критические поля для проверки**:
+
 - orders: `position_idx`, `reduce_only`, `close_on_trigger`
 - positions: `stop_loss`, `take_profit`, `trailing_stop_active`
 - signals: `suggested_position_size`, `confidence`, `signal_strength`
@@ -72,14 +76,14 @@ async def verify_compatibility():
     # 1. Проверка загрузки конфигурации v2 в v3
     from core.config.config_manager import ConfigManager
     config = ConfigManager.get_config()
-    
+
     # 2. Проверка что все exchange API работают
     from exchanges.factory import ExchangeFactory
     for exchange_name in ['bybit', 'binance', 'okx']:
         exchange = await ExchangeFactory.create(exchange_name)
         balance = await exchange.get_balance()
         assert balance is not None
-    
+
     # 3. Проверка стратегий
     from strategies.factory import StrategyFactory
     strategies = StrategyFactory.get_available_strategies()
@@ -89,6 +93,7 @@ async def verify_compatibility():
 ### 4. Проверка новой функциональности
 
 **ML система**:
+
 ```bash
 # Проверь что ML модель загружается и работает
 python3 test_ml_predictions.py
@@ -98,6 +103,7 @@ python3 monitor_ml_signals_realtime.py
 ```
 
 **Unified Launcher**:
+
 ```bash
 # Проверь все режимы запуска
 python3 unified_launcher.py --status
@@ -108,6 +114,7 @@ python3 unified_launcher.py --mode=ml --dry-run
 ### 5. Проверка производительности
 
 Сравни метрики v2 и v3:
+
 - Latency обработки сигналов: должна быть <50ms (v2: ~100ms)
 - Throughput: >1000 сигналов/сек (v2: ~500)
 - Memory usage: <2GB в idle (v2: ~1GB)
@@ -129,6 +136,7 @@ git ls-files | grep -E "\.env$"
 ### 7. Проверка критических сценариев
 
 **Сценарий 1: Создание ордера с Enhanced SL/TP**
+
 ```python
 # Должен создать ордер с:
 # - Основным SL/TP
@@ -138,6 +146,7 @@ git ls-files | grep -E "\.env$"
 ```
 
 **Сценарий 2: Обработка сбоя биржи**
+
 ```python
 # При недоступности Bybit система должна:
 # - Переключиться на запасную биржу
@@ -146,6 +155,7 @@ git ls-files | grep -E "\.env$"
 ```
 
 **Сценарий 3: Risk limit превышение**
+
 ```python
 # При drawdown > 5% система должна:
 # - Остановить открытие новых позиций
@@ -156,6 +166,7 @@ git ls-files | grep -E "\.env$"
 ## Чек-лист финальной проверки
 
 ### Критические компоненты (MUST HAVE)
+
 - [ ] Enhanced SL/TP полностью работает как в v2
 - [ ] Все биржи подключаются и торгуют
 - [ ] Risk management блокирует опасные операции
@@ -163,12 +174,14 @@ git ls-files | grep -E "\.env$"
 - [ ] Hedge mode корректно обрабатывается
 
 ### Важные компоненты (SHOULD HAVE)
+
 - [ ] ML предсказания генерируются и уникальны
 - [ ] Monitoring и алерты работают
 - [ ] API endpoints доступны и защищены
 - [ ] Логирование структурировано
 
 ### Улучшения (NICE TO HAVE)
+
 - [ ] Performance лучше чем v2
 - [ ] Код покрыт тестами >80%
 - [ ] Документация актуальна
@@ -204,6 +217,7 @@ python3 unified_launcher.py --mode=core --dry-run
 ## Критерии успешной миграции
 
 ✅ **Миграция считается успешной если**:
+
 1. Все функции из v2 работают в v3 без потери качества
 2. Новые функции (ML, multi-trader) работают стабильно
 3. Performance не деградировала (latency <50ms)
@@ -211,6 +225,7 @@ python3 unified_launcher.py --mode=core --dry-run
 5. Risk management предотвращает катастрофические потери
 
 ❌ **Миграция НЕ готова к production если**:
+
 1. Enhanced SL/TP работает не как в v2
 2. Есть проблемы с hedge mode позициями
 3. ML предсказания одинаковые для всех пар
@@ -234,7 +249,7 @@ python3 unified_launcher.py --mode=core --dry-run
 ### ✅ Что работает хорошо
 - ...
 
-### ⚠️ Требует внимания  
+### ⚠️ Требует внимания
 - ...
 
 ### ❌ Критические проблемы

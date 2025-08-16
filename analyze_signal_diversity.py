@@ -122,9 +122,7 @@ class SignalDiversityAnalyzer:
             )
 
             if candles is None or len(candles) < 96:
-                logger.error(
-                    f"Not enough data for prediction: {len(candles) if candles else 0}"
-                )
+                logger.error(f"Not enough data for prediction: {len(candles) if candles else 0}")
                 return None
 
             logger.info(f"Loaded {len(candles)} candles for {symbol}")
@@ -162,9 +160,7 @@ class SignalDiversityAnalyzer:
             logger.error(f"Error testing live prediction: {e}")
             return None
 
-    async def test_multiple_symbols(
-        self, symbols=["BTCUSDT", "ETHUSDT", "ADAUSDT", "DOTUSDT"]
-    ):
+    async def test_multiple_symbols(self, symbols=["BTCUSDT", "ETHUSDT", "ADAUSDT", "DOTUSDT"]):
         """Тестируем предсказания для нескольких символов"""
         results = {}
 
@@ -178,12 +174,10 @@ class SignalDiversityAnalyzer:
                             "signal_type"
                         ),  # FIXED: use signal_type instead of direction
                         "confidence": prediction.get("confidence"),
-                        "direction_score": prediction.get("predictions", {}).get(
-                            "direction_score"
+                        "direction_score": prediction.get("predictions", {}).get("direction_score"),
+                        "directions_by_timeframe": prediction.get("predictions", {}).get(
+                            "directions_by_timeframe", []
                         ),
-                        "directions_by_timeframe": prediction.get(
-                            "predictions", {}
-                        ).get("directions_by_timeframe", []),
                     }
 
             except Exception as e:
@@ -248,9 +242,7 @@ async def main():
 
         # 1. Анализируем недавние сигналы из БД
         logger.info("📊 Анализ недавних сигналов из БД...")
-        recent_analysis = await analyzer.analyze_recent_signals(
-            days_back=3, symbol="BTCUSDT"
-        )
+        recent_analysis = await analyzer.analyze_recent_signals(days_back=3, symbol="BTCUSDT")
 
         # 2. Тестируем живые предсказания
         logger.info("🔮 Тестирование живых предсказаний...")

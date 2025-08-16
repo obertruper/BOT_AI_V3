@@ -115,20 +115,14 @@ def migrate_config():
         sl_tp = v2_config["enhanced_sl_tp"]
         trader_config["risk_management"]["stop_loss"] = {
             "enabled": sl_tp.get("enabled", True),
-            "type": "trailing"
-            if sl_tp.get("trailing_stop", {}).get("enabled")
-            else "fixed",
+            "type": "trailing" if sl_tp.get("trailing_stop", {}).get("enabled") else "fixed",
             "value": sl_tp.get("stop_loss_percent", 2.0),
-            "trailing_distance": sl_tp.get("trailing_stop", {}).get(
-                "callback_rate", 1.0
-            ),
+            "trailing_distance": sl_tp.get("trailing_stop", {}).get("callback_rate", 1.0),
         }
 
         trader_config["risk_management"]["take_profit"] = {
             "enabled": sl_tp.get("enabled", True),
-            "type": "partial"
-            if sl_tp.get("partial_take_profit", {}).get("enabled")
-            else "fixed",
+            "type": "partial" if sl_tp.get("partial_take_profit", {}).get("enabled") else "fixed",
             "levels": [],
         }
 
@@ -139,6 +133,7 @@ def migrate_config():
                 zip(
                     ptp.get("profit_levels", [2.0, 3.0, 5.0]),
                     ptp.get("close_percentages", [20, 30, 30]),
+                    strict=False,
                 )
             ):
                 trader_config["risk_management"]["take_profit"]["levels"].append(
@@ -180,9 +175,7 @@ def migrate_config():
             "chat_id": "${TELEGRAM_CHAT_ID}",
             "notifications": {"trades": True, "errors": True, "daily_summary": True},
             "error_threshold": v2_config.get("error_monitor", {}).get("threshold", 10),
-            "error_window": v2_config.get("error_monitor", {}).get(
-                "window_minutes", 60
-            ),
+            "error_window": v2_config.get("error_monitor", {}).get("window_minutes", 60),
         }
 
         # Обновляем версию

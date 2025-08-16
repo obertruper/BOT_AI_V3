@@ -7,7 +7,6 @@ import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -17,7 +16,7 @@ class AIResponse:
     model: str
     response_text: str
     processing_time: float
-    metadata: Dict  # Дополнительные данные (источники, токены и т.д.)
+    metadata: dict  # Дополнительные данные (источники, токены и т.д.)
     timestamp: datetime
 
 
@@ -28,11 +27,11 @@ class AIVerificationSystem:
     """
 
     def __init__(self):
-        self.response_cache: Dict[str, AIResponse] = {}
-        self.analysis_cache: Dict[str, Dict] = {}
+        self.response_cache: dict[str, AIResponse] = {}
+        self.analysis_cache: dict[str, dict] = {}
         self.template_path = "docs/templates/AI_VERIFICATION_TEMPLATE.md"
 
-    async def cross_verify_task(self, task: str, context: Optional[str] = None) -> str:
+    async def cross_verify_task(self, task: str, context: str | None = None) -> str:
         """
         Основной метод для кросс-верификации задачи
 
@@ -93,7 +92,7 @@ class AIVerificationSystem:
         # Интеллектуальное ожидание с проверкой готовности
         pass
 
-    async def _extract_and_cache_responses(self) -> Dict[str, AIResponse]:
+    async def _extract_and_cache_responses(self) -> dict[str, AIResponse]:
         """Извлечение ответов из браузера и кэширование"""
         responses = {}
 
@@ -117,7 +116,7 @@ class AIVerificationSystem:
 
         return responses
 
-    async def _deep_analysis(self, responses: Dict[str, AIResponse]) -> Dict:
+    async def _deep_analysis(self, responses: dict[str, AIResponse]) -> dict:
         """
         Глубокий анализ ответов с использованием MCP sequential thinking
         """
@@ -132,7 +131,7 @@ class AIVerificationSystem:
         self.analysis_cache = analysis
         return analysis
 
-    def _compare_responses(self, responses: Dict[str, AIResponse]) -> Dict:
+    def _compare_responses(self, responses: dict[str, AIResponse]) -> dict:
         """Сравнительный анализ ответов"""
         comparison = {
             "common_elements": [],
@@ -146,7 +145,7 @@ class AIVerificationSystem:
 
         return comparison
 
-    def _synthesize_best_practices(self, responses: Dict[str, AIResponse]) -> Dict:
+    def _synthesize_best_practices(self, responses: dict[str, AIResponse]) -> dict:
         """Синтез лучших практик из всех ответов"""
         synthesis = {
             "recommended_approach": "",
@@ -160,9 +159,7 @@ class AIVerificationSystem:
 
         return synthesis
 
-    def _create_implementation_plan(
-        self, responses: Dict[str, AIResponse]
-    ) -> List[str]:
+    def _create_implementation_plan(self, responses: dict[str, AIResponse]) -> list[str]:
         """Создание плана внедрения на основе анализа"""
         plan = []
 
@@ -171,7 +168,7 @@ class AIVerificationSystem:
 
         return plan
 
-    def _extract_metrics(self, responses: Dict[str, AIResponse]) -> Dict:
+    def _extract_metrics(self, responses: dict[str, AIResponse]) -> dict:
         """Извлечение метрик из ответов"""
         metrics = {
             "processing_times": {},
@@ -188,14 +185,14 @@ class AIVerificationSystem:
         return metrics
 
     def _generate_unified_report(
-        self, task: str, responses: Dict[str, AIResponse], analysis: Dict
+        self, task: str, responses: dict[str, AIResponse], analysis: dict
     ) -> str:
         """Генерация единого отчета в формате Markdown"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_path = f"docs/AI_VERIFICATION_REPORTS/verification_{timestamp}.md"
 
         # Загрузка шаблона
-        with open(self.template_path, "r", encoding="utf-8") as f:
+        with open(self.template_path, encoding="utf-8") as f:
             template = f.read()
 
         # Заполнение шаблона
@@ -208,8 +205,7 @@ class AIVerificationSystem:
             comparison_table=self._format_comparison_table(analysis["comparison"]),
             synthesis=analysis["synthesis"],
             implementation_plan="\n".join(
-                f"{i+1}. {step}"
-                for i, step in enumerate(analysis["implementation_plan"])
+                f"{i + 1}. {step}" for i, step in enumerate(analysis["implementation_plan"])
             ),
             metrics=json.dumps(analysis["metrics"], indent=2),
         )
@@ -220,7 +216,7 @@ class AIVerificationSystem:
 
         return report_path
 
-    def _format_comparison_table(self, comparison: Dict) -> str:
+    def _format_comparison_table(self, comparison: dict) -> str:
         """Форматирование таблицы сравнения"""
         # Генерация markdown таблицы
         # ...
@@ -247,17 +243,17 @@ class AIVerificationSystem:
         # Реализация через mcp__playwright__
         pass
 
-    async def _extract_chatgpt_response(self) -> Optional[AIResponse]:
+    async def _extract_chatgpt_response(self) -> AIResponse | None:
         """Извлечение ответа ChatGPT из браузера"""
         # Реализация через mcp__playwright__browser_snapshot
         pass
 
-    async def _extract_grok_response(self) -> Optional[AIResponse]:
+    async def _extract_grok_response(self) -> AIResponse | None:
         """Извлечение ответа Grok из браузера"""
         # Реализация через mcp__playwright__browser_snapshot
         pass
 
-    async def _extract_claude_response(self) -> Optional[AIResponse]:
+    async def _extract_claude_response(self) -> AIResponse | None:
         """Извлечение ответа Claude из браузера"""
         # Реализация через mcp__playwright__browser_snapshot
         pass

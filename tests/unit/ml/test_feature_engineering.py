@@ -293,9 +293,7 @@ class TestFeatureEngineer:
 
         # Проверяем отсутствие NaN в большинстве колонок
         nan_ratio = df.isna().sum() / len(df)
-        assert (nan_ratio < 0.5).sum() > len(
-            df.columns
-        ) * 0.8  # 80% колонок имеют <50% NaN
+        assert (nan_ratio < 0.5).sum() > len(df.columns) * 0.8  # 80% колонок имеют <50% NaN
 
         # Проверяем, что feature_names обновлены
         assert feature_engineer._initialized

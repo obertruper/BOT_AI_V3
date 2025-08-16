@@ -9,9 +9,9 @@ Unified Signal Processor - единая точка обработки всех M
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.exceptions import SignalProcessingError
 from core.logger import setup_logger
@@ -29,9 +29,7 @@ class UnifiedSignalProcessor:
     ML предсказание → Валидация → Сигнал → Ордер → Исполнение
     """
 
-    def __init__(
-        self, ml_manager=None, trading_engine=None, config: Dict[str, Any] = None
-    ):
+    def __init__(self, ml_manager=None, trading_engine=None, config: dict[str, Any] = None):
         self.ml_manager = ml_manager
         self.trading_engine = trading_engine
         self.config = config or {}
@@ -50,9 +48,7 @@ class UnifiedSignalProcessor:
             f"UnifiedSignalProcessor инициализирован (min_confidence: {self.min_confidence})"
         )
 
-    async def process_ml_prediction(
-        self, symbol: str, market_data: Dict[str, Any]
-    ) -> Optional[Order]:
+    async def process_ml_prediction(self, symbol: str, market_data: dict[str, Any]) -> Order | None:
         """
         Полная обработка ML предсказания до создания ордера
 
@@ -110,8 +106,8 @@ class UnifiedSignalProcessor:
             raise SignalProcessingError(f"Ошибка обработки: {e}")
 
     async def _get_ml_prediction(
-        self, symbol: str, market_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        self, symbol: str, market_data: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Получает предсказание от ML модели"""
         if not self.ml_manager:
             logger.warning("ML Manager не установлен")
@@ -163,8 +159,8 @@ class UnifiedSignalProcessor:
             return None
 
     async def _generate_signal(
-        self, symbol: str, prediction: Dict[str, Any], market_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        self, symbol: str, prediction: dict[str, Any], market_data: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Генерирует торговый сигнал на основе ML предсказания"""
         try:
             # Извлекаем данные из предсказания
@@ -205,7 +201,7 @@ class UnifiedSignalProcessor:
                 "suggested_price": float(market_data.get("current_price", 0)),
                 "strategy_name": "UnifiedMLStrategy",
                 "exchange": self.config.get("exchange", "bybit"),
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
                 "extra_data": {
                     "ml_prediction": prediction,
                     "direction": direction,
@@ -226,14 +222,12 @@ class UnifiedSignalProcessor:
             logger.error(f"Ошибка генерации сигнала: {e}")
             return None
 
-    async def _validate_signal(self, signal: Dict[str, Any]) -> bool:
+    async def _validate_signal(self, signal: dict[str, Any]) -> bool:
         """Валидация торгового сигнала"""
         try:
             # Проверка минимальной уверенности
             if signal["confidence"] < self.min_confidence:
-                logger.debug(
-                    f"Низкая уверенность: {signal['confidence']} < {self.min_confidence}"
-                )
+                logger.debug(f"Низкая уверенность: {signal['confidence']} < {self.min_confidence}")
                 return False
 
             # Проверка лимита дневных сделок
@@ -254,7 +248,7 @@ class UnifiedSignalProcessor:
             logger.error(f"Ошибка валидации сигнала: {e}")
             return False
 
-    async def _save_signal(self, signal: Dict[str, Any]) -> None:
+    async def _save_signal(self, signal: dict[str, Any]) -> None:
         """Сохраняет сигнал в базу данных"""
         try:
             query = """
@@ -286,16 +280,12 @@ class UnifiedSignalProcessor:
             logger.error(f"Ошибка сохранения сигнала: {e}")
             raise
 
-    async def _create_order_from_signal(
-        self, signal: Dict[str, Any]
-    ) -> Optional[Order]:
+    async def _create_order_from_signal(self, signal: dict[str, Any]) -> Order | None:
         """Создает ордер на основе сигнала"""
         try:
             # Определяем параметры ордера
             side = (
-                OrderSide.BUY
-                if signal["signal_type"] == SignalType.LONG.value
-                else OrderSide.SELL
+                OrderSide.BUY if signal["signal_type"] == SignalType.LONG.value else OrderSide.SELL
             )
 
             # Расчет размера позиции
@@ -333,9 +323,7 @@ class UnifiedSignalProcessor:
             logger.error(f"Ошибка создания ордера: {e}")
             return None
 
-    async def _calculate_position_size(
-        self, symbol: str, price: float, strength: float
-    ) -> Decimal:
+    async def _calculate_position_size(self, symbol: str, price: float, strength: float) -> Decimal:
         """Расчет размера позиции с учетом риск-менеджмента"""
         try:
             # Базовый размер позиции
@@ -427,7 +415,7 @@ class UnifiedSignalProcessor:
             logger.error(f"Ошибка проверки позиций: {e}")
             return 0
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Возвращает статистику процессора"""
         return {
             "signals_processed": self.signals_processed,

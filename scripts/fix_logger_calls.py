@@ -16,7 +16,7 @@ pattern = re.compile(r'(logger_factory\.get_logger\([^,]+), component="[^"]+"\)'
 
 def fix_file(file_path):
     """Исправляет вызовы get_logger в файле"""
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         content = f.read()
 
     # Заменяем все вхождения

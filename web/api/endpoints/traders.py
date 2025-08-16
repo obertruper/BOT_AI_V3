@@ -9,7 +9,7 @@ REST API для управления трейдерами:
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -31,9 +31,9 @@ class TraderCreateRequest(BaseModel):
     exchange: str
     strategy: str
     symbol: str
-    leverage: Optional[float] = None
-    risk_balance: Optional[float] = None
-    config_overrides: Optional[Dict[str, Any]] = None
+    leverage: float | None = None
+    risk_balance: float | None = None
+    config_overrides: dict[str, Any] | None = None
 
 
 class TraderResponse(BaseModel):
@@ -46,19 +46,19 @@ class TraderResponse(BaseModel):
     state: str
     is_trading: bool
     created_at: datetime
-    last_activity: Optional[datetime] = None
-    performance: Optional[Dict[str, Any]] = None
-    current_position: Optional[Dict[str, Any]] = None
+    last_activity: datetime | None = None
+    performance: dict[str, Any] | None = None
+    current_position: dict[str, Any] | None = None
 
 
 class TraderUpdateRequest(BaseModel):
     """Запрос на обновление трейдера"""
 
-    leverage: Optional[float] = None
-    risk_balance: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
-    config_updates: Optional[Dict[str, Any]] = None
+    leverage: float | None = None
+    risk_balance: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    config_updates: dict[str, Any] | None = None
 
 
 class TradingActionRequest(BaseModel):
@@ -71,11 +71,11 @@ class TradingActionRequest(BaseModel):
 # =================== ENDPOINTS ===================
 
 
-@router.get("/", response_model=List[TraderResponse])
+@router.get("/", response_model=list[TraderResponse])
 async def get_traders(
     active_only: bool = Query(False, description="Только активные трейдеры"),
-    exchange: Optional[str] = Query(None, description="Фильтр по бирже"),
-    strategy: Optional[str] = Query(None, description="Фильтр по стратегии"),
+    exchange: str | None = Query(None, description="Фильтр по бирже"),
+    strategy: str | None = Query(None, description="Фильтр по стратегии"),
 ):
     """Получить список всех трейдеров"""
     try:
@@ -126,9 +126,7 @@ async def get_traders(
 
     except Exception as e:
         logger.error(f"Ошибка получения списка трейдеров: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения трейдеров: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения трейдеров: {e!s}")
 
 
 @router.get("/{trader_id}", response_model=TraderResponse)
@@ -139,9 +137,7 @@ async def get_trader(trader_id: str):
         trader = trader_manager.get_trader(trader_id)
 
         if not trader:
-            raise HTTPException(
-                status_code=404, detail=f"Трейдер {trader_id} не найден"
-            )
+            raise HTTPException(status_code=404, detail=f"Трейдер {trader_id} не найден")
 
         trader_response = TraderResponse(
             trader_id=trader.trader_id,
@@ -163,9 +159,7 @@ async def get_trader(trader_id: str):
         raise
     except Exception as e:
         logger.error(f"Ошибка получения трейдера {trader_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения трейдера: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения трейдера: {e!s}")
 
 
 @router.post("/", response_model=TraderResponse)
@@ -222,9 +216,7 @@ async def create_trader(request: TraderCreateRequest):
         raise
     except Exception as e:
         logger.error(f"Ошибка создания трейдера {request.trader_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка создания трейдера: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка создания трейдера: {e!s}")
 
 
 @router.put("/{trader_id}", response_model=TraderResponse)
@@ -235,9 +227,7 @@ async def update_trader(trader_id: str, request: TraderUpdateRequest):
         trader = trader_manager.get_trader(trader_id)
 
         if not trader:
-            raise HTTPException(
-                status_code=404, detail=f"Трейдер {trader_id} не найден"
-            )
+            raise HTTPException(status_code=404, detail=f"Трейдер {trader_id} не найден")
 
         # Обновляем настройки
         updates = {}
@@ -268,9 +258,7 @@ async def update_trader(trader_id: str, request: TraderUpdateRequest):
             current_position=trader.get_current_position(),
         )
 
-        logger.info(
-            f"Обновлены настройки трейдера {trader_id}", extra={"updates": updates}
-        )
+        logger.info(f"Обновлены настройки трейдера {trader_id}", extra={"updates": updates})
 
         return trader_response
 
@@ -278,12 +266,10 @@ async def update_trader(trader_id: str, request: TraderUpdateRequest):
         raise
     except Exception as e:
         logger.error(f"Ошибка обновления трейдера {trader_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка обновления трейдера: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления трейдера: {e!s}")
 
 
-@router.post("/{trader_id}/actions", response_model=Dict[str, Any])
+@router.post("/{trader_id}/actions", response_model=dict[str, Any])
 async def trader_action(trader_id: str, request: TradingActionRequest):
     """Выполнить торговое действие с трейдером"""
     try:
@@ -291,9 +277,7 @@ async def trader_action(trader_id: str, request: TradingActionRequest):
         trader = trader_manager.get_trader(trader_id)
 
         if not trader:
-            raise HTTPException(
-                status_code=404, detail=f"Трейдер {trader_id} не найден"
-            )
+            raise HTTPException(status_code=404, detail=f"Трейдер {trader_id} не найден")
 
         result = {}
 
@@ -330,9 +314,7 @@ async def trader_action(trader_id: str, request: TradingActionRequest):
             }
 
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Неизвестное действие: {request.action}"
-            )
+            raise HTTPException(status_code=400, detail=f"Неизвестное действие: {request.action}")
 
         logger.info(
             f"Выполнено действие {request.action} для трейдера {trader_id}",
@@ -344,12 +326,8 @@ async def trader_action(trader_id: str, request: TradingActionRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Ошибка выполнения действия {request.action} для трейдера {trader_id}: {e}"
-        )
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка выполнения действия: {str(e)}"
-        )
+        logger.error(f"Ошибка выполнения действия {request.action} для трейдера {trader_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка выполнения действия: {e!s}")
 
 
 @router.delete("/{trader_id}")
@@ -362,9 +340,7 @@ async def delete_trader(
         trader = trader_manager.get_trader(trader_id)
 
         if not trader:
-            raise HTTPException(
-                status_code=404, detail=f"Трейдер {trader_id} не найден"
-            )
+            raise HTTPException(status_code=404, detail=f"Трейдер {trader_id} не найден")
 
         # Проверяем можно ли удалить трейдера
         if trader.is_trading() and not force:
@@ -388,12 +364,10 @@ async def delete_trader(
         raise
     except Exception as e:
         logger.error(f"Ошибка удаления трейдера {trader_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка удаления трейдера: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления трейдера: {e!s}")
 
 
-@router.get("/{trader_id}/performance", response_model=Dict[str, Any])
+@router.get("/{trader_id}/performance", response_model=dict[str, Any])
 async def get_trader_performance(
     trader_id: str, period: str = Query("24h", description="Период анализа")
 ):
@@ -403,15 +377,11 @@ async def get_trader_performance(
         trader = trader_manager.get_trader(trader_id)
 
         if not trader:
-            raise HTTPException(
-                status_code=404, detail=f"Трейдер {trader_id} не найден"
-            )
+            raise HTTPException(status_code=404, detail=f"Трейдер {trader_id} не найден")
 
         performance = trader.get_detailed_performance(period)
 
-        logger.info(
-            f"Получена статистика производительности трейдера {trader_id} за {period}"
-        )
+        logger.info(f"Получена статистика производительности трейдера {trader_id} за {period}")
 
         return performance
 
@@ -419,16 +389,14 @@ async def get_trader_performance(
         raise
     except Exception as e:
         logger.error(f"Ошибка получения статистики трейдера {trader_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения статистики: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статистики: {e!s}")
 
 
-@router.get("/{trader_id}/logs", response_model=List[Dict[str, Any]])
+@router.get("/{trader_id}/logs", response_model=list[dict[str, Any]])
 async def get_trader_logs(
     trader_id: str,
     limit: int = Query(100, description="Количество записей"),
-    level: Optional[str] = Query(None, description="Уровень логирования"),
+    level: str | None = Query(None, description="Уровень логирования"),
 ):
     """Получить логи трейдера"""
     try:
@@ -436,9 +404,7 @@ async def get_trader_logs(
         trader = trader_manager.get_trader(trader_id)
 
         if not trader:
-            raise HTTPException(
-                status_code=404, detail=f"Трейдер {trader_id} не найден"
-            )
+            raise HTTPException(status_code=404, detail=f"Трейдер {trader_id} не найден")
 
         logs = trader.get_logs(limit=limit, level=level)
 
@@ -448,7 +414,7 @@ async def get_trader_logs(
         raise
     except Exception as e:
         logger.error(f"Ошибка получения логов трейдера {trader_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения логов: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения логов: {e!s}")
 
 
 # =================== DEPENDENCY INJECTION ===================

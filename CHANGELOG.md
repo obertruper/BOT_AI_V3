@@ -1,119 +1,126 @@
 # Changelog
 
-Все значимые изменения в проекте BOT_AI_V3 документируются в этом файле.
+All notable changes to BOT_AI_V3 will be documented in this file.
 
-Формат основан на [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-и проект придерживается [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0-beta.2] - 2025-08-08
+## [3.1.0] - 2025-01-14
 
-### 🎉 Добавлено
+### Added
 
-- **Поддержка Hedge Mode** - полная интеграция hedge mode для фьючерсной торговли на Bybit
-- **Конфигурация торговли** - новая секция `trading` в system.yaml с настройками hedge_mode, leverage, category
-- **Position Index логика** - автоматическое определение position_idx на основе направления сделки (1=buy, 2=sell)
-- **Документация Hedge Mode** - создано подробное руководство по настройке и использованию hedge mode
+- Complete Feature Engineering v2.0 system with 240 ML features
+- Comprehensive documentation for Feature Engineering and ML System
+- Migration guide for upgrading from v1.0 to v2.0
+- Automatic feature trimming to 240 for ML compatibility
+- Method stubs for logger compatibility (start_stage, end_stage)
+- **ML Predictions Logging System**:
+  - Detailed logging of all ML model inputs and outputs
+  - PostgreSQL tables for storing predictions and feature importance
+  - Real-time prediction tracking with performance metrics
+  - Analytics script for analyzing prediction accuracy
+  - Batch saving optimization for high-throughput scenarios
 
-### 🔧 Исправлено
+### Changed
 
-- **Ошибка "position idx not match position mode"** - BybitClient теперь корректно обрабатывает hedge mode
-- **Применение leverage** - leverage теперь корректно применяется при создании ордеров
-- **Минимальный размер ордера** - исправлен расчет минимального размера для соответствия требованиям биржи
-- **API аутентификация** - исправлена проблема с неправильным порядком API ключей
+- Feature engineering now independent of configuration
+- All technical indicators created with default parameters
+- Improved feature naming consistency (ichimoku_tenkan, keltner_upper_20, etc.)
+- Updated realtime_indicator_calculator.py to filter target variables
+- Enhanced ML signal processing with better caching
 
-### 📊 Изменено
+### Fixed
 
-- **BybitClient** - добавлена загрузка конфигурации hedge mode из system.yaml
-- **SignalProcessor** - обновлен для корректной работы с hedge mode при создании ордеров
-- **Конфигурация по умолчанию** - hedge_mode=true, leverage=5, category=linear для фьючерсов
+- Feature count mismatch errors (273 → 240 automatic trimming)
+- Missing indicators (OBV, Ichimoku, Keltner, Donchian)
+- Indentation errors in Bollinger Bands calculation
+- Target variable leakage in ML features
+- Logger compatibility issues with original code
 
-## [3.0.0-beta] - 2025-08-08
+### Technical Details
 
-### 🎉 Добавлено
+- **Feature Categories**:
+  - Basic Features: 12
+  - Technical Indicators: 52
+  - Microstructure: 15
+  - Rally Detection: 42
+  - Signal Quality: 21
+  - Futures-Specific: 15
+  - ML-Optimized: 30+
+  - Temporal: 16
+  - Cross-Asset: 5
+  - **Total**: 273 (240 features + 33 targets)
 
-- **Полная ML интеграция** - реализован полный поток от ML предсказаний до создания ордеров
-- **AISignalGenerator** - реализован метод `_emit_signal` для отправки сигналов в Trading Engine
-- **TradingEngine** - добавлен метод `receive_trading_signal` для приема ML сигналов
-- **SignalScheduler** - интеграция с Trading Engine для автоматической генерации сигналов
-- **Thread-safe репозитории** - SignalRepository и TradeRepository для безопасной работы с БД
-- **GPU оптимизация** - поддержка RTX 5090 с CUDA 12.8 (torch.compile отключен из-за sm_120)
-- **Документация ML** - создан docs/ML_INTEGRATION.md с полным описанием архитектуры
+## [3.0.0] - 2025-01-10
 
-### 🔧 Исправлено
+### Added
 
-- **LoggerFactory** - удален неподдерживаемый параметр `component` в exchanges/registry.py
-- **SignalProcessor** - полностью переписан для возврата `List[Order]` вместо `bool`
-- **Enum дубликаты** - исправлена ошибка дублирования NEUTRAL в SignalType
-- **SQLAlchemy metadata** - переименован в `signal_metadata` (зарезервированный атрибут)
-- **ComponentInitializationError** - исправлена ошибка с параметром `severity`
-- **ML Signal Processor** - добавлена инициализация `_pending_tasks`
-- **Конфигурация traders** - создан config/traders.yaml для multi_crypto_10 трейдера
+- Unified launcher system for all components
+- ML trading with UnifiedPatchTST model
+- PostgreSQL on port 5555 support
+- 7 exchange integrations (Bybit, Binance, OKX, Gate.io, KuCoin, HTX, BingX)
+- Web interface and API server
 
-### 📊 Изменено
+### Changed
 
-- **Signal flow** - полностью переработан поток: ML → AISignalGenerator → TradingEngine → SignalProcessor → Orders
-- **TradingSignal → Signal** - реализована конвертация между форматами сигналов
-- **SystemOrchestrator** - добавлена связь между AISignalGenerator и TradingEngine
-- **Signal модель БД** - создана полная модель для хранения торговых сигналов
-- **Risk management** - интегрирован в процесс создания ордеров
+- Complete project restructuring (178 files → organized structure)
+- Leverage fixed at 5x for all positions
+- Stop Loss/Take Profit integration at order creation
 
-### 🚀 Производительность
+### Fixed
 
-- ML инференция: ~200-300ms на GPU
-- Генерация сигналов: 1 минута для всех символов
-- Обработка: 1000+ сигналов/сек
-- F1 score: 0.414 для ML предсказаний
+- Leverage issues (was 10x, now correctly 5x)
+- SL/TP not being set on positions
+- File organization and structure
 
-## [3.0.0-alpha] - 2025-07-13
+## [2.0.0] - 2024-12-01
 
-### Начальный релиз
+### Added
 
-- Базовая архитектура системы
-- Веб-интерфейс на FastAPI
-- Интеграция с биржами через ccxt
-- Система стратегий
-- Risk management framework
+- Machine Learning predictions system
+- Advanced risk management
+- Multi-symbol support (50+ pairs)
+- Real-time WebSocket connections
+
+### Changed
+
+- Migrated from synchronous to asynchronous architecture
+- Updated to Bybit API v5
+
+## [1.0.0] - 2024-10-01
+
+### Added
+
+- Initial release
+- Basic trading functionality
+- Simple technical indicators
+- Single exchange support (Bybit)
 
 ---
 
-## Решенные проблемы из предыдущей сессии
+## Feature Engineering Versions
 
-### Критические исправления
+### v2.0 (Current)
 
-1. **ML предсказания показывали только NEUTRAL/FLAT**
-   - Причина: отсутствовала связь между ML и Trading Engine
-   - Решение: реализован полный signal flow
+- 240 ML features + 33 targets
+- No configuration dependency
+- Automatic feature management
 
-2. **AISignalGenerator не отправлял сигналы**
-   - Причина: метод `_emit_signal` был TODO
-   - Решение: полная реализация с интеграцией Trading Engine
+### v1.0 (Legacy)
 
-3. **SignalProcessor не создавал ордера**
-   - Причина: возвращал bool вместо List[Order]
-   - Решение: полная переработка с логикой создания ордеров
+- Variable feature count (200-300)
+- Configuration-dependent
+- Manual feature selection
 
-4. **Ошибки БД моделей**
-   - Причина: конфликты с зарезервированными словами и enum
-   - Решение: рефакторинг моделей и правильные импорты
+## Model Versions
 
-### Тестирование
+### UnifiedPatchTST v1.0 (Current)
 
-- ✅ test_ml_flow_simple.py - успешная демонстрация ML → Orders потока
-- ✅ GPU RTX 5090 работает корректно
-- ✅ Все компоненты интегрированы и протестированы
+- Transformer-based architecture
+- 96 timesteps × 240 features input
+- 20 predictions output
+- ~2M parameters
 
-## Миграция с V2
+---
 
-### Перенесенные компоненты из BOT_AI_V2
-
-- SignalRepository с thread-safe операциями
-- TradeRepository с аналитикой
-- Конфигурация traders.yaml
-- Логика risk management
-
-### Архитектурные улучшения
-
-- Асинхронная обработка всех операций
-- Queue-based signal processing
-- Изолированные процессы через UnifiedLauncher
-- MCP серверы для расширенной функциональности
+*For detailed migration instructions, see [MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md)*

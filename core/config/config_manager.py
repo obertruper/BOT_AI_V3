@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Configuration Manager для BOT_Trading v3.0
 
@@ -17,7 +16,7 @@ import asyncio
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 
@@ -32,7 +31,7 @@ class ConfigInfo:
     path: str
     loaded_at: datetime
     is_valid: bool
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 class ConfigManager:
@@ -47,12 +46,12 @@ class ConfigManager:
     - Обратную совместимость с v1.0/v2.0
     """
 
-    def __init__(self, config_path: Optional[str] = None):
-        self._config: Dict[str, Any] = {}
-        self._config_path: Optional[str] = config_path
-        self._db_path: Optional[str] = None
-        self._trader_configs: Dict[str, Dict[str, Any]] = {}
-        self._config_info: Optional[ConfigInfo] = None
+    def __init__(self, config_path: str | None = None):
+        self._config: dict[str, Any] = {}
+        self._config_path: str | None = config_path
+        self._db_path: str | None = None
+        self._trader_configs: dict[str, dict[str, Any]] = {}
+        self._config_info: ConfigInfo | None = None
         self._is_initialized = False
 
         # Пути поиска конфигураций (совместимость с v1.0/v2.0)
@@ -80,9 +79,7 @@ class ConfigManager:
             await self._load_trader_configs()
             self._is_initialized = True
         except Exception as e:
-            raise ConfigurationError(
-                f"Не удалось инициализировать конфигурацию: {e}"
-            ) from e
+            raise ConfigurationError(f"Не удалось инициализировать конфигурацию: {e}") from e
 
     async def _load_system_config(self) -> None:
         """Загрузка основной системной конфигурации"""
@@ -161,9 +158,7 @@ class ConfigManager:
     async def _load_trader_configs(self) -> None:
         """Загрузка конфигураций отдельных трейдеров"""
         # Поиск конфигураций трейдеров
-        traders_config_dir = os.path.join(
-            os.path.dirname(self._config_path or ""), "traders"
-        )
+        traders_config_dir = os.path.join(os.path.dirname(self._config_path or ""), "traders")
 
         if os.path.exists(traders_config_dir):
             for config_file in os.listdir(traders_config_dir):
@@ -201,15 +196,11 @@ class ConfigManager:
                         self._config["ml_integration"] = risk_config["ml_integration"]
                     if "monitoring" in risk_config:
                         self._config["monitoring"] = risk_config["monitoring"]
-                    print(
-                        f"✅ Загружена конфигурация управления рисками из {risk_config_path}"
-                    )
+                    print(f"✅ Загружена конфигурация управления рисками из {risk_config_path}")
                 except Exception as e:
                     print(f"Ошибка загрузки risk_management.yaml: {e}")
             else:
-                print(
-                    f"⚠️ Файл risk_management.yaml не найден по пути: {risk_config_path}"
-                )
+                print(f"⚠️ Файл risk_management.yaml не найден по пути: {risk_config_path}")
 
     async def _load_and_merge_configs(self) -> None:
         """Загрузка и слияние всех конфигурационных файлов"""
@@ -239,7 +230,7 @@ class ConfigManager:
                 except Exception as e:
                     print(f"⚠️ Ошибка загрузки {config_file}: {e}")
 
-    def _merge_configs(self, base: Dict[str, Any], update: Dict[str, Any]) -> None:
+    def _merge_configs(self, base: dict[str, Any], update: dict[str, Any]) -> None:
         """Рекурсивное слияние конфигураций"""
         for key, value in update.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
@@ -247,19 +238,17 @@ class ConfigManager:
             else:
                 base[key] = value
 
-    async def _load_yaml_file(self, file_path: str) -> Dict[str, Any]:
+    async def _load_yaml_file(self, file_path: str) -> dict[str, Any]:
         """Асинхронная загрузка YAML файла"""
 
         def _load_sync():
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _load_sync)
 
-    def get_config(
-        self, key: str = None, default: Any = None, force_reload: bool = False
-    ) -> Any:
+    def get_config(self, key: str = None, default: Any = None, force_reload: bool = False) -> Any:
         """
         Получение значения из конфигурации (совместимость с v1.0/v2.0)
 
@@ -290,9 +279,7 @@ class ConfigManager:
 
         return value
 
-    def get_leverage(
-        self, model_score: Optional[int] = None, default: Optional[float] = None
-    ) -> float:
+    def get_leverage(self, model_score: int | None = None, default: float | None = None) -> float:
         """
         Получение leverage с учетом приоритетов (совместимость с v1.0/v2.0)
 
@@ -330,9 +317,7 @@ class ConfigManager:
         # Используем default или финальное значение по умолчанию
         return default if default is not None else 5.0
 
-    def get_trader_config(
-        self, trader_id: str, key: str = None, default: Any = None
-    ) -> Any:
+    def get_trader_config(self, trader_id: str, key: str = None, default: Any = None) -> Any:
         """
         Получение конфигурации конкретного трейдера
 
@@ -361,16 +346,16 @@ class ConfigManager:
 
         return value
 
-    def get_all_trader_ids(self) -> List[str]:
+    def get_all_trader_ids(self) -> list[str]:
         """Получение списка всех идентификаторов трейдеров"""
         return list(self._trader_configs.keys())
 
-    def get_system_config(self) -> Dict[str, Any]:
+    def get_system_config(self) -> dict[str, Any]:
         """Получение системной конфигурации"""
         return self._config.get("system", {})
 
     # Новые методы: обновление и сохранение системной конфигурации
-    def update_system_config(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+    def update_system_config(self, updates: dict[str, Any]) -> dict[str, Any]:
         """Обновляет раздел system в конфигурации и возвращает актуальные данные.
 
         Примечание: метод выполняет in-memory обновление и пытается сохранить
@@ -396,16 +381,14 @@ class ConfigManager:
     def save_system_config(self) -> None:
         """Сохраняет текущую конфигурацию в YAML файл, если путь известен."""
         if not self._config_path:
-            raise ConfigurationError(
-                "Неизвестен путь к конфигурационному файлу для сохранения"
-            )
+            raise ConfigurationError("Неизвестен путь к конфигурационному файлу для сохранения")
 
         # Безопасная запись YAML
         data_to_write = self._config.copy()
         with open(self._config_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(data_to_write, f, allow_unicode=True, sort_keys=False)
 
-    def get_database_config(self) -> Dict[str, Any]:
+    def get_database_config(self) -> dict[str, Any]:
         """Получение конфигурации базы данных"""
         # Приоритет: database > postgres (обратная совместимость)
         db_config = self._config.get("database")
@@ -414,41 +397,41 @@ class ConfigManager:
 
         return self._config.get("postgres", {})
 
-    def get_logging_config(self) -> Dict[str, Any]:
+    def get_logging_config(self) -> dict[str, Any]:
         """Получение конфигурации логирования"""
         return self._config.get("logging", {})
 
-    def get_redis_config(self) -> Dict[str, Any]:
+    def get_redis_config(self) -> dict[str, Any]:
         """Получение конфигурации Redis"""
         return self._config.get("redis", {})
 
-    def get_ml_config(self) -> Dict[str, Any]:
+    def get_ml_config(self) -> dict[str, Any]:
         """Получение ML конфигурации"""
         return self.get_config("ml", {})
 
-    def get_risk_management_config(self) -> Dict[str, Any]:
+    def get_risk_management_config(self) -> dict[str, Any]:
         """Получение конфигурации управления рисками"""
         return self.get_config("risk_management", {})
 
-    def get_enhanced_sltp_config(self) -> Dict[str, Any]:
+    def get_enhanced_sltp_config(self) -> dict[str, Any]:
         """Получение конфигурации улучшенного SL/TP"""
         return self.get_config("enhanced_sltp", {})
 
-    def get_ml_integration_config(self) -> Dict[str, Any]:
+    def get_ml_integration_config(self) -> dict[str, Any]:
         """Получение конфигурации ML-интеграции"""
         return self.get_config("ml_integration", {})
 
-    def get_monitoring_config(self) -> Dict[str, Any]:
+    def get_monitoring_config(self) -> dict[str, Any]:
         """Получение конфигурации мониторинга"""
         return self.get_config("monitoring", {})
 
-    def get_risk_profile(self, profile_name: str = "standard") -> Dict[str, Any]:
+    def get_risk_profile(self, profile_name: str = "standard") -> dict[str, Any]:
         """Получение профиля риска по имени"""
         risk_config = self.get_risk_management_config()
         risk_profiles = risk_config.get("risk_profiles", {})
         return risk_profiles.get(profile_name, {})
 
-    def get_asset_category(self, symbol: str) -> Dict[str, Any]:
+    def get_asset_category(self, symbol: str) -> dict[str, Any]:
         """Получение категории актива по символу"""
         risk_config = self.get_risk_management_config()
         asset_categories = risk_config.get("asset_categories", {})
@@ -461,9 +444,7 @@ class ConfigManager:
         # Возвращаем стандартную категорию если не найдена
         return asset_categories.get("stable_coins", {})
 
-    def get_exchange_config(
-        self, exchange_name: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def get_exchange_config(self, exchange_name: str | None = None) -> dict[str, Any]:
         """Получение конфигурации биржи"""
         exchanges = self._config.get("exchanges", {})
         if exchange_name:
@@ -497,7 +478,7 @@ class ConfigManager:
         trader_config = self.get_trader_config(trader_id)
         return trader_config.get("enabled", False)
 
-    def get_config_info(self) -> Optional[ConfigInfo]:
+    def get_config_info(self) -> ConfigInfo | None:
         """Получение информации о состоянии конфигурации"""
         return self._config_info
 
@@ -506,7 +487,7 @@ class ConfigManager:
         self._is_initialized = False
         await self.initialize()
 
-    def validate_config(self) -> List[str]:
+    def validate_config(self) -> list[str]:
         """
         Валидация конфигурации
 
@@ -537,7 +518,7 @@ class ConfigManager:
 
 
 # Глобальный экземпляр для обратной совместимости
-_global_config_manager: Optional[ConfigManager] = None
+_global_config_manager: ConfigManager | None = None
 
 
 def get_global_config_manager() -> ConfigManager:
@@ -549,7 +530,7 @@ def get_global_config_manager() -> ConfigManager:
 
 
 # Функции обратной совместимости с v1.0/v2.0
-def load_config(config_path: str) -> Dict[str, Any]:
+def load_config(config_path: str) -> dict[str, Any]:
     """Загрузка конфигурации (совместимость с v1.0/v2.0)"""
     manager = ConfigManager(config_path)
     asyncio.create_task(manager.initialize())
@@ -562,9 +543,7 @@ def get_config(key: str = None, default: Any = None, force_reload: bool = False)
     return manager.get_config(key, default, force_reload)
 
 
-def get_leverage(
-    model_score: Optional[int] = None, default: Optional[float] = None
-) -> float:
+def get_leverage(model_score: int | None = None, default: float | None = None) -> float:
     """Получение leverage (совместимость с v1.0/v2.0)"""
     manager = get_global_config_manager()
     return manager.get_leverage(model_score, default)

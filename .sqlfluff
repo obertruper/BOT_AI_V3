@@ -1,0 +1,42 @@
+[sqlfluff]
+# Specify the SQL dialect for PostgreSQL
+dialect = postgres
+
+# Maximum line length
+max_line_length = 120
+
+# Indentation
+indent_unit = space
+indent_size = 4
+
+# Comma positioning
+comma_style = trailing
+
+# Case settings
+capitalisation_policy = lower
+
+[sqlfluff:indentation]
+# Indentation configuration
+indented_joins = false
+indented_using_on = true
+template_blocks_indent = true
+
+[sqlfluff:rules]
+# Disable specific rules if needed
+exclude_rules = L016,L034
+
+[sqlfluff:layout:type:comma]
+spacing_before = touch
+line_position = trailing
+
+[sqlfluff:rules:L010]
+# Capitalization of keywords
+capitalisation_policy = lower
+
+[sqlfluff:rules:L014]
+# Unquoted identifiers
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:L030]
+# Function names
+capitalisation_policy = lower

@@ -185,9 +185,7 @@ def create_scheduler_metrics_table():
             cur.execute(
                 "CREATE INDEX idx_scheduler_metrics_cycle_start ON scheduler_metrics(cycle_start DESC);"
             )
-            cur.execute(
-                "CREATE INDEX idx_scheduler_metrics_status ON scheduler_metrics(status);"
-            )
+            cur.execute("CREATE INDEX idx_scheduler_metrics_status ON scheduler_metrics(status);")
 
             conn.commit()
             print("  ✅ Таблица scheduler_metrics создана")

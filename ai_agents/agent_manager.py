@@ -7,7 +7,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .claude_code_sdk import ClaudeCodeOptions, ClaudeCodeSDK, PermissionMode, ThinkingMode
 from .utils.mcp_manager import get_mcp_manager
@@ -22,7 +22,7 @@ class AgentConfig:
     name: str
     role: str
     system_prompt: str
-    allowed_tools: List[str]
+    allowed_tools: list[str]
     max_turns: int = 5
     model: str = "sonnet"  # Можно использовать "opus", "sonnet" или "haiku"
     thinking_mode: ThinkingMode = ThinkingMode.NORMAL
@@ -42,7 +42,7 @@ class ClaudeCodeAgent:
         mcp_tools = self.mcp_manager.get_tools_for_agent(config.name)
         self.config.allowed_tools.extend(mcp_tools)
 
-    async def execute_task(self, task: str, context: Optional[Dict] = None) -> str:
+    async def execute_task(self, task: str, context: dict | None = None) -> str:
         """Выполнить задачу через Claude Code SDK"""
         # Создаем опции для SDK
         options = ClaudeCodeOptions(
@@ -70,7 +70,7 @@ class ClaudeCodeAgent:
             logger.info(f"Agent {self.config.name} completed task successfully")
             return result
         except Exception as e:
-            logger.error(f"Agent {self.config.name} failed: {str(e)}")
+            logger.error(f"Agent {self.config.name} failed: {e!s}")
             raise
 
 
@@ -83,7 +83,7 @@ class MultiModelOrchestrator:
             "openai": None,  # Будет реализовано
             "local": None,  # Для локальных моделей
         }
-        self.agents: Dict[str, Any] = {}
+        self.agents: dict[str, Any] = {}
 
     def create_agent(self, agent_type: str, config: AgentConfig):
         """Создать агента определенного типа"""
@@ -94,7 +94,7 @@ class MultiModelOrchestrator:
         if agent_class:
             self.agents[config.name] = agent_class(config)
 
-    async def collaborate(self, task: str, agents: List[str]) -> Dict[str, str]:
+    async def collaborate(self, task: str, agents: list[str]) -> dict[str, str]:
         """Выполнить задачу с участием нескольких агентов"""
         results = {}
         context = {}
@@ -260,7 +260,9 @@ async def develop_strategy(description: str) -> str:
     orchestrator = MultiModelOrchestrator()
     orchestrator.create_agent("claude", AGENT_CONFIGS["strategy_developer"])
 
-    task = f"Разработайте торговую стратегию: {description}. Включите risk management и backtesting."
+    task = (
+        f"Разработайте торговую стратегию: {description}. Включите risk management и backtesting."
+    )
     results = await orchestrator.collaborate(task, ["strategy_developer"])
     return results.get("strategy_developer", "")
 
@@ -307,9 +309,7 @@ async def security_audit(target_path: str) -> str:
     return results.get("security_auditor", "")
 
 
-async def collaborative_development(
-    task_description: str, agents: List[str]
-) -> Dict[str, str]:
+async def collaborative_development(task_description: str, agents: list[str]) -> dict[str, str]:
     """Совместная разработка с участием нескольких агентов"""
     orchestrator = MultiModelOrchestrator()
 

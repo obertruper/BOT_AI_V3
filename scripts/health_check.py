@@ -48,7 +48,7 @@ class HealthChecker:
                         self.alerts.append(f"API unhealthy: {response.status}")
         except Exception as e:
             self.checks.append({"component": "API", "status": "down", "error": str(e)})
-            self.alerts.append(f"API is down: {str(e)}")
+            self.alerts.append(f"API is down: {e!s}")
 
     async def check_database(self):
         """Проверка PostgreSQL"""
@@ -62,9 +62,7 @@ class HealthChecker:
             )
 
             # Проверяем количество активных ордеров
-            active_orders = await conn.fetchval(
-                "SELECT COUNT(*) FROM orders WHERE status = 'open'"
-            )
+            active_orders = await conn.fetchval("SELECT COUNT(*) FROM orders WHERE status = 'open'")
 
             # Проверяем последнюю торговлю
             last_trade = await conn.fetchrow(
@@ -79,17 +77,13 @@ class HealthChecker:
                     "status": "healthy",
                     "details": {
                         "active_orders": active_orders,
-                        "last_trade": str(last_trade["created_at"])
-                        if last_trade
-                        else None,
+                        "last_trade": str(last_trade["created_at"]) if last_trade else None,
                     },
                 }
             )
         except Exception as e:
-            self.checks.append(
-                {"component": "PostgreSQL", "status": "down", "error": str(e)}
-            )
-            self.alerts.append(f"PostgreSQL is down: {str(e)}")
+            self.checks.append({"component": "PostgreSQL", "status": "down", "error": str(e)})
+            self.alerts.append(f"PostgreSQL is down: {e!s}")
 
     async def check_redis(self):
         """Проверка Redis"""
@@ -113,10 +107,8 @@ class HealthChecker:
             )
             r.close()
         except Exception as e:
-            self.checks.append(
-                {"component": "Redis", "status": "down", "error": str(e)}
-            )
-            self.alerts.append(f"Redis is down: {str(e)}")
+            self.checks.append({"component": "Redis", "status": "down", "error": str(e)})
+            self.alerts.append(f"Redis is down: {e!s}")
 
     async def check_disk_space(self):
         """Проверка места на диске"""
@@ -142,9 +134,7 @@ class HealthChecker:
             if free_percent < 10:
                 self.alerts.append(f"Low disk space: {free_percent:.1f}% free")
         except Exception as e:
-            self.checks.append(
-                {"component": "Disk Space", "status": "error", "error": str(e)}
-            )
+            self.checks.append({"component": "Disk Space", "status": "error", "error": str(e)})
 
     async def check_logs_for_errors(self):
         """Проверка логов на критические ошибки"""
@@ -158,15 +148,11 @@ class HealthChecker:
 
             if log_file.exists():
                 # Читаем последние 1000 строк
-                with open(log_file, "r") as f:
+                with open(log_file) as f:
                     lines = f.readlines()[-1000:]
 
-                error_count = sum(
-                    1 for line in lines if "ERROR" in line or "CRITICAL" in line
-                )
-                recent_errors = [
-                    line.strip() for line in lines[-10:] if "ERROR" in line
-                ]
+                error_count = sum(1 for line in lines if "ERROR" in line or "CRITICAL" in line)
+                recent_errors = [line.strip() for line in lines[-10:] if "ERROR" in line]
 
                 status = "healthy" if error_count < 10 else "warning"
 
@@ -186,9 +172,7 @@ class HealthChecker:
                         f"High error rate: {error_count} errors in last 1000 log lines"
                     )
         except Exception as e:
-            self.checks.append(
-                {"component": "Logs", "status": "error", "error": str(e)}
-            )
+            self.checks.append({"component": "Logs", "status": "error", "error": str(e)})
 
     async def send_alerts(self):
         """Отправка алертов (Slack, Telegram, Email)"""
@@ -214,9 +198,7 @@ class HealthChecker:
                                         },
                                         {
                                             "title": "Time",
-                                            "value": datetime.now().strftime(
-                                                "%Y-%m-%d %H:%M:%S"
-                                            ),
+                                            "value": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                         },
                                     ],
                                 }
@@ -249,9 +231,7 @@ class HealthChecker:
         }
 
         # Сохраняем в файл
-        report_file = (
-            Path(__file__).parent.parent / "data" / "logs" / "health_check.json"
-        )
+        report_file = Path(__file__).parent.parent / "data" / "logs" / "health_check.json"
         with open(report_file, "w") as f:
             json.dump(report, f, indent=2)
 

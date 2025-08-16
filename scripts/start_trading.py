@@ -104,9 +104,7 @@ async def apply_migrations():
     logger.info("🔄 Применение миграций БД...")
 
     try:
-        result = subprocess.run(
-            ["alembic", "upgrade", "head"], capture_output=True, text=True
-        )
+        result = subprocess.run(["alembic", "upgrade", "head"], capture_output=True, text=True)
 
         if result.returncode == 0:
             logger.info("✅ Миграции применены успешно")

@@ -14,7 +14,7 @@ Data Adapters для BOT_Trading v3.0
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -39,7 +39,7 @@ class DataAdapters:
 
     # =================== TRADER ADAPTERS ===================
 
-    def trader_to_response(self, trader) -> Dict[str, Any]:
+    def trader_to_response(self, trader) -> dict[str, Any]:
         """
         Преобразование внутреннего объекта трейдера в API response
 
@@ -54,9 +54,7 @@ class DataAdapters:
                 return {}
 
             # Получаем конфигурацию трейдера
-            trader_config = (
-                trader.get_config("trader", {}) if hasattr(trader, "get_config") else {}
-            )
+            trader_config = trader.get_config("trader", {}) if hasattr(trader, "get_config") else {}
 
             # Базовая информация о трейдере
             response = {
@@ -64,16 +62,11 @@ class DataAdapters:
                 "exchange": trader_config.get("exchange", "unknown"),
                 "strategy": trader_config.get("strategy", "unknown"),
                 "symbol": trader_config.get("symbol", "unknown"),
-                "state": trader._state.value
-                if hasattr(trader, "_state")
-                else "unknown",
+                "state": trader._state.value if hasattr(trader, "_state") else "unknown",
                 "is_trading": getattr(trader, "_is_running", False),
-                "created_at": self._datetime_to_iso(
-                    getattr(trader, "_created_at", None)
-                ),
+                "created_at": self._datetime_to_iso(getattr(trader, "_created_at", None)),
                 "last_activity": self._datetime_to_iso(
-                    getattr(trader, "_started_at", None)
-                    or getattr(trader, "_created_at", None)
+                    getattr(trader, "_started_at", None) or getattr(trader, "_created_at", None)
                 ),
             }
 
@@ -89,17 +82,13 @@ class DataAdapters:
                         "profit_loss": metrics.profit_loss,
                         "max_drawdown": metrics.max_drawdown,
                         "current_positions": metrics.current_positions,
-                        "last_trade_time": self._datetime_to_iso(
-                            metrics.last_trade_time
-                        ),
+                        "last_trade_time": self._datetime_to_iso(metrics.last_trade_time),
                         "errors_count": metrics.errors_count,
                     }
                 else:
                     response["performance"] = {}
             except Exception as e:
-                logger.warning(
-                    f"Не удалось получить метрики производительности трейдера: {e}"
-                )
+                logger.warning(f"Не удалось получить метрики производительности трейдера: {e}")
                 response["performance"] = {}
 
             # Текущие позиции
@@ -119,17 +108,15 @@ class DataAdapters:
 
         except Exception as e:
             logger.error(f"Ошибка преобразования трейдера в response: {e}")
-            return {"error": f"Failed to convert trader: {str(e)}"}
+            return {"error": f"Failed to convert trader: {e!s}"}
 
-    def traders_list_to_response(self, traders: List) -> List[Dict[str, Any]]:
+    def traders_list_to_response(self, traders: list) -> list[dict[str, Any]]:
         """Преобразование списка трейдеров"""
-        return [
-            self.trader_to_response(trader) for trader in traders if trader is not None
-        ]
+        return [self.trader_to_response(trader) for trader in traders if trader is not None]
 
     # =================== POSITION ADAPTERS ===================
 
-    def position_to_response(self, position) -> Dict[str, Any]:
+    def position_to_response(self, position) -> dict[str, Any]:
         """
         Преобразование позиции в API response
 
@@ -147,43 +134,29 @@ class DataAdapters:
                 "symbol": getattr(position, "symbol", "unknown"),
                 "side": getattr(position, "side", "unknown"),
                 "size": self._decimal_to_float(getattr(position, "size", 0)),
-                "entry_price": self._decimal_to_float(
-                    getattr(position, "entry_price", 0)
-                ),
-                "mark_price": self._decimal_to_float(
-                    getattr(position, "mark_price", 0)
-                ),
-                "unrealized_pnl": self._decimal_to_float(
-                    getattr(position, "unrealized_pnl", 0)
-                ),
-                "realized_pnl": self._decimal_to_float(
-                    getattr(position, "realized_pnl", 0)
-                ),
+                "entry_price": self._decimal_to_float(getattr(position, "entry_price", 0)),
+                "mark_price": self._decimal_to_float(getattr(position, "mark_price", 0)),
+                "unrealized_pnl": self._decimal_to_float(getattr(position, "unrealized_pnl", 0)),
+                "realized_pnl": self._decimal_to_float(getattr(position, "realized_pnl", 0)),
                 "margin": self._decimal_to_float(getattr(position, "margin", 0)),
                 "leverage": self._decimal_to_float(getattr(position, "leverage", 1)),
-                "created_at": self._datetime_to_iso(
-                    getattr(position, "created_at", None)
-                ),
-                "updated_at": self._datetime_to_iso(
-                    getattr(position, "updated_at", None)
-                ),
+                "created_at": self._datetime_to_iso(getattr(position, "created_at", None)),
+                "updated_at": self._datetime_to_iso(getattr(position, "updated_at", None)),
             }
 
         except Exception as e:
             logger.error(f"Ошибка преобразования позиции в response: {e}")
-            return {"error": f"Failed to convert position: {str(e)}"}
+            return {"error": f"Failed to convert position: {e!s}"}
 
-    def positions_list_to_response(self, positions: List) -> List[Dict[str, Any]]:
+    def positions_list_to_response(self, positions: list) -> list[dict[str, Any]]:
         """Преобразование списка позиций"""
         return [
-            self.position_to_response(position)
-            for position in positions
-            if position is not None
+            self.position_to_response(position) for position in positions if position is not None
         ]
 
     # =================== ORDER ADAPTERS ===================
 
-    def order_to_response(self, order) -> Dict[str, Any]:
+    def order_to_response(self, order) -> dict[str, Any]:
         """
         Преобразование ордера в API response
 
@@ -205,15 +178,11 @@ class DataAdapters:
                 "order_type": getattr(order, "order_type", "unknown"),
                 "quantity": self._decimal_to_float(getattr(order, "quantity", 0)),
                 "price": self._decimal_to_float(getattr(order, "price", 0)),
-                "filled_quantity": self._decimal_to_float(
-                    getattr(order, "filled_quantity", 0)
-                ),
+                "filled_quantity": self._decimal_to_float(getattr(order, "filled_quantity", 0)),
                 "remaining_quantity": self._decimal_to_float(
                     getattr(order, "remaining_quantity", 0)
                 ),
-                "average_price": self._decimal_to_float(
-                    getattr(order, "average_price", 0)
-                ),
+                "average_price": self._decimal_to_float(getattr(order, "average_price", 0)),
                 "status": getattr(order, "status", "unknown"),
                 "time_in_force": getattr(order, "time_in_force", None),
                 "created_at": self._datetime_to_iso(getattr(order, "created_at", None)),
@@ -223,15 +192,15 @@ class DataAdapters:
 
         except Exception as e:
             logger.error(f"Ошибка преобразования ордера в response: {e}")
-            return {"error": f"Failed to convert order: {str(e)}"}
+            return {"error": f"Failed to convert order: {e!s}"}
 
-    def orders_list_to_response(self, orders: List) -> List[Dict[str, Any]]:
+    def orders_list_to_response(self, orders: list) -> list[dict[str, Any]]:
         """Преобразование списка ордеров"""
         return [self.order_to_response(order) for order in orders if order is not None]
 
     # =================== EXCHANGE ADAPTERS ===================
 
-    def exchange_to_response(self, exchange) -> Dict[str, Any]:
+    def exchange_to_response(self, exchange) -> dict[str, Any]:
         """
         Преобразование объекта биржи в API response
 
@@ -255,13 +224,9 @@ class DataAdapters:
                     if getattr(exchange, "is_connected", lambda: False)()
                     else "disconnected"
                 ),
-                "capabilities": self._capabilities_to_dict(
-                    getattr(exchange, "capabilities", None)
-                ),
+                "capabilities": self._capabilities_to_dict(getattr(exchange, "capabilities", None)),
                 "api_limits": getattr(exchange, "api_limits", {}),
-                "last_heartbeat": self._datetime_to_iso(
-                    getattr(exchange, "last_heartbeat", None)
-                ),
+                "last_heartbeat": self._datetime_to_iso(getattr(exchange, "last_heartbeat", None)),
                 "latency_ms": getattr(exchange, "latency_ms", None),
                 "error_count": getattr(exchange, "error_count", 0),
                 "success_rate": getattr(exchange, "success_rate", 100.0),
@@ -269,20 +234,16 @@ class DataAdapters:
 
         except Exception as e:
             logger.error(f"Ошибка преобразования биржи в response: {e}")
-            return {"error": f"Failed to convert exchange: {str(e)}"}
+            return {"error": f"Failed to convert exchange: {e!s}"}
 
-    def _capabilities_to_dict(self, capabilities) -> Dict[str, bool]:
+    def _capabilities_to_dict(self, capabilities) -> dict[str, bool]:
         """Преобразование capabilities в словарь"""
         if capabilities is None:
             return {}
 
         try:
             if hasattr(capabilities, "__dict__"):
-                return {
-                    k: v
-                    for k, v in capabilities.__dict__.items()
-                    if isinstance(v, bool)
-                }
+                return {k: v for k, v in capabilities.__dict__.items() if isinstance(v, bool)}
             elif isinstance(capabilities, dict):
                 return {k: v for k, v in capabilities.items() if isinstance(v, bool)}
             else:
@@ -293,7 +254,7 @@ class DataAdapters:
 
     # =================== METRICS ADAPTERS ===================
 
-    def metrics_to_response(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+    def metrics_to_response(self, metrics: dict[str, Any]) -> dict[str, Any]:
         """
         Преобразование метрик в API response
 
@@ -310,9 +271,7 @@ class DataAdapters:
             cleaned_metrics = {}
 
             for key, value in metrics.items():
-                if isinstance(value, (int, float)):
-                    cleaned_metrics[key] = float(value)
-                elif isinstance(value, Decimal):
+                if isinstance(value, (int, float)) or isinstance(value, Decimal):
                     cleaned_metrics[key] = float(value)
                 elif isinstance(value, datetime):
                     cleaned_metrics[key] = value.isoformat()
@@ -321,9 +280,7 @@ class DataAdapters:
                 elif isinstance(value, dict):
                     cleaned_metrics[key] = self.metrics_to_response(value)
                 elif isinstance(value, list):
-                    cleaned_metrics[key] = [
-                        self._clean_metric_value(item) for item in value
-                    ]
+                    cleaned_metrics[key] = [self._clean_metric_value(item) for item in value]
                 else:
                     cleaned_metrics[key] = str(value)
 
@@ -331,9 +288,9 @@ class DataAdapters:
 
         except Exception as e:
             logger.error(f"Ошибка преобразования метрик в response: {e}")
-            return {"error": f"Failed to convert metrics: {str(e)}"}
+            return {"error": f"Failed to convert metrics: {e!s}"}
 
-    def _clean_performance_metrics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+    def _clean_performance_metrics(self, metrics: dict[str, Any]) -> dict[str, Any]:
         """Очистка метрик производительности"""
         if not metrics:
             return {}
@@ -341,27 +298,17 @@ class DataAdapters:
         try:
             return {
                 "total_pnl": self._decimal_to_float(metrics.get("total_pnl", 0.0)),
-                "unrealized_pnl": self._decimal_to_float(
-                    metrics.get("unrealized_pnl", 0.0)
-                ),
-                "realized_pnl": self._decimal_to_float(
-                    metrics.get("realized_pnl", 0.0)
-                ),
+                "unrealized_pnl": self._decimal_to_float(metrics.get("unrealized_pnl", 0.0)),
+                "realized_pnl": self._decimal_to_float(metrics.get("realized_pnl", 0.0)),
                 "total_trades": int(metrics.get("total_trades", 0)),
                 "winning_trades": int(metrics.get("winning_trades", 0)),
                 "losing_trades": int(metrics.get("losing_trades", 0)),
                 "win_rate": float(metrics.get("win_rate", 0.0)),
                 "average_win": self._decimal_to_float(metrics.get("average_win", 0.0)),
-                "average_loss": self._decimal_to_float(
-                    metrics.get("average_loss", 0.0)
-                ),
+                "average_loss": self._decimal_to_float(metrics.get("average_loss", 0.0)),
                 "largest_win": self._decimal_to_float(metrics.get("largest_win", 0.0)),
-                "largest_loss": self._decimal_to_float(
-                    metrics.get("largest_loss", 0.0)
-                ),
-                "max_drawdown": self._decimal_to_float(
-                    metrics.get("max_drawdown", 0.0)
-                ),
+                "largest_loss": self._decimal_to_float(metrics.get("largest_loss", 0.0)),
+                "max_drawdown": self._decimal_to_float(metrics.get("max_drawdown", 0.0)),
                 "sharpe_ratio": float(metrics.get("sharpe_ratio", 0.0)),
                 "profit_factor": float(metrics.get("profit_factor", 0.0)),
                 "last_updated": self._datetime_to_iso(metrics.get("last_updated")),
@@ -372,7 +319,7 @@ class DataAdapters:
 
     # =================== STRATEGY ADAPTERS ===================
 
-    def strategy_to_response(self, strategy) -> Dict[str, Any]:
+    def strategy_to_response(self, strategy) -> dict[str, Any]:
         """
         Преобразование стратегии в API response
 
@@ -403,9 +350,9 @@ class DataAdapters:
 
         except Exception as e:
             logger.error(f"Ошибка преобразования стратегии в response: {e}")
-            return {"error": f"Failed to convert strategy: {str(e)}"}
+            return {"error": f"Failed to convert strategy: {e!s}"}
 
-    def _get_strategy_performance(self, strategy) -> Optional[Dict[str, float]]:
+    def _get_strategy_performance(self, strategy) -> dict[str, float] | None:
         """Получение метрик производительности стратегии"""
         try:
             if hasattr(strategy, "get_performance_metrics"):
@@ -413,14 +360,12 @@ class DataAdapters:
                 return self._clean_performance_metrics(metrics)
             return None
         except Exception as e:
-            logger.warning(
-                f"Не удалось получить метрики производительности стратегии: {e}"
-            )
+            logger.warning(f"Не удалось получить метрики производительности стратегии: {e}")
             return None
 
     # =================== CONFIG ADAPTERS ===================
 
-    def config_to_response(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def config_to_response(self, config: dict[str, Any]) -> dict[str, Any]:
         """
         Преобразование конфигурации в API response
 
@@ -442,9 +387,9 @@ class DataAdapters:
 
         except Exception as e:
             logger.error(f"Ошибка преобразования конфигурации в response: {e}")
-            return {"error": f"Failed to convert config: {str(e)}"}
+            return {"error": f"Failed to convert config: {e!s}"}
 
-    def _remove_sensitive_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def _remove_sensitive_data(self, config: dict[str, Any]) -> dict[str, Any]:
         """Удаление чувствительных данных из конфигурации"""
         sensitive_keys = {
             "api_key",
@@ -475,7 +420,7 @@ class DataAdapters:
 
         return clean_dict(config)
 
-    def _clean_config_values(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def _clean_config_values(self, config: dict[str, Any]) -> dict[str, Any]:
         """Очистка значений конфигурации"""
 
         def clean_value(value):
@@ -494,24 +439,24 @@ class DataAdapters:
 
     # =================== UTILITY METHODS ===================
 
-    def _decimal_to_float(self, value: Union[Decimal, float, int, str, None]) -> float:
+    def _decimal_to_float(self, value: Decimal | float | int | str | None) -> float:
         """Преобразование Decimal в float"""
         if value is None:
             return 0.0
 
         try:
-            if isinstance(value, Decimal):
-                return float(value)
-            elif isinstance(value, (int, float)):
-                return float(value)
-            elif isinstance(value, str):
+            if (
+                isinstance(value, Decimal)
+                or isinstance(value, (int, float))
+                or isinstance(value, str)
+            ):
                 return float(value)
             else:
                 return 0.0
         except (ValueError, TypeError):
             return 0.0
 
-    def _datetime_to_iso(self, dt: Optional[datetime]) -> Optional[str]:
+    def _datetime_to_iso(self, dt: datetime | None) -> str | None:
         """Преобразование datetime в ISO строку"""
         if dt is None:
             return None
@@ -539,7 +484,7 @@ class DataAdapters:
 
     # =================== BATCH OPERATIONS ===================
 
-    def batch_convert(self, items: List, converter_method: str) -> List[Dict[str, Any]]:
+    def batch_convert(self, items: list, converter_method: str) -> list[dict[str, Any]]:
         """
         Пакетное преобразование списка объектов
 
@@ -565,7 +510,7 @@ class DataAdapters:
 
     # =================== VALIDATION ===================
 
-    def validate_response_data(self, data: Dict[str, Any]) -> bool:
+    def validate_response_data(self, data: dict[str, Any]) -> bool:
         """Валидация данных response"""
         try:
             # Проверяем что нет None значений в обязательных полях

@@ -11,7 +11,7 @@ Comprehensive Exception System для BOT_Trading v3.0
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class ErrorSeverity(Enum):
@@ -62,11 +62,11 @@ class BaseTradingError(Exception):
         message: str,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
         category: ErrorCategory = ErrorCategory.SYSTEM,
-        context: Optional[Dict[str, Any]] = None,
-        original_exception: Optional[Exception] = None,
-        component: Optional[str] = None,
-        trader_id: Optional[str] = None,
-        error_code: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        original_exception: Exception | None = None,
+        component: str | None = None,
+        trader_id: str | None = None,
+        error_code: str | None = None,
     ):
         super().__init__(message)
         self.message = message
@@ -87,7 +87,7 @@ class BaseTradingError(Exception):
                 "args": original_exception.args,
             }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование исключения в словарь для логирования"""
         return {
             "error_type": type(self).__name__,
@@ -122,7 +122,7 @@ class BaseTradingError(Exception):
 class ConfigurationError(BaseTradingError):
     """Базовая ошибка конфигурации"""
 
-    def __init__(self, message: str, config_path: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, config_path: str | None = None, **kwargs):
         super().__init__(
             message,
             severity=ErrorSeverity.HIGH,
@@ -136,7 +136,7 @@ class ConfigurationError(BaseTradingError):
 class DataLoadError(BaseTradingError):
     """Ошибки загрузки данных"""
 
-    def __init__(self, message: str, symbol: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, symbol: str | None = None, **kwargs):
         super().__init__(
             message,
             severity=ErrorSeverity.MEDIUM,
@@ -151,9 +151,7 @@ class ConfigValidationError(ConfigurationError):
     """Ошибка валидации конфигурации"""
 
     def __init__(self, field: str, expected: str, actual: Any, **kwargs):
-        message = (
-            f"Validation failed for field '{field}': expected {expected}, got {actual}"
-        )
+        message = f"Validation failed for field '{field}': expected {expected}, got {actual}"
         super().__init__(message, **kwargs)
         self.context.update({"field": field, "expected": expected, "actual": actual})
 
@@ -187,7 +185,7 @@ class TraderInitializationError(TraderError):
         self,
         message: str,
         trader_id: str,
-        failed_component: Optional[str] = None,
+        failed_component: str | None = None,
         **kwargs,
     ):
         super().__init__(message, trader_id, severity=ErrorSeverity.HIGH, **kwargs)
@@ -198,9 +196,7 @@ class TraderInitializationError(TraderError):
 class TraderConfigurationError(TraderError):
     """Ошибка конфигурации трейдера"""
 
-    def __init__(
-        self, message: str, trader_id: str, config_field: Optional[str] = None, **kwargs
-    ):
+    def __init__(self, message: str, trader_id: str, config_field: str | None = None, **kwargs):
         super().__init__(message, trader_id, **kwargs)
         if config_field:
             self.context["config_field"] = config_field
@@ -222,9 +218,7 @@ class TraderFactoryError(BaseTradingError):
 class TraderManagerError(BaseTradingError):
     """Ошибка менеджера трейдеров"""
 
-    def __init__(
-        self, message: str, affected_traders: Optional[List[str]] = None, **kwargs
-    ):
+    def __init__(self, message: str, affected_traders: list[str] | None = None, **kwargs):
         super().__init__(
             message,
             severity=ErrorSeverity.HIGH,
@@ -288,7 +282,7 @@ class UnsupportedExchangeError(ExchangeError):
     def __init__(
         self,
         exchange_name: str,
-        supported_exchanges: Optional[List[str]] = None,
+        supported_exchanges: list[str] | None = None,
         **kwargs,
     ):
         message = f"Unsupported exchange: {exchange_name}"
@@ -303,7 +297,7 @@ class UnsupportedExchangeError(ExchangeError):
 class ExchangeConnectionError(ExchangeError):
     """Ошибка подключения к бирже"""
 
-    def __init__(self, exchange_name: str, endpoint: Optional[str] = None, **kwargs):
+    def __init__(self, exchange_name: str, endpoint: str | None = None, **kwargs):
         message = f"Connection failed to {exchange_name}"
         if endpoint:
             message += f" endpoint: {endpoint}"
@@ -333,8 +327,8 @@ class ExchangeAPIError(ExchangeError):
         self,
         exchange_name: str,
         api_method: str,
-        status_code: Optional[int] = None,
-        api_message: Optional[str] = None,
+        status_code: int | None = None,
+        api_message: str | None = None,
         **kwargs,
     ):
         message = f"API error in {exchange_name}.{api_method}"
@@ -356,7 +350,7 @@ class ExchangeAPIError(ExchangeError):
 class ExchangeRateLimitError(ExchangeError):
     """Превышен rate limit биржи"""
 
-    def __init__(self, exchange_name: str, retry_after: Optional[int] = None, **kwargs):
+    def __init__(self, exchange_name: str, retry_after: int | None = None, **kwargs):
         message = f"Rate limit exceeded for {exchange_name}"
         if retry_after:
             message += f", retry after {retry_after} seconds"
@@ -395,7 +389,7 @@ class LeverageError(ExchangeError):
         self,
         exchange_name: str,
         requested_leverage: int,
-        max_leverage: Optional[int] = None,
+        max_leverage: int | None = None,
         **kwargs,
     ):
         message = f"Leverage error on {exchange_name}: requested {requested_leverage}x"
@@ -421,7 +415,7 @@ class StrategyError(BaseTradingError):
         self,
         message: str,
         strategy_name: str,
-        trader_id: Optional[str] = None,
+        trader_id: str | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -442,7 +436,7 @@ class UnsupportedStrategyError(StrategyError):
     def __init__(
         self,
         strategy_name: str,
-        supported_strategies: Optional[List[str]] = None,
+        supported_strategies: list[str] | None = None,
         **kwargs,
     ):
         message = f"Unsupported strategy: {strategy_name}"
@@ -484,7 +478,7 @@ class SignalGenerationError(StrategyError):
 class MLError(BaseTradingError):
     """Базовая ошибка ML системы"""
 
-    def __init__(self, message: str, model_name: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, model_name: str | None = None, **kwargs):
         super().__init__(
             message,
             severity=ErrorSeverity.MEDIUM,
@@ -512,7 +506,7 @@ class ModelLoadError(MLError):
 class PredictionError(MLError):
     """Ошибка предсказания ML модели"""
 
-    def __init__(self, model_name: str, features_count: Optional[int] = None, **kwargs):
+    def __init__(self, model_name: str, features_count: int | None = None, **kwargs):
         message = f"Prediction failed for model '{model_name}'"
         if features_count is not None:
             message += f" with {features_count} features"
@@ -539,7 +533,7 @@ class FeatureExtractionError(MLError):
 class DatabaseError(BaseTradingError):
     """Базовая ошибка базы данных"""
 
-    def __init__(self, message: str, operation: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, operation: str | None = None, **kwargs):
         super().__init__(
             message,
             severity=ErrorSeverity.HIGH,
@@ -581,7 +575,7 @@ class RepositoryError(DatabaseError):
 class NetworkError(BaseTradingError):
     """Базовая сетевая ошибка"""
 
-    def __init__(self, message: str, endpoint: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, endpoint: str | None = None, **kwargs):
         super().__init__(
             message,
             severity=ErrorSeverity.MEDIUM,
@@ -607,7 +601,7 @@ class ConnectionTimeoutError(NetworkError):
 class WebSocketError(NetworkError):
     """Ошибка WebSocket соединения"""
 
-    def __init__(self, message: str, ws_url: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, ws_url: str | None = None, **kwargs):
         super().__init__(message, **kwargs)
         if ws_url:
             self.context["ws_url"] = ws_url
@@ -637,12 +631,10 @@ class RiskLimitExceededError(RiskManagementError):
         limit_type: str,
         current_value: float,
         max_allowed: float,
-        trader_id: Optional[str] = None,
+        trader_id: str | None = None,
         **kwargs,
     ):
-        message = (
-            f"Risk limit exceeded: {limit_type} = {current_value}, max = {max_allowed}"
-        )
+        message = f"Risk limit exceeded: {limit_type} = {current_value}, max = {max_allowed}"
         super().__init__(message, trader_id=trader_id, **kwargs)
         self.context.update(
             {
@@ -656,12 +648,8 @@ class RiskLimitExceededError(RiskManagementError):
 class InvalidPositionSizeError(RiskManagementError):
     """Некорректный размер позиции"""
 
-    def __init__(
-        self, position_size: float, min_size: float, max_size: float, **kwargs
-    ):
-        message = (
-            f"Invalid position size: {position_size} (allowed: {min_size} - {max_size})"
-        )
+    def __init__(self, position_size: float, min_size: float, max_size: float, **kwargs):
+        message = f"Invalid position size: {position_size} (allowed: {min_size} - {max_size})"
         super().__init__(message, **kwargs)
         self.context.update(
             {"position_size": position_size, "min_size": min_size, "max_size": max_size}
@@ -674,9 +662,7 @@ class InvalidPositionSizeError(RiskManagementError):
 class ValidationError(BaseTradingError):
     """Базовая ошибка валидации"""
 
-    def __init__(
-        self, message: str, field: Optional[str] = None, value: Any = None, **kwargs
-    ):
+    def __init__(self, message: str, field: str | None = None, value: Any = None, **kwargs):
         super().__init__(
             message,
             severity=ErrorSeverity.MEDIUM,
@@ -692,9 +678,7 @@ class ValidationError(BaseTradingError):
 class OrderValidationError(ValidationError):
     """Ошибка валидации ордера"""
 
-    def __init__(
-        self, reason: str, order_data: Optional[Dict[str, Any]] = None, **kwargs
-    ):
+    def __init__(self, reason: str, order_data: dict[str, Any] | None = None, **kwargs):
         super().__init__(f"Order validation failed: {reason}", **kwargs)
         if order_data:
             self.context["order_data"] = order_data
@@ -737,10 +721,10 @@ class ComponentInitializationError(SystemError):
 class ResourceExhaustedError(SystemError):
     """Исчерпание системных ресурсов"""
 
-    def __init__(
-        self, resource_type: str, current_usage: float, limit: float, **kwargs
-    ):
-        message = f"Resource exhausted: {resource_type} usage {current_usage:.1f}% (limit: {limit:.1f}%)"
+    def __init__(self, resource_type: str, current_usage: float, limit: float, **kwargs):
+        message = (
+            f"Resource exhausted: {resource_type} usage {current_usage:.1f}% (limit: {limit:.1f}%)"
+        )
         super().__init__(message, severity=ErrorSeverity.CRITICAL, **kwargs)
         self.context.update(
             {
@@ -754,7 +738,7 @@ class ResourceExhaustedError(SystemError):
 # =================== UTILITY FUNCTIONS ===================
 
 
-def create_error_context(**kwargs) -> Dict[str, Any]:
+def create_error_context(**kwargs) -> dict[str, Any]:
     """Создание контекста ошибки с дополнительной информацией"""
     context = {}
 
@@ -781,7 +765,7 @@ def log_exception(logger, exception: BaseTradingError) -> None:
 
 
 def handle_and_log_error(
-    logger, error: Exception, context: Optional[Dict[str, Any]] = None
+    logger, error: Exception, context: dict[str, Any] | None = None
 ) -> BaseTradingError:
     """
     Обработка и логирование произвольной ошибки
@@ -805,7 +789,7 @@ def handle_and_log_error(
 class SystemInitializationError(BaseTradingError):
     """Ошибка инициализации системы"""
 
-    def __init__(self, message: str, component: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, component: str | None = None, **kwargs):
         super().__init__(
             message=message,
             component=component or "system",
@@ -818,7 +802,7 @@ class SystemInitializationError(BaseTradingError):
 class SystemShutdownError(BaseTradingError):
     """Ошибка при остановке системы"""
 
-    def __init__(self, message: str, component: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, component: str | None = None, **kwargs):
         super().__init__(
             message=message,
             component=component or "system",
@@ -831,7 +815,7 @@ class SystemShutdownError(BaseTradingError):
 class HealthCheckError(BaseTradingError):
     """Ошибка проверки здоровья системы"""
 
-    def __init__(self, message: str, component: Optional[str] = None, **kwargs):
+    def __init__(self, message: str, component: str | None = None, **kwargs):
         super().__init__(
             message=message,
             component=component or "health_checker",

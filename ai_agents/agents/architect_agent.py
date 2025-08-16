@@ -8,7 +8,7 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import networkx as nx
 
@@ -21,11 +21,11 @@ class ModuleInfo:
     """Информация о модуле проекта"""
 
     path: Path
-    imports: List[str] = field(default_factory=list)
-    exports: List[str] = field(default_factory=list)
-    classes: List[str] = field(default_factory=list)
-    functions: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
+    imports: list[str] = field(default_factory=list)
+    exports: list[str] = field(default_factory=list)
+    classes: list[str] = field(default_factory=list)
+    functions: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     complexity: int = 0
     lines_of_code: int = 0
     docstring_coverage: float = 0.0
@@ -35,22 +35,22 @@ class ModuleInfo:
 class ArchitectureAnalysis:
     """Результат анализа архитектуры"""
 
-    modules: Dict[str, ModuleInfo]
+    modules: dict[str, ModuleInfo]
     dependency_graph: nx.DiGraph
-    circular_dependencies: List[List[str]]
-    code_smells: List[Dict[str, Any]]
-    metrics: Dict[str, Any]
-    recommendations: List[str]
+    circular_dependencies: list[list[str]]
+    code_smells: list[dict[str, Any]]
+    metrics: dict[str, Any]
+    recommendations: list[str]
 
 
 class ArchitectAgent:
     """Агент для анализа и улучшения архитектуры кода"""
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or Path.cwd()
         self.sdk = ClaudeCodeSDK()
         self.mcp_manager = get_mcp_manager()
-        self.modules: Dict[str, ModuleInfo] = {}
+        self.modules: dict[str, ModuleInfo] = {}
         self.dependency_graph = nx.DiGraph()
 
     async def analyze_architecture(self) -> ArchitectureAnalysis:
@@ -69,9 +69,7 @@ class ArchitectAgent:
         metrics = self._calculate_metrics()
 
         # Генерируем рекомендации через Claude
-        recommendations = await self._generate_recommendations(
-            circular_deps, code_smells, metrics
-        )
+        recommendations = await self._generate_recommendations(circular_deps, code_smells, metrics)
 
         return ArchitectureAnalysis(
             modules=self.modules,
@@ -90,10 +88,7 @@ class ArchitectAgent:
         python_files = [
             f
             for f in python_files
-            if not any(
-                part in f.parts
-                for part in ["venv", "__pycache__", ".git", "node_modules"]
-            )
+            if not any(part in f.parts for part in ["venv", "__pycache__", ".git", "node_modules"])
         ]
 
         for file_path in python_files:
@@ -187,7 +182,7 @@ class ArchitectAgent:
             return import_name[1:]
         return import_name.replace(".", "/")
 
-    def _find_circular_dependencies(self) -> List[List[str]]:
+    def _find_circular_dependencies(self) -> list[list[str]]:
         """Найти циклические зависимости"""
         try:
             cycles = list(nx.simple_cycles(self.dependency_graph))
@@ -195,7 +190,7 @@ class ArchitectAgent:
         except:
             return []
 
-    async def _detect_code_smells(self) -> List[Dict[str, Any]]:
+    async def _detect_code_smells(self) -> list[dict[str, Any]]:
         """Обнаружить code smells"""
         code_smells = []
 
@@ -235,7 +230,7 @@ class ArchitectAgent:
 
         return code_smells
 
-    def _calculate_metrics(self) -> Dict[str, Any]:
+    def _calculate_metrics(self) -> dict[str, Any]:
         """Вычислить метрики проекта"""
         total_loc = sum(m.lines_of_code for m in self.modules.values())
         total_modules = len(self.modules)
@@ -264,10 +259,10 @@ class ArchitectAgent:
 
     async def _generate_recommendations(
         self,
-        circular_deps: List[List[str]],
-        code_smells: List[Dict[str, Any]],
-        metrics: Dict[str, Any],
-    ) -> List[str]:
+        circular_deps: list[list[str]],
+        code_smells: list[dict[str, Any]],
+        metrics: dict[str, Any],
+    ) -> list[str]:
         """Генерировать рекомендации через Claude"""
         options = ClaudeCodeOptions(
             system_prompt="""Вы архитектор программного обеспечения.
@@ -333,7 +328,7 @@ class ArchitectAgent:
 
         return "\n".join(mermaid)
 
-    async def suggest_refactoring(self, module_path: str) -> Dict[str, Any]:
+    async def suggest_refactoring(self, module_path: str) -> dict[str, Any]:
         """Предложить рефакторинг для конкретного модуля"""
         options = ClaudeCodeOptions(
             system_prompt="""Вы эксперт по рефакторингу.
@@ -359,7 +354,7 @@ class ArchitectAgent:
 
 # Функции для быстрого доступа
 async def analyze_project_architecture(
-    project_root: Optional[str] = None,
+    project_root: str | None = None,
 ) -> ArchitectureAnalysis:
     """Быстрый анализ архитектуры проекта"""
     root = Path(project_root) if project_root else Path.cwd()

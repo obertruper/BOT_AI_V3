@@ -38,9 +38,7 @@ async def test_data_updates():
         f"   • update_interval: {data_config.get('update_interval', 60)} сек ({data_config.get('update_interval', 60) / 60:.1f} мин)"
     )
     print(f"   • initial_load_days: {data_config.get('initial_load_days', 7)} дней")
-    print(
-        f"   • min_candles_for_ml: {data_config.get('min_candles_for_ml', 96)} свечей"
-    )
+    print(f"   • min_candles_for_ml: {data_config.get('min_candles_for_ml', 96)} свечей")
     print(f"   • check_on_startup: {data_config.get('check_on_startup', True)}")
 
     # Проверяем данные в БД
@@ -125,9 +123,7 @@ async def test_data_updates():
         print(
             f"   • Интервал обновления: {service.update_interval} сек ({service.update_interval / 60:.1f} мин)"
         )
-        print(
-            f"   • Автообновление: {'Включено' if service.auto_update else 'Отключено'}"
-        )
+        print(f"   • Автообновление: {'Включено' if service.auto_update else 'Отключено'}")
 
     except Exception as e:
         print(f"   ❌ Ошибка инициализации DataUpdateService: {e}")

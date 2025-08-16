@@ -96,7 +96,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error starting bot: {e}")
-            await update.message.reply_text(f"❌ Ошибка запуска: {str(e)}")
+            await update.message.reply_text(f"❌ Ошибка запуска: {e!s}")
 
     async def cmd_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /stop."""
@@ -112,7 +112,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error stopping bot: {e}")
-            await update.message.reply_text(f"❌ Ошибка остановки: {str(e)}")
+            await update.message.reply_text(f"❌ Ошибка остановки: {e!s}")
 
     async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /status."""
@@ -171,7 +171,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error getting stats: {e}")
-            await update.message.reply_text(f"❌ Ошибка получения статистики: {str(e)}")
+            await update.message.reply_text(f"❌ Ошибка получения статистики: {e!s}")
 
     async def cmd_sessionpnl(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /sessionpnl для совместимости с v2."""
@@ -182,9 +182,7 @@ class TelegramBotV3:
 
                 result = await db.execute(
                     select(func.count(Trade.id), func.sum(Trade.pnl)).where(
-                        and_(
-                            Trade.status == "closed", Trade.created_at >= session_start
-                        )
+                        and_(Trade.status == "closed", Trade.created_at >= session_start)
                     )
                 )
                 count, pnl = result.fetchone()
@@ -197,7 +195,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error getting session PnL: {e}")
-            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+            await update.message.reply_text(f"❌ Ошибка: {e!s}")
 
     async def cmd_traders(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает список трейдеров."""
@@ -236,9 +234,7 @@ class TelegramBotV3:
 
         await update.message.reply_text(msg)
 
-    async def cmd_update_config(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def cmd_update_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет параметры SL/TP из конфигурации (совместимость с v2)."""
         try:
             # Перезагружаем конфигурацию
@@ -255,7 +251,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error updating config: {e}")
-            await update.message.reply_text(f"❌ Ошибка обновления: {str(e)}")
+            await update.message.reply_text(f"❌ Ошибка обновления: {e!s}")
 
     async def cmd_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Главное меню с кнопками."""
@@ -273,9 +269,7 @@ class TelegramBotV3:
                 InlineKeyboardButton("🔄 Обновить SL/TP", callback_data="refresh_once"),
             ],
             [
-                InlineKeyboardButton(
-                    "📈 Последние сделки", callback_data="recent_trades"
-                ),
+                InlineKeyboardButton("📈 Последние сделки", callback_data="recent_trades"),
                 InlineKeyboardButton("📊 Мониторинг", callback_data="monitor_trades"),
             ],
         ]
@@ -309,9 +303,7 @@ class TelegramBotV3:
         """
         await update.message.reply_text(msg)
 
-    async def callback_handler(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик callback кнопок."""
         query = update.callback_query
         await query.answer()
@@ -367,7 +359,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error getting signals: {e}")
-            await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+            await query.edit_message_text(f"❌ Ошибка: {e!s}")
 
     async def _handle_balance_callback(self, query):
         """Показывает баланс."""
@@ -404,7 +396,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error getting balance: {e}")
-            await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+            await query.edit_message_text(f"❌ Ошибка: {e!s}")
 
     async def _handle_refresh_config_callback(self, query):
         """Обновляет конфигурацию (совместимость с v2)."""
@@ -419,7 +411,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error refreshing config: {e}")
-            await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+            await query.edit_message_text(f"❌ Ошибка: {e!s}")
 
     async def _handle_recent_trades_callback(self, query):
         """Показывает последние сделки."""
@@ -443,25 +435,21 @@ class TelegramBotV3:
                     msg += f"{emoji} {trade.symbol} {trade.side.upper()}\n"
                     msg += f"  Объем: {trade.quantity}\n"
                     msg += f"  Вход: {trade.entry_price} → Выход: {trade.exit_price}\n"
-                    msg += (
-                        f"  PnL: {trade.pnl:.2f} USDT ({trade.pnl_percentage:.2f}%)\n"
-                    )
+                    msg += f"  PnL: {trade.pnl:.2f} USDT ({trade.pnl_percentage:.2f}%)\n"
                     msg += f"  {trade.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
 
                 await query.edit_message_text(msg)
 
         except Exception as e:
             logger.error(f"Error getting trades: {e}")
-            await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+            await query.edit_message_text(f"❌ Ошибка: {e!s}")
 
     async def _handle_monitor_trades_callback(self, query):
         """Мониторинг открытых позиций."""
         try:
             async with get_async_db() as db:
                 result = await db.execute(
-                    select(Trade)
-                    .where(Trade.status == "open")
-                    .order_by(Trade.created_at.desc())
+                    select(Trade).where(Trade.status == "open").order_by(Trade.created_at.desc())
                 )
                 open_trades = result.scalars().all()
 
@@ -486,7 +474,7 @@ class TelegramBotV3:
 
         except Exception as e:
             logger.error(f"Error monitoring trades: {e}")
-            await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+            await query.edit_message_text(f"❌ Ошибка: {e!s}")
 
     async def _handle_traders_callback(self, query):
         """Обработчик кнопки трейдеров."""
@@ -507,9 +495,9 @@ class TelegramBotV3:
     async def _calculate_win_rate(self, db, trader_id: str) -> float:
         """Рассчитывает Win Rate для трейдера."""
         result = await db.execute(
-            select(
-                func.count(Trade.id).filter(Trade.pnl > 0), func.count(Trade.id)
-            ).where(and_(Trade.trader_id == trader_id, Trade.status == "closed"))
+            select(func.count(Trade.id).filter(Trade.pnl > 0), func.count(Trade.id)).where(
+                and_(Trade.trader_id == trader_id, Trade.status == "closed")
+            )
         )
         wins, total = result.fetchone()
 
@@ -556,9 +544,7 @@ class TelegramBotV3:
         else:  # closed
             msg += f"Вход: {trade.entry_price} → Выход: {trade.exit_price}\n"
             pnl_emoji = "💰" if trade.pnl > 0 else "💸"
-            msg += (
-                f"{pnl_emoji} PnL: {trade.pnl:.2f} USDT ({trade.pnl_percentage:.2f}%)\n"
-            )
+            msg += f"{pnl_emoji} PnL: {trade.pnl:.2f} USDT ({trade.pnl_percentage:.2f}%)\n"
 
         await self.send_notification(msg, parse_mode="HTML")
 
@@ -593,9 +579,7 @@ class TelegramBotV3:
         error_threshold = self.config.get_value("telegram.error_threshold", 10)
 
         if recent_errors >= error_threshold:
-            logger.critical(
-                f"Error threshold reached: {recent_errors} errors in last hour"
-            )
+            logger.critical(f"Error threshold reached: {recent_errors} errors in last hour")
             # Здесь можно добавить автоматические действия
 
     async def run(self):

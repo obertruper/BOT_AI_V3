@@ -103,9 +103,7 @@ async def check_positions():
                         logger.info(f"  - Тип: {order.order_type}")
                         logger.info(f"  - Символ: {order.symbol}")
                         logger.info(f"  - Сторона: {order.side}")
-                        logger.info(
-                            f"  - Триггер цена: {getattr(order, 'trigger_price', 'N/A')}"
-                        )
+                        logger.info(f"  - Триггер цена: {getattr(order, 'trigger_price', 'N/A')}")
                         logger.info(f"  - Количество: {order.quantity}")
 
                 logger.info(f"\n📈 Итого SL/TP ордеров: {sl_tp_orders}")

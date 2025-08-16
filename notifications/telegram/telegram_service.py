@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Telegram сервис для BOT Trading v3
 Адаптированная версия из v2 для асинхронной архитектуры
@@ -7,7 +6,7 @@ Telegram сервис для BOT Trading v3
 
 import asyncio
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -137,7 +136,7 @@ class TelegramNotificationService:
         except Exception as e:
             logger.error(f"Error sending Telegram notification: {e}")
 
-    async def send_trade_notification(self, trade_data: Dict[str, Any]):
+    async def send_trade_notification(self, trade_data: dict[str, Any]):
         """Отправляет уведомление о сделке"""
         message = f"""
 🔔 <b>New Trade Opened</b>
@@ -213,7 +212,7 @@ Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
             message = f"""
 <b>System Status</b>
 
-🟢 Status: {status["system"]["is_running"] and "Running" or "Stopped"}
+🟢 Status: {(status["system"]["is_running"] and "Running") or "Stopped"}
 📊 Version: {status["system"]["version"]}
 ⏱️ Uptime: {status["system"]["uptime_seconds"] or 0:.0f}s
 
@@ -319,9 +318,7 @@ Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
             parse_mode="HTML",
         )
 
-    async def callback_handler(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик callback запросов от inline кнопок"""
         query = update.callback_query
         await query.answer()

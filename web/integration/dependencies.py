@@ -12,7 +12,7 @@ Dependency Injection для Web API
 """
 
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 
 # Условные импорты для разработки
 try:
@@ -65,24 +65,24 @@ else:
     logger = logging.getLogger("web_dependencies")
 
 # Глобальные переменные для хранения компонентов системы
-_orchestrator: Optional[SystemOrchestrator] = None
-_trader_manager: Optional[TraderManager] = None
-_exchange_factory: Optional[ExchangeFactory] = None
-_exchange_registry: Optional[ExchangeRegistry] = None
-_config_manager: Optional[ConfigManager] = None
-_metrics_collector: Optional[MetricsCollector] = None
-_health_checker: Optional[HealthChecker] = None
+_orchestrator: SystemOrchestrator | None = None
+_trader_manager: TraderManager | None = None
+_exchange_factory: ExchangeFactory | None = None
+_exchange_registry: ExchangeRegistry | None = None
+_config_manager: ConfigManager | None = None
+_metrics_collector: MetricsCollector | None = None
+_health_checker: HealthChecker | None = None
 
 # Дополнительные сервисы
-_user_manager: Optional[Any] = None
-_session_manager: Optional[Any] = None
-_stats_service: Optional[Any] = None
-_alerts_service: Optional[Any] = None
-_logs_service: Optional[Any] = None
-_strategy_registry: Optional[Any] = None
-_strategy_manager: Optional[Any] = None
-_backtest_engine: Optional[Any] = None
-_performance_service: Optional[Any] = None
+_user_manager: Any | None = None
+_session_manager: Any | None = None
+_stats_service: Any | None = None
+_alerts_service: Any | None = None
+_logs_service: Any | None = None
+_strategy_registry: Any | None = None
+_strategy_manager: Any | None = None
+_backtest_engine: Any | None = None
+_performance_service: Any | None = None
 
 
 class DependencyContainer:
@@ -229,7 +229,7 @@ def get_config_manager_dependency() -> ConfigManager:
     return _config_manager
 
 
-def get_metrics_collector_dependency() -> Optional[MetricsCollector]:
+def get_metrics_collector_dependency() -> MetricsCollector | None:
     """Получить metrics_collector"""
     return _metrics_collector
 

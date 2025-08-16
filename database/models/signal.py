@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 
 from sqlalchemy import JSON, DateTime, Enum, Float, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,21 +23,17 @@ class Signal(BaseModel):
     # Основные поля
     symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     exchange: Mapped[str] = mapped_column(String(50), nullable=False)
-    signal_type: Mapped[SignalType] = mapped_column(
-        Enum(SignalType), nullable=False, index=True
-    )
+    signal_type: Mapped[SignalType] = mapped_column(Enum(SignalType), nullable=False, index=True)
 
     # Параметры сигнала
-    strength: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    strength: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Предлагаемые уровни
-    suggested_price: Mapped[Optional[Decimal]] = mapped_column(Float, nullable=True)
-    suggested_stop_loss: Mapped[Optional[Decimal]] = mapped_column(Float, nullable=True)
-    suggested_take_profit: Mapped[Optional[Decimal]] = mapped_column(
-        Float, nullable=True
-    )
-    suggested_quantity: Mapped[Optional[Decimal]] = mapped_column(Float, nullable=True)
+    suggested_price: Mapped[Decimal | None] = mapped_column(Float, nullable=True)
+    suggested_stop_loss: Mapped[Decimal | None] = mapped_column(Float, nullable=True)
+    suggested_take_profit: Mapped[Decimal | None] = mapped_column(Float, nullable=True)
+    suggested_quantity: Mapped[Decimal | None] = mapped_column(Float, nullable=True)
 
     @property
     def suggested_position_size(self):
@@ -50,18 +46,16 @@ class Signal(BaseModel):
         self.suggested_quantity = value
 
     # Источник сигнала
-    strategy_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    timeframe: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    strategy_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    timeframe: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     # Временные метки истечения
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Дополнительные данные
-    indicators: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
-    extra_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
-    signal_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    indicators: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    extra_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    signal_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True, name="metadata"
     )
 
@@ -73,7 +67,7 @@ class Signal(BaseModel):
             f"type={self.signal_type.value}, strength={self.strength})>"
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование в словарь"""
         return {
             "id": self.id,
@@ -82,16 +76,12 @@ class Signal(BaseModel):
             "signal_type": self.signal_type.value,
             "strength": float(self.strength) if self.strength else None,
             "confidence": float(self.confidence) if self.confidence else None,
-            "suggested_price": float(self.suggested_price)
-            if self.suggested_price
-            else None,
+            "suggested_price": float(self.suggested_price) if self.suggested_price else None,
             "suggested_stop_loss": (
                 float(self.suggested_stop_loss) if self.suggested_stop_loss else None
             ),
             "suggested_take_profit": (
-                float(self.suggested_take_profit)
-                if self.suggested_take_profit
-                else None
+                float(self.suggested_take_profit) if self.suggested_take_profit else None
             ),
             "suggested_quantity": (
                 float(self.suggested_quantity) if self.suggested_quantity else None

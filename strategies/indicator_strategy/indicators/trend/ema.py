@@ -4,7 +4,6 @@ EMA (Exponential Moving Average) индикатор
 """
 
 import logging
-from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -40,9 +39,7 @@ class EMAIndicator(IndicatorBase):
         # Периоды
         self.periods = self.params.get("periods", [12, 26, 50, 200])
         if not isinstance(self.periods, list) or not self.periods:
-            raise ValueError(
-                f"EMA periods must be a non-empty list, got {self.periods}"
-            )
+            raise ValueError(f"EMA periods must be a non-empty list, got {self.periods}")
 
         # Проверка что все периоды - положительные числа
         for period in self.periods:
@@ -65,9 +62,7 @@ class EMAIndicator(IndicatorBase):
         ]:
             raise ValueError(f"Unknown price type: {self.price_type}")
 
-        logger.debug(
-            f"EMA initialized: periods={self.periods}, price_type={self.price_type}"
-        )
+        logger.debug(f"EMA initialized: periods={self.periods}, price_type={self.price_type}")
 
     def calculate(self, data: pd.DataFrame) -> IndicatorResult:
         """
@@ -148,8 +143,8 @@ class EMAIndicator(IndicatorBase):
     def _determine_signal(
         self,
         current_price: float,
-        current_emas: Dict[str, float],
-        ema_series: Dict[str, pd.Series],
+        current_emas: dict[str, float],
+        ema_series: dict[str, pd.Series],
     ) -> int:
         """
         Определение торгового сигнала на основе EMA
@@ -190,9 +185,7 @@ class EMAIndicator(IndicatorBase):
         else:
             return 0
 
-    def _calculate_strength(
-        self, current_price: float, current_emas: Dict[str, float]
-    ) -> float:
+    def _calculate_strength(self, current_price: float, current_emas: dict[str, float]) -> float:
         """
         Расчет силы сигнала (0-100)
 
@@ -226,7 +219,7 @@ class EMAIndicator(IndicatorBase):
 
         return avg_strength
 
-    def _analyze_ema_structure(self, current_emas: Dict[str, float]) -> str:
+    def _analyze_ema_structure(self, current_emas: dict[str, float]) -> str:
         """
         Анализ структуры EMA (бычья, медвежья, смешанная)
 
@@ -248,14 +241,10 @@ class EMAIndicator(IndicatorBase):
 
         # Проверка порядка EMA
         # Бычья: краткосрочные > долгосрочные
-        is_bullish = all(
-            sorted_emas[i] >= sorted_emas[i + 1] for i in range(len(sorted_emas) - 1)
-        )
+        is_bullish = all(sorted_emas[i] >= sorted_emas[i + 1] for i in range(len(sorted_emas) - 1))
 
         # Медвежья: краткосрочные < долгосрочные
-        is_bearish = all(
-            sorted_emas[i] <= sorted_emas[i + 1] for i in range(len(sorted_emas) - 1)
-        )
+        is_bearish = all(sorted_emas[i] <= sorted_emas[i + 1] for i in range(len(sorted_emas) - 1))
 
         if is_bullish:
             return "bullish"
@@ -264,9 +253,7 @@ class EMAIndicator(IndicatorBase):
         else:
             return "mixed"
 
-    def _calculate_trend_strength(
-        self, prices: pd.Series, emas: Dict[str, pd.Series]
-    ) -> float:
+    def _calculate_trend_strength(self, prices: pd.Series, emas: dict[str, pd.Series]) -> float:
         """
         Расчет силы тренда (0-100)
 
@@ -296,7 +283,7 @@ class EMAIndicator(IndicatorBase):
 
         return np.mean(strengths)
 
-    def _check_golden_cross(self, emas: Dict[str, pd.Series]) -> bool:
+    def _check_golden_cross(self, emas: dict[str, pd.Series]) -> bool:
         """
         Проверка золотого креста (50 EMA пересекает 200 EMA снизу вверх)
 
@@ -320,7 +307,7 @@ class EMAIndicator(IndicatorBase):
 
         return prev_50 < prev_200 and curr_50 > curr_200
 
-    def _check_death_cross(self, emas: Dict[str, pd.Series]) -> bool:
+    def _check_death_cross(self, emas: dict[str, pd.Series]) -> bool:
         """
         Проверка креста смерти (50 EMA пересекает 200 EMA сверху вниз)
 
@@ -344,7 +331,7 @@ class EMAIndicator(IndicatorBase):
 
         return prev_50 > prev_200 and curr_50 < curr_200
 
-    def get_required_columns(self) -> List[str]:
+    def get_required_columns(self) -> list[str]:
         """Необходимые колонки данных"""
         if self.price_type in ["close", "open", "high", "low"]:
             return [self.price_type]

@@ -11,4 +11,4 @@ from .events import EventType, WebSocketEvent
 from .manager import WebSocketManager
 from .streams import StreamManager
 
-__all__ = ["WebSocketManager", "StreamManager", "WebSocketEvent", "EventType"]
+__all__ = ["EventType", "StreamManager", "WebSocketEvent", "WebSocketManager"]

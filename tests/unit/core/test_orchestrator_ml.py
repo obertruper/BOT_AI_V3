@@ -106,9 +106,7 @@ class TestSystemOrchestratorML:
         """Тест передачи ML сигнала в торговый движок"""
         # Mock компоненты
         orchestrator.trader_manager = AsyncMock()
-        orchestrator.trader_manager.get_active_traders = AsyncMock(
-            return_value=["trader1"]
-        )
+        orchestrator.trader_manager.get_active_traders = AsyncMock(return_value=["trader1"])
         orchestrator.trader_manager.get_trader = AsyncMock()
 
         mock_trader = AsyncMock()
@@ -229,9 +227,7 @@ class TestSystemOrchestratorML:
         ]
 
         orchestrator.ml_signal_generator = AsyncMock()
-        orchestrator.ml_signal_generator.generate_signals = AsyncMock(
-            return_value=signals
-        )
+        orchestrator.ml_signal_generator.generate_signals = AsyncMock(return_value=signals)
 
         # Mock обработку
         orchestrator._process_ml_signal = AsyncMock()

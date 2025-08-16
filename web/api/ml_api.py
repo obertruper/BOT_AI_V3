@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 API endpoints для ML сигналов
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -33,7 +32,7 @@ async def get_db():
 class MLSignalResponse(BaseModel):
     """Модель ответа для ML сигнала"""
 
-    id: Optional[int] = None
+    id: int | None = None
     symbol: str
     exchange: str
     signal_type: str
@@ -41,10 +40,10 @@ class MLSignalResponse(BaseModel):
     strength: float
     timestamp: str
     strategy_name: str = "PatchTST_ML"
-    suggested_price: Optional[float] = None
-    suggested_stop_loss: Optional[float] = None
-    suggested_take_profit: Optional[float] = None
-    extra_data: Optional[Dict[str, Any]] = None
+    suggested_price: float | None = None
+    suggested_stop_loss: float | None = None
+    suggested_take_profit: float | None = None
+    extra_data: dict[str, Any] | None = None
 
 
 class MLMetricsResponse(BaseModel):
@@ -54,17 +53,17 @@ class MLMetricsResponse(BaseModel):
     success_rate: float
     save_rate: float
     error_rate: float
-    active_symbols: List[str]
-    last_signal_time: Optional[str] = None
+    active_symbols: list[str]
+    last_signal_time: str | None = None
 
 
-@router.get("/signals/latest", response_model=List[MLSignalResponse])
+@router.get("/signals/latest", response_model=list[MLSignalResponse])
 async def get_latest_ml_signals(
     limit: int = Query(default=10, ge=1, le=100),
-    symbol: Optional[str] = Query(default=None),
-    exchange: Optional[str] = Query(default="bybit"),
+    symbol: str | None = Query(default=None),
+    exchange: str | None = Query(default="bybit"),
     db: AsyncSession = Depends(get_db),
-) -> List[MLSignalResponse]:
+) -> list[MLSignalResponse]:
     """
     Получение последних ML сигналов
 
@@ -78,9 +77,7 @@ async def get_latest_ml_signals(
     """
     try:
         # Формируем запрос
-        query = select(Signal).where(
-            Signal.strategy_name.in_(["PatchTST_ML", "PatchTST_RealTime"])
-        )
+        query = select(Signal).where(Signal.strategy_name.in_(["PatchTST_ML", "PatchTST_RealTime"]))
 
         if symbol:
             query = query.where(Signal.symbol == symbol)
@@ -105,9 +102,7 @@ async def get_latest_ml_signals(
                     signal_type=signal.signal_type.value,
                     confidence=signal.confidence,
                     strength=signal.strength,
-                    timestamp=signal.created_at.isoformat()
-                    if signal.created_at
-                    else "",
+                    timestamp=signal.created_at.isoformat() if signal.created_at else "",
                     strategy_name=signal.strategy_name,
                     suggested_price=signal.suggested_price,
                     suggested_stop_loss=signal.suggested_stop_loss,
@@ -123,12 +118,12 @@ async def get_latest_ml_signals(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/signals/active", response_model=List[MLSignalResponse])
+@router.get("/signals/active", response_model=list[MLSignalResponse])
 async def get_active_ml_signals(
-    symbol: Optional[str] = Query(default=None),
-    exchange: Optional[str] = Query(default="bybit"),
+    symbol: str | None = Query(default=None),
+    exchange: str | None = Query(default="bybit"),
     db: AsyncSession = Depends(get_db),
-) -> List[MLSignalResponse]:
+) -> list[MLSignalResponse]:
     """
     Получение активных ML сигналов (не старше 10 минут)
     """
@@ -164,9 +159,7 @@ async def get_active_ml_signals(
                     signal_type=signal.signal_type.value,
                     confidence=signal.confidence,
                     strength=signal.strength,
-                    timestamp=signal.created_at.isoformat()
-                    if signal.created_at
-                    else "",
+                    timestamp=signal.created_at.isoformat() if signal.created_at else "",
                     strategy_name=signal.strategy_name,
                     suggested_price=signal.suggested_price,
                     suggested_stop_loss=signal.suggested_stop_loss,
@@ -233,9 +226,7 @@ async def get_ml_metrics(db: AsyncSession = Depends(get_db)) -> MLMetricsRespons
             save_rate=1.0,  # Все сигналы сохраняются
             error_rate=0.0,  # Пока не отслеживаем
             active_symbols=active_symbols,
-            last_signal_time=last_signal.created_at.isoformat()
-            if last_signal
-            else None,
+            last_signal_time=last_signal.created_at.isoformat() if last_signal else None,
         )
 
     except Exception as e:
@@ -287,9 +278,7 @@ async def start_scheduler():
         orchestrator = SystemOrchestrator(get_global_config_manager())
 
         if not orchestrator.signal_scheduler:
-            raise HTTPException(
-                status_code=400, detail="ML Signal Scheduler не инициализирован"
-            )
+            raise HTTPException(status_code=400, detail="ML Signal Scheduler не инициализирован")
 
         await orchestrator.signal_scheduler.start()
 
@@ -310,9 +299,7 @@ async def stop_scheduler():
         orchestrator = SystemOrchestrator(get_global_config_manager())
 
         if not orchestrator.signal_scheduler:
-            raise HTTPException(
-                status_code=400, detail="ML Signal Scheduler не инициализирован"
-            )
+            raise HTTPException(status_code=400, detail="ML Signal Scheduler не инициализирован")
 
         await orchestrator.signal_scheduler.stop()
 

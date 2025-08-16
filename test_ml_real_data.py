@@ -56,9 +56,7 @@ async def test_ml_with_real_data():
         data = []
         for i, price in enumerate(prices):
             # Добавляем внутрибарную волатильность
-            noise = np.random.normal(
-                0, price * 0.001, 4
-            )  # 0.1% внутрибарная волатильность
+            noise = np.random.normal(0, price * 0.001, 4)  # 0.1% внутрибарная волатильность
 
             open_price = prices[i - 1] if i > 0 else price
             close_price = price
@@ -67,9 +65,7 @@ async def test_ml_with_real_data():
             high_price = max(open_price, close_price) + abs(noise[0])
             low_price = min(open_price, close_price) - abs(noise[1])
 
-            volume = np.random.exponential(
-                1000000
-            )  # Экспоненциальное распределение объема
+            volume = np.random.exponential(1000000)  # Экспоненциальное распределение объема
 
             data.append(
                 {
@@ -87,9 +83,7 @@ async def test_ml_with_real_data():
         df.set_index("datetime", inplace=True)
 
         print(f"📊 Создан DataFrame: {df.shape}")
-        print(
-            f"📈 Ценовой диапазон: ${df['close'].min():.2f} - ${df['close'].max():.2f}"
-        )
+        print(f"📈 Ценовой диапазон: ${df['close'].min():.2f} - ${df['close'].max():.2f}")
         print("📊 Последние 5 свечей:")
         print(df[["open", "high", "low", "close", "volume"]].tail())
 
@@ -108,9 +102,7 @@ async def test_ml_with_real_data():
         print("\n📊 Детальная информация:")
         print(f"   Returns 15m: {predictions_data.get('returns_15m', 'N/A'):.6f}")
         print(f"   Returns 1h: {predictions_data.get('returns_1h', 'N/A'):.6f}")
-        print(
-            f"   Direction score: {predictions_data.get('direction_score', 'N/A'):.4f}"
-        )
+        print(f"   Direction score: {predictions_data.get('direction_score', 'N/A'):.4f}")
 
         directions = predictions_data.get("directions_by_timeframe", [])
         direction_probs = predictions_data.get("direction_probabilities", [])
@@ -145,9 +137,7 @@ async def test_ml_with_real_data():
         else:
             print("❌ Сигнал не сгенерирован")
             print("   Возможные причины:")
-            print(
-                f"   - Confidence {prediction['confidence']:.4f} < {ml_processor.min_confidence}"
-            )
+            print(f"   - Confidence {prediction['confidence']:.4f} < {ml_processor.min_confidence}")
             print(
                 f"   - Signal strength {prediction['signal_strength']:.4f} < {ml_processor.min_signal_strength}"
             )
@@ -206,7 +196,7 @@ async def test_ml_with_real_data():
 
         # Статистика
         print("\n📊 Статистика по трендам:")
-        for trend, signal in zip(trends, signals_generated):
+        for trend, signal in zip(trends, signals_generated, strict=False):
             print(f"   {trend}: {signal}")
 
         unique_signals = set(signals_generated)

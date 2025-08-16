@@ -4,7 +4,6 @@
 """
 
 import logging
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +46,7 @@ class DynamicWeightCalculator:
         },
     }
 
-    def __init__(
-        self, custom_multipliers: Optional[Dict[str, Dict[str, float]]] = None
-    ):
+    def __init__(self, custom_multipliers: dict[str, dict[str, float]] | None = None):
         """
         Инициализация калькулятора
 
@@ -62,10 +59,10 @@ class DynamicWeightCalculator:
 
     def calculate_weights(
         self,
-        base_weights: Dict[str, float],
+        base_weights: dict[str, float],
         market_regime: str,
         smooth_transition: bool = True,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Расчет динамических весов для текущего режима рынка
 
@@ -78,9 +75,7 @@ class DynamicWeightCalculator:
             Адаптированные веса
         """
         if market_regime not in self.multipliers:
-            logger.warning(
-                f"Unknown market regime: {market_regime}, using base weights"
-            )
+            logger.warning(f"Unknown market regime: {market_regime}, using base weights")
             return base_weights.copy()
 
         # Получение множителей для режима
@@ -92,15 +87,9 @@ class DynamicWeightCalculator:
             multiplier = regime_multipliers.get(category, 1.0)
 
             # Плавный переход между режимами
-            if (
-                smooth_transition
-                and self._last_regime
-                and self._last_regime != market_regime
-            ):
+            if smooth_transition and self._last_regime and self._last_regime != market_regime:
                 # Постепенное изменение множителя
-                old_multiplier = self.multipliers.get(self._last_regime, {}).get(
-                    category, 1.0
-                )
+                old_multiplier = self.multipliers.get(self._last_regime, {}).get(category, 1.0)
                 multiplier = self._smooth_transition(old_multiplier, multiplier)
 
             adjusted_weights[category] = base_weight * multiplier
@@ -108,9 +97,7 @@ class DynamicWeightCalculator:
         # Нормализация весов
         total_weight = sum(adjusted_weights.values())
         if total_weight > 0:
-            normalized_weights = {
-                k: v / total_weight for k, v in adjusted_weights.items()
-            }
+            normalized_weights = {k: v / total_weight for k, v in adjusted_weights.items()}
         else:
             normalized_weights = base_weights.copy()
 
@@ -136,7 +123,7 @@ class DynamicWeightCalculator:
         alpha = 0.3  # Коэффициент сглаживания
         return old_value * (1 - alpha) + new_value * alpha
 
-    def get_regime_characteristics(self, market_regime: str) -> Dict[str, any]:
+    def get_regime_characteristics(self, market_regime: str) -> dict[str, any]:
         """
         Получение характеристик режима рынка
 
@@ -209,8 +196,8 @@ class DynamicWeightCalculator:
         )
 
     def suggest_adjustments(
-        self, current_performance: Dict[str, float], market_regime: str
-    ) -> Dict[str, any]:
+        self, current_performance: dict[str, float], market_regime: str
+    ) -> dict[str, any]:
         """
         Предложение корректировок на основе производительности
 
@@ -225,9 +212,7 @@ class DynamicWeightCalculator:
 
         # Анализ производительности по категориям
         for category, performance in current_performance.items():
-            expected_multiplier = self.multipliers.get(market_regime, {}).get(
-                category, 1.0
-            )
+            expected_multiplier = self.multipliers.get(market_regime, {}).get(category, 1.0)
 
             # Если категория работает хуже ожидаемого
             if performance < 0.4 and expected_multiplier > 1.0:

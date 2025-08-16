@@ -63,7 +63,7 @@ async def check_keys():
 
             if response and "result" in response:
                 result = response["result"]
-                if "list" in result and result["list"]:
+                if result.get("list"):
                     wallet = result["list"][0]
                     total_balance = float(wallet.get("totalEquity", 0))
                     print(f"   ✅ Ключи работают! Баланс: ${total_balance:.2f}")
@@ -102,7 +102,7 @@ async def check_keys():
     for config_file in config_files:
         if os.path.exists(config_file):
             print(f"📄 Найден файл: {config_file}")
-            with open(config_file, "r") as f:
+            with open(config_file) as f:
                 content = f.read()
                 if "api_key" in content.lower() or "bybit" in content.lower():
                     print("   Может содержать ключи, проверьте вручную")

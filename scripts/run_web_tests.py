@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Скрипт для запуска автоматических тестов веб-интерфейса BOT_AI_V3
 
@@ -10,7 +9,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
 class WebTestReport:
@@ -21,9 +20,7 @@ class WebTestReport:
         self.screenshots = []
         self.timestamp = datetime.now()
 
-    def add_test_result(
-        self, test_name: str, status: str, details: Dict[str, Any] = None
-    ):
+    def add_test_result(self, test_name: str, status: str, details: dict[str, Any] = None):
         """Добавление результата теста"""
         result = {
             "test": test_name,
@@ -43,7 +40,7 @@ class WebTestReport:
             }
         )
 
-    def generate_report(self) -> Dict[str, Any]:
+    def generate_report(self) -> dict[str, Any]:
         """Генерация полного отчета"""
         # Подсчет статистики
         total_tests = len(self.test_results)
@@ -74,7 +71,7 @@ class WebTestReport:
 
         return report
 
-    def _generate_recommendations(self) -> List[str]:
+    def _generate_recommendations(self) -> list[str]:
         """Генерация рекомендаций на основе результатов"""
         recommendations = []
 
@@ -105,9 +102,7 @@ class WebTestReport:
                     )
 
         if not recommendations:
-            recommendations.append(
-                "✅ Все тесты пройдены успешно! Система работает стабильно."
-            )
+            recommendations.append("✅ Все тесты пройдены успешно! Система работает стабильно.")
 
         return recommendations
 
@@ -138,7 +133,7 @@ class WebTestReport:
 
         return filepath, html_filepath
 
-    def _generate_html_report(self, report: Dict[str, Any]) -> str:
+    def _generate_html_report(self, report: dict[str, Any]) -> str:
         """Генерация HTML версии отчета"""
         html = f"""
 <!DOCTYPE html>

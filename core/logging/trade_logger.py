@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Enhanced Trade Logger для BOT Trading v3
 
@@ -12,7 +11,7 @@ import logging
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 from structlog.processors import CallsiteParameter, CallsiteParameterAdder
@@ -28,9 +27,7 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        CallsiteParameterAdder(
-            parameters=[CallsiteParameter.FILENAME, CallsiteParameter.LINENO]
-        ),
+        CallsiteParameterAdder(parameters=[CallsiteParameter.FILENAME, CallsiteParameter.LINENO]),
         structlog.dev.ConsoleRenderer(),
     ],
     context_class=dict,
@@ -68,9 +65,7 @@ class TradeLogger:
         self.logger = structlog.get_logger(name)
 
         # Файловый логгер для торговых операций
-        self.trade_log_file = (
-            self.log_dir / f"trades_{datetime.now().strftime('%Y%m%d')}.log"
-        )
+        self.trade_log_file = self.log_dir / f"trades_{datetime.now().strftime('%Y%m%d')}.log"
         self._setup_file_logger()
 
         # Счетчики для статистики
@@ -101,18 +96,16 @@ class TradeLogger:
         file_logger.setLevel(logging.DEBUG)
         self.file_logger = file_logger
 
-    def _log_to_file(self, level: str, message: str, data: Dict = None):
+    def _log_to_file(self, level: str, message: str, data: dict = None):
         """Запись в файл с JSON данными"""
         if data:
-            message = (
-                f"{message} | DATA: {json.dumps(data, default=str, ensure_ascii=False)}"
-            )
+            message = f"{message} | DATA: {json.dumps(data, default=str, ensure_ascii=False)}"
 
         getattr(self.file_logger, level.lower())(message)
 
     # ========== SIGNAL LOGGING ==========
 
-    def log_signal_received(self, signal: Dict[str, Any]):
+    def log_signal_received(self, signal: dict[str, Any]):
         """Логирование получения сигнала"""
         self.stats["signals_received"] += 1
 
@@ -134,7 +127,7 @@ class TradeLogger:
 
         return log_data
 
-    def log_signal_processing(self, signal_id: str, action: str, details: Dict = None):
+    def log_signal_processing(self, signal_id: str, action: str, details: dict = None):
         """Логирование обработки сигнала"""
         log_data = {
             "signal_id": signal_id,
@@ -159,7 +152,7 @@ class TradeLogger:
 
     # ========== ORDER LOGGING ==========
 
-    def log_order_creation(self, order: Dict[str, Any]):
+    def log_order_creation(self, order: dict[str, Any]):
         """Логирование создания ордера"""
         self.stats["orders_created"] += 1
 
@@ -184,7 +177,7 @@ class TradeLogger:
 
         return log_data
 
-    def log_order_submission(self, order_id: str, exchange: str, response: Dict = None):
+    def log_order_submission(self, order_id: str, exchange: str, response: dict = None):
         """Логирование отправки ордера на биржу"""
         log_data = {
             "order_id": order_id,
@@ -196,7 +189,7 @@ class TradeLogger:
         self.logger.info(f"📤 ОРДЕР ОТПРАВЛЕН на {exchange}", **log_data)
         self._log_to_file("info", "ORDER_SUBMITTED", log_data)
 
-    def log_order_execution(self, order_id: str, execution_data: Dict):
+    def log_order_execution(self, order_id: str, execution_data: dict):
         """Логирование исполнения ордера"""
         self.stats["orders_executed"] += 1
 
@@ -234,7 +227,7 @@ class TradeLogger:
         position_id: str,
         sl_price: float = None,
         tp_price: float = None,
-        partial_levels: List = None,
+        partial_levels: list = None,
     ):
         """Логирование установки SL/TP"""
         self.stats["sltp_set"] += 1
@@ -331,9 +324,7 @@ class TradeLogger:
         )
         self._log_to_file("info", "PARTIAL_CLOSE", log_data)
 
-    def log_sl_moved_to_breakeven(
-        self, position_id: str, entry_price: float, new_sl: float
-    ):
+    def log_sl_moved_to_breakeven(self, position_id: str, entry_price: float, new_sl: float):
         """Логирование переноса SL в безубыток"""
         log_data = {
             "position_id": position_id,
@@ -342,9 +333,7 @@ class TradeLogger:
             "timestamp": datetime.now().isoformat(),
         }
 
-        self.logger.info(
-            f"🔒 SL ПЕРЕНЕСЕН В БЕЗУБЫТОК: {new_sl} (вход: {entry_price})", **log_data
-        )
+        self.logger.info(f"🔒 SL ПЕРЕНЕСЕН В БЕЗУБЫТОК: {new_sl} (вход: {entry_price})", **log_data)
         self._log_to_file("info", "SL_TO_BREAKEVEN", log_data)
 
     # ========== TRAILING STOP LOGGING ==========
@@ -388,7 +377,7 @@ class TradeLogger:
 
     # ========== POSITION LOGGING ==========
 
-    def log_position_opened(self, position: Dict[str, Any]):
+    def log_position_opened(self, position: dict[str, Any]):
         """Логирование открытия позиции"""
         log_data = {
             "position_id": position.get("id"),
@@ -426,7 +415,7 @@ class TradeLogger:
         )
         self._log_to_file("info", "POSITION_CLOSED", log_data)
 
-    def log_position_update(self, position_id: str, update_type: str, data: Dict):
+    def log_position_update(self, position_id: str, update_type: str, data: dict):
         """Логирование обновления позиции"""
         log_data = {
             "position_id": position_id,
@@ -472,7 +461,7 @@ class TradeLogger:
         self,
         error_type: str,
         error_message: str,
-        context: Dict = None,
+        context: dict = None,
         exception: Exception = None,
     ):
         """Логирование ошибок"""
@@ -507,7 +496,7 @@ class TradeLogger:
         )
         self._log_to_file("info", "DAILY_SUMMARY", log_data)
 
-    def get_statistics(self) -> Dict:
+    def get_statistics(self) -> dict:
         """Получение текущей статистики"""
         return self.stats.copy()
 
@@ -520,7 +509,7 @@ class TradeLogger:
 
 
 # Глобальный экземпляр логгера
-_trade_logger: Optional[TradeLogger] = None
+_trade_logger: TradeLogger | None = None
 
 
 def get_trade_logger() -> TradeLogger:

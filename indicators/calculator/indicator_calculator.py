@@ -3,7 +3,7 @@
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -40,7 +40,7 @@ class IndicatorCalculator:
         fast_period: int = 12,
         slow_period: int = 26,
         signal_period: int = 9,
-    ) -> Dict[str, pd.Series]:
+    ) -> dict[str, pd.Series]:
         """MACD индикатор"""
         ema_fast = self.calculate_ema(data, fast_period)
         ema_slow = self.calculate_ema(data, slow_period)
@@ -53,7 +53,7 @@ class IndicatorCalculator:
 
     def calculate_bollinger_bands(
         self, data: pd.Series, period: int = 20, std_dev: int = 2
-    ) -> Dict[str, pd.Series]:
+    ) -> dict[str, pd.Series]:
         """Полосы Боллинджера"""
         sma = self.calculate_sma(data, period)
         std = data.rolling(window=period).std()
@@ -71,7 +71,7 @@ class IndicatorCalculator:
         period: int = 14,
         smooth_k: int = 3,
         smooth_d: int = 3,
-    ) -> Dict[str, pd.Series]:
+    ) -> dict[str, pd.Series]:
         """Стохастический осциллятор"""
         lowest_low = low.rolling(window=period).min()
         highest_high = high.rolling(window=period).max()
@@ -108,7 +108,7 @@ class IndicatorCalculator:
         vwap = (typical_price * volume).cumsum() / volume.cumsum()
         return vwap
 
-    def calculate_all_indicators(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def calculate_all_indicators(self, df: pd.DataFrame) -> dict[str, Any]:
         """Рассчитать все основные индикаторы"""
         results = {}
 
@@ -133,9 +133,7 @@ class IndicatorCalculator:
 
             # Stochastic
             if "high" in df and "low" in df:
-                stoch_data = self.calculate_stochastic(
-                    df["high"], df["low"], df["close"]
-                )
+                stoch_data = self.calculate_stochastic(df["high"], df["low"], df["close"])
                 results["stoch_k"] = stoch_data["k"]
                 results["stoch_d"] = stoch_data["d"]
 

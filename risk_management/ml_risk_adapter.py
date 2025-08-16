@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ML Risk Adapter - адаптер для интеграции ML-сигналов с системой управления рисками
 Адаптировано из BOT_AI_V2 для BOT Trading v3
@@ -7,7 +6,7 @@ ML Risk Adapter - адаптер для интеграции ML-сигналов
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .enhanced_calculator import EnhancedRiskCalculator, MLSignalData, RiskParameters
 
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 class MLSignalAdapter:
     """Адаптер для конвертации ML-сигналов в формат системы рисков"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.config = config
         self.ml_config = config.get("ml_integration", {})
         self.risk_calculator = EnhancedRiskCalculator(config)
@@ -31,8 +30,8 @@ class MLSignalAdapter:
         logger.info("MLSignalAdapter инициализирован")
 
     def convert_ml_prediction_to_signal(
-        self, prediction: Dict[str, Any], symbol: str
-    ) -> Optional[MLSignalData]:
+        self, prediction: dict[str, Any], symbol: str
+    ) -> MLSignalData | None:
         """
         Конвертирует ML-предсказание в MLSignalData
 
@@ -56,9 +55,7 @@ class MLSignalAdapter:
                 return None
 
             # Проверяем пороги уверенности
-            if not self._check_confidence_thresholds(
-                signal_type, confidence, success_probability
-            ):
+            if not self._check_confidence_thresholds(signal_type, confidence, success_probability):
                 logger.debug(f"Сигнал {symbol} не проходит пороги уверенности")
                 return None
 
@@ -99,7 +96,7 @@ class MLSignalAdapter:
         symbol: str,
         entry_price: float,
         ml_signal: MLSignalData,
-        account_balance: Optional[float] = None,
+        account_balance: float | None = None,
         risk_profile: str = "standard",
     ) -> RiskParameters:
         """
@@ -159,9 +156,7 @@ class MLSignalAdapter:
         try:
             # Проверяем базовые параметры
             if not (0 <= ml_signal.confidence <= 1):
-                logger.warning(
-                    f"Некорректная уверенность для {symbol}: {ml_signal.confidence}"
-                )
+                logger.warning(f"Некорректная уверенность для {symbol}: {ml_signal.confidence}")
                 return False
 
             if not (0 <= ml_signal.signal_strength <= 1):
@@ -194,16 +189,12 @@ class MLSignalAdapter:
             # Проверяем SL/TP если есть
             if ml_signal.stop_loss_pct is not None:
                 if not (0.001 <= ml_signal.stop_loss_pct <= 0.1):  # 0.1% - 10%
-                    logger.warning(
-                        f"Некорректный SL для {symbol}: {ml_signal.stop_loss_pct}"
-                    )
+                    logger.warning(f"Некорректный SL для {symbol}: {ml_signal.stop_loss_pct}")
                     return False
 
             if ml_signal.take_profit_pct is not None:
                 if not (0.002 <= ml_signal.take_profit_pct <= 0.2):  # 0.2% - 20%
-                    logger.warning(
-                        f"Некорректный TP для {symbol}: {ml_signal.take_profit_pct}"
-                    )
+                    logger.warning(f"Некорректный TP для {symbol}: {ml_signal.take_profit_pct}")
                     return False
 
             logger.debug(f"ML-сигнал для {symbol} прошел валидацию")
@@ -215,7 +206,7 @@ class MLSignalAdapter:
 
     def get_adaptive_sltp_config(
         self, symbol: str, entry_price: float, side: str, ml_signal: MLSignalData
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Получает адаптивную конфигурацию SL/TP на основе ML-сигнала
 
@@ -375,9 +366,7 @@ class MLSignalAdapter:
             logger.error(f"Ошибка применения risk level adjustment: {e}")
             return risk_params
 
-    def _get_fallback_parameters(
-        self, symbol: str, entry_price: float
-    ) -> RiskParameters:
+    def _get_fallback_parameters(self, symbol: str, entry_price: float) -> RiskParameters:
         """Возвращает базовые параметры при ошибке"""
         return RiskParameters(
             position_size=5.0 / entry_price,  # Минимальный размер
@@ -389,7 +378,7 @@ class MLSignalAdapter:
             ml_score=None,
         )
 
-    def _get_default_sltp_config(self, entry_price: float, side: str) -> Dict[str, Any]:
+    def _get_default_sltp_config(self, entry_price: float, side: str) -> dict[str, Any]:
         """Возвращает базовую конфигурацию SL/TP"""
         if side == "SELL":
             sl_price = entry_price * 1.02

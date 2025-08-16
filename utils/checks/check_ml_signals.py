@@ -34,18 +34,14 @@ async def check_ml_signals():
             print(f"Всего сигналов в БД: {signal_count or 0}")
 
             # Последние 10 сигналов
-            result = await db.execute(
-                select(Signal).order_by(desc(Signal.created_at)).limit(10)
-            )
+            result = await db.execute(select(Signal).order_by(desc(Signal.created_at)).limit(10))
             recent_signals = result.scalars().all()
 
             if recent_signals:
                 print("\nПоследние сигналы:")
                 for sig in recent_signals[:5]:
                     strength_str = f"{sig.strength:.2f}" if sig.strength else "N/A"
-                    confidence_str = (
-                        f"{sig.confidence:.0f}%" if sig.confidence else "N/A"
-                    )
+                    confidence_str = f"{sig.confidence:.0f}%" if sig.confidence else "N/A"
                     print(
                         f"  {sig.created_at.strftime('%H:%M:%S')} | "
                         f"{sig.symbol} | {sig.signal_type.value} | "
@@ -63,9 +59,7 @@ async def check_ml_signals():
             print(f"Всего ордеров в БД: {order_count or 0}")
 
             # Последние ордера
-            result = await db.execute(
-                select(Order).order_by(desc(Order.created_at)).limit(10)
-            )
+            result = await db.execute(select(Order).order_by(desc(Order.created_at)).limit(10))
             recent_orders = result.scalars().all()
 
             if recent_orders:
@@ -88,9 +82,7 @@ async def check_ml_signals():
             print(f"Всего сделок в БД: {trade_count or 0}")
 
             # Последние сделки
-            result = await db.execute(
-                select(Trade).order_by(desc(Trade.created_at)).limit(5)
-            )
+            result = await db.execute(select(Trade).order_by(desc(Trade.created_at)).limit(5))
             recent_trades = result.scalars().all()
 
             if recent_trades:

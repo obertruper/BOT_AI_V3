@@ -11,11 +11,12 @@ Trader Manager для BOT_Trading v3.0
 
 import asyncio
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from core.config.config_manager import ConfigManager
 from core.exceptions import (
@@ -85,7 +86,7 @@ class TraderManager:
     def __init__(
         self,
         config_manager: ConfigManager,
-        trader_factory: Optional[TraderFactory] = None,
+        trader_factory: TraderFactory | None = None,
     ):
         self.config_manager = config_manager
         self.trader_factory = trader_factory or TraderFactory(config_manager)
@@ -94,29 +95,27 @@ class TraderManager:
         # Состояние менеджера
         self._state = ManagerState.CREATED
         self._created_at = datetime.now()
-        self._started_at: Optional[datetime] = None
-        self._stopped_at: Optional[datetime] = None
+        self._started_at: datetime | None = None
+        self._stopped_at: datetime | None = None
 
         # Трейдеры и их состояние
-        self._traders: Dict[str, TraderContext] = {}
-        self._trader_health: Dict[str, TraderHealthStatus] = {}
-        self._trader_tasks: Dict[str, asyncio.Task] = {}
+        self._traders: dict[str, TraderContext] = {}
+        self._trader_health: dict[str, TraderHealthStatus] = {}
+        self._trader_tasks: dict[str, asyncio.Task] = {}
 
         # Метрики и мониторинг
         self.metrics = ManagerMetrics()
         self._health_check_interval = 30  # секунд
-        self._health_check_task: Optional[asyncio.Task] = None
-        self._metrics_update_task: Optional[asyncio.Task] = None
+        self._health_check_task: asyncio.Task | None = None
+        self._metrics_update_task: asyncio.Task | None = None
 
         # Настройки и лимиты
         self._max_traders = config_manager.get_config("system.limits.max_traders", 10)
         self._max_consecutive_errors = 5
-        self._auto_recovery_enabled = config_manager.get_config(
-            "system.auto_recovery", True
-        )
+        self._auto_recovery_enabled = config_manager.get_config("system.auto_recovery", True)
 
         # Callback'и для событий
-        self._event_callbacks: Dict[str, List[Callable]] = {
+        self._event_callbacks: dict[str, list[Callable]] = {
             "trader_started": [],
             "trader_stopped": [],
             "trader_error": [],
@@ -353,9 +352,7 @@ class TraderManager:
             self._trader_tasks[trader_id] = task
 
             # Обновление метрик
-            self.metrics.active_traders = len(
-                [t for t in self._traders.values() if t.is_running]
-            )
+            self.metrics.active_traders = len([t for t in self._traders.values() if t.is_running])
 
             # Уведомление о событии
             await self._emit_event("trader_started", trader_id, trader_context)
@@ -406,9 +403,7 @@ class TraderManager:
             await trader_context.stop()
 
             # Обновление метрик
-            self.metrics.active_traders = len(
-                [t for t in self._traders.values() if t.is_running]
-            )
+            self.metrics.active_traders = len([t for t in self._traders.values() if t.is_running])
 
             # Уведомление о событии
             await self._emit_event("trader_stopped", trader_id, trader_context)
@@ -441,9 +436,7 @@ class TraderManager:
 
         # Обновление метрик
         self.metrics.total_traders = len(self._traders)
-        self.metrics.active_traders = len(
-            [t for t in self._traders.values() if t.is_running]
-        )
+        self.metrics.active_traders = len([t for t in self._traders.values() if t.is_running])
 
         self.logger.info(f"Трейдер {trader_id} удален")
 
@@ -471,18 +464,13 @@ class TraderManager:
             if self._auto_recovery_enabled:
                 await self._attempt_recovery(trader_context, e)
 
-    async def _attempt_recovery(
-        self, trader_context: TraderContext, error: Exception
-    ) -> None:
+    async def _attempt_recovery(self, trader_context: TraderContext, error: Exception) -> None:
         """Попытка автоматического восстановления трейдера"""
         trader_id = trader_context.trader_id
 
         # Проверка лимита consecutive errors
         health_status = self._trader_health.get(trader_id)
-        if (
-            health_status
-            and health_status.consecutive_errors >= self._max_consecutive_errors
-        ):
+        if health_status and health_status.consecutive_errors >= self._max_consecutive_errors:
             self.logger.error(
                 f"Трейдер {trader_id} превысил лимит последовательных ошибок "
                 f"({self._max_consecutive_errors}). Автоматическое восстановление отключено."
@@ -512,9 +500,7 @@ class TraderManager:
             self.logger.info(f"Трейдер {trader_id} восстановлен")
 
         except Exception as recovery_error:
-            self.logger.error(
-                f"Ошибка восстановления трейдера {trader_id}: {recovery_error}"
-            )
+            self.logger.error(f"Ошибка восстановления трейдера {trader_id}: {recovery_error}")
             if health_status:
                 health_status.consecutive_errors += 1
 
@@ -535,17 +521,13 @@ class TraderManager:
         check_tasks = []
 
         for trader_id, trader_context in self._traders.items():
-            task = asyncio.create_task(
-                self._check_trader_health(trader_id, trader_context)
-            )
+            task = asyncio.create_task(self._check_trader_health(trader_id, trader_context))
             check_tasks.append(task)
 
         if check_tasks:
             await asyncio.gather(*check_tasks, return_exceptions=True)
 
-    async def _check_trader_health(
-        self, trader_id: str, trader_context: TraderContext
-    ) -> None:
+    async def _check_trader_health(self, trader_id: str, trader_context: TraderContext) -> None:
         """Проверка здоровья отдельного трейдера"""
         try:
             start_time = datetime.now()
@@ -567,9 +549,7 @@ class TraderManager:
 
                 if not is_healthy:
                     health_status.consecutive_errors += 1
-                    await self._emit_event(
-                        "health_check_failed", trader_id, health_status
-                    )
+                    await self._emit_event("health_check_failed", trader_id, health_status)
                 else:
                     health_status.consecutive_errors = 0
 
@@ -591,9 +571,7 @@ class TraderManager:
     async def _update_metrics(self) -> None:
         """Обновление общих метрик менеджера"""
         self.metrics.total_traders = len(self._traders)
-        self.metrics.active_traders = len(
-            [t for t in self._traders.values() if t.is_running]
-        )
+        self.metrics.active_traders = len([t for t in self._traders.values() if t.is_running])
         self.metrics.healthy_traders = len(
             [h for h in self._trader_health.values() if h.is_healthy]
         )
@@ -620,9 +598,7 @@ class TraderManager:
 
         # Время работы менеджера
         if self._started_at:
-            self.metrics.uptime_seconds = (
-                datetime.now() - self._started_at
-            ).total_seconds()
+            self.metrics.uptime_seconds = (datetime.now() - self._started_at).total_seconds()
 
     async def _emit_event(self, event_name: str, *args) -> None:
         """Уведомление о событии"""
@@ -642,19 +618,19 @@ class TraderManager:
             self._event_callbacks[event_name] = []
         self._event_callbacks[event_name].append(callback)
 
-    def get_trader(self, trader_id: str) -> Optional[TraderContext]:
+    def get_trader(self, trader_id: str) -> TraderContext | None:
         """Получение трейдера по ID"""
         return self._traders.get(trader_id)
 
-    def get_all_traders(self) -> Dict[str, TraderContext]:
+    def get_all_traders(self) -> dict[str, TraderContext]:
         """Получение всех трейдеров"""
         return self._traders.copy()
 
-    def get_trader_health(self, trader_id: str) -> Optional[TraderHealthStatus]:
+    def get_trader_health(self, trader_id: str) -> TraderHealthStatus | None:
         """Получение статуса здоровья трейдера"""
         return self._trader_health.get(trader_id)
 
-    def get_manager_status(self) -> Dict[str, Any]:
+    def get_manager_status(self) -> dict[str, Any]:
         """Получение статуса менеджера"""
         return {
             "state": self._state.value,
@@ -670,8 +646,7 @@ class TraderManager:
                 "uptime_seconds": self.metrics.uptime_seconds,
             },
             "traders": {
-                trader_id: trader.get_status()
-                for trader_id, trader in self._traders.items()
+                trader_id: trader.get_status() for trader_id, trader in self._traders.items()
             },
         }
 
@@ -680,8 +655,8 @@ class TraderManager:
 
         @dataclass
         class HealthResult:
-            failed_traders: List[str] = field(default_factory=list)
-            warnings: List[str] = field(default_factory=list)
+            failed_traders: list[str] = field(default_factory=list)
+            warnings: list[str] = field(default_factory=list)
 
         result = HealthResult()
 
@@ -700,7 +675,7 @@ class TraderManager:
 
         return result
 
-    async def get_active_traders(self) -> List[TraderContext]:
+    async def get_active_traders(self) -> list[TraderContext]:
         """Получение списка активных трейдеров"""
         active_traders = []
         for trader in self._traders.values():
@@ -733,7 +708,7 @@ class TraderManager:
 
 
 # Глобальный менеджер для удобства использования
-_global_trader_manager: Optional[TraderManager] = None
+_global_trader_manager: TraderManager | None = None
 
 
 def get_global_trader_manager() -> TraderManager:

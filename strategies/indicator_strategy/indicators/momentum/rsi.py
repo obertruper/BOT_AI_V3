@@ -4,7 +4,6 @@ RSI (Relative Strength Index) индикатор
 """
 
 import logging
-from typing import List, Optional
 
 import pandas as pd
 
@@ -178,7 +177,7 @@ class RSIIndicator(IndicatorBase):
 
         return min(100, max(0, strength))
 
-    def _check_divergence(self, prices: pd.Series, rsi: pd.Series) -> Optional[str]:
+    def _check_divergence(self, prices: pd.Series, rsi: pd.Series) -> str | None:
         """
         Проверка дивергенций между ценой и RSI
 
@@ -214,7 +213,7 @@ class RSIIndicator(IndicatorBase):
 
         return None
 
-    def _find_peaks(self, series: pd.Series, distance: int = 3) -> List[float]:
+    def _find_peaks(self, series: pd.Series, distance: int = 3) -> list[float]:
         """
         Поиск локальных максимумов в серии
 
@@ -261,7 +260,7 @@ class RSIIndicator(IndicatorBase):
         else:
             return "neutral"
 
-    def get_required_columns(self) -> List[str]:
+    def get_required_columns(self) -> list[str]:
         """Необходимые колонки данных"""
         return ["close"]
 

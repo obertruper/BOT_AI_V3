@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Обработчик торговых сигналов
 
@@ -9,7 +8,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import List, Optional, Set
 
 from sqlalchemy import select
 
@@ -28,9 +26,9 @@ class SignalProcessor:
     - Передачу на исполнение
     """
 
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: logging.Logger | None = None):
         self.logger = logger or logging.getLogger(__name__)
-        self._active_signals: Set[str] = set()
+        self._active_signals: set[str] = set()
         self._signal_queue: asyncio.Queue = asyncio.Queue()
         self._processing = False
 
@@ -102,7 +100,7 @@ class SignalProcessor:
 
         return True
 
-    async def get_pending_signals(self) -> List[Signal]:
+    async def get_pending_signals(self) -> list[Signal]:
         """Получить необработанные сигналы из очереди"""
         signals = []
 
@@ -131,16 +129,12 @@ class SignalProcessor:
 
         async with get_async_db() as db:
             # Находим истекшие сигналы
-            result = await db.execute(
-                select(Signal).where(Signal.expires_at < current_time)
-            )
+            result = await db.execute(select(Signal).where(Signal.expires_at < current_time))
             expired_signals = result.scalars().all()
 
             # Удаляем из активных
             for signal in expired_signals:
-                signal_key = (
-                    f"{signal.symbol}_{signal.exchange}_{signal.signal_type.value}"
-                )
+                signal_key = f"{signal.symbol}_{signal.exchange}_{signal.signal_type.value}"
                 self._active_signals.discard(signal_key)
 
             self.logger.info(f"Очищено {len(expired_signals)} истекших сигналов")

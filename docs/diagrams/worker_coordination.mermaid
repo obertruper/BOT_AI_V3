@@ -1,0 +1,46 @@
+stateDiagram-v2
+    [*] --> Starting: Запуск процесса
+
+    Starting --> CheckExisting: Проверка существующих воркеров
+
+    CheckExisting --> WorkerExists: Воркер уже существует
+    CheckExisting --> RegisterWorker: Воркер не существует
+
+    WorkerExists --> [*]: Выход (предотвращение дубликата)
+
+    RegisterWorker --> Running: Успешная регистрация
+
+    Running --> SendHeartbeat: Отправка heartbeat
+    SendHeartbeat --> Running: Heartbeat успешен
+
+    Running --> ProcessTask: Получение задачи
+    ProcessTask --> Running: Задача выполнена
+
+    Running --> Error: Ошибка в процессе
+    Error --> Recovery: Попытка восстановления
+    Recovery --> Running: Восстановлено
+    Recovery --> Stopping: Невозможно восстановить
+
+    Running --> Stopping: Сигнал остановки
+
+    Stopping --> Unregister: Снятие с регистрации
+    Unregister --> Cleanup: Очистка ресурсов
+    Cleanup --> [*]: Завершение
+
+    note right of CheckExisting
+        WorkerCoordinator проверяет
+        наличие активного воркера
+        данного типа в реестре
+    end note
+
+    note left of SendHeartbeat
+        Heartbeat отправляется
+        каждые 30 секунд для
+        подтверждения активности
+    end note
+
+    note right of WorkerExists
+        Критическая точка:
+        предотвращение запуска
+        дублирующих процессов
+    end note

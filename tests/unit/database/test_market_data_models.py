@@ -317,16 +317,10 @@ class TestMarketDataModels:
         test_session.commit()
 
         # Проверяем сохранение
-        spot = (
-            test_session.query(RawMarketData).filter_by(symbol="SPOT_BTCUSDT").first()
-        )
+        spot = test_session.query(RawMarketData).filter_by(symbol="SPOT_BTCUSDT").first()
         assert spot.market_type == MarketType.SPOT
 
-        futures = (
-            test_session.query(RawMarketData)
-            .filter_by(symbol="FUTURES_BTCUSDT")
-            .first()
-        )
+        futures = test_session.query(RawMarketData).filter_by(symbol="FUTURES_BTCUSDT").first()
         assert futures.market_type == MarketType.FUTURES
 
     def test_jsonb_field_updates(self, test_session):
@@ -385,9 +379,7 @@ class TestMarketDataModels:
 
         results = (
             test_session.query(RawMarketData)
-            .filter(
-                RawMarketData.datetime >= start_time, RawMarketData.datetime <= end_time
-            )
+            .filter(RawMarketData.datetime >= start_time, RawMarketData.datetime <= end_time)
             .all()
         )
 

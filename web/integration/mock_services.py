@@ -20,7 +20,7 @@ import asyncio
 import hashlib
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -61,9 +61,7 @@ class MockUserManager:
         }
         logger.info("MockUserManager инициализирован с 3 пользователями")
 
-    async def authenticate_user(
-        self, username: str, password: str
-    ) -> Optional[MockUser]:
+    async def authenticate_user(self, username: str, password: str) -> MockUser | None:
         """Аутентификация пользователя"""
         user = self.users.get(username)
         if user and user.password_hash == hashlib.sha256(password.encode()).hexdigest():
@@ -73,11 +71,11 @@ class MockUserManager:
         logger.warning(f"Неудачная попытка входа для пользователя {username}")
         return None
 
-    async def get_user_by_username(self, username: str) -> Optional[MockUser]:
+    async def get_user_by_username(self, username: str) -> MockUser | None:
         """Получить пользователя по имени"""
         return self.users.get(username)
 
-    async def get_user_by_id(self, user_id: str) -> Optional[MockUser]:
+    async def get_user_by_id(self, user_id: str) -> MockUser | None:
         """Получить пользователя по ID"""
         for user in self.users.values():
             if user.user_id == user_id:
@@ -120,7 +118,7 @@ class MockSessionManager:
     """Mock менеджер сессий"""
 
     def __init__(self):
-        self.sessions: Dict[str, MockSession] = {}
+        self.sessions: dict[str, MockSession] = {}
         logger.info("MockSessionManager инициализирован")
 
     async def create_session(
@@ -133,15 +131,13 @@ class MockSessionManager:
         logger.info(f"Создана сессия {session_id} для пользователя {user_id}")
         return session_id
 
-    async def get_session(self, session_id: str) -> Optional[MockSession]:
+    async def get_session(self, session_id: str) -> MockSession | None:
         """Получить сессию"""
         return self.sessions.get(session_id)
 
-    async def get_user_sessions(self, user_id: str) -> List[MockSession]:
+    async def get_user_sessions(self, user_id: str) -> list[MockSession]:
         """Получить все сессии пользователя"""
-        return [
-            session for session in self.sessions.values() if session.user_id == user_id
-        ]
+        return [session for session in self.sessions.values() if session.user_id == user_id]
 
     async def delete_session(self, session_id: str):
         """Удалить сессию"""
@@ -160,9 +156,7 @@ class MockSessionManager:
         for session_id in sessions_to_delete:
             del self.sessions[session_id]
 
-        logger.info(
-            f"Удалено {len(sessions_to_delete)} сессий для пользователя {user_id}"
-        )
+        logger.info(f"Удалено {len(sessions_to_delete)} сессий для пользователя {user_id}")
 
 
 # =================== MOCK STATS SERVICE ===================
@@ -174,9 +168,7 @@ class MockStatsService:
     def __init__(self):
         logger.info("MockStatsService инициализирован")
 
-    async def get_trading_stats(
-        self, start_time: datetime, end_time: datetime
-    ) -> Dict[str, Any]:
+    async def get_trading_stats(self, start_time: datetime, end_time: datetime) -> dict[str, Any]:
         """Получить статистику торговли за период"""
         # Симуляция реальных данных
         hours_diff = (end_time - start_time).total_seconds() / 3600
@@ -218,28 +210,20 @@ class MockAlertsService:
                 "trader_manager",
                 "Трейдер BTCUSDT приостановлен из-за высокой волатильности",
             ),
-            MockAlert(
-                "2", "info", "exchange_bybit", "Успешное подключение к Bybit API"
-            ),
+            MockAlert("2", "info", "exchange_bybit", "Успешное подключение к Bybit API"),
             MockAlert("3", "error", "ml_strategy", "Ошибка загрузки ML модели"),
         ]
         logger.info("MockAlertsService инициализирован с 3 алертами")
 
-    async def get_alerts(
-        self, filters: Dict[str, Any], limit: int
-    ) -> List[Dict[str, Any]]:
+    async def get_alerts(self, filters: dict[str, Any], limit: int) -> list[dict[str, Any]]:
         """Получить алерты с фильтрами"""
         filtered_alerts = self.alerts
 
         if "level" in filters:
-            filtered_alerts = [
-                a for a in filtered_alerts if a.level == filters["level"]
-            ]
+            filtered_alerts = [a for a in filtered_alerts if a.level == filters["level"]]
 
         if "resolved" in filters:
-            filtered_alerts = [
-                a for a in filtered_alerts if a.resolved == filters["resolved"]
-            ]
+            filtered_alerts = [a for a in filtered_alerts if a.resolved == filters["resolved"]]
 
         result = []
         for alert in filtered_alerts[:limit]:
@@ -275,9 +259,7 @@ class MockLogsService:
     def __init__(self):
         logger.info("MockLogsService инициализирован")
 
-    async def get_logs(
-        self, filters: Dict[str, Any], limit: int
-    ) -> List[Dict[str, Any]]:
+    async def get_logs(self, filters: dict[str, Any], limit: int) -> list[dict[str, Any]]:
         """Получить логи с фильтрами"""
         # Симуляция логов
         logs = []
@@ -286,9 +268,7 @@ class MockLogsService:
                 {
                     "timestamp": (datetime.now() - timedelta(minutes=i)).isoformat(),
                     "level": "INFO" if i % 3 != 0 else "WARNING",
-                    "component": ["trader_manager", "ml_strategy", "bybit_client"][
-                        i % 3
-                    ],
+                    "component": ["trader_manager", "ml_strategy", "bybit_client"][i % 3],
                     "message": f"Mock log message {i + 1}",
                     "logger_name": "bot_trading.mock",
                     "line_number": 100 + i,
@@ -326,18 +306,16 @@ class MockStrategyRegistry:
     def __init__(self):
         self.strategies = {
             "ml_strategy": MockStrategy("ml_strategy", "ML Strategy", "ml"),
-            "ema_crossover": MockStrategy(
-                "ema_crossover", "EMA Crossover", "indicator"
-            ),
+            "ema_crossover": MockStrategy("ema_crossover", "EMA Crossover", "indicator"),
             "grid_trading": MockStrategy("grid_trading", "Grid Trading", "grid"),
         }
         logger.info("MockStrategyRegistry инициализирован с 3 стратегиями")
 
-    def get_available_strategies(self) -> List[str]:
+    def get_available_strategies(self) -> list[str]:
         """Получить список доступных стратегий"""
         return list(self.strategies.keys())
 
-    def get_strategy_class(self, strategy_name: str) -> Optional[MockStrategy]:
+    def get_strategy_class(self, strategy_name: str) -> MockStrategy | None:
         """Получить класс стратегии"""
         return self.strategies.get(strategy_name)
 
@@ -348,9 +326,7 @@ class MockStrategyManager:
     def __init__(self):
         logger.info("MockStrategyManager инициализирован")
 
-    async def configure_strategy(
-        self, trader_id: str, strategy_config: Dict[str, Any]
-    ) -> bool:
+    async def configure_strategy(self, trader_id: str, strategy_config: dict[str, Any]) -> bool:
         """Настроить стратегию для трейдера"""
         logger.info(
             f"Настройка стратегии {strategy_config['strategy_name']} для трейдера {trader_id}"
@@ -369,7 +345,7 @@ class MockBacktestEngine:
         self.backtests = {}
         logger.info("MockBacktestEngine инициализирован")
 
-    async def start_backtest(self, backtest_config: Dict[str, Any]) -> str:
+    async def start_backtest(self, backtest_config: dict[str, Any]) -> str:
         """Запустить бэктест"""
         backtest_id = str(uuid.uuid4())
 
@@ -398,7 +374,7 @@ class MockBacktestEngine:
 
         return backtest_id
 
-    async def get_backtest_result(self, backtest_id: str) -> Optional[Dict[str, Any]]:
+    async def get_backtest_result(self, backtest_id: str) -> dict[str, Any] | None:
         """Получить результат бэктеста"""
         return self.backtests.get(backtest_id)
 
@@ -412,7 +388,7 @@ class MockPerformanceService:
     def __init__(self):
         logger.info("MockPerformanceService инициализирован")
 
-    async def get_strategy_summary(self, strategy_name: str) -> Dict[str, float]:
+    async def get_strategy_summary(self, strategy_name: str) -> dict[str, float]:
         """Получить краткую сводку производительности стратегии"""
         return {
             "total_pnl": 245.67,
@@ -421,9 +397,7 @@ class MockPerformanceService:
             "max_drawdown": -8.2,
         }
 
-    async def get_strategy_detailed_metrics(
-        self, strategy_name: str
-    ) -> Dict[str, float]:
+    async def get_strategy_detailed_metrics(self, strategy_name: str) -> dict[str, float]:
         """Получить детальные метрики производительности"""
         return {
             "total_pnl": 245.67,
@@ -438,9 +412,7 @@ class MockPerformanceService:
             "var_95": -12.5,
         }
 
-    async def get_strategy_performance(
-        self, strategy_name: str, period: str
-    ) -> Dict[str, Any]:
+    async def get_strategy_performance(self, strategy_name: str, period: str) -> dict[str, Any]:
         """Получить производительность стратегии за период"""
         return await self.get_strategy_detailed_metrics(strategy_name)
 
@@ -448,7 +420,7 @@ class MockPerformanceService:
 # =================== UTILITY FUNCTIONS ===================
 
 
-def create_all_mock_services() -> Dict[str, Any]:
+def create_all_mock_services() -> dict[str, Any]:
     """Создать все mock сервисы"""
     logger.info("Создание всех mock сервисов")
 

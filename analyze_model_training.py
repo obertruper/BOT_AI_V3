@@ -130,9 +130,7 @@ def analyze_training():
     # Ищем финальный слой для direction
     final_direction_key = None
     for key in state_dict.keys():
-        if "direction" in key.lower() and (
-            "3.weight" in key or "final" in key or "output" in key
-        ):
+        if "direction" in key.lower() and ("3.weight" in key or "final" in key or "output" in key):
             final_direction_key = key
             break
 
@@ -185,9 +183,7 @@ def analyze_training():
             if final_acc < 0.4:
                 problems.append(f"Низкая точность модели: {final_acc:.1%}")
             elif final_acc > 0.35 and final_acc < 0.36:
-                problems.append(
-                    "Точность ~33% указывает на случайные предсказания (3 класса)"
-                )
+                problems.append("Точность ~33% указывает на случайные предсказания (3 класса)")
 
     # Проверка val_loss
     if "val_loss" in checkpoint:

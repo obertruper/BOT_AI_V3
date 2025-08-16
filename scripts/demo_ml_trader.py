@@ -10,7 +10,7 @@ import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -24,9 +24,7 @@ init(autoreset=True)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Настройка логирования
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -51,21 +49,15 @@ class MLTraderDemo:
                 checkpoint = torch.load(model_path, map_location=self.device)
                 if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
                     # Модель сохранена как checkpoint
-                    logger.info(
-                        "Модель сохранена как checkpoint, создаем mock модель для демо"
-                    )
+                    logger.info("Модель сохранена как checkpoint, создаем mock модель для демо")
                     self.model = None  # Будем использовать симуляцию
                 else:
                     self.model = checkpoint
                     if hasattr(self.model, "eval"):
                         self.model.eval()
-                logger.info(
-                    f"{Fore.GREEN}✅ Модель загружена (режим симуляции){Style.RESET_ALL}"
-                )
+                logger.info(f"{Fore.GREEN}✅ Модель загружена (режим симуляции){Style.RESET_ALL}")
             else:
-                logger.error(
-                    f"{Fore.RED}❌ Файл модели не найден: {model_path}{Style.RESET_ALL}"
-                )
+                logger.error(f"{Fore.RED}❌ Файл модели не найден: {model_path}{Style.RESET_ALL}")
                 return False
 
             # Загрузка scaler
@@ -75,9 +67,7 @@ class MLTraderDemo:
                     self.scaler = pickle.load(f)
                 logger.info(f"{Fore.GREEN}✅ Scaler загружен{Style.RESET_ALL}")
             else:
-                logger.error(
-                    f"{Fore.RED}❌ Файл scaler не найден: {scaler_path}{Style.RESET_ALL}"
-                )
+                logger.error(f"{Fore.RED}❌ Файл scaler не найден: {scaler_path}{Style.RESET_ALL}")
                 return False
 
             # Загрузка конфигурации
@@ -95,9 +85,7 @@ class MLTraderDemo:
             return True
 
         except Exception as e:
-            logger.error(
-                f"{Fore.RED}❌ Ошибка при загрузке модели: {e}{Style.RESET_ALL}"
-            )
+            logger.error(f"{Fore.RED}❌ Ошибка при загрузке модели: {e}{Style.RESET_ALL}")
             return False
 
     def generate_sample_data(self, num_points: int = 100) -> pd.DataFrame:
@@ -194,13 +182,11 @@ class MLTraderDemo:
 
                 features = self.scaler.transform(features)
             except Exception as e:
-                logger.warning(
-                    f"Ошибка при нормализации: {e}. Используем сырые данные."
-                )
+                logger.warning(f"Ошибка при нормализации: {e}. Используем сырые данные.")
 
         return features
 
-    def generate_signals(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+    def generate_signals(self, df: pd.DataFrame) -> list[dict[str, Any]]:
         """Генерация торговых сигналов"""
         signals = []
 
@@ -260,12 +246,10 @@ class MLTraderDemo:
 
         return signals
 
-    def print_signals(self, signals: List[Dict[str, Any]]):
+    def print_signals(self, signals: list[dict[str, Any]]):
         """Красивый вывод сигналов"""
         print(f"\n{Fore.CYAN}{'=' * 60}{Style.RESET_ALL}")
-        print(
-            f"{Fore.CYAN}📈 ТОРГОВЫЕ СИГНАЛЫ ОТ ML МОДЕЛИ (PatchTST){Style.RESET_ALL}"
-        )
+        print(f"{Fore.CYAN}📈 ТОРГОВЫЕ СИГНАЛЫ ОТ ML МОДЕЛИ (PatchTST){Style.RESET_ALL}")
         print(f"{Fore.CYAN}{'=' * 60}{Style.RESET_ALL}\n")
 
         for signal in signals:
@@ -287,9 +271,7 @@ class MLTraderDemo:
     async def run_demo(self):
         """Запуск демонстрации"""
         print(f"\n{Fore.CYAN}🚀 ДЕМОНСТРАЦИЯ ML ТРЕЙДЕРА{Style.RESET_ALL}")
-        print(
-            f"{Fore.CYAN}Модель: PatchTST (Patch Time Series Transformer){Style.RESET_ALL}\n"
-        )
+        print(f"{Fore.CYAN}Модель: PatchTST (Patch Time Series Transformer){Style.RESET_ALL}\n")
 
         # Загружаем модель
         if not self.load_model_components():
@@ -324,19 +306,11 @@ class MLTraderDemo:
                 sell_signals = sum(1 for s in signals if s["type"] == "SELL")
 
                 print("\n📊 Статистика:")
-                print(
-                    f"   {Fore.GREEN}Сигналов на покупку: {buy_signals}{Style.RESET_ALL}"
-                )
-                print(
-                    f"   {Fore.RED}Сигналов на продажу: {sell_signals}{Style.RESET_ALL}"
-                )
-                print(
-                    f"   Средняя уверенность: {np.mean([s['confidence'] for s in signals]):.1%}"
-                )
+                print(f"   {Fore.GREEN}Сигналов на покупку: {buy_signals}{Style.RESET_ALL}")
+                print(f"   {Fore.RED}Сигналов на продажу: {sell_signals}{Style.RESET_ALL}")
+                print(f"   Средняя уверенность: {np.mean([s['confidence'] for s in signals]):.1%}")
 
-                print(
-                    f"\n{Fore.CYAN}Ожидание 10 секунд... (Ctrl+C для выхода){Style.RESET_ALL}"
-                )
+                print(f"\n{Fore.CYAN}Ожидание 10 секунд... (Ctrl+C для выхода){Style.RESET_ALL}")
                 await asyncio.sleep(10)
 
             except KeyboardInterrupt:

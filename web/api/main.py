@@ -12,7 +12,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -52,11 +52,11 @@ except ImportError:
 
 
 # Глобальные переменные для интеграции
-_orchestrator: Optional[Any] = None
-_trader_manager: Optional[Any] = None
-_exchange_factory: Optional[Any] = None
-_config_manager: Optional[ConfigManager] = None
-_web_bridge: Optional[WebOrchestratorBridge] = None
+_orchestrator: Any | None = None
+_trader_manager: Any | None = None
+_exchange_factory: Any | None = None
+_config_manager: ConfigManager | None = None
+_web_bridge: WebOrchestratorBridge | None = None
 
 
 @asynccontextmanager
@@ -73,9 +73,7 @@ async def lifespan(app: FastAPI):
     if _orchestrator:
         logger.info("✅ Получен orchestrator из shared context")
     else:
-        logger.warning(
-            "⚠️ Orchestrator не найден в shared context, работаем в mock режиме"
-        )
+        logger.warning("⚠️ Orchestrator не найден в shared context, работаем в mock режиме")
 
     try:
         # Инициализация веб-моста с orchestrator из shared context
@@ -276,15 +274,11 @@ async def health_check():
 
         # Обновляем глобальные переменные из orchestrator если они не заданы
         if _orchestrator:
-            _trader_manager = _trader_manager or getattr(
-                _orchestrator, "trader_manager", None
-            )
+            _trader_manager = _trader_manager or getattr(_orchestrator, "trader_manager", None)
             _exchange_factory = _exchange_factory or getattr(
                 _orchestrator, "exchange_factory", None
             )
-            _config_manager = _config_manager or getattr(
-                _orchestrator, "config_manager", None
-            )
+            _config_manager = _config_manager or getattr(_orchestrator, "config_manager", None)
 
             # Обновляем статус компонентов
             basic_status.update(
@@ -366,7 +360,7 @@ async def get_system_status(bridge: WebOrchestratorBridge = Depends(get_web_brid
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get system status: {str(e)}",
+            detail=f"Failed to get system status: {e!s}",
         )
 
 
@@ -386,14 +380,12 @@ async def get_traders(bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get traders: {str(e)}",
+            detail=f"Failed to get traders: {e!s}",
         )
 
 
 @app.get("/api/traders/{trader_id}")
-async def get_trader(
-    trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)
-):
+async def get_trader(trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
     """Получение данных конкретного трейдера"""
     try:
         trader = await bridge.get_trader(trader_id)
@@ -412,14 +404,12 @@ async def get_trader(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get trader: {str(e)}",
+            detail=f"Failed to get trader: {e!s}",
         )
 
 
 @app.post("/api/traders/{trader_id}/start")
-async def start_trader(
-    trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)
-):
+async def start_trader(trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
     """Запуск трейдера"""
     try:
         result = await bridge.start_trader(trader_id)
@@ -431,14 +421,12 @@ async def start_trader(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start trader: {str(e)}",
+            detail=f"Failed to start trader: {e!s}",
         )
 
 
 @app.post("/api/traders/{trader_id}/stop")
-async def stop_trader(
-    trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)
-):
+async def stop_trader(trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
     """Остановка трейдера"""
     try:
         result = await bridge.stop_trader(trader_id)
@@ -450,7 +438,7 @@ async def stop_trader(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to stop trader: {str(e)}",
+            detail=f"Failed to stop trader: {e!s}",
         )
 
 
@@ -459,7 +447,7 @@ async def stop_trader(
 
 @app.get("/api/positions")
 async def get_positions(
-    trader_id: Optional[str] = None,
+    trader_id: str | None = None,
     bridge: WebOrchestratorBridge = Depends(get_web_bridge),
 ):
     """Получение списка позиций"""
@@ -473,7 +461,7 @@ async def get_positions(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get positions: {str(e)}",
+            detail=f"Failed to get positions: {e!s}",
         )
 
 
@@ -481,7 +469,7 @@ async def get_positions(
 async def get_system_config_raw():
     """Безопасная выдача полной конфигурации (секреты редактируются)."""
     try:
-        cfg_manager: Optional[ConfigManager] = _config_manager
+        cfg_manager: ConfigManager | None = _config_manager
         if not cfg_manager:
             cfg_manager = ConfigManager()
             await cfg_manager.initialize()
@@ -525,7 +513,7 @@ async def update_system_config(body: dict):
         if not isinstance(updates, dict):
             raise ValueError("updates must be a dict")
 
-        cfg_manager: Optional[ConfigManager] = _config_manager
+        cfg_manager: ConfigManager | None = _config_manager
         if not cfg_manager:
             cfg_manager = ConfigManager()
             await cfg_manager.initialize()
@@ -596,9 +584,7 @@ async def start_web_server(
 
     # Инициализация компонентов если переданы
     if orchestrator and trader_manager and exchange_factory and config_manager:
-        initialize_web_api(
-            orchestrator, trader_manager, exchange_factory, config_manager
-        )
+        initialize_web_api(orchestrator, trader_manager, exchange_factory, config_manager)
 
     # Настройка логирования
     logger_factory = get_global_logger_factory()

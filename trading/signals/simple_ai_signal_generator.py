@@ -10,7 +10,6 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -40,11 +39,11 @@ class SimpleSignalScore:
     should_trade: bool = False
 
     # Рекомендуемые уровни
-    suggested_sl: Optional[float] = None
-    suggested_tp: Optional[float] = None
+    suggested_sl: float | None = None
+    suggested_tp: float | None = None
 
     # Детали для логирования
-    reasons: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
 
 
 class SimpleAISignalGenerator:
@@ -72,9 +71,9 @@ class SimpleAISignalGenerator:
 
         # Состояние
         self._running = False
-        self._signal_tasks: Dict[str, asyncio.Task] = {}
-        self._last_signals: Dict[str, SimpleSignalScore] = {}
-        self._candle_cache: Dict[str, pd.DataFrame] = {}
+        self._signal_tasks: dict[str, asyncio.Task] = {}
+        self._last_signals: dict[str, SimpleSignalScore] = {}
+        self._candle_cache: dict[str, pd.DataFrame] = {}
 
     def _load_config(self):
         """Загрузка конфигурации"""
@@ -120,12 +119,8 @@ class SimpleAISignalGenerator:
                 sandbox=exchange_config["testnet"],
             )
 
-            self.logger.info(
-                f"📊 Настроено {len(self.symbols)} символов для отслеживания"
-            )
-            self.logger.info(
-                f"⏱️ Интервал генерации сигналов: {self.signal_interval} сек"
-            )
+            self.logger.info(f"📊 Настроено {len(self.symbols)} символов для отслеживания")
+            self.logger.info(f"⏱️ Интервал генерации сигналов: {self.signal_interval} сек")
 
         except Exception as e:
             self.logger.error(f"Ошибка инициализации: {e}")
@@ -180,9 +175,7 @@ class SimpleAISignalGenerator:
                 self.logger.error(f"❌ Ошибка генерации сигнала для {symbol}: {e}")
                 await asyncio.sleep(self.signal_interval)
 
-    async def _generate_and_score_signal(
-        self, symbol: str
-    ) -> Optional[SimpleSignalScore]:
+    async def _generate_and_score_signal(self, symbol: str) -> SimpleSignalScore | None:
         """Генерация и оценка сигнала для символа"""
         try:
             # Получаем свечные данные
@@ -229,16 +222,12 @@ class SimpleAISignalGenerator:
 
             if current_volume > avg_volume * 1.5:
                 signal_score.volume_score = 0.5
-                signal_score.reasons.append(
-                    f"Высокий объем: {current_volume / avg_volume:.1f}x"
-                )
+                signal_score.reasons.append(f"Высокий объем: {current_volume / avg_volume:.1f}x")
             elif current_volume > avg_volume:
                 signal_score.volume_score = 0.3
 
             # 4. Анализ моментума
-            price_change = (
-                candles["close"].iloc[-1] / candles["close"].iloc[-5] - 1
-            ) * 100
+            price_change = (candles["close"].iloc[-1] / candles["close"].iloc[-5] - 1) * 100
 
             if abs(price_change) > 2:
                 signal_score.momentum_score = 0.4
@@ -296,9 +285,7 @@ class SimpleAISignalGenerator:
 
     def _create_trading_signal(self, signal_score: SimpleSignalScore) -> TradingSignal:
         """Создание торгового сигнала из оценки"""
-        signal_type = (
-            SignalType.BUY if signal_score.direction == "BUY" else SignalType.SELL
-        )
+        signal_type = SignalType.BUY if signal_score.direction == "BUY" else SignalType.SELL
 
         # Получаем текущую цену из кэша
         candles = self._candle_cache.get(f"{signal_score.symbol}_15m")
@@ -331,7 +318,7 @@ class SimpleAISignalGenerator:
 
     async def _get_candles(
         self, symbol: str, timeframe: str = "15m", limit: int = 100
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Получение свечных данных"""
         try:
             # Проверяем кэш
@@ -339,9 +326,9 @@ class SimpleAISignalGenerator:
             if cache_key in self._candle_cache:
                 cached_data = self._candle_cache[cache_key]
                 # Если данные не старше 1 минуты - используем кэш
-                if len(cached_data) > 0 and (
-                    datetime.now() - cached_data.index[-1]
-                ) < timedelta(minutes=1):
+                if len(cached_data) > 0 and (datetime.now() - cached_data.index[-1]) < timedelta(
+                    minutes=1
+                ):
                     return cached_data
 
             # Получаем свежие данные
@@ -395,9 +382,7 @@ class SimpleAISignalGenerator:
                 # Выводим статистику каждые 5 минут
                 await asyncio.sleep(300)
 
-                active_signals = len(
-                    [s for s in self._last_signals.values() if s.should_trade]
-                )
+                active_signals = len([s for s in self._last_signals.values() if s.should_trade])
                 total_signals = len(self._last_signals)
 
                 self.logger.info(
@@ -409,6 +394,6 @@ class SimpleAISignalGenerator:
             except Exception as e:
                 self.logger.error(f"Ошибка мониторинга: {e}")
 
-    async def get_current_signals(self) -> Dict[str, SimpleSignalScore]:
+    async def get_current_signals(self) -> dict[str, SimpleSignalScore]:
         """Получение текущих сигналов"""
         return self._last_signals.copy()

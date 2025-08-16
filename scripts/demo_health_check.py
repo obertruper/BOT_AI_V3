@@ -54,9 +54,7 @@ async def demo_health_checker():
             system_info = detailed_report["details"]["system"]
 
             print("\nСистемные ресурсы:")
-            print(
-                f"  CPU: {system_info['cpu']['percent']}% ({system_info['cpu']['cores']} ядер)"
-            )
+            print(f"  CPU: {system_info['cpu']['percent']}% ({system_info['cpu']['cores']} ядер)")
             print(
                 f"  RAM: {system_info['memory']['percent']}% "
                 f"({system_info['memory']['available_gb']:.1f} GB доступно из "

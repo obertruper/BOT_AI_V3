@@ -95,9 +95,7 @@ async def test_bybit_auth():
                                 for coin_info in wallet["coin"]:
                                     balance = float(coin_info.get("walletBalance", 0))
                                     if balance > 0:
-                                        print(
-                                            f"   • {coin_info['coin']}: {balance:.4f}"
-                                        )
+                                        print(f"   • {coin_info['coin']}: {balance:.4f}")
                 else:
                     print("❌ Ошибка аутентификации:")
                     print(f"   Код: {data.get('retCode')}")

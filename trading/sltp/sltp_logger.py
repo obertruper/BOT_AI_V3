@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 SL/TP Logger для детального отслеживания операций со стоп-лоссами и тейк-профитами
 """
 
 from datetime import datetime
-from typing import Dict, List
 
 from core.logging.trade_logger import get_trade_logger
 
@@ -16,7 +14,7 @@ class SLTPLogger:
     def __init__(self):
         self.trade_logger = get_trade_logger()
 
-    def log_sltp_calculation(self, position: Dict, sl_config: Dict, tp_config: Dict):
+    def log_sltp_calculation(self, position: dict, sl_config: dict, tp_config: dict):
         """Логирование расчета SL/TP"""
         log_data = {
             "symbol": position.get("symbol"),
@@ -44,7 +42,7 @@ class SLTPLogger:
         )
         self.trade_logger._log_to_file("info", "SLTP_CALCULATION", log_data)
 
-    def log_partial_tp_setup(self, position_id: str, levels: List[Dict]):
+    def log_partial_tp_setup(self, position_id: str, levels: list[dict]):
         """Логирование настройки частичных TP"""
         log_data = {
             "position_id": position_id,
@@ -134,7 +132,7 @@ class SLTPLogger:
         )
         self.trade_logger._log_to_file("info", "SL_ADJUSTMENT", log_data)
 
-    def log_trailing_stop_state(self, position_id: str, state: Dict):
+    def log_trailing_stop_state(self, position_id: str, state: dict):
         """Логирование состояния trailing stop"""
         log_data = {
             "position_id": position_id,
@@ -162,7 +160,7 @@ class SLTPLogger:
         if state.get("updates_count", 0) % 5 == 0:  # Каждое 5-е обновление
             self.trade_logger._log_to_file("debug", "TRAILING_STOP_STATE", log_data)
 
-    def log_profit_protection(self, position_id: str, protection_level: Dict):
+    def log_profit_protection(self, position_id: str, protection_level: dict):
         """Логирование защиты прибыли"""
         log_data = {
             "position_id": position_id,
@@ -182,9 +180,7 @@ class SLTPLogger:
         )
         self.trade_logger._log_to_file("info", "PROFIT_PROTECTION", log_data)
 
-    def log_sltp_error(
-        self, position_id: str, operation: str, error: str, context: Dict = None
-    ):
+    def log_sltp_error(self, position_id: str, operation: str, error: str, context: dict = None):
         """Логирование ошибок SL/TP"""
         log_data = {
             "position_id": position_id,
@@ -194,14 +190,10 @@ class SLTPLogger:
             "timestamp": datetime.now().isoformat(),
         }
 
-        self.trade_logger.logger.error(
-            f"❌ ОШИБКА SL/TP [{operation}]: {error}", **log_data
-        )
+        self.trade_logger.logger.error(f"❌ ОШИБКА SL/TP [{operation}]: {error}", **log_data)
         self.trade_logger._log_to_file("error", "SLTP_ERROR", log_data)
 
-    def log_sltp_api_response(
-        self, position_id: str, api_call: str, request: Dict, response: Dict
-    ):
+    def log_sltp_api_response(self, position_id: str, api_call: str, request: dict, response: dict):
         """Логирование API вызовов для SL/TP"""
         log_data = {
             "position_id": position_id,
@@ -213,9 +205,7 @@ class SLTPLogger:
         }
 
         if log_data["success"]:
-            self.trade_logger.logger.debug(
-                f"✅ API SL/TP: {api_call} успешно", **log_data
-            )
+            self.trade_logger.logger.debug(f"✅ API SL/TP: {api_call} успешно", **log_data)
         else:
             self.trade_logger.logger.warning(
                 f"⚠️ API SL/TP: {api_call} | Код: {response.get('retCode')} | {response.get('retMsg')}",

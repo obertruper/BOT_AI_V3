@@ -1,0 +1,76 @@
+sequenceDiagram
+    participant ML as ML Manager
+    participant SD as SignalDeduplicator
+    participant TE as Trading Engine
+    participant RL as RateLimiter
+    participant BM as BalanceManager
+    participant EX as Exchange API
+    participant DB as PostgreSQL
+
+    %% Генерация сигнала
+    Note over ML: Генерация ML предсказания
+    ML->>ML: model.predict(data)
+    ML->>ML: create_signal(prediction)
+
+    %% Проверка на дубликат
+    ML->>SD: check_and_register_signal(signal)
+    SD->>SD: create_fingerprint(signal)
+    SD->>DB: SELECT * FROM signal_fingerprints WHERE hash = ?
+
+    alt Сигнал уникален
+        DB-->>SD: Не найдено
+        SD->>DB: INSERT INTO signal_fingerprints
+        SD-->>ML: true (уникальный)
+        ML->>TE: process_signal(signal)
+    else Сигнал дубликат
+        DB-->>SD: Найден дубликат
+        SD-->>ML: false (дубликат)
+        Note over ML: Пропуск дубликата
+    end
+
+    %% Обработка сигнала
+    Note over TE: Обработка уникального сигнала
+    TE->>TE: validate_signal(signal)
+
+    %% Проверка rate limit
+    TE->>RL: acquire('bybit', 'order')
+    RL->>RL: check_limits()
+
+    alt Rate limit не превышен
+        RL-->>TE: wait_time = 0
+    else Rate limit превышен
+        RL-->>TE: wait_time = 2.5s
+        TE->>TE: sleep(2.5s)
+    end
+
+    %% Проверка и резервирование баланса
+    TE->>BM: check_balance_availability(amount)
+    BM->>DB: SELECT available FROM balances
+    DB-->>BM: balance_data
+
+    alt Баланс достаточен
+        BM-->>TE: true, null
+        TE->>BM: reserve_balance(amount)
+        BM->>BM: create_reservation()
+        BM-->>TE: reservation_id
+
+        %% Создание ордера
+        TE->>EX: create_order(params)
+
+        alt Ордер успешен
+            EX-->>TE: order_result
+            TE->>BM: release_reservation(reservation_id)
+            BM->>BM: remove_reservation()
+            TE->>DB: INSERT INTO orders
+            Note over TE: Ордер создан успешно
+        else Ордер неуспешен
+            EX-->>TE: error
+            TE->>BM: release_reservation(reservation_id)
+            BM->>BM: remove_reservation()
+            Note over TE: Ошибка создания ордера
+        end
+
+    else Баланс недостаточен
+        BM-->>TE: false, "Insufficient balance"
+        Note over TE: Пропуск сигнала
+    end

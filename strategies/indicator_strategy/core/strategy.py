@@ -5,7 +5,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from strategies.base import IndicatorStrategyBase, MarketData, RiskParameters, TradingSignal
 from strategies.registry import register_strategy
@@ -35,7 +35,7 @@ class IndicatorStrategy(IndicatorStrategyBase):
     - Управление рисками для позиций 1-7 дней
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Инициализация стратегии"""
         super().__init__(config)
 
@@ -70,11 +70,9 @@ class IndicatorStrategy(IndicatorStrategyBase):
             risk_config=self.risk_config, signal_threshold=self.signal_threshold
         )
 
-        logger.info(
-            f"Initialized {len(self.indicator_manager.get_indicators())} indicators"
-        )
+        logger.info(f"Initialized {len(self.indicator_manager.get_indicators())} indicators")
 
-    async def _calculate_all_indicators(self, symbol: str) -> Dict[str, Dict[str, Any]]:
+    async def _calculate_all_indicators(self, symbol: str) -> dict[str, dict[str, Any]]:
         """
         Расчет всех индикаторов для символа
 
@@ -97,10 +95,7 @@ class IndicatorStrategy(IndicatorStrategyBase):
         cache_key = f"{symbol}_{df.index[-1]}"
         if cache_key in self.indicator_cache:
             cached_time = self.last_cache_update.get(cache_key)
-            if (
-                cached_time
-                and (datetime.now() - cached_time).seconds < self.cache_ttl_seconds
-            ):
+            if cached_time and (datetime.now() - cached_time).seconds < self.cache_ttl_seconds:
                 return self.indicator_cache[cache_key]
 
         # Расчет индикаторов
@@ -112,9 +107,7 @@ class IndicatorStrategy(IndicatorStrategyBase):
             results["trend"] = trend_indicators
 
         # Импульсные индикаторы
-        momentum_indicators = (
-            await self.indicator_manager.calculate_momentum_indicators(df)
-        )
+        momentum_indicators = await self.indicator_manager.calculate_momentum_indicators(df)
         if momentum_indicators:
             results["momentum"] = momentum_indicators
 
@@ -124,9 +117,7 @@ class IndicatorStrategy(IndicatorStrategyBase):
             results["volume"] = volume_indicators
 
         # Индикаторы волатильности
-        volatility_indicators = (
-            await self.indicator_manager.calculate_volatility_indicators(df)
-        )
+        volatility_indicators = await self.indicator_manager.calculate_volatility_indicators(df)
         if volatility_indicators:
             results["volatility"] = volatility_indicators
 
@@ -136,9 +127,7 @@ class IndicatorStrategy(IndicatorStrategyBase):
 
         return results
 
-    async def generate_signals(
-        self, market_data_batch: List[MarketData]
-    ) -> List[TradingSignal]:
+    async def generate_signals(self, market_data_batch: list[MarketData]) -> list[TradingSignal]:
         """
         Генерация сигналов для пакета данных
 
@@ -212,7 +201,7 @@ class IndicatorStrategy(IndicatorStrategyBase):
         return int(max_period * 1.2)
 
     async def on_signal_executed(
-        self, signal: TradingSignal, execution_result: Dict[str, Any]
+        self, signal: TradingSignal, execution_result: dict[str, Any]
     ) -> None:
         """Обработка результата исполнения сигнала"""
         await super().on_signal_executed(signal, execution_result)
@@ -225,20 +214,16 @@ class IndicatorStrategy(IndicatorStrategyBase):
             success_rate = self._successful_signals / self._total_signals
             logger.info(f"[{self.name}] Signal execution rate: {success_rate:.2%}")
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Получение статистики стратегии"""
         stats = {
             "total_signals": self._total_signals,
             "successful_signals": self._successful_signals,
             "success_rate": (
-                self._successful_signals / self._total_signals
-                if self._total_signals > 0
-                else 0
+                self._successful_signals / self._total_signals if self._total_signals > 0 else 0
             ),
             "active_indicators": (
-                len(self.indicator_manager.get_indicators())
-                if self.indicator_manager
-                else 0
+                len(self.indicator_manager.get_indicators()) if self.indicator_manager else 0
             ),
             "cache_size": len(self.indicator_cache),
             "symbols_tracked": len(self.market_data_history),
@@ -246,7 +231,7 @@ class IndicatorStrategy(IndicatorStrategyBase):
 
         return stats
 
-    def validate_config(self) -> Tuple[bool, Optional[str]]:
+    def validate_config(self) -> tuple[bool, str | None]:
         """Валидация конфигурации стратегии"""
         # Базовая валидация
         is_valid, error = super().validate_config()

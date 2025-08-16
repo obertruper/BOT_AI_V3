@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Форсированное создание тестовых сигналов и ордеров
 
@@ -16,7 +15,6 @@ import logging
 import sys
 import uuid
 from datetime import datetime, timedelta
-from typing import List
 
 # Добавляем путь к проекту
 sys.path.insert(0, "/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3")
@@ -112,7 +110,7 @@ class ForcedSignalOrderTester:
         except Exception as e:
             self.logger.error(f"❌ Ошибка создания баланса: {e}")
 
-    async def _create_forced_signals(self) -> List[Signal]:
+    async def _create_forced_signals(self) -> list[Signal]:
         """Создание форсированных сигналов"""
         self.logger.info("📝 Создаем форсированные сигналы...")
 
@@ -212,7 +210,7 @@ class ForcedSignalOrderTester:
 
         return signals
 
-    async def _force_create_orders_direct(self, signals: List[Signal]):
+    async def _force_create_orders_direct(self, signals: list[Signal]):
         """Прямое форсированное создание ордеров"""
         self.logger.info("⚡ ФОРСИРУЕМ создание ордеров напрямую...")
 
@@ -223,9 +221,7 @@ class ForcedSignalOrderTester:
 
                     # Определяем параметры ордера
                     order_side = self._get_order_side(signal.signal_type)
-                    order_type = (
-                        OrderType.LIMIT if signal.suggested_price else OrderType.MARKET
-                    )
+                    order_type = OrderType.LIMIT if signal.suggested_price else OrderType.MARKET
 
                     # Генерируем уникальный ID ордера
                     order_id = f"FORCED_{uuid.uuid4().hex[:8]}_{int(datetime.utcnow().timestamp())}"
@@ -238,9 +234,7 @@ class ForcedSignalOrderTester:
                         side=order_side,
                         order_type=order_type,
                         status=OrderStatus.PENDING,
-                        price=float(signal.suggested_price)
-                        if signal.suggested_price
-                        else None,
+                        price=float(signal.suggested_price) if signal.suggested_price else None,
                         quantity=float(signal.suggested_quantity),
                         filled_quantity=0.0,
                         stop_loss=(
@@ -327,7 +321,7 @@ class ForcedSignalOrderTester:
         except Exception as e:
             self.logger.error(f"   ❌ Ошибка симуляции исполнения: {e}")
 
-    async def _test_through_trading_engine(self, signals: List[Signal]):
+    async def _test_through_trading_engine(self, signals: list[Signal]):
         """Тестирование через торговый движок (если доступен)"""
         self.logger.info("🏗️  Тестируем через торговый движок...")
 
@@ -340,9 +334,7 @@ class ForcedSignalOrderTester:
 
             # Здесь можно добавить тестирование через реальный движок
             # Но это требует полной инициализации системы
-            self.logger.warning(
-                "   ⚠️  Тестирование через движок требует полной инициализации"
-            )
+            self.logger.warning("   ⚠️  Тестирование через движок требует полной инициализации")
 
         except ImportError as e:
             self.logger.warning(f"   ⚠️  Торговый движок недоступен: {e}")
@@ -379,9 +371,7 @@ class ForcedSignalOrderTester:
                 balances = balance_result.fetchall()
 
                 self.logger.info("📊 РЕЗУЛЬТАТЫ ДИАГНОСТИКИ:")
-                self.logger.info(
-                    f"   🔸 Форсированных сигналов: {forced_signals_count}"
-                )
+                self.logger.info(f"   🔸 Форсированных сигналов: {forced_signals_count}")
                 self.logger.info(f"   🔸 Форсированных ордеров: {forced_orders_count}")
                 self.logger.info(f"   🔸 Сделок: {trades_count}")
 
@@ -408,12 +398,8 @@ class ForcedSignalOrderTester:
                 if all_signals_count > 50 and all_orders_count < 10:
                     self.logger.error("❌ ПРОБЛЕМА: Много сигналов, мало ордеров!")
                     self.logger.error("   Возможные причины:")
-                    self.logger.error(
-                        "   1. SignalProcessor не подключен к OrderManager"
-                    )
-                    self.logger.error(
-                        "   2. TradingEngine не запущен или не обрабатывает сигналы"
-                    )
+                    self.logger.error("   1. SignalProcessor не подключен к OrderManager")
+                    self.logger.error("   2. TradingEngine не запущен или не обрабатывает сигналы")
                     self.logger.error("   3. Ошибки валидации сигналов")
                     self.logger.error("   4. Проблемы с риск-менеджментом")
 

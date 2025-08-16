@@ -4,7 +4,7 @@ Risk Manager для управления рисками торговли
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.logger import setup_risk_management_logger
 
@@ -16,8 +16,8 @@ class RiskStatus:
     def __init__(
         self,
         requires_action: bool = False,
-        action: Optional[str] = None,
-        message: Optional[str] = None,
+        action: str | None = None,
+        message: str | None = None,
     ):
         self.requires_action = requires_action
         self.action = action
@@ -27,9 +27,7 @@ class RiskStatus:
 class RiskManager:
     """Менеджер управления рисками с поддержкой профилей и ML-интеграции"""
 
-    def __init__(
-        self, config: Dict[str, Any], position_manager=None, exchange_registry=None
-    ):
+    def __init__(self, config: dict[str, Any], position_manager=None, exchange_registry=None):
         self.config = config
         self.position_manager = position_manager
         self.exchange_registry = exchange_registry
@@ -70,21 +68,17 @@ class RiskManager:
             f"   🔧 ML-интеграция: {'✅ Включена' if self.ml_enabled else '❌ Отключена'}"
         )
         self.logger.info(f"   📈 Доступные профили: {list(self.risk_profiles.keys())}")
-        self.logger.info(
-            f"   🏷️ Категории активов: {list(self.asset_categories.keys())}"
-        )
+        self.logger.info(f"   🏷️ Категории активов: {list(self.asset_categories.keys())}")
 
-    def get_risk_profile(self, profile_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_risk_profile(self, profile_name: str | None = None) -> dict[str, Any]:
         """Получение профиля риска"""
         if profile_name is None:
             profile_name = self.current_profile
 
-        result = self.risk_profiles.get(
-            profile_name, self.risk_profiles.get("standard", {})
-        )
+        result = self.risk_profiles.get(profile_name, self.risk_profiles.get("standard", {}))
         return result if isinstance(result, dict) else {}
 
-    def get_asset_category(self, symbol: str) -> Dict[str, Any]:
+    def get_asset_category(self, symbol: str) -> dict[str, Any]:
         """Получение категории актива по символу"""
         for category_name, category_config in self.asset_categories.items():
             symbols = category_config.get("symbols", [])
@@ -97,9 +91,9 @@ class RiskManager:
 
     def calculate_position_size(
         self,
-        signal: Dict[str, Any],
-        balance: Optional[Decimal] = None,
-        profile_name: Optional[str] = None,
+        signal: dict[str, Any],
+        balance: Decimal | None = None,
+        profile_name: str | None = None,
     ) -> Decimal:
         """Расчет размера позиции с учетом профиля риска и категории актива"""
         if not self.enabled:
@@ -150,7 +144,7 @@ class RiskManager:
         self.logger.info(f"   ✅ Финальный размер позиции: ${adjusted_risk}")
         return adjusted_risk
 
-    def _calculate_ml_adjustment(self, signal: Dict[str, Any]) -> Decimal:
+    def _calculate_ml_adjustment(self, signal: dict[str, Any]) -> Decimal:
         """Расчет ML-корректировки для риска"""
         if not self.ml_enabled:
             return Decimal("1.0")
@@ -167,9 +161,7 @@ class RiskManager:
             buy_loss_threshold = Decimal(str(thresholds.get("buy_loss", 0.35)))
 
             # Получаем вероятности
-            profit_probability = Decimal(
-                str(ml_predictions.get("profit_probability", 0.5))
-            )
+            profit_probability = Decimal(str(ml_predictions.get("profit_probability", 0.5)))
             loss_probability = Decimal(str(ml_predictions.get("loss_probability", 0.5)))
 
             # Рассчитываем корректировку
@@ -185,7 +177,7 @@ class RiskManager:
             self.logger.warning(f"Ошибка расчета ML-корректировки: {e}")
             return Decimal("1.0")
 
-    async def check_signal_risk(self, signal: Dict[str, Any]) -> bool:
+    async def check_signal_risk(self, signal: dict[str, Any]) -> bool:
         """Проверяет риски для сигнала с учетом профилей и категорий"""
         if not self.enabled:
             self.logger.debug("🛑 RiskManager отключен, пропускаем проверку")
@@ -221,9 +213,7 @@ class RiskManager:
                 )
                 return False
             else:
-                self.logger.debug(
-                    f"   ✅ Плечо {leverage}x в пределах лимита {max_leverage}x"
-                )
+                self.logger.debug(f"   ✅ Плечо {leverage}x в пределах лимита {max_leverage}x")
 
             # Проверка размера позиции
             position_size = signal.get("position_size", 0)
@@ -265,7 +255,7 @@ class RiskManager:
             self.logger.error(f"❌ Ошибка проверки рисков для {symbol}: {e}")
             return False
 
-    def _check_ml_requirements(self, signal: Dict[str, Any], side: str) -> bool:
+    def _check_ml_requirements(self, signal: dict[str, Any], side: str) -> bool:
         """Проверка ML-требований для сигнала"""
         try:
             ml_predictions = signal.get("ml_predictions", {})
@@ -367,14 +357,10 @@ class RiskManager:
                 if position.size != 0:
                     # Получаем категорию актива для позиции
                     asset_category = self.get_asset_category(position.symbol)
-                    asset_risk_multiplier = Decimal(
-                        str(asset_category.get("risk_multiplier", 1.0))
-                    )
+                    asset_risk_multiplier = Decimal(str(asset_category.get("risk_multiplier", 1.0)))
 
                     # Рассчитываем риск с учетом категории
-                    position_risk = (
-                        abs(position.size) * self.risk_per_trade * asset_risk_multiplier
-                    )
+                    position_risk = abs(position.size) * self.risk_per_trade * asset_risk_multiplier
                     total_risk += position_risk
 
             return total_risk

@@ -15,7 +15,6 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Добавляем путь к проекту
 sys.path.append(str(Path(__file__).parent.parent))
@@ -35,7 +34,7 @@ class TemplateCrossVerification:
         self,
         template_name: str,
         task_content: str,
-        custom_params: Optional[dict] = None,
+        custom_params: dict | None = None,
     ):
         """Запуск кросс-верификации с шаблоном"""
 
@@ -123,9 +122,7 @@ class TemplateCrossVerification:
             # Показываем параметры
             params = config.get("params", {})
             if params:
-                print(
-                    f"   ⚙️ Параметры: {', '.join(f'{k}={v}' for k, v in params.items())}"
-                )
+                print(f"   ⚙️ Параметры: {', '.join(f'{k}={v}' for k, v in params.items())}")
 
             print()
 
@@ -161,9 +158,7 @@ class TemplateCrossVerification:
 
         # Примеры использования
         print("\n📖 Пример использования:")
-        print(
-            f'   python ai_agents/template_cross_verify.py {template_name} "Ваша задача здесь"'
-        )
+        print(f'   python ai_agents/template_cross_verify.py {template_name} "Ваша задача здесь"')
 
 
 async def main():
@@ -218,17 +213,13 @@ async def main():
     if not args.template_name or not args.task_content:
         print("❌ Необходимо указать название шаблона и содержание задачи!")
         print("\nИспользование:")
-        print(
-            "   python ai_agents/template_cross_verify.py <template_name> <task_content>"
-        )
+        print("   python ai_agents/template_cross_verify.py <template_name> <task_content>")
         print("\nДля просмотра шаблонов:")
         print("   python ai_agents/template_cross_verify.py --list")
         sys.exit(1)
 
     # Запускаем кросс-верификацию с шаблоном
-    await template_verifier.run_template_verification(
-        args.template_name, args.task_content
-    )
+    await template_verifier.run_template_verification(args.template_name, args.task_content)
 
 
 if __name__ == "__main__":

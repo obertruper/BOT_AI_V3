@@ -36,9 +36,7 @@ async def check_order():
         # Получаем активные ордера
         params = {"category": "linear", "settleCoin": "USDT"}
 
-        response = await client._make_request(
-            "GET", "/v5/order/realtime", params, auth=True
-        )
+        response = await client._make_request("GET", "/v5/order/realtime", params, auth=True)
         logger.info(f"📦 Активные ордера: {len(response['result']['list'])} шт.")
 
         for order in response["result"]["list"]:
@@ -51,9 +49,7 @@ async def check_order():
         params = {"category": "linear", "orderId": order_id}
 
         try:
-            response = await client._make_request(
-                "GET", "/v5/order/history", params, auth=True
-            )
+            response = await client._make_request("GET", "/v5/order/history", params, auth=True)
             if response["result"]["list"]:
                 order = response["result"]["list"][0]
                 logger.info("\n✅ Найден ордер в истории:")
@@ -74,9 +70,7 @@ async def check_order():
         logger.info(f"\n📊 Открытые позиции: {len(positions)} шт.")
         for pos in positions:
             logger.info(f"  - {pos.symbol}: {pos.side} {pos.size}")
-            logger.info(
-                f"    Entry: ${pos.mark_price:.2f}, PnL: ${pos.unrealised_pnl:.2f}"
-            )
+            logger.info(f"    Entry: ${pos.mark_price:.2f}, PnL: ${pos.unrealised_pnl:.2f}")
 
     except Exception as e:
         logger.error(f"❌ Ошибка: {e}")

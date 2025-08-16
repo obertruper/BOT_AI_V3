@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Enhanced Risk Calculator с ML-интеграцией
 Адаптировано из BOT_AI_V2 для BOT Trading v3
@@ -8,7 +7,7 @@ Enhanced Risk Calculator с ML-интеграцией
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ class RiskParameters:
     leverage: int
     risk_amount: float
     confidence_adjusted: bool = False
-    ml_score: Optional[float] = None
+    ml_score: float | None = None
 
 
 @dataclass
@@ -34,24 +33,22 @@ class MLSignalData:
     signal_strength: float  # 0.0 - 1.0
     confidence: float  # 0.0 - 1.0
     success_probability: float  # 0.0 - 1.0
-    stop_loss_pct: Optional[float] = None
-    take_profit_pct: Optional[float] = None
+    stop_loss_pct: float | None = None
+    take_profit_pct: float | None = None
     risk_level: str = "LOW"  # LOW, MEDIUM, HIGH
 
 
 class EnhancedRiskCalculator:
     """Улучшенный калькулятор рисков с ML-интеграцией"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.config = config
         self.risk_config = config.get("risk_management", {})
         self.ml_config = config.get("ml_integration", {})
 
         # Основные параметры риска
         self.risk_per_trade = Decimal(str(self.risk_config.get("risk_per_trade", 0.02)))
-        self.fixed_risk_balance = Decimal(
-            str(self.risk_config.get("fixed_risk_balance", 500))
-        )
+        self.fixed_risk_balance = Decimal(str(self.risk_config.get("fixed_risk_balance", 500)))
         self.max_leverage = self.risk_config.get("max_leverage", 20)
         self.min_notional = self.risk_config.get("min_notional", 5.0)
 
@@ -70,7 +67,7 @@ class EnhancedRiskCalculator:
         symbol: str,
         entry_price: float,
         ml_signal: MLSignalData,
-        account_balance: Optional[float] = None,
+        account_balance: float | None = None,
         risk_profile: str = "standard",
     ) -> RiskParameters:
         """
@@ -95,9 +92,7 @@ class EnhancedRiskCalculator:
             ml_adjustment = self._calculate_ml_adjustment(ml_signal)
 
             # Итоговый множитель риска
-            total_risk_multiplier = (
-                base_risk_multiplier * asset_risk_multiplier * ml_adjustment
-            )
+            total_risk_multiplier = base_risk_multiplier * asset_risk_multiplier * ml_adjustment
 
             # Расчет размера позиции
             position_size = self._calculate_position_size(
@@ -114,9 +109,7 @@ class EnhancedRiskCalculator:
 
             # Расчет суммы риска
             risk_amount = float(
-                self.fixed_risk_balance
-                * self.risk_per_trade
-                * Decimal(str(total_risk_multiplier))
+                self.fixed_risk_balance * self.risk_per_trade * Decimal(str(total_risk_multiplier))
             )
 
             logger.info(
@@ -145,8 +138,8 @@ class EnhancedRiskCalculator:
         self,
         entry_price: float,
         stop_loss_price: float,
-        risk_percentage: Optional[float] = None,
-        account_balance: Optional[float] = None,
+        risk_percentage: float | None = None,
+        account_balance: float | None = None,
     ) -> float:
         """
         Рассчитывает размер позиции на основе риска (формула из V2)
@@ -165,9 +158,7 @@ class EnhancedRiskCalculator:
                 risk_percentage = float(self.risk_per_trade)
 
             # Используем фиксированный баланс или реальный
-            balance = (
-                account_balance if account_balance else float(self.fixed_risk_balance)
-            )
+            balance = account_balance if account_balance else float(self.fixed_risk_balance)
 
             # Риск в долларах
             risk_amount = balance * risk_percentage
@@ -185,9 +176,7 @@ class EnhancedRiskCalculator:
             # Проверяем минимальный размер
             min_size = self.min_notional / entry_price
             if position_size < min_size:
-                logger.warning(
-                    f"Размер позиции {position_size} меньше минимального {min_size}"
-                )
+                logger.warning(f"Размер позиции {position_size} меньше минимального {min_size}")
                 position_size = min_size
 
             logger.info(
@@ -206,9 +195,9 @@ class EnhancedRiskCalculator:
         symbol: str,
         entry_price: float,
         side: str,
-        ml_signal: Optional[MLSignalData] = None,
-        volatility: Optional[float] = None,
-    ) -> Dict[str, float]:
+        ml_signal: MLSignalData | None = None,
+        volatility: float | None = None,
+    ) -> dict[str, float]:
         """
         Получает адаптивные параметры SL/TP на основе ML и волатильности
 
@@ -245,9 +234,7 @@ class EnhancedRiskCalculator:
 
             # Корректировка на основе волатильности
             if volatility:
-                volatility_factor = min(
-                    max(volatility / 0.02, 0.5), 2.0
-                )  # Ограничиваем 0.5-2.0
+                volatility_factor = min(max(volatility / 0.02, 0.5), 2.0)  # Ограничиваем 0.5-2.0
                 base_sl_pct *= volatility_factor
                 base_tp_pct *= volatility_factor
 
@@ -304,9 +291,7 @@ class EnhancedRiskCalculator:
         """
         try:
             # Получаем настройки волатильности
-            vol_config = self.config.get("enhanced_sltp", {}).get(
-                "volatility_adjustment", {}
-            )
+            vol_config = self.config.get("enhanced_sltp", {}).get("volatility_adjustment", {})
 
             if not vol_config.get("enabled", False):
                 return base_params
@@ -319,9 +304,7 @@ class EnhancedRiskCalculator:
 
             # Корректируем параметры
             adjusted_sl_pct = base_params.stop_loss_pct * normalized_vol * sl_multiplier
-            adjusted_tp_pct = (
-                base_params.take_profit_pct * normalized_vol * tp_multiplier
-            )
+            adjusted_tp_pct = base_params.take_profit_pct * normalized_vol * tp_multiplier
 
             # Ограничиваем значения
             adjusted_sl_pct = min(max(adjusted_sl_pct, 0.005), 0.10)  # 0.5% - 10%
@@ -402,13 +385,11 @@ class EnhancedRiskCalculator:
         self,
         entry_price: float,
         risk_multiplier: float,
-        account_balance: Optional[float] = None,
+        account_balance: float | None = None,
     ) -> float:
         """Рассчитывает размер позиции"""
         try:
-            balance = (
-                account_balance if account_balance else float(self.fixed_risk_balance)
-            )
+            balance = account_balance if account_balance else float(self.fixed_risk_balance)
             risk_amount = balance * float(self.risk_per_trade) * risk_multiplier
 
             # Используем 2% стоп-лосс для расчета
@@ -430,7 +411,7 @@ class EnhancedRiskCalculator:
 
     def _calculate_sltp_levels(
         self, ml_signal: MLSignalData, symbol: str, entry_price: float
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Рассчитывает уровни SL/TP"""
         try:
             # Используем значения из ML-сигнала или дефолтные
@@ -477,9 +458,7 @@ class EnhancedRiskCalculator:
             logger.error(f"Ошибка расчета leverage: {e}")
             return self.risk_config.get("default_leverage", 5)
 
-    def _get_fallback_parameters(
-        self, symbol: str, entry_price: float
-    ) -> RiskParameters:
+    def _get_fallback_parameters(self, symbol: str, entry_price: float) -> RiskParameters:
         """Возвращает базовые параметры при ошибке"""
         return RiskParameters(
             position_size=self.min_notional / entry_price,

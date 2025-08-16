@@ -15,7 +15,7 @@ Exchange Factory для BOT_Trading v3.0
 import asyncio
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any
 
 from core.logger import setup_logger
 
@@ -41,7 +41,7 @@ class ExchangeCredentials:
 
     api_key: str
     api_secret: str
-    passphrase: Optional[str] = None  # Для некоторых бирж (OKX, KuCoin)
+    passphrase: str | None = None  # Для некоторых бирж (OKX, KuCoin)
     sandbox: bool = False
     timeout: int = 30
 
@@ -52,7 +52,7 @@ class ExchangeConfig:
 
     exchange_type: ExchangeType
     credentials: ExchangeCredentials
-    settings: Optional[Dict[str, Any]] = None
+    settings: dict[str, Any] | None = None
 
 
 class ExchangeFactory:
@@ -67,10 +67,10 @@ class ExchangeFactory:
     """
 
     # Реестр классов клиентов
-    _exchange_classes: Dict[ExchangeType, Type[BaseExchangeInterface]] = {}
+    _exchange_classes: dict[ExchangeType, type[BaseExchangeInterface]] = {}
 
     # Кеш экземпляров
-    _client_cache: Dict[str, BaseExchangeInterface] = {}
+    _client_cache: dict[str, BaseExchangeInterface] = {}
 
     def __init__(self):
         # Логирование
@@ -108,13 +108,13 @@ class ExchangeFactory:
 
     def create_client(
         self,
-        exchange_type: Union[str, ExchangeType],
+        exchange_type: str | ExchangeType,
         api_key: str,
         api_secret: str,
-        passphrase: Optional[str] = None,
+        passphrase: str | None = None,
         sandbox: bool = False,
         timeout: int = 30,
-        cache_key: Optional[str] = None,
+        cache_key: str | None = None,
         force_new: bool = False,
         **kwargs,
     ) -> BaseExchangeInterface:
@@ -178,9 +178,7 @@ class ExchangeFactory:
             # Кешируем экземпляр
             self._client_cache[cache_key] = client
 
-            self.logger.info(
-                f"Created {exchange_type.value} client (sandbox={sandbox})"
-            )
+            self.logger.info(f"Created {exchange_type.value} client (sandbox={sandbox})")
             return client
 
         except Exception as e:
@@ -188,9 +186,7 @@ class ExchangeFactory:
             self.logger.error(error_msg)
             raise ExchangeError(str(exchange_type), error_msg)
 
-    def create_exchange(
-        self, exchange_type: Union[str, ExchangeType], **kwargs
-    ) -> BaseExchangeInterface:
+    def create_exchange(self, exchange_type: str | ExchangeType, **kwargs) -> BaseExchangeInterface:
         """
         Создание клиента биржи (алиас для create_client для совместимости)
 
@@ -206,7 +202,7 @@ class ExchangeFactory:
     def create_from_config(
         self,
         config: ExchangeConfig,
-        cache_key: Optional[str] = None,
+        cache_key: str | None = None,
         force_new: bool = False,
     ) -> BaseExchangeInterface:
         """
@@ -259,11 +255,11 @@ class ExchangeFactory:
             self.logger.error(f"Failed to connect client: {e}")
             raise ExchangeError(client.name, f"Connection failed: {e}")
 
-    def get_supported_exchanges(self) -> List[str]:
+    def get_supported_exchanges(self) -> list[str]:
         """Получение списка поддерживаемых бирж"""
         return [exchange.value for exchange in ExchangeFactory._exchange_classes.keys()]
 
-    def is_exchange_supported(self, exchange_type: Union[str, ExchangeType]) -> bool:
+    def is_exchange_supported(self, exchange_type: str | ExchangeType) -> bool:
         """Проверка поддержки биржи"""
         try:
             if isinstance(exchange_type, str):
@@ -272,7 +268,7 @@ class ExchangeFactory:
         except (ValueError, AttributeError):
             return False
 
-    def clear_cache(self, exchange_type: Optional[Union[str, ExchangeType]] = None):
+    def clear_cache(self, exchange_type: str | ExchangeType | None = None):
         """
         Очистка кеша клиентов
 
@@ -290,16 +286,14 @@ class ExchangeFactory:
                 exchange_type = exchange_type.lower()
 
             keys_to_remove = [
-                key
-                for key in self._client_cache.keys()
-                if key.startswith(f"{exchange_type}_")
+                key for key in self._client_cache.keys() if key.startswith(f"{exchange_type}_")
             ]
 
             for key in keys_to_remove:
                 del self._client_cache[key]
 
     @staticmethod
-    async def create_exchange_client(exchange_name: str) -> Optional[Any]:
+    async def create_exchange_client(exchange_name: str) -> Any | None:
         """Статический метод для создания клиента биржи"""
         import os
 
@@ -314,9 +308,7 @@ class ExchangeFactory:
                 testnet = os.getenv("BYBIT_TESTNET", "false").lower() == "true"
 
                 if not api_key or not api_secret:
-                    factory.logger.error(
-                        "Bybit credentials not available in environment"
-                    )
+                    factory.logger.error("Bybit credentials not available in environment")
                     return None
 
                 client = factory.create_client(
@@ -359,9 +351,7 @@ class ExchangeFactory:
 
         self.clear_cache()
 
-    def _validate_credentials(
-        self, api_key: str, api_secret: str, exchange_type: ExchangeType
-    ):
+    def _validate_credentials(self, api_key: str, api_secret: str, exchange_type: ExchangeType):
         """Валидация учетных данных"""
         # Разрешаем публичный доступ для загрузки рыночных данных
         if api_key == "public_access" and api_secret == "public_access":
@@ -369,9 +359,7 @@ class ExchangeFactory:
             return
 
         if not api_key or not api_secret:
-            raise AuthenticationError(
-                exchange_type.value, "API key and secret are required"
-            )
+            raise AuthenticationError(exchange_type.value, "API key and secret are required")
 
         # Дополнительная валидация для конкретных бирж
         if exchange_type == ExchangeType.BYBIT:
@@ -387,7 +375,7 @@ class ExchangeFactory:
                     f"Invalid Bybit API credentials format: key_len={len(api_key)}, secret_len={len(api_secret)}",
                 )
 
-    def get_client_info(self) -> Dict[str, Any]:
+    def get_client_info(self) -> dict[str, Any]:
         """Получение информации о клиентах в кеше"""
         info = {
             "total_clients": len(self._client_cache),
@@ -405,7 +393,7 @@ class ExchangeFactory:
 
 
 # Глобальный экземпляр фабрики
-_global_factory: Optional[ExchangeFactory] = None
+_global_factory: ExchangeFactory | None = None
 
 
 def get_exchange_factory() -> ExchangeFactory:
@@ -422,9 +410,7 @@ def create_bybit_client(
 ) -> BaseExchangeInterface:
     """Быстрое создание Bybit клиента"""
     factory = get_exchange_factory()
-    return factory.create_client(
-        ExchangeType.BYBIT, api_key, api_secret, sandbox=sandbox, **kwargs
-    )
+    return factory.create_client(ExchangeType.BYBIT, api_key, api_secret, sandbox=sandbox, **kwargs)
 
 
 def create_binance_client(
@@ -442,12 +428,12 @@ exchange_factory = get_exchange_factory()
 
 # Экспорт
 __all__ = [
+    "ExchangeConfig",
+    "ExchangeCredentials",
     "ExchangeFactory",
     "ExchangeType",
-    "ExchangeCredentials",
-    "ExchangeConfig",
-    "get_exchange_factory",
-    "exchange_factory",
-    "create_bybit_client",
     "create_binance_client",
+    "create_bybit_client",
+    "exchange_factory",
+    "get_exchange_factory",
 ]

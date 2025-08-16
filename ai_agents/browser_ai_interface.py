@@ -9,7 +9,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .claude_code_sdk import ClaudeCodeOptions, ClaudeCodeSDK, ThinkingMode
 
@@ -20,10 +20,10 @@ class AIModelConfig:
 
     name: str
     url: str
-    selectors: Dict[str, str]
+    selectors: dict[str, str]
     file_upload_method: str = "button"  # "button", "drag_drop", "input"
-    file_selectors: Dict[str, str] = field(default_factory=dict)
-    wait_selectors: List[str] = field(default_factory=list)
+    file_selectors: dict[str, str] = field(default_factory=dict)
+    wait_selectors: list[str] = field(default_factory=list)
     wait_time: int = 5000
     max_retries: int = 3
 
@@ -35,7 +35,7 @@ class BrowserAIInterface:
         self.claude_sdk = ClaudeCodeSDK()
         self.models = self._setup_models()
 
-    def _setup_models(self) -> Dict[str, AIModelConfig]:
+    def _setup_models(self) -> dict[str, AIModelConfig]:
         """Настройка конфигураций для различных AI моделей"""
         return {
             "grok4": AIModelConfig(
@@ -102,7 +102,7 @@ class BrowserAIInterface:
         self,
         model_name: str,
         prompt: str,
-        file_paths: List[str] = None,
+        file_paths: list[str] = None,
         use_existing_tab: bool = True,
     ) -> str:
         """Отправить запрос к AI модели через браузер используя Playwright MCP"""
@@ -134,16 +134,14 @@ class BrowserAIInterface:
             timeout=60000,
         )
 
-        result = await self.claude_sdk.query(
-            playwright_task, options, f"browser_ai_{model_name}"
-        )
+        result = await self.claude_sdk.query(playwright_task, options, f"browser_ai_{model_name}")
         return self._extract_ai_response(result)
 
     def _build_playwright_task(
         self,
         model_config: AIModelConfig,
         prompt: str,
-        file_paths: List[str] = None,
+        file_paths: list[str] = None,
         use_existing_tab: bool = True,
     ) -> str:
         """Построить задачу для Playwright MCP"""
@@ -164,9 +162,7 @@ class BrowserAIInterface:
                 ]
             )
         else:
-            task_parts.append(
-                f"   - Откройте новую вкладку: browser_navigate {model_config.url}"
-            )
+            task_parts.append(f"   - Откройте новую вкладку: browser_navigate {model_config.url}")
 
         task_parts.extend(
             [
@@ -183,7 +179,7 @@ class BrowserAIInterface:
             task_parts.extend(
                 [
                     "3. ЗАГРУЗКА ФАЙЛОВ:",
-                    f"   - Найдите кнопку загрузки: {model_config.file_selectors.get('attach_button', 'button[aria-label*=\"Attach\"]')}",
+                    f"   - Найдите кнопку загрузки: {model_config.file_selectors.get('attach_button', 'button[aria-label*="Attach"]')}",
                     "   - Нажмите на неё: browser_click",
                     f"   - Загрузите файлы: browser_file_upload с файлами {file_paths}",
                     "   - Дождитесь завершения загрузки",
@@ -262,8 +258,8 @@ class BrowserAIInterface:
         return claude_response.strip()
 
     async def compare_models(
-        self, prompt: str, models: List[str], file_paths: List[str] = None
-    ) -> Dict[str, str]:
+        self, prompt: str, models: list[str], file_paths: list[str] = None
+    ) -> dict[str, str]:
         """Сравнить ответы от нескольких моделей"""
         results = {}
 
@@ -287,9 +283,7 @@ class BrowserAIInterface:
 
         return results
 
-    def analyze_complexity(
-        self, prompt: str, file_paths: List[str] = None
-    ) -> Tuple[int, str]:
+    def analyze_complexity(self, prompt: str, file_paths: list[str] = None) -> tuple[int, str]:
         """Анализ сложности задачи (1-10) и обоснование"""
 
         complexity_score = 1
@@ -328,22 +322,16 @@ class BrowserAIInterface:
             python_files = [f for f in file_paths if f.endswith(".py")]
             for py_file in python_files[:3]:  # Анализируем первые 3 файла
                 try:
-                    with open(py_file, "r", encoding="utf-8") as f:
+                    with open(py_file, encoding="utf-8") as f:
                         content = f.read()
 
                     # Считаем функции, классы, строки
                     try:
                         tree = ast.parse(content)
                         functions = len(
-                            [
-                                n
-                                for n in ast.walk(tree)
-                                if isinstance(n, ast.FunctionDef)
-                            ]
+                            [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
                         )
-                        classes = len(
-                            [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
-                        )
+                        classes = len([n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)])
                         lines = len(content.split("\n"))
 
                         if lines > 100:
@@ -358,9 +346,7 @@ class BrowserAIInterface:
 
                     except SyntaxError:
                         complexity_score += 1
-                        reasons.append(
-                            f"{py_file}: синтаксические ошибки требуют анализа"
-                        )
+                        reasons.append(f"{py_file}: синтаксические ошибки требуют анализа")
 
                 except Exception:
                     pass
@@ -383,7 +369,7 @@ class BrowserAIInterface:
 
         return complexity_score, reasoning
 
-    def should_cross_verify(self, prompt: str, file_paths: List[str] = None) -> bool:
+    def should_cross_verify(self, prompt: str, file_paths: list[str] = None) -> bool:
         """Определить нужна ли кросс-проверка"""
 
         # Явный триггер
@@ -433,18 +419,17 @@ class SmartCrossVerifier:
     async def intelligent_query(
         self,
         prompt: str,
-        file_paths: List[str] = None,
+        file_paths: list[str] = None,
         force_cross_verify: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Интеллектуальный запрос с автоматическим решением о кросс-проверке"""
 
         # Анализируем нужна ли кросс-проверка
         complexity, complexity_reason = self.browser_interface.analyze_complexity(
             prompt, file_paths
         )
-        needs_verification = (
-            force_cross_verify
-            or self.browser_interface.should_cross_verify(prompt, file_paths)
+        needs_verification = force_cross_verify or self.browser_interface.should_cross_verify(
+            prompt, file_paths
         )
 
         result = {
@@ -468,33 +453,27 @@ class SmartCrossVerifier:
                     "response": simple_response,
                     "confidence_score": 0.8,  # Базовая уверенность для Claude
                     "models_used": ["claude_code_sdk"],
-                    "analysis": {
-                        "summary": "Простая задача, кросс-проверка не требуется"
-                    },
+                    "analysis": {"summary": "Простая задача, кросс-проверка не требуется"},
                 }
             )
 
         return result
 
     async def _cross_verify_response(
-        self, prompt: str, file_paths: List[str] = None
-    ) -> Dict[str, Any]:
+        self, prompt: str, file_paths: list[str] = None
+    ) -> dict[str, Any]:
         """Выполнить кросс-проверку через Grok 4 и OpenAI 3 Pro"""
 
         models = ["grok4", "openai_pro"]
 
         # Отправляем запросы параллельно
-        model_responses = await self.browser_interface.compare_models(
-            prompt, models, file_paths
-        )
+        model_responses = await self.browser_interface.compare_models(prompt, models, file_paths)
 
         # Анализируем согласованность ответов
         analysis = await self._analyze_response_consistency(model_responses, prompt)
 
         # Генерируем итоговый ответ
-        final_response = await self._generate_consensus_response(
-            model_responses, analysis, prompt
-        )
+        final_response = await self._generate_consensus_response(model_responses, analysis, prompt)
 
         return {
             "response": final_response,
@@ -504,25 +483,21 @@ class SmartCrossVerifier:
             "analysis": analysis,
         }
 
-    async def _simple_claude_response(
-        self, prompt: str, file_paths: List[str] = None
-    ) -> str:
+    async def _simple_claude_response(self, prompt: str, file_paths: list[str] = None) -> str:
         """Простой ответ через Claude Code SDK"""
 
         # Добавляем информацию о файлах в промпт если есть
         enhanced_prompt = prompt
         if file_paths:
-            enhanced_prompt += (
-                f"\n\nПрикрепленные файлы для анализа: {', '.join(file_paths)}"
-            )
+            enhanced_prompt += f"\n\nПрикрепленные файлы для анализа: {', '.join(file_paths)}"
 
         options = ClaudeCodeOptions(thinking_mode=ThinkingMode.NORMAL, max_turns=5)
 
         return await self.claude_sdk.query(enhanced_prompt, options, "simple_query")
 
     async def _analyze_response_consistency(
-        self, model_responses: Dict[str, Dict[str, Any]], original_query: str
-    ) -> Dict[str, Any]:
+        self, model_responses: dict[str, dict[str, Any]], original_query: str
+    ) -> dict[str, Any]:
         """Анализ согласованности ответов от разных AI"""
 
         successful_responses = {}
@@ -580,9 +555,7 @@ class SmartCrossVerifier:
         }}
         """
 
-        analysis_options = ClaudeCodeOptions(
-            thinking_mode=ThinkingMode.THINK_HARD, max_turns=3
-        )
+        analysis_options = ClaudeCodeOptions(thinking_mode=ThinkingMode.THINK_HARD, max_turns=3)
 
         analysis_response = await self.claude_sdk.query(
             analysis_prompt, analysis_options, "response_analyzer"
@@ -608,8 +581,8 @@ class SmartCrossVerifier:
 
     async def _generate_consensus_response(
         self,
-        model_responses: Dict[str, Dict[str, Any]],
-        analysis: Dict[str, Any],
+        model_responses: dict[str, dict[str, Any]],
+        analysis: dict[str, Any],
         original_query: str,
     ) -> str:
         """Генерация итогового консенсусного ответа"""
@@ -643,22 +616,20 @@ class SmartCrossVerifier:
         ## Консенсусный ответ
         [Основной ответ, объединяющий лучшие части]
 
-        ## Уровень согласия моделей: {analysis.get('agreement_level', 'unknown')}
-        ## Оценка надежности: {analysis.get('consistency_score', 0.5):.1f}/1.0
+        ## Уровень согласия моделей: {analysis.get("agreement_level", "unknown")}
+        ## Оценка надежности: {analysis.get("consistency_score", 0.5):.1f}/1.0
 
-        {"## Области согласия:" if analysis.get('key_agreements') else ""}
-        {chr(10).join(f"- {agreement}" for agreement in analysis.get('key_agreements', []))}
+        {"## Области согласия:" if analysis.get("key_agreements") else ""}
+        {chr(10).join(f"- {agreement}" for agreement in analysis.get("key_agreements", []))}
 
-        {"## Области разногласий:" if analysis.get('key_differences') else ""}
-        {chr(10).join(f"- {difference}" for difference in analysis.get('key_differences', []))}
+        {"## Области разногласий:" if analysis.get("key_differences") else ""}
+        {chr(10).join(f"- {difference}" for difference in analysis.get("key_differences", []))}
 
         ## Рекомендации:
-        {chr(10).join(f"- {rec}" for rec in analysis.get('recommendations', ['Используйте результат с осторожностью']))}
+        {chr(10).join(f"- {rec}" for rec in analysis.get("recommendations", ["Используйте результат с осторожностью"]))}
         """
 
-        consensus_options = ClaudeCodeOptions(
-            thinking_mode=ThinkingMode.THINK_HARDER, max_turns=5
-        )
+        consensus_options = ClaudeCodeOptions(thinking_mode=ThinkingMode.THINK_HARDER, max_turns=5)
 
         return await self.claude_sdk.query(
             consensus_prompt, consensus_options, "consensus_generator"
@@ -666,7 +637,7 @@ class SmartCrossVerifier:
 
     async def research_with_verification(
         self, topic: str, include_sources: bool = True, force_verification: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Исследование темы с обязательной верификацией"""
 
         research_query = f"""
@@ -679,14 +650,12 @@ class SmartCrossVerifier:
         4. Практические применения и кейсы
         5. Потенциальные проблемы и ограничения
         6. Перспективы развития
-        {'7. Надежные источники и ссылки для дополнительного изучения' if include_sources else ''}
+        {"7. Надежные источники и ссылки для дополнительного изучения" if include_sources else ""}
 
         Фокус на актуальной и проверенной информации.
         """
 
-        return await self.intelligent_query(
-            research_query, force_cross_verify=force_verification
-        )
+        return await self.intelligent_query(research_query, force_cross_verify=force_verification)
 
 
 class TerminalAICommands:
@@ -699,8 +668,8 @@ class TerminalAICommands:
     async def ask_multiple_models(
         self,
         question: str,
-        models: Optional[List[str]] = None,
-        file_paths: Optional[List[str]] = None,
+        models: list[str] | None = None,
+        file_paths: list[str] | None = None,
     ):
         """Задать вопрос нескольким моделям"""
         if models is None:
@@ -712,14 +681,12 @@ class TerminalAICommands:
             print(f"📎 Файлы: {', '.join(file_paths)}")
         print()
 
-        results = await self.browser_interface.compare_models(
-            question, models, file_paths
-        )
+        results = await self.browser_interface.compare_models(question, models, file_paths)
 
         for model, data in results.items():
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"🤖 Ответ от {data.get('name', model)}:")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
             if data["status"] == "success":
                 print(data["response"])
@@ -730,7 +697,7 @@ class TerminalAICommands:
     async def intelligent_ask(
         self,
         question: str,
-        file_paths: Optional[List[str]] = None,
+        file_paths: list[str] | None = None,
         force_cross_verify: bool = False,
     ):
         """Интеллектуальный запрос с автоматической кросс-проверкой"""
@@ -741,9 +708,7 @@ class TerminalAICommands:
             question, file_paths, force_cross_verify
         )
 
-        print(
-            f"📊 Сложность: {result['complexity_score']}/10 ({result['complexity_reason']})"
-        )
+        print(f"📊 Сложность: {result['complexity_score']}/10 ({result['complexity_reason']})")
         print(f"🔍 Кросс-проверка: {'Да' if result['verification_used'] else 'Нет'}")
         print(f"🎯 Уверенность: {result['confidence_score']:.1f}/1.0")
         print(f"🤖 Модели: {', '.join(result['models_used'])}")
@@ -806,9 +771,7 @@ class TerminalAICommands:
 
 
 # CLI функции для быстрого доступа
-async def ask_ai(
-    question: str, model: str = "grok4", file_paths: List[str] = None
-) -> str:
+async def ask_ai(question: str, model: str = "grok4", file_paths: list[str] = None) -> str:
     """Быстрый вопрос к AI модели"""
     interface = BrowserAIInterface()
     response = await interface.query_model_via_browser(model, question, file_paths)
@@ -816,16 +779,16 @@ async def ask_ai(
 
 
 async def smart_ask(
-    question: str, file_paths: List[str] = None, force_cross_verify: bool = False
-) -> Dict[str, Any]:
+    question: str, file_paths: list[str] = None, force_cross_verify: bool = False
+) -> dict[str, Any]:
     """Умный запрос с автоматической кросс-проверкой"""
     verifier = SmartCrossVerifier()
     return await verifier.intelligent_query(question, file_paths, force_cross_verify)
 
 
 async def cross_verify(
-    question: str, models: List[str] = None, file_paths: List[str] = None
-) -> Dict[str, Any]:
+    question: str, models: list[str] = None, file_paths: list[str] = None
+) -> dict[str, Any]:
     """Принудительная кросс-проверка ответов"""
     if models is None:
         models = ["grok4", "openai_pro"]
@@ -834,14 +797,14 @@ async def cross_verify(
     return await interface.compare_models(question, models, file_paths)
 
 
-async def compare_ai(question: str, file_paths: List[str] = None):
+async def compare_ai(question: str, file_paths: list[str] = None):
     """Сравнить ответы от разных AI"""
     terminal = TerminalAICommands()
     await terminal.ask_multiple_models(question, file_paths=file_paths)
 
 
 async def intelligent_ask(
-    question: str, file_paths: List[str] = None, force_cross_verify: bool = False
+    question: str, file_paths: list[str] = None, force_cross_verify: bool = False
 ):
     """Интеллектуальный вопрос с анализом сложности"""
     terminal = TerminalAICommands()
@@ -855,10 +818,10 @@ async def research(topic: str, verification: bool = True):
 
 
 async def upload_and_analyze(
-    file_paths: List[str],
+    file_paths: list[str],
     analysis_query: str = "Проанализируйте эти файлы",
-    models: List[str] = None,
-) -> Dict[str, Any]:
+    models: list[str] = None,
+) -> dict[str, Any]:
     """Загрузка файлов и анализ через браузерные AI"""
     if models is None:
         models = ["grok4", "openai_pro"]
@@ -899,9 +862,7 @@ if __name__ == "__main__":
 
         # 5. Исследование с верификацией
         print("\n5️⃣ Исследование с верификацией:")
-        await research(
-            "Применение ИИ в алгоритмической торговле 2024", verification=True
-        )
+        await research("Применение ИИ в алгоритмической торговле 2024", verification=True)
 
         print("\n✅ Демонстрация завершена!")
 

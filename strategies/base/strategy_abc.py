@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +45,12 @@ class MarketData:
     timeframe: str
 
     # Дополнительные поля для криптовалют
-    quote_volume: Optional[float] = None
-    trades_count: Optional[int] = None
-    buy_volume: Optional[float] = None
-    sell_volume: Optional[float] = None
+    quote_volume: float | None = None
+    trades_count: int | None = None
+    buy_volume: float | None = None
+    sell_volume: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование в словарь"""
         return {
             "symbol": self.symbol,
@@ -84,13 +84,13 @@ class TradingSignal:
     # Метаданные
     strategy_name: str
     timeframe: str
-    indicators_used: List[str]
+    indicators_used: list[str]
     reasoning: str
 
     # Опциональные поля
-    risk_reward_ratio: Optional[float] = None
-    expected_duration_hours: Optional[float] = None
-    metadata: Optional[Dict[str, Any]] = None
+    risk_reward_ratio: float | None = None
+    expected_duration_hours: float | None = None
+    metadata: dict[str, Any] | None = None
 
     @property
     def signal_strength(self) -> SignalStrength:
@@ -102,7 +102,7 @@ class TradingSignal:
         else:
             return SignalStrength.WEAK
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование в словарь для сериализации"""
         return {
             "timestamp": self.timestamp.isoformat(),
@@ -138,9 +138,7 @@ class RiskParameters:
     use_trailing_stop: bool = False
     trailing_activation_pct: float = 2.0
     trailing_distance_pct: float = 1.0
-    partial_close_levels: Optional[List[Tuple[float, float]]] = (
-        None  # [(уровень, процент)]
-    )
+    partial_close_levels: list[tuple[float, float]] | None = None  # [(уровень, процент)]
 
     def validate(self) -> bool:
         """Валидация параметров"""
@@ -158,7 +156,7 @@ class RiskParameters:
 class StrategyABC(ABC):
     """Абстрактный базовый класс для всех торговых стратегий"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Инициализация стратегии
 
@@ -178,7 +176,7 @@ class StrategyABC(ABC):
         pass
 
     @abstractmethod
-    async def analyze(self, market_data: MarketData) -> Optional[TradingSignal]:
+    async def analyze(self, market_data: MarketData) -> TradingSignal | None:
         """
         Анализ рыночных данных и генерация сигнала
 
@@ -191,9 +189,7 @@ class StrategyABC(ABC):
         pass
 
     @abstractmethod
-    async def generate_signals(
-        self, market_data_batch: List[MarketData]
-    ) -> List[TradingSignal]:
+    async def generate_signals(self, market_data_batch: list[MarketData]) -> list[TradingSignal]:
         """
         Генерация сигналов для пакета данных
 
@@ -216,7 +212,7 @@ class StrategyABC(ABC):
         pass
 
     @abstractmethod
-    def validate_config(self) -> Tuple[bool, Optional[str]]:
+    def validate_config(self) -> tuple[bool, str | None]:
         """
         Валидация конфигурации стратегии
 
@@ -225,21 +221,21 @@ class StrategyABC(ABC):
         """
         pass
 
-    async def on_position_opened(self, position: Dict[str, Any]) -> None:
+    async def on_position_opened(self, position: dict[str, Any]) -> None:
         """Колбэк при открытии позиции"""
         logger.info(f"[{self.name}] Position opened: {position}")
 
-    async def on_position_closed(self, position: Dict[str, Any]) -> None:
+    async def on_position_closed(self, position: dict[str, Any]) -> None:
         """Колбэк при закрытии позиции"""
         logger.info(f"[{self.name}] Position closed: {position}")
 
     async def on_signal_executed(
-        self, signal: TradingSignal, execution_result: Dict[str, Any]
+        self, signal: TradingSignal, execution_result: dict[str, Any]
     ) -> None:
         """Колбэк при исполнении сигнала"""
         logger.info(f"[{self.name}] Signal executed: {signal.signal_type.value}")
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Получение статуса стратегии"""
         return {
             "name": self.name,

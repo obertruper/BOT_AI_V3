@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Модели для хранения рыночных данных (OHLCV) и обработанных данных с индикаторами
 Адаптировано из LLM TRANSFORM для интеграции с BOT_AI_V3
@@ -58,9 +57,7 @@ class RawMarketData(Base):
 
     id = Column(BigInteger, primary_key=True)
     symbol = Column(String(20), nullable=False, index=True)
-    timestamp = Column(
-        BigInteger, nullable=False, index=True
-    )  # Unix timestamp в миллисекундах
+    timestamp = Column(BigInteger, nullable=False, index=True)  # Unix timestamp в миллисекундах
     datetime = Column(DateTime(timezone=True), nullable=False, index=True)
 
     # OHLCV данные
@@ -73,9 +70,7 @@ class RawMarketData(Base):
 
     # Метаданные
     interval_minutes = Column(Integer, nullable=False, default=15)
-    market_type = Column(
-        Enum(MarketType), default=MarketType.FUTURES
-    )  # Торгуем на фьючерсах
+    market_type = Column(Enum(MarketType), default=MarketType.FUTURES)  # Торгуем на фьючерсах
     exchange = Column(String(50), default="bybit")
 
     # Дополнительные поля для futures
@@ -87,9 +82,7 @@ class RawMarketData(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Связь с обработанными данными
-    processed_data = relationship(
-        "ProcessedMarketData", back_populates="raw_data", uselist=False
-    )
+    processed_data = relationship("ProcessedMarketData", back_populates="raw_data", uselist=False)
 
     # Уникальный индекс для предотвращения дубликатов
     __table_args__ = (
@@ -280,9 +273,7 @@ class MarketDataSnapshot(Base):
     is_active = Column(Boolean, default=True)
     data_quality_score = Column(Float, default=1.0)  # 0-1, качество данных
 
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         Index("idx_snapshot_symbol", "symbol"),

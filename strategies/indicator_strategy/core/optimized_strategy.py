@@ -8,7 +8,7 @@ import logging
 import time
 from collections import deque
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -119,15 +119,15 @@ class PerformanceTracker:
 class OptimizedIndicatorStrategy(IndicatorStrategy):
     """Оптимизированная версия индикаторной стратегии"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
 
         # Заменяем обычные DataFrame на CircularBuffer
-        self.market_buffers: Dict[str, CircularBuffer] = {}
+        self.market_buffers: dict[str, CircularBuffer] = {}
 
         # Оптимизированный кэш с хэш-ключами
-        self._cache_data: Dict[int, Dict[str, Any]] = {}
-        self._cache_timestamps: Dict[int, float] = {}
+        self._cache_data: dict[int, dict[str, Any]] = {}
+        self._cache_timestamps: dict[int, float] = {}
 
         # Пул для параллельных вычислений
         self.indicator_semaphore = asyncio.Semaphore(4)  # Ограничиваем параллелизм
@@ -165,7 +165,7 @@ class OptimizedIndicatorStrategy(IndicatorStrategy):
         return hash(key_str)
 
     @PerformanceTracker("calculate_all_indicators")
-    async def _calculate_all_indicators(self, symbol: str) -> Dict[str, Dict[str, Any]]:
+    async def _calculate_all_indicators(self, symbol: str) -> dict[str, dict[str, Any]]:
         """Параллельный расчет всех индикаторов"""
         if symbol not in self.market_buffers:
             logger.warning(f"No market data buffer for {symbol}")
@@ -195,15 +195,11 @@ class OptimizedIndicatorStrategy(IndicatorStrategy):
 
         # Запускаем все расчеты параллельно
         tasks = [
-            calculate_with_semaphore(
-                self.indicator_manager.calculate_trend_indicators, df.copy()
-            ),
+            calculate_with_semaphore(self.indicator_manager.calculate_trend_indicators, df.copy()),
             calculate_with_semaphore(
                 self.indicator_manager.calculate_momentum_indicators, df.copy()
             ),
-            calculate_with_semaphore(
-                self.indicator_manager.calculate_volume_indicators, df.copy()
-            ),
+            calculate_with_semaphore(self.indicator_manager.calculate_volume_indicators, df.copy()),
             calculate_with_semaphore(
                 self.indicator_manager.calculate_volatility_indicators, df.copy()
             ),
@@ -216,7 +212,7 @@ class OptimizedIndicatorStrategy(IndicatorStrategy):
         indicator_results = {}
         categories = ["trend", "momentum", "volume", "volatility"]
 
-        for category, result in zip(categories, results):
+        for category, result in zip(categories, results, strict=False):
             if isinstance(result, Exception):
                 logger.error(f"Error calculating {category} indicators: {result}")
                 continue
@@ -241,7 +237,7 @@ class OptimizedIndicatorStrategy(IndicatorStrategy):
 
         return indicator_results
 
-    async def analyze(self, market_data: MarketData) -> Optional[TradingSignal]:
+    async def analyze(self, market_data: MarketData) -> TradingSignal | None:
         """Оптимизированный анализ с батчированием"""
         if not self._is_initialized:
             logger.warning(f"{self.name} not initialized, skipping analysis")
@@ -253,9 +249,7 @@ class OptimizedIndicatorStrategy(IndicatorStrategy):
         # Остальная логика остается той же, но работает быстрее
         return await super().analyze(market_data)
 
-    async def process_batch(
-        self, market_data_batch: List[MarketData]
-    ) -> List[TradingSignal]:
+    async def process_batch(self, market_data_batch: list[MarketData]) -> list[TradingSignal]:
         """Пакетная обработка данных для дополнительной оптимизации"""
         if not market_data_batch:
             return []
@@ -284,14 +278,12 @@ class OptimizedIndicatorStrategy(IndicatorStrategy):
 
 
 # Фабричная функция для создания оптимизированной стратегии
-def create_optimized_strategy(config: Dict[str, Any]) -> OptimizedIndicatorStrategy:
+def create_optimized_strategy(config: dict[str, Any]) -> OptimizedIndicatorStrategy:
     """Создание оптимизированной стратегии с настройками производительности"""
 
     # Добавляем оптимальные настройки если их нет
     performance_config = config.copy()
-    performance_config.setdefault(
-        "cache_ttl_seconds", 30
-    )  # Короче TTL для актуальности
+    performance_config.setdefault("cache_ttl_seconds", 30)  # Короче TTL для актуальности
     performance_config.setdefault("max_history_length", 300)  # Меньше данных в памяти
 
     return OptimizedIndicatorStrategy(performance_config)

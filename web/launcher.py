@@ -31,15 +31,9 @@ def setup_environment():
 async def main():
     """Главная функция запуска"""
     parser = argparse.ArgumentParser(description="BOT_Trading v3.0 Web Interface")
-    parser.add_argument(
-        "--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)"
-    )
-    parser.add_argument(
-        "--port", type=int, default=8080, help="Port to bind to (default: 8080)"
-    )
-    parser.add_argument(
-        "--reload", action="store_true", help="Enable auto-reload for development"
-    )
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8080, help="Port to bind to (default: 8080)")
+    parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
 
     args = parser.parse_args()

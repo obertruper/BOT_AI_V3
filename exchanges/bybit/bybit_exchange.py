@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Bybit Exchange для BOT Trading v3
 
@@ -8,7 +7,6 @@ Bybit Exchange для BOT Trading v3
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Union
 
 from core.logger import setup_logger
 from exchanges.base.exchange_interface import BaseExchangeInterface
@@ -38,9 +36,7 @@ class BybitExchange(BaseExchangeInterface):
     унифицированный интерфейс для торговой системы.
     """
 
-    def __init__(
-        self, api_key: str, api_secret: str, sandbox: bool = False, timeout: int = 30
-    ):
+    def __init__(self, api_key: str, api_secret: str, sandbox: bool = False, timeout: int = 30):
         """
         Инициализация Bybit Exchange.
 
@@ -63,7 +59,7 @@ class BybitExchange(BaseExchangeInterface):
         self._connected = False
 
         # Кэш для свечей
-        self.candles_cache: Dict[str, Dict] = {}
+        self.candles_cache: dict[str, dict] = {}
         self.cache_ttl = 60  # 1 минута
 
         # Маппинг интервалов
@@ -129,7 +125,7 @@ class BybitExchange(BaseExchangeInterface):
         """Получение информации о бирже"""
         return await self.client.get_exchange_info()
 
-    async def get_instruments(self, category: Optional[str] = None) -> List[Instrument]:
+    async def get_instruments(self, category: str | None = None) -> list[Instrument]:
         """Получение списка инструментов"""
         return await self.client.get_instruments(category)
 
@@ -143,13 +139,11 @@ class BybitExchange(BaseExchangeInterface):
         """Получение информации об аккаунте"""
         return await self.client.get_account_info()
 
-    async def get_balances(self, account_type: Optional[str] = None) -> List[Balance]:
+    async def get_balances(self, account_type: str | None = None) -> list[Balance]:
         """Получение балансов"""
         return await self.client.get_balances(account_type)
 
-    async def get_balance(
-        self, currency: str, account_type: Optional[str] = None
-    ) -> Balance:
+    async def get_balance(self, currency: str, account_type: str | None = None) -> Balance:
         """Получение баланса конкретной валюты"""
         return await self.client.get_balance(currency, account_type)
 
@@ -159,7 +153,7 @@ class BybitExchange(BaseExchangeInterface):
         """Получение тикера"""
         return await self.client.get_ticker(symbol)
 
-    async def get_tickers(self, category: Optional[str] = None) -> List[Ticker]:
+    async def get_tickers(self, category: str | None = None) -> list[Ticker]:
         """Получение всех тикеров"""
         return await self.client.get_tickers(category)
 
@@ -171,14 +165,12 @@ class BybitExchange(BaseExchangeInterface):
         self,
         symbol: str,
         interval: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 500,
-    ) -> List[Kline]:
+    ) -> list[Kline]:
         """Получение свечей"""
-        return await self.client.get_klines(
-            symbol, interval, start_time, end_time, limit
-        )
+        return await self.client.get_klines(symbol, interval, start_time, end_time, limit)
 
     # =================== ТОРГОВЛЯ ===================
 
@@ -190,9 +182,7 @@ class BybitExchange(BaseExchangeInterface):
         """Отмена ордера"""
         return await self.client.cancel_order(symbol, order_id)
 
-    async def cancel_all_orders(
-        self, symbol: Optional[str] = None
-    ) -> List[OrderResponse]:
+    async def cancel_all_orders(self, symbol: str | None = None) -> list[OrderResponse]:
         """Отмена всех ордеров"""
         return await self.client.cancel_all_orders(symbol)
 
@@ -200,8 +190,8 @@ class BybitExchange(BaseExchangeInterface):
         self,
         symbol: str,
         order_id: str,
-        quantity: Optional[float] = None,
-        price: Optional[float] = None,
+        quantity: float | None = None,
+        price: float | None = None,
     ) -> OrderResponse:
         """Модификация ордера"""
         return await self.client.modify_order(symbol, order_id, quantity, price)
@@ -210,33 +200,31 @@ class BybitExchange(BaseExchangeInterface):
         """Получение информации об ордере"""
         return await self.client.get_order(symbol, order_id)
 
-    async def get_open_orders(self, symbol: Optional[str] = None) -> List[Order]:
+    async def get_open_orders(self, symbol: str | None = None) -> list[Order]:
         """Получение открытых ордеров"""
         return await self.client.get_open_orders(symbol)
 
     async def get_order_history(
         self,
-        symbol: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        symbol: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Order]:
+    ) -> list[Order]:
         """Получение истории ордеров"""
         return await self.client.get_order_history(symbol, start_time, end_time, limit)
 
     # =================== ПОЗИЦИИ ===================
 
-    async def get_positions(self, symbol: Optional[str] = None) -> List[Position]:
+    async def get_positions(self, symbol: str | None = None) -> list[Position]:
         """Получение позиций"""
         return await self.client.get_positions(symbol)
 
-    async def get_position(self, symbol: str) -> Optional[Position]:
+    async def get_position(self, symbol: str) -> Position | None:
         """Получение конкретной позиции"""
         return await self.client.get_position(symbol)
 
-    async def close_position(
-        self, symbol: str, quantity: Optional[float] = None
-    ) -> OrderResponse:
+    async def close_position(self, symbol: str, quantity: float | None = None) -> OrderResponse:
         """Закрытие позиции"""
         return await self.client.close_position(symbol, quantity)
 
@@ -249,20 +237,20 @@ class BybitExchange(BaseExchangeInterface):
         return await self.client.set_position_mode(symbol, hedge_mode)
 
     async def set_stop_loss(
-        self, symbol: str, stop_price: float, quantity: Optional[float] = None
+        self, symbol: str, stop_price: float, quantity: float | None = None
     ) -> OrderResponse:
         """Установка Stop Loss"""
         return await self.client.set_stop_loss(symbol, stop_price, quantity)
 
     async def set_take_profit(
-        self, symbol: str, take_price: float, quantity: Optional[float] = None
+        self, symbol: str, take_price: float, quantity: float | None = None
     ) -> OrderResponse:
         """Установка Take Profit"""
         return await self.client.set_take_profit(symbol, take_price, quantity)
 
     # =================== ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ===================
 
-    async def fetch_balance(self) -> Dict[str, Dict[str, float]]:
+    async def fetch_balance(self) -> dict[str, dict[str, float]]:
         """
         Получение баланса аккаунта
 
@@ -290,7 +278,7 @@ class BybitExchange(BaseExchangeInterface):
             logger.error(f"Ошибка получения баланса: {e}")
             return {}
 
-    async def load_markets(self) -> Dict[str, Dict[str, any]]:
+    async def load_markets(self) -> dict[str, dict[str, any]]:
         """
         Загрузка информации о торговых парах
 
@@ -329,7 +317,7 @@ class BybitExchange(BaseExchangeInterface):
             logger.error(f"Ошибка загрузки рынков: {e}")
             return {}
 
-    async def create_order(self, **kwargs) -> Dict[str, any]:
+    async def create_order(self, **kwargs) -> dict[str, any]:
         """
         Создание ордера (упрощенный интерфейс)
 
@@ -399,10 +387,10 @@ class BybitExchange(BaseExchangeInterface):
         self,
         symbol: str,
         side: str,
-        qty: Union[float, str],
+        qty: float | str,
         order_type: str = "Market",
         **kwargs,
-    ) -> Dict[str, any]:
+    ) -> dict[str, any]:
         """
         Синхронная версия place_order для обратной совместимости.
 
@@ -410,13 +398,13 @@ class BybitExchange(BaseExchangeInterface):
         """
         return self.legacy_adapter.place_order(symbol, side, qty, order_type, **kwargs)
 
-    def get_positions_sync(self, symbol: Optional[str] = None) -> Dict[str, any]:
+    def get_positions_sync(self, symbol: str | None = None) -> dict[str, any]:
         """
         Синхронная версия get_positions для обратной совместимости.
         """
         return self.legacy_adapter.get_positions(symbol)
 
-    def get_wallet_balance_sync(self, account_type: str = "UNIFIED") -> Dict[str, any]:
+    def get_wallet_balance_sync(self, account_type: str = "UNIFIED") -> dict[str, any]:
         """
         Синхронная версия get_wallet_balance для обратной совместимости.
         """
@@ -430,17 +418,15 @@ class BybitExchange(BaseExchangeInterface):
 
     async def get_trade_history(
         self,
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
         limit: int = 50,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ):
         """Получение истории сделок"""
         return await self.client.get_trade_history(symbol, limit, start_time, end_time)
 
-    async def modify_stop_loss(
-        self, symbol: str, order_id: str, stop_loss: float
-    ) -> OrderResponse:
+    async def modify_stop_loss(self, symbol: str, order_id: str, stop_loss: float) -> OrderResponse:
         """Модификация стоп-лосса"""
         return await self.client.modify_stop_loss(symbol, order_id, stop_loss)
 
@@ -452,7 +438,7 @@ class BybitExchange(BaseExchangeInterface):
 
     # =================== WEBSOCKET МЕТОДЫ ===================
 
-    async def start_websocket(self, channels: List[str], callback: callable) -> bool:
+    async def start_websocket(self, channels: list[str], callback: callable) -> bool:
         """Запуск WebSocket соединения"""
         try:
             return await self.client.start_websocket(channels, callback)
@@ -513,10 +499,10 @@ class BybitExchange(BaseExchangeInterface):
         self,
         symbol: str,
         timeframe: str = "15m",
-        since: Optional[int] = None,
-        limit: Optional[int] = None,
-        params: Dict = None,
-    ) -> List[List]:
+        since: int | None = None,
+        limit: int | None = None,
+        params: dict = None,
+    ) -> list[list]:
         """
         Метод для совместимости с ccxt интерфейсом.
         Проксирует вызов к клиенту.
@@ -538,11 +524,11 @@ class BybitExchange(BaseExchangeInterface):
     async def get_candles(
         self,
         symbol: str,
-        interval_minutes: Union[int, str],
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        interval_minutes: int | str,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 1000,
-    ) -> List[Candle]:
+    ) -> list[Candle]:
         """
         Получение свечей с биржи Bybit
 
@@ -576,9 +562,7 @@ class BybitExchange(BaseExchangeInterface):
                 }
                 interval_minutes = str_to_minutes.get(interval_minutes)
                 if not interval_minutes:
-                    raise ValueError(
-                        f"Unknown interval format: {interval_minutes_orig}"
-                    )
+                    raise ValueError(f"Unknown interval format: {interval_minutes_orig}")
 
             # Проверка кэша
             cache_key = f"{symbol}_{interval_minutes}_{start_time}_{end_time}_{limit}"
@@ -661,9 +645,7 @@ class BybitExchange(BaseExchangeInterface):
                     candle = Candle(
                         symbol=symbol,
                         exchange=self.name,
-                        interval_minutes=int(
-                            interval_minutes
-                        ),  # Убеждаемся что это int
+                        interval_minutes=int(interval_minutes),  # Убеждаемся что это int
                         timestamp=timestamp,
                         open_price=float(candle_data[1]),
                         high_price=float(candle_data[2]),
@@ -701,20 +683,18 @@ class BybitExchange(BaseExchangeInterface):
             logger.error(f"Failed to get candles for {symbol}: {e}")
             raise
 
-    def _is_cache_valid(self, cached_data: Dict) -> bool:
+    def _is_cache_valid(self, cached_data: dict) -> bool:
         """Проверка валидности кэша"""
         cache_age = (datetime.now() - cached_data["timestamp"]).total_seconds()
         return cache_age < self.cache_ttl
 
     async def get_recent_candles(
         self, symbol: str, interval_minutes: int, count: int = 100
-    ) -> List[Candle]:
+    ) -> list[Candle]:
         """Получение последних свечей"""
 
         end_time = datetime.now()
-        start_time = end_time - timedelta(
-            minutes=interval_minutes * count * 2
-        )  # С запасом
+        start_time = end_time - timedelta(minutes=interval_minutes * count * 2)  # С запасом
 
         candles = await self.get_candles(
             symbol=symbol,
@@ -749,9 +729,9 @@ def create_bybit_exchange(
 
 # Экспорт для удобства
 __all__ = [
-    "BybitExchange",
-    "BybitClient",
-    "BybitLegacyAdapter",
     "BybitAPIClient",
+    "BybitClient",
+    "BybitExchange",
+    "BybitLegacyAdapter",
     "create_bybit_exchange",
 ]

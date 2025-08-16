@@ -46,7 +46,7 @@ def visualize_directions(directions, probabilities):
     print("-" * 50)
 
     for i, (tf, dir_idx, probs) in enumerate(
-        zip(timeframes, directions, probabilities)
+        zip(timeframes, directions, probabilities, strict=False)
     ):
         symbol = symbols[dir_idx]
 
@@ -71,7 +71,7 @@ def calculate_weighted_decision(directions, weights):
     print("-" * 50)
 
     weighted_sum = 0
-    for i, (d, w) in enumerate(zip(directions, weights)):
+    for i, (d, w) in enumerate(zip(directions, weights, strict=False)):
         contribution = d * w
         weighted_sum += contribution
         print(f"Таймфрейм {i + 1}: {d} × {w:.1f} = {contribution:.2f}")
@@ -160,9 +160,7 @@ async def visualize_ml_system():
 
                 # Процесс принятия решения
                 weights = [0.4, 0.3, 0.2, 0.1]
-                weighted_sum, decision = calculate_weighted_decision(
-                    directions, weights
-                )
+                weighted_sum, decision = calculate_weighted_decision(directions, weights)
 
             # Будущие доходности
             print("\nПредсказанные доходности:")
@@ -186,9 +184,7 @@ async def visualize_ml_system():
             print("\nУровни управления риском:")
             print("-" * 50)
             print(f"Stop Loss:    ${sl_price:,.2f} ({prediction['stop_loss_pct']:.1%})")
-            print(
-                f"Take Profit:  ${tp_price:,.2f} ({prediction['take_profit_pct']:.1%})"
-            )
+            print(f"Take Profit:  ${tp_price:,.2f} ({prediction['take_profit_pct']:.1%})")
 
         # Риск
         print(f"\nУровень риска: {prediction['risk_level']}")

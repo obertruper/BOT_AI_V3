@@ -8,7 +8,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. **Activate venv first**: `source venv/bin/activate` before ANY command
 3. **API keys ONLY in .env** - check before commit: `git diff --staged | grep -i "api_key\|secret"`
 4. **Async/await everywhere** - use `async def`, `await`, `asyncio` for all I/O
-5. **TodoWrite required** for tasks with 3+ steps
+5. **USE SPECIALIZED AGENTS** - For any complex task, use the appropriate development agent
+
+## 🤖 ALWAYS USE DEVELOPMENT AGENTS
+
+**IMPORTANT**: For any complex development task in this project, you MUST use specialized agents. Do not try to solve complex problems directly - delegate to the appropriate agent.
+
+### Primary Development Agents (USE THESE FIRST)
+
+- **trading-core-expert**: For ALL trading logic, strategy implementation, order/position management, ML signal integration. Handles 7 exchanges via unified_launcher.py.
+- **ml-optimizer**: For UnifiedPatchTST model optimization, GPU inference, 240+ features, <20ms inference, PostgreSQL:5555 integration.
+- **api-developer**: For REST/WebSocket endpoints, exchange APIs, FastAPI implementation, 1000+ signals/sec, <50ms latency.
+- **database-architect**: For PostgreSQL:5555 schema design, query optimization, migrations, indexes, performance tuning.
+- **exchange-specialist**: For 7 crypto exchanges integration (Bybit, Binance, OKX, etc), rate limits, WebSocket streams.
+
+### Support Agents
+
+- **debug-specialist**: For ML pipeline issues, async/await deadlocks, memory leaks, PostgreSQL issues, distributed tracing.
+- **risk-analyzer**: For ML-aware risk controls, position sizing, VaR/CVaR calculations, stress testing for 50+ pairs.
+- **code-architect**: For system design, async architecture, microservices, event-driven patterns, UnifiedLauncher design.
+- **performance-tuner**: For ML pipeline optimization, reducing latency <50ms, GPU profiling, batch processing.
+- **test-architect**: For unit/integration/E2E tests, >90% coverage, pytest fixtures, async test patterns.
+
+### Quality Agents
+
+- **code-reviewer**: Use AFTER making changes to review async patterns, PostgreSQL queries, ML integration.
+- **refactor-expert**: For improving async patterns, ML pipeline optimization, PostgreSQL query refactoring.
+- **security-guardian**: For API key protection, zero-knowledge proofs, real-time threat detection.
+
+### When to Use Agents
+
+Use agents **IMMEDIATELY** when:
+
+- Implementing trading features → `trading-core-expert`
+- Optimizing ML model → `ml-optimizer`
+- Creating API endpoints → `api-developer`
+- Database changes → `database-architect`
+- Debugging errors → `debug-specialist`
+- ANY task with 3+ steps → relevant agent
+
+### MCP Servers Active
+
+Current MCP servers configured:
+
+- **postgres**: PostgreSQL on port 5555
+- **filesystem**: Project directory access
+- **puppeteer**: Browser automation (if needed)
+- **sonarqube**: Code quality analysis
+- **sequential-thinking**: Complex problem solving
+- **memory**: Knowledge graph for context
 
 ## Project Overview
 

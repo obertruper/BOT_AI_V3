@@ -49,7 +49,7 @@ class TestFeatureEngineerV2:
             prices.append(prices[-1] * (1 + ret))
 
         data = []
-        for i, (date, price) in enumerate(zip(dates, prices)):
+        for i, (date, price) in enumerate(zip(dates, prices, strict=False)):
             # Генерируем OHLC на основе цены
             noise = np.random.normal(0, 0.005, 4)
             open_price = price * (1 + noise[0])
@@ -83,9 +83,7 @@ class TestFeatureEngineerV2:
         # Дублируем для ETHUSDT с другими ценами
         eth_data = sample_data.copy()
         eth_data["symbol"] = "ETHUSDT"
-        eth_data["open"] = (
-            eth_data["open"] * 0.08
-        )  # ETH примерно в 12.5 раз дешевле BTC
+        eth_data["open"] = eth_data["open"] * 0.08  # ETH примерно в 12.5 раз дешевле BTC
         eth_data["high"] = eth_data["high"] * 0.08
         eth_data["low"] = eth_data["low"] * 0.08
         eth_data["close"] = eth_data["close"] * 0.08
@@ -159,9 +157,7 @@ class TestFeatureEngineerV2:
 
         # Проверяем корректность расчетов
         assert (result["high_low_ratio"] >= 1.0).all()  # high всегда >= low
-        assert (result["close_position"] >= 0).all() and (
-            result["close_position"] <= 1
-        ).all()
+        assert (result["close_position"] >= 0).all() and (result["close_position"] <= 1).all()
         assert (
             not result["returns"].isna().iloc[1:].any()
         )  # returns не должны быть NaN кроме первого
@@ -236,9 +232,7 @@ class TestFeatureEngineerV2:
         ]
 
         for indicator in expected_crypto_indicators:
-            assert indicator in data_with_tech.columns, (
-                f"Отсутствует криптоиндикатор: {indicator}"
-            )
+            assert indicator in data_with_tech.columns, f"Отсутствует криптоиндикатор: {indicator}"
 
         # Проверяем корректность Stochastic
         stoch_k_valid = data_with_tech["stoch_k"].dropna()
@@ -269,16 +263,12 @@ class TestFeatureEngineerV2:
         ]
 
         for feature in expected_microstructure:
-            assert feature in result.columns, (
-                f"Отсутствует микроструктурный признак: {feature}"
-            )
+            assert feature in result.columns, f"Отсутствует микроструктурный признак: {feature}"
 
         # Проверяем корректность расчетов
         assert (result["hl_spread"] >= 0).all()  # Спред не может быть отрицательным
         assert result["price_direction"].isin([-1, 0, 1]).all()  # Направление цены
-        assert (
-            result["dollar_volume"] > 0
-        ).all()  # Dollar volume должен быть положительным
+        assert (result["dollar_volume"] > 0).all()  # Dollar volume должен быть положительным
 
     def test_temporal_features(self, sample_config, sample_data):
         """Тест временных признаков"""
@@ -307,9 +297,7 @@ class TestFeatureEngineerV2:
         ]
 
         for feature in expected_temporal:
-            assert feature in result.columns, (
-                f"Отсутствует временной признак: {feature}"
-            )
+            assert feature in result.columns, f"Отсутствует временной признак: {feature}"
 
         # Проверяем корректность циклического кодирования
         assert (result["hour_sin"] >= -1).all() and (result["hour_sin"] <= 1).all()
@@ -373,9 +361,7 @@ class TestFeatureEngineerV2:
         # Создаем базовые признаки сначала
         data_with_basic = []
         for symbol in multi_symbol_data["symbol"].unique():
-            symbol_data = multi_symbol_data[
-                multi_symbol_data["symbol"] == symbol
-            ].copy()
+            symbol_data = multi_symbol_data[multi_symbol_data["symbol"] == symbol].copy()
             symbol_data = fe._create_basic_features(symbol_data)
             data_with_basic.append(symbol_data)
 
@@ -395,9 +381,7 @@ class TestFeatureEngineerV2:
         ]
 
         for feature in expected_cross_asset:
-            assert feature in result.columns, (
-                f"Отсутствует кросс-активный признак: {feature}"
-            )
+            assert feature in result.columns, f"Отсутствует кросс-активный признак: {feature}"
 
         # Проверяем наличие секторов
         sectors = result["sector"].unique()
@@ -422,9 +406,7 @@ class TestFeatureEngineerV2:
         # Проверяем отсутствие критических NaN в основных колонках
         critical_cols = ["symbol", "datetime", "close", "volume"]
         for col in critical_cols:
-            assert not result[col].isna().any(), (
-                f"Критическая колонка {col} содержит NaN"
-            )
+            assert not result[col].isna().any(), f"Критическая колонка {col} содержит NaN"
 
         # Проверяем типы данных
         assert pd.api.types.is_datetime64_any_dtype(result["datetime"])
@@ -474,13 +456,9 @@ class TestFeatureEngineerV2:
         # Проверяем, что критических NaN не осталось
         critical_cols = ["close", "volume", "open", "high", "low"]
         for col in critical_cols:
-            assert not result[col].isna().any(), (
-                f"В колонке {col} остались NaN после обработки"
-            )
+            assert not result[col].isna().any(), f"В колонке {col} остались NaN после обработки"
 
-    def test_prepare_trading_data_without_leakage(
-        self, sample_config, multi_symbol_data
-    ):
+    def test_prepare_trading_data_without_leakage(self, sample_config, multi_symbol_data):
         """Тест подготовки торговых данных без утечек"""
         fe = FeatureEngineer(sample_config)
         fe.disable_progress = True
@@ -518,10 +496,7 @@ class TestFeatureEngineerV2:
                 train_vals = train_data[col].dropna()
                 if len(original_vals) > 0 and len(train_vals) > 0:
                     # Проверяем, что значения примерно в том же диапазоне
-                    assert (
-                        abs(original_vals.mean() - train_vals.mean())
-                        < original_vals.std()
-                    )
+                    assert abs(original_vals.mean() - train_vals.mean()) < original_vals.std()
 
     def test_feature_statistics_logging(self, sample_config, sample_data, caplog):
         """Тест логирования статистики признаков"""
@@ -598,8 +573,7 @@ class TestFeatureEngineerEdgeCases:
                 {
                     "id": i,
                     "symbol": "BTCUSDT",
-                    "datetime": pd.Timestamp("2024-01-01")
-                    + pd.Timedelta(minutes=15 * i),
+                    "datetime": pd.Timestamp("2024-01-01") + pd.Timedelta(minutes=15 * i),
                     "timestamp": 1704067200 + 900 * i,
                     "open": (
                         50000 if i % 10 != 0 else 1e10
@@ -620,9 +594,7 @@ class TestFeatureEngineerEdgeCases:
         # Проверяем, что бесконечные значения были обработаны
         numeric_cols = result.select_dtypes(include=[np.number]).columns
         for col in numeric_cols:
-            assert not np.isinf(result[col]).any(), (
-                f"Колонка {col} содержит бесконечные значения"
-            )
+            assert not np.isinf(result[col]).any(), f"Колонка {col} содержит бесконечные значения"
 
 
 if __name__ == "__main__":

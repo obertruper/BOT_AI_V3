@@ -6,7 +6,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 import aiohttp
 from colorama import Fore, Style, init
@@ -35,7 +35,7 @@ class SystemMonitor:
         if self.session:
             await self.session.close()
 
-    async def get_health(self) -> Dict[str, Any]:
+    async def get_health(self) -> dict[str, Any]:
         """Получить статус здоровья системы"""
         try:
             async with self.session.get(f"{API_BASE_URL}/health") as resp:
@@ -46,7 +46,7 @@ class SystemMonitor:
         except Exception as e:
             return {"status": "offline", "error": str(e)}
 
-    async def get_traders(self) -> Dict[str, Any]:
+    async def get_traders(self) -> dict[str, Any]:
         """Получить список трейдеров"""
         try:
             async with self.session.get(f"{API_BASE_URL}/traders") as resp:
@@ -57,12 +57,10 @@ class SystemMonitor:
         except Exception as e:
             return {"error": str(e)}
 
-    async def get_signals(self, limit: int = 10) -> Dict[str, Any]:
+    async def get_signals(self, limit: int = 10) -> dict[str, Any]:
         """Получить последние сигналы"""
         try:
-            async with self.session.get(
-                f"{API_BASE_URL}/signals?limit={limit}"
-            ) as resp:
+            async with self.session.get(f"{API_BASE_URL}/signals?limit={limit}") as resp:
                 if resp.status == 200:
                     return await resp.json()
                 else:
@@ -70,7 +68,7 @@ class SystemMonitor:
         except Exception as e:
             return {"error": str(e)}
 
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """Получить метрики системы"""
         try:
             async with self.session.get(f"{API_BASE_URL}/metrics") as resp:
@@ -88,7 +86,7 @@ class SystemMonitor:
         print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}".center(80))
         print("=" * 80 + "\n")
 
-    def print_health_status(self, health: Dict[str, Any]):
+    def print_health_status(self, health: dict[str, Any]):
         """Печать статуса здоровья"""
         print(f"{Fore.YELLOW}📊 SYSTEM HEALTH{Style.RESET_ALL}")
         print("-" * 40)
@@ -124,7 +122,7 @@ class SystemMonitor:
                 if "error" in status:
                     print(f"    Error: {status['error']}")
 
-    def print_traders(self, traders_data: Dict[str, Any]):
+    def print_traders(self, traders_data: dict[str, Any]):
         """Печать информации о трейдерах"""
         print(f"\n{Fore.YELLOW}🤖 ACTIVE TRADERS{Style.RESET_ALL}")
         print("-" * 40)
@@ -140,9 +138,7 @@ class SystemMonitor:
 
         table_data = []
         for trader in traders:
-            status_color = (
-                Fore.GREEN if trader.get("state") == "RUNNING" else Fore.YELLOW
-            )
+            status_color = Fore.GREEN if trader.get("state") == "RUNNING" else Fore.YELLOW
             table_data.append(
                 [
                     trader.get("trader_id", "Unknown"),
@@ -156,7 +152,7 @@ class SystemMonitor:
         headers = ["Trader ID", "State", "Strategy", "Exchange", "Symbol"]
         print(tabulate(table_data, headers=headers, tablefmt="grid"))
 
-    def print_signals(self, signals_data: Dict[str, Any]):
+    def print_signals(self, signals_data: dict[str, Any]):
         """Печать последних сигналов"""
         print(f"\n{Fore.YELLOW}📈 RECENT SIGNALS{Style.RESET_ALL}")
         print("-" * 40)
@@ -196,7 +192,7 @@ class SystemMonitor:
         headers = ["Time", "Type", "Symbol", "Confidence", "Strength"]
         print(tabulate(table_data, headers=headers, tablefmt="grid"))
 
-    def print_metrics(self, metrics: Dict[str, Any]):
+    def print_metrics(self, metrics: dict[str, Any]):
         """Печать метрик системы"""
         print(f"\n{Fore.YELLOW}📊 SYSTEM METRICS{Style.RESET_ALL}")
         print("-" * 40)
@@ -266,12 +262,8 @@ async def main():
                             f"{Fore.YELLOW}⚠️  API might not be fully available (status: {resp.status}){Style.RESET_ALL}"
                         )
             except Exception:
-                print(
-                    f"{Fore.YELLOW}⚠️  Cannot connect to API at {API_BASE_URL}{Style.RESET_ALL}"
-                )
-                print(
-                    "    Make sure the web server is running: python3 web/launcher.py"
-                )
+                print(f"{Fore.YELLOW}⚠️  Cannot connect to API at {API_BASE_URL}{Style.RESET_ALL}")
+                print("    Make sure the web server is running: python3 web/launcher.py")
 
         # Запускаем мониторинг
         async with SystemMonitor() as monitor:

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Система мониторинга 499 ошибок
 Автоматически отслеживает и уведомляет о 499 ошибках
@@ -46,16 +45,14 @@ class Error499Monitor:
     async def _check_log_file(self, log_file: str):
         """Проверка конкретного лог файла"""
         try:
-            with open(log_file, "r", encoding="utf-8") as f:
+            with open(log_file, encoding="utf-8") as f:
                 content = f.read()
 
             for pattern in self.error_patterns:
                 matches = re.findall(pattern, content, re.IGNORECASE)
                 if matches:
                     self.error_count += len(matches)
-                    print(
-                        f"⚠️ Найдено {len(matches)} потенциальных 499 ошибок в {log_file}"
-                    )
+                    print(f"⚠️ Найдено {len(matches)} потенциальных 499 ошибок в {log_file}")
 
         except Exception as e:
             print(f"❌ Ошибка проверки лога {log_file}: {e}")
@@ -67,9 +64,7 @@ class Error499Monitor:
         print(f"   Время проверки: {datetime.now()}")
 
         if self.error_count > 0:
-            print(
-                "   ⚠️ Обнаружены 499 ошибки! Рекомендуется запустить fix_system_issues.py"
-            )
+            print("   ⚠️ Обнаружены 499 ошибки! Рекомендуется запустить fix_system_issues.py")
         else:
             print("   ✅ 499 ошибки не обнаружены")
 

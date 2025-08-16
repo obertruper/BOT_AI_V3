@@ -5,7 +5,7 @@
 
 import asyncio
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 sys.path.append(".")
@@ -38,7 +38,7 @@ async def create_test_long_signal():
             strategy="test_long_signal",
             timeframe="15m",
             exchange="bybit",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             metadata={
                 "test": True,
                 "ml_confidence": 0.85,

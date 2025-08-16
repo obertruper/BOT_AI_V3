@@ -5,7 +5,7 @@
 import signal
 import sys
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 import psutil
 
@@ -29,7 +29,7 @@ def print_banner() -> None:
     print(banner)
 
 
-def get_system_resources() -> Dict[str, Any]:
+def get_system_resources() -> dict[str, Any]:
     """Получение информации о системных ресурсах"""
     try:
         # Память
@@ -85,9 +85,7 @@ def validate_python_version() -> bool:
     current_version = sys.version_info[:2]
 
     if current_version < required_version:
-        print(
-            f"❌ Требуется Python {required_version[0]}.{required_version[1]} или выше"
-        )
+        print(f"❌ Требуется Python {required_version[0]}.{required_version[1]} или выше")
         print(f"❌ Текущая версия: {current_version[0]}.{current_version[1]}")
         return False
 
@@ -108,11 +106,11 @@ def format_duration(seconds: float) -> str:
     if seconds < 60:
         return f"{seconds:.1f} сек"
     elif seconds < 3600:
-        return f"{seconds/60:.1f} мин"
+        return f"{seconds / 60:.1f} мин"
     elif seconds < 86400:
-        return f"{seconds/3600:.1f} ч"
+        return f"{seconds / 3600:.1f} ч"
     else:
-        return f"{seconds/86400:.1f} дн"
+        return f"{seconds / 86400:.1f} дн"
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:

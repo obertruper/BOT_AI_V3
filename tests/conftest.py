@@ -279,8 +279,7 @@ def generate_random_candles():
 
             candles.append(
                 {
-                    "timestamp": datetime.utcnow().timestamp()
-                    + i * 900,  # 15 min intervals
+                    "timestamp": datetime.utcnow().timestamp() + i * 900,  # 15 min intervals
                     "open": open_price,
                     "high": high_price,
                     "low": low_price,

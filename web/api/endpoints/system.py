@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Системные эндпоинты для BOT Trading v3
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -28,7 +27,7 @@ class SystemStatus(BaseModel):
     start_time: datetime
     version: str
     environment: str
-    components: Dict[str, bool]
+    components: dict[str, bool]
     traders_count: int
     active_positions: int
 
@@ -37,7 +36,7 @@ class HealthCheck(BaseModel):
     """Модель проверки здоровья"""
 
     healthy: bool
-    components: Dict[str, Dict[str, Any]]
+    components: dict[str, dict[str, Any]]
     timestamp: datetime
     version: str
 
@@ -45,17 +44,17 @@ class HealthCheck(BaseModel):
 class SystemConfig(BaseModel):
     """Модель системной конфигурации"""
 
-    database: Dict[str, Any]
-    monitoring: Dict[str, Any]
-    logging: Dict[str, Any]
-    api: Dict[str, Any]
-    risk_management: Dict[str, Any]
+    database: dict[str, Any]
+    monitoring: dict[str, Any]
+    logging: dict[str, Any]
+    api: dict[str, Any]
+    risk_management: dict[str, Any]
 
 
 class SystemConfigUpdate(BaseModel):
     """Запрос на обновление системной конфигурации (плоский верхний уровень system)"""
 
-    updates: Dict[str, Any]
+    updates: dict[str, Any]
 
 
 @router.get("/status", response_model=SystemStatus)
@@ -88,7 +87,7 @@ async def get_system_status(
         logger.error(f"Ошибка получения статуса системы: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка получения статуса: {str(e)}",
+            detail=f"Ошибка получения статуса: {e!s}",
         )
 
 
@@ -157,7 +156,7 @@ async def get_system_config(
         logger.error(f"Ошибка получения конфигурации: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка получения конфигурации: {str(e)}",
+            detail=f"Ошибка получения конфигурации: {e!s}",
         )
 
 
@@ -165,7 +164,7 @@ async def get_system_config(
 async def update_system_config(
     request: SystemConfigUpdate,
     config_manager: ConfigManager = Depends(get_config_manager),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Обновить часть системной конфигурации (раздел system) и сохранить изменения.
 
@@ -196,13 +195,13 @@ async def update_system_config(
 @router.get("/config/raw")
 async def get_full_config(
     config_manager: ConfigManager = Depends(get_config_manager),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Получить всю конфигурацию (без фильтрации), для админских нужд UI."""
     try:
         cfg = config_manager.get_config()
 
         # Убираем секреты если встречаются типичные ключи
-        def _sanitize(d: Dict[str, Any]) -> Dict[str, Any]:
+        def _sanitize(d: dict[str, Any]) -> dict[str, Any]:
             redacted = {}
             for k, v in d.items():
                 lk = k.lower()
@@ -232,7 +231,7 @@ async def get_full_config(
 @router.post("/restart")
 async def restart_system(
     orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """
     Перезапустить систему.
 
@@ -255,14 +254,14 @@ async def restart_system(
         logger.error(f"Ошибка перезапуска системы: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка перезапуска: {str(e)}",
+            detail=f"Ошибка перезапуска: {e!s}",
         )
 
 
 @router.post("/shutdown")
 async def shutdown_system(
     orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """
     Остановить систему.
 
@@ -280,14 +279,14 @@ async def shutdown_system(
         logger.error(f"Ошибка остановки системы: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка остановки: {str(e)}",
+            detail=f"Ошибка остановки: {e!s}",
         )
 
 
 @router.get("/metrics")
 async def get_system_metrics(
     orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Получить системные метрики.
 
@@ -311,14 +310,12 @@ async def get_system_metrics(
         logger.error(f"Ошибка получения метрик: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка получения метрик: {str(e)}",
+            detail=f"Ошибка получения метрик: {e!s}",
         )
 
 
 @router.get("/logs")
-async def get_system_logs(
-    lines: int = 100, level: Optional[str] = None
-) -> Dict[str, Any]:
+async def get_system_logs(lines: int = 100, level: str | None = None) -> dict[str, Any]:
     """
     Получить последние логи системы.
 
@@ -346,5 +343,5 @@ async def get_system_logs(
         logger.error(f"Ошибка получения логов: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка получения логов: {str(e)}",
+            detail=f"Ошибка получения логов: {e!s}",
         )

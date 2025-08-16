@@ -36,9 +36,7 @@ print(f"  model_confidence (среднее sigmoid): {model_confidence:.6f}")
 
 # Из ml_manager.py строки 638-640
 # combined_confidence = signal_strength * 0.4 + model_confidence * 0.4 + (1.0 - avg_risk) * 0.2
-combined_confidence = (
-    signal_strength * 0.4 + model_confidence * 0.4 + (1.0 - avg_risk) * 0.2
-)
+combined_confidence = signal_strength * 0.4 + model_confidence * 0.4 + (1.0 - avg_risk) * 0.2
 
 print("\n📈 Итоговый расчет:")
 print(

@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Интеграция SL/TP с Order Manager
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from database.models import Order
 from database.models.base_models import OrderSide
@@ -15,7 +14,7 @@ from trading.sltp.enhanced_manager import EnhancedSLTPManager
 class SLTPIntegration:
     """Интеграция Enhanced SL/TP Manager с системой ордеров"""
 
-    def __init__(self, sltp_manager: Optional[EnhancedSLTPManager] = None):
+    def __init__(self, sltp_manager: EnhancedSLTPManager | None = None):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.sltp_manager = sltp_manager
 
@@ -88,32 +87,24 @@ class SLTPIntegration:
                 # Position из exchanges.base.models не имеет id, используем symbol как идентификатор
                 order.extra_data["position_id"] = f"{order.symbol}_{order.order_id}"
                 order.extra_data["sltp_created"] = True
-                order.extra_data["sl_order_id"] = (
-                    sl_tp_orders[0].id if sl_tp_orders else None
-                )
+                order.extra_data["sl_order_id"] = sl_tp_orders[0].id if sl_tp_orders else None
                 order.extra_data["tp_order_ids"] = (
                     [o.id for o in sl_tp_orders[1:]] if len(sl_tp_orders) > 1 else []
                 )
 
                 return True
             else:
-                self.logger.warning(
-                    f"Не удалось создать SL/TP ордера для {order.symbol}"
-                )
+                self.logger.warning(f"Не удалось создать SL/TP ордера для {order.symbol}")
                 return False
 
         except Exception as e:
-            self.logger.error(
-                f"Ошибка при создании SL/TP для ордера {order.order_id}: {e}"
-            )
+            self.logger.error(f"Ошибка при создании SL/TP для ордера {order.order_id}: {e}")
             import traceback
 
             traceback.print_exc()
             return False
 
-    async def update_position_sltp(
-        self, position_id: str, current_price: float
-    ) -> bool:
+    async def update_position_sltp(self, position_id: str, current_price: float) -> bool:
         """
         Обновление SL/TP для позиции (трейлинг стоп, защита прибыли)
 
@@ -129,9 +120,7 @@ class SLTPIntegration:
 
         try:
             # Обновляем трейлинг стоп
-            updated = await self.sltp_manager.update_trailing_stop(
-                position_id, current_price
-            )
+            updated = await self.sltp_manager.update_trailing_stop(position_id, current_price)
 
             if updated:
                 self.logger.info(f"✅ Обновлен трейлинг стоп для позиции {position_id}")
@@ -142,9 +131,7 @@ class SLTPIntegration:
             )
 
             if profit_protected:
-                self.logger.info(
-                    f"✅ Активирована защита прибыли для позиции {position_id}"
-                )
+                self.logger.info(f"✅ Активирована защита прибыли для позиции {position_id}")
 
             return updated or profit_protected
 
@@ -173,14 +160,10 @@ class SLTPIntegration:
             )
 
             if executed:
-                self.logger.info(
-                    f"✅ Выполнен частичный Take Profit для позиции {position_id}"
-                )
+                self.logger.info(f"✅ Выполнен частичный Take Profit для позиции {position_id}")
 
             return executed
 
         except Exception as e:
-            self.logger.error(
-                f"Ошибка проверки частичного TP для позиции {position_id}: {e}"
-            )
+            self.logger.error(f"Ошибка проверки частичного TP для позиции {position_id}: {e}")
             return False

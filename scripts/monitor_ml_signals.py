@@ -102,9 +102,7 @@ def monitor_loop():
                     print("  Components:")
                     for comp, active in components.items():
                         emoji = "✅" if active else "❌"
-                        print(
-                            f"    {emoji} {comp}: {'active' if active else 'inactive'}"
-                        )
+                        print(f"    {emoji} {comp}: {'active' if active else 'inactive'}")
             else:
                 print(f"  {Fore.RED}❌ Cannot connect to API{Style.RESET_ALL}")
 
@@ -121,9 +119,7 @@ def monitor_loop():
                 else:
                     print(f"  {Fore.YELLOW}⚠️  No recent signals{Style.RESET_ALL}")
             else:
-                print(
-                    f"  {Fore.YELLOW}⚠️  ML signals endpoint not available{Style.RESET_ALL}"
-                )
+                print(f"  {Fore.YELLOW}⚠️  ML signals endpoint not available{Style.RESET_ALL}")
 
             # 3. Трейдеры
             print(f"\n{Fore.GREEN}👥 TRADERS:")
@@ -174,9 +170,7 @@ if __name__ == "__main__":
             time.sleep(2)
             monitor_loop()
         else:
-            print(
-                f"{Fore.RED}❌ API returned status code: {response.status_code}{Style.RESET_ALL}"
-            )
+            print(f"{Fore.RED}❌ API returned status code: {response.status_code}{Style.RESET_ALL}")
     except requests.exceptions.ConnectionError:
         print(f"{Fore.RED}❌ Cannot connect to API at {API_URL}{Style.RESET_ALL}")
         print(f"{Fore.YELLOW}Make sure the trading system is running{Style.RESET_ALL}")

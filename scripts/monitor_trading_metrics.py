@@ -7,7 +7,7 @@ Real-time Trading Metrics Monitor
 import asyncio
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import psutil
 from rich.console import Console
@@ -69,16 +69,12 @@ class TradingMetricsMonitor:
         async with get_async_db() as db:
             # Активные ордера
             active_orders = await db.execute(
-                select(func.count(Order.id)).where(
-                    Order.status.in_(["open", "pending"])
-                )
+                select(func.count(Order.id)).where(Order.status.in_(["open", "pending"]))
             )
             active_orders_count = active_orders.scalar()
 
             # Сделки за последние 24 часа
-            yesterday = datetime.now(timezone.utc).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
+            yesterday = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
             trades_today = await db.execute(
                 select(func.count(Trade.id), func.sum(Trade.pnl)).where(
                     Trade.timestamp >= yesterday
@@ -88,9 +84,9 @@ class TradingMetricsMonitor:
 
             # Текущий баланс
             balances = await db.execute(
-                select(
-                    Balance.asset, Balance.free, Balance.locked, Balance.exchange
-                ).where(Balance.asset == "USDT")
+                select(Balance.asset, Balance.free, Balance.locked, Balance.exchange).where(
+                    Balance.asset == "USDT"
+                )
             )
 
             # Win rate
@@ -151,9 +147,7 @@ class TradingMetricsMonitor:
         # Win Rate
         wr_color = "green" if metrics["win_rate"] > 50 else "red"
         wr_status = "✅" if metrics["win_rate"] > 50 else "❌"
-        table.add_row(
-            "Win Rate", Text(f"{metrics['win_rate']:.1f}%", style=wr_color), wr_status
-        )
+        table.add_row("Win Rate", Text(f"{metrics['win_rate']:.1f}%", style=wr_color), wr_status)
 
         return table
 
@@ -173,15 +167,9 @@ class TradingMetricsMonitor:
             else "green"
         )
         cpu_status = (
-            "🔴"
-            if system_metrics["cpu"] > 80
-            else "🟡"
-            if system_metrics["cpu"] > 50
-            else "🟢"
+            "🔴" if system_metrics["cpu"] > 80 else "🟡" if system_metrics["cpu"] > 50 else "🟢"
         )
-        table.add_row(
-            "CPU", Text(f"{system_metrics['cpu']:.1f}%", style=cpu_color), cpu_status
-        )
+        table.add_row("CPU", Text(f"{system_metrics['cpu']:.1f}%", style=cpu_color), cpu_status)
 
         # Memory
         mem_color = (
@@ -213,11 +201,7 @@ class TradingMetricsMonitor:
             else "green"
         )
         disk_status = (
-            "🔴"
-            if system_metrics["disk"] > 90
-            else "🟡"
-            if system_metrics["disk"] > 70
-            else "🟢"
+            "🔴" if system_metrics["disk"] > 90 else "🟡" if system_metrics["disk"] > 70 else "🟢"
         )
         table.add_row(
             "Disk",
@@ -256,9 +240,7 @@ class TradingMetricsMonitor:
             total_free += free
             total_locked += locked
 
-            table.add_row(
-                balance.exchange, f"${free:.2f}", f"${locked:.2f}", f"${total:.2f}"
-            )
+            table.add_row(balance.exchange, f"${free:.2f}", f"${locked:.2f}", f"${total:.2f}")
 
         # Итого
         table.add_row(
@@ -285,9 +267,7 @@ class TradingMetricsMonitor:
                     header_text = Text()
                     header_text.append("🚀 BOT_AI_V3 ", style="bold purple")
                     header_text.append("Trading Metrics Monitor | ", style="white")
-                    header_text.append(
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), style="cyan"
-                    )
+                    header_text.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), style="cyan")
                     layout["header"].update(Panel(header_text, style="bold"))
 
                     # Обновляем метрики

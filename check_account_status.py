@@ -43,26 +43,20 @@ async def check_account():
     async with aiohttp.ClientSession() as session:
         # Баланс
         url = "https://api.bybit.com/v5/account/wallet-balance"
-        async with session.get(
-            url, headers=headers, params={"accountType": "UNIFIED"}
-        ) as response:
+        async with session.get(url, headers=headers, params={"accountType": "UNIFIED"}) as response:
             if response.status == 200:
                 data = await response.json()
                 if data.get("retCode") == 0:
                     for account in data["result"]["list"]:
                         print(f"  Тип счета: {account['accountType']}")
                         print(f"  Общий баланс: ${account['totalEquity']}")
-                        print(
-                            f"  Доступный баланс: ${account['totalAvailableBalance']}"
-                        )
+                        print(f"  Доступный баланс: ${account['totalAvailableBalance']}")
                         print(f"  Используемая маржа: ${account['totalInitialMargin']}")
 
                         # Проверяем достаточность средств
                         available = float(account["totalAvailableBalance"])
                         if available < 10:
-                            print(
-                                "  ⚠️ ВНИМАНИЕ: Недостаточно средств! Нужно минимум $10"
-                            )
+                            print("  ⚠️ ВНИМАНИЕ: Недостаточно средств! Нужно минимум $10")
                         else:
                             print("  ✅ Достаточно средств для торговли")
 
@@ -86,9 +80,7 @@ async def check_account():
                 data = await response.json()
                 if data.get("retCode") == 0:
                     positions = data["result"]["list"]
-                    open_positions = [
-                        p for p in positions if float(p.get("size", "0")) != 0
-                    ]
+                    open_positions = [p for p in positions if float(p.get("size", "0")) != 0]
 
                     if open_positions:
                         for pos in open_positions:

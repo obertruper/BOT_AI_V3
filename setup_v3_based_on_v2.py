@@ -399,7 +399,7 @@ def update_config():
     config_path = Path("/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/config/trading.yaml")
 
     if config_path.exists():
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
     else:
         config = {}

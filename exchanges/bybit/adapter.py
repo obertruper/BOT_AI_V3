@@ -9,7 +9,7 @@ Bybit Adapter для BOT_Trading v3.0
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from core.logger import setup_logger
 
@@ -34,9 +34,7 @@ class BybitLegacyAdapter:
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = False):
         # Создаем унифицированный клиент
-        self.client = BybitClient(
-            api_key=api_key, api_secret=api_secret, sandbox=testnet
-        )
+        self.client = BybitClient(api_key=api_key, api_secret=api_secret, sandbox=testnet)
 
         # Логирование
         self.logger = setup_logger("bybit_adapter")
@@ -76,15 +74,15 @@ class BybitLegacyAdapter:
         self,
         symbol: str,
         side: str,
-        qty: Union[float, str],
+        qty: float | str,
         order_type: str = "Market",
         reduce_only: bool = False,
         time_in_force: str = "GTC",
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Legacy place_order метод для совместимости"""
         import asyncio
 
@@ -132,20 +130,18 @@ class BybitLegacyAdapter:
             self.logger.error(f"Legacy place_order failed: {e}")
             return {"retCode": 99999, "retMsg": str(e), "result": None}
 
-    def cancel_order(self, symbol: str, order_id: str) -> Dict[str, Any]:
+    def cancel_order(self, symbol: str, order_id: str) -> dict[str, Any]:
         """Legacy cancel_order метод"""
         import asyncio
 
         try:
             loop = asyncio.get_event_loop()
-            response = loop.run_until_complete(
-                self.client.cancel_order(symbol, order_id)
-            )
+            response = loop.run_until_complete(self.client.cancel_order(symbol, order_id))
             return self._convert_order_response_to_legacy(response)
         except Exception as e:
             return {"retCode": 99999, "retMsg": str(e), "result": None}
 
-    def get_positions(self, symbol: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+    def get_positions(self, symbol: str | None = None, **kwargs) -> dict[str, Any]:
         """Legacy get_positions метод"""
         import asyncio
 
@@ -164,7 +160,7 @@ class BybitLegacyAdapter:
         except Exception as e:
             return {"retCode": 99999, "retMsg": str(e), "result": None}
 
-    def get_wallet_balance(self, account_type: str = "UNIFIED") -> Dict[str, Any]:
+    def get_wallet_balance(self, account_type: str = "UNIFIED") -> dict[str, Any]:
         """Legacy get_wallet_balance метод"""
         import asyncio
 
@@ -186,9 +182,7 @@ class BybitLegacyAdapter:
             return {
                 "retCode": 0,
                 "retMsg": "OK",
-                "result": {
-                    "list": [{"accountType": account_type, "coin": legacy_coins}]
-                },
+                "result": {"list": [{"accountType": account_type, "coin": legacy_coins}]},
             }
 
         except Exception as e:
@@ -209,10 +203,10 @@ class BybitLegacyAdapter:
     def set_trading_stop(
         self,
         symbol: str,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Legacy set_trading_stop метод"""
         import asyncio
 
@@ -220,9 +214,7 @@ class BybitLegacyAdapter:
             loop = asyncio.get_event_loop()
 
             if stop_loss:
-                response = loop.run_until_complete(
-                    self.client.set_stop_loss(symbol, stop_loss)
-                )
+                response = loop.run_until_complete(self.client.set_stop_loss(symbol, stop_loss))
                 if not response.success:
                     return {
                         "retCode": 99999,
@@ -231,9 +223,7 @@ class BybitLegacyAdapter:
                     }
 
             if take_profit:
-                response = loop.run_until_complete(
-                    self.client.set_take_profit(symbol, take_profit)
-                )
+                response = loop.run_until_complete(self.client.set_take_profit(symbol, take_profit))
                 if not response.success:
                     return {
                         "retCode": 99999,
@@ -246,7 +236,7 @@ class BybitLegacyAdapter:
         except Exception as e:
             return {"retCode": 99999, "retMsg": str(e), "result": None}
 
-    def get_server_time(self) -> Dict[str, Any]:
+    def get_server_time(self) -> dict[str, Any]:
         """Legacy get_server_time метод"""
         import asyncio
 
@@ -277,9 +267,7 @@ class BybitLegacyAdapter:
 
     # =================== CONVERSION HELPERS ===================
 
-    def _convert_order_response_to_legacy(
-        self, response: OrderResponse
-    ) -> Dict[str, Any]:
+    def _convert_order_response_to_legacy(self, response: OrderResponse) -> dict[str, Any]:
         """Преобразование OrderResponse в legacy формат"""
         if response.success:
             return {
@@ -293,7 +281,7 @@ class BybitLegacyAdapter:
         else:
             return {"retCode": 99999, "retMsg": response.message, "result": None}
 
-    def _convert_position_to_legacy(self, position: Position) -> Dict[str, Any]:
+    def _convert_position_to_legacy(self, position: Position) -> dict[str, Any]:
         """Преобразование Position в legacy формат"""
         return {
             "symbol": position.symbol,
@@ -310,14 +298,10 @@ class BybitLegacyAdapter:
             "positionMode": getattr(position, "position_mode", "MergedSingle"),
             "autoAddMargin": 1 if getattr(position, "auto_add_margin", False) else 0,
             "createdTime": (
-                str(int(position.created_time.timestamp() * 1000))
-                if position.created_time
-                else "0"
+                str(int(position.created_time.timestamp() * 1000)) if position.created_time else "0"
             ),
             "updatedTime": (
-                str(int(position.updated_time.timestamp() * 1000))
-                if position.updated_time
-                else "0"
+                str(int(position.updated_time.timestamp() * 1000)) if position.updated_time else "0"
             ),
         }
 
@@ -330,18 +314,14 @@ class BybitAPIClient(BybitLegacyAdapter):
     методы для полной совместимости с существующим кодом.
     """
 
-    def __init__(
-        self, api_key="", api_secret="", testnet=False, config_path=None, db_path=None
-    ):
+    def __init__(self, api_key="", api_secret="", testnet=False, config_path=None, db_path=None):
         super().__init__(api_key, api_secret, testnet)
 
         # Legacy атрибуты для совместимости
         self.api_key = api_key
         self.api_secret = api_secret
         self.testnet = testnet
-        self.base_url = (
-            "https://api-testnet.bybit.com" if testnet else "https://api.bybit.com"
-        )
+        self.base_url = "https://api-testnet.bybit.com" if testnet else "https://api.bybit.com"
 
         # Метрики для совместимости
         self.request_count = 0
@@ -350,8 +330,8 @@ class BybitAPIClient(BybitLegacyAdapter):
         self.last_errors = []
 
     def _make_request(
-        self, method: str, endpoint: str, params: Dict = None, auth: bool = False
-    ) -> Dict[str, Any]:
+        self, method: str, endpoint: str, params: dict = None, auth: bool = False
+    ) -> dict[str, Any]:
         """Legacy _make_request метод"""
         import asyncio
 
@@ -398,9 +378,9 @@ def get_bybit_client(
 
 # Экспорт для совместимости
 __all__ = [
+    "BybitAPIClient",  # Полностью совместимый клиент
     "BybitClient",  # Новый унифицированный клиент
     "BybitLegacyAdapter",  # Адаптер для legacy кода
-    "BybitAPIClient",  # Полностью совместимый клиент
-    "get_bybit_client",  # Фабричная функция
     "clean_symbol",  # Утилита
+    "get_bybit_client",  # Фабричная функция
 ]

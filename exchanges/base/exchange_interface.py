@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .models import (
     AccountInfo,
@@ -88,15 +88,13 @@ class BaseExchangeInterface(ABC):
     реализованы каждой биржей для интеграции с системой торговли.
     """
 
-    def __init__(
-        self, api_key: str, api_secret: str, sandbox: bool = False, timeout: int = 30
-    ):
+    def __init__(self, api_key: str, api_secret: str, sandbox: bool = False, timeout: int = 30):
         self.api_key = api_key
         self.api_secret = api_secret
         self.sandbox = sandbox
         self.timeout = timeout
         self._connected = False
-        self._last_request_time: Optional[datetime] = None
+        self._last_request_time: datetime | None = None
 
     # =================== ОСНОВНЫЕ СВОЙСТВА ===================
 
@@ -157,7 +155,7 @@ class BaseExchangeInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_instruments(self, category: Optional[str] = None) -> List[Instrument]:
+    async def get_instruments(self, category: str | None = None) -> list[Instrument]:
         """
         Получение списка торговых инструментов
 
@@ -179,7 +177,7 @@ class BaseExchangeInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_balances(self, account_type: Optional[str] = None) -> List[Balance]:
+    async def get_balances(self, account_type: str | None = None) -> list[Balance]:
         """
         Получение балансов аккаунта
 
@@ -189,9 +187,7 @@ class BaseExchangeInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_balance(
-        self, currency: str, account_type: Optional[str] = None
-    ) -> Balance:
+    async def get_balance(self, currency: str, account_type: str | None = None) -> Balance:
         """Получение баланса конкретной валюты"""
         pass
 
@@ -203,7 +199,7 @@ class BaseExchangeInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_tickers(self, category: Optional[str] = None) -> List[Ticker]:
+    async def get_tickers(self, category: str | None = None) -> list[Ticker]:
         """Получение тикеров всех инструментов"""
         pass
 
@@ -217,10 +213,10 @@ class BaseExchangeInterface(ABC):
         self,
         symbol: str,
         interval: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 500,
-    ) -> List[Kline]:
+    ) -> list[Kline]:
         """
         Получение свечных данных
 
@@ -246,9 +242,7 @@ class BaseExchangeInterface(ABC):
         pass
 
     @abstractmethod
-    async def cancel_all_orders(
-        self, symbol: Optional[str] = None
-    ) -> List[OrderResponse]:
+    async def cancel_all_orders(self, symbol: str | None = None) -> list[OrderResponse]:
         """Отмена всех ордеров"""
         pass
 
@@ -257,8 +251,8 @@ class BaseExchangeInterface(ABC):
         self,
         symbol: str,
         order_id: str,
-        quantity: Optional[float] = None,
-        price: Optional[float] = None,
+        quantity: float | None = None,
+        price: float | None = None,
     ) -> OrderResponse:
         """Модификация ордера"""
         pass
@@ -269,37 +263,35 @@ class BaseExchangeInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_open_orders(self, symbol: Optional[str] = None) -> List[Order]:
+    async def get_open_orders(self, symbol: str | None = None) -> list[Order]:
         """Получение активных ордеров"""
         pass
 
     @abstractmethod
     async def get_order_history(
         self,
-        symbol: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        symbol: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Order]:
+    ) -> list[Order]:
         """Получение истории ордеров"""
         pass
 
     # =================== УПРАВЛЕНИЕ ПОЗИЦИЯМИ ===================
 
     @abstractmethod
-    async def get_positions(self, symbol: Optional[str] = None) -> List[Position]:
+    async def get_positions(self, symbol: str | None = None) -> list[Position]:
         """Получение открытых позиций"""
         pass
 
     @abstractmethod
-    async def get_position(self, symbol: str) -> Optional[Position]:
+    async def get_position(self, symbol: str) -> Position | None:
         """Получение позиции по символу"""
         pass
 
     @abstractmethod
-    async def close_position(
-        self, symbol: str, quantity: Optional[float] = None
-    ) -> OrderResponse:
+    async def close_position(self, symbol: str, quantity: float | None = None) -> OrderResponse:
         """Закрытие позиции"""
         pass
 
@@ -317,29 +309,25 @@ class BaseExchangeInterface(ABC):
 
     @abstractmethod
     async def set_stop_loss(
-        self, symbol: str, stop_price: float, quantity: Optional[float] = None
+        self, symbol: str, stop_price: float, quantity: float | None = None
     ) -> OrderResponse:
         """Установка Stop Loss"""
         pass
 
     @abstractmethod
     async def set_take_profit(
-        self, symbol: str, take_price: float, quantity: Optional[float] = None
+        self, symbol: str, take_price: float, quantity: float | None = None
     ) -> OrderResponse:
         """Установка Take Profit"""
         pass
 
     @abstractmethod
-    async def modify_stop_loss(
-        self, symbol: str, new_stop_price: float
-    ) -> OrderResponse:
+    async def modify_stop_loss(self, symbol: str, new_stop_price: float) -> OrderResponse:
         """Модификация Stop Loss"""
         pass
 
     @abstractmethod
-    async def modify_take_profit(
-        self, symbol: str, new_take_price: float
-    ) -> OrderResponse:
+    async def modify_take_profit(self, symbol: str, new_take_price: float) -> OrderResponse:
         """Модификация Take Profit"""
         pass
 
@@ -348,18 +336,18 @@ class BaseExchangeInterface(ABC):
     @abstractmethod
     async def get_trade_history(
         self,
-        symbol: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        symbol: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Получение истории сделок"""
         pass
 
     # =================== WEBSOCKET ===================
 
     @abstractmethod
-    async def start_websocket(self, channels: List[str], callback: callable) -> bool:
+    async def start_websocket(self, channels: list[str], callback: callable) -> bool:
         """Запуск WebSocket подключения"""
         pass
 
@@ -395,7 +383,7 @@ class BaseExchangeInterface(ABC):
 
     # =================== УТИЛИТЫ ===================
 
-    async def get_trading_fees(self, symbol: str) -> Dict[str, float]:
+    async def get_trading_fees(self, symbol: str) -> dict[str, float]:
         """
         Получение торговых комиссий
 
@@ -457,7 +445,7 @@ def get_exchange_capabilities(exchange_name: str) -> ExchangeCapabilities:
     pass
 
 
-async def test_exchange_connection(exchange: BaseExchangeInterface) -> Dict[str, Any]:
+async def test_exchange_connection(exchange: BaseExchangeInterface) -> dict[str, Any]:
     """
     Тестирование подключения к бирже
 

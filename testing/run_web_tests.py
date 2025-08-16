@@ -54,9 +54,7 @@ async def run_real_puppeteer_tests():
     await asyncio.sleep(3)
 
     print("📸 Создание скриншота dashboard...")
-    await mcp__puppeteer__puppeteer_screenshot(
-        name="bot_ai_v3_dashboard", width=1920, height=1080
-    )
+    await mcp__puppeteer__puppeteer_screenshot(name="bot_ai_v3_dashboard", width=1920, height=1080)
 
     # Тестирование производительности
     print("⚡ Анализ производительности...")
@@ -79,13 +77,9 @@ async def run_real_puppeteer_tests():
     )
 
     print("📊 Метрики производительности:")
-    print(
-        f"   • DOM Content Loaded: {performance_data.get('domContentLoaded', 0):.0f}ms"
-    )
+    print(f"   • DOM Content Loaded: {performance_data.get('domContentLoaded', 0):.0f}ms")
     print(f"   • Load Complete: {performance_data.get('loadComplete', 0):.0f}ms")
-    print(
-        f"   • First Contentful Paint: {performance_data.get('firstContentfulPaint', 0):.0f}ms"
-    )
+    print(f"   • First Contentful Paint: {performance_data.get('firstContentfulPaint', 0):.0f}ms")
     print(f"   • DOM Elements: {performance_data.get('domElements', 0)}")
 
     # Тестирование элементов интерфейса
@@ -120,18 +114,14 @@ async def run_real_puppeteer_tests():
         url=base_url, launchOptions={"defaultViewport": {"width": 375, "height": 667}}
     )
     await asyncio.sleep(2)
-    await mcp__puppeteer__puppeteer_screenshot(
-        name="bot_ai_v3_mobile", width=375, height=667
-    )
+    await mcp__puppeteer__puppeteer_screenshot(name="bot_ai_v3_mobile", width=375, height=667)
 
     # Tablet viewport
     await mcp__puppeteer__puppeteer_navigate(
         url=base_url, launchOptions={"defaultViewport": {"width": 768, "height": 1024}}
     )
     await asyncio.sleep(2)
-    await mcp__puppeteer__puppeteer_screenshot(
-        name="bot_ai_v3_tablet", width=768, height=1024
-    )
+    await mcp__puppeteer__puppeteer_screenshot(name="bot_ai_v3_tablet", width=768, height=1024)
 
     # Тестирование взаимодействий
     print("🖱️ Тестирование пользовательских взаимодействий...")
@@ -206,9 +196,7 @@ async def run_real_puppeteer_tests():
 
     # Финальный скриншот
     print("📸 Создание финального скриншота...")
-    await mcp__puppeteer__puppeteer_screenshot(
-        name="bot_ai_v3_final_test", width=1920, height=1080
-    )
+    await mcp__puppeteer__puppeteer_screenshot(name="bot_ai_v3_final_test", width=1920, height=1080)
 
     return {
         "status": "success",
@@ -341,9 +329,7 @@ async def generate_test_report(results):
         print("\n💡 РЕКОМЕНДАЦИИ:")
         if results["status"] == "demo_success":
             print("   🎭 Запущен демонстрационный режим")
-            print(
-                "   🔧 Для полного тестирования запустите веб-интерфейс на http://localhost:5173"
-            )
+            print("   🔧 Для полного тестирования запустите веб-интерфейс на http://localhost:5173")
             print("   🤖 Убедитесь, что Puppeteer MCP сервер активен")
         else:
             perf = results.get("performance", {})
@@ -373,21 +359,13 @@ if __name__ == "__main__":
             # Проверяем доступность MCP функций
             try:
                 # Попытка импорта MCP функций
-                globals()["mcp__puppeteer__puppeteer_navigate"] = (
-                    mcp__puppeteer__puppeteer_navigate
-                )
+                globals()["mcp__puppeteer__puppeteer_navigate"] = mcp__puppeteer__puppeteer_navigate
                 globals()["mcp__puppeteer__puppeteer_screenshot"] = (
                     mcp__puppeteer__puppeteer_screenshot
                 )
-                globals()["mcp__puppeteer__puppeteer_click"] = (
-                    mcp__puppeteer__puppeteer_click
-                )
-                globals()["mcp__puppeteer__puppeteer_hover"] = (
-                    mcp__puppeteer__puppeteer_hover
-                )
-                globals()["mcp__puppeteer__puppeteer_evaluate"] = (
-                    mcp__puppeteer__puppeteer_evaluate
-                )
+                globals()["mcp__puppeteer__puppeteer_click"] = mcp__puppeteer__puppeteer_click
+                globals()["mcp__puppeteer__puppeteer_hover"] = mcp__puppeteer__puppeteer_hover
+                globals()["mcp__puppeteer__puppeteer_evaluate"] = mcp__puppeteer__puppeteer_evaluate
 
                 print("✅ Puppeteer MCP функции доступны")
             except NameError:

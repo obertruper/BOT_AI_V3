@@ -11,10 +11,11 @@ Health Monitor для мониторинга состояния бирж BOT_Tra
 
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import aiohttp
 
@@ -50,7 +51,7 @@ class HealthMetric:
     value: float
     status: HealthStatus
     timestamp: datetime
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -60,8 +61,8 @@ class HealthCheckResult:
     check_type: CheckType
     status: HealthStatus
     latency_ms: float
-    error_message: Optional[str] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    error_message: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
 
 
@@ -72,8 +73,8 @@ class ExchangeHealthStatus:
     exchange_name: str
     overall_status: HealthStatus
     last_check: datetime
-    checks: Dict[CheckType, HealthCheckResult] = field(default_factory=dict)
-    metrics: List[HealthMetric] = field(default_factory=list)
+    checks: dict[CheckType, HealthCheckResult] = field(default_factory=dict)
+    metrics: list[HealthMetric] = field(default_factory=list)
     consecutive_failures: int = 0
     uptime_percentage: float = 100.0
 
@@ -85,9 +86,7 @@ class ExchangeHealthStatus:
     @property
     def avg_latency(self) -> float:
         """Средняя латентность"""
-        latencies = [
-            check.latency_ms for check in self.checks.values() if check.latency_ms > 0
-        ]
+        latencies = [check.latency_ms for check in self.checks.values() if check.latency_ms > 0]
         return sum(latencies) / len(latencies) if latencies else 0.0
 
 
@@ -106,12 +105,12 @@ class ExchangeHealthMonitor:
         self.logger = setup_logger("exchange_health_monitor")
 
         # Состояние мониторинга
-        self.exchange_status: Dict[str, ExchangeHealthStatus] = {}
-        self.monitoring_tasks: Dict[str, asyncio.Task] = {}
+        self.exchange_status: dict[str, ExchangeHealthStatus] = {}
+        self.monitoring_tasks: dict[str, asyncio.Task] = {}
         self.is_running = False
 
         # HTTP session для проверок
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
         # Конфигурация проверок
         self.check_interval = 30  # Интервал проверок в секундах
@@ -119,13 +118,13 @@ class ExchangeHealthMonitor:
         self.max_consecutive_failures = 5
 
         # Обработчики событий
-        self.alert_handlers: List[Callable] = []
-        self.recovery_handlers: Dict[str, Callable] = {}
+        self.alert_handlers: list[Callable] = []
+        self.recovery_handlers: dict[str, Callable] = {}
 
         # Конфигурации endpoints для разных бирж
         self.exchange_endpoints = self._init_exchange_endpoints()
 
-    def _init_exchange_endpoints(self) -> Dict[str, Dict[str, str]]:
+    def _init_exchange_endpoints(self) -> dict[str, dict[str, str]]:
         """Инициализация endpoints для проверки здоровья"""
         return {
             "bybit": {
@@ -190,9 +189,7 @@ class ExchangeHealthMonitor:
             task.cancel()
 
         if self.monitoring_tasks:
-            await asyncio.gather(
-                *self.monitoring_tasks.values(), return_exceptions=True
-            )
+            await asyncio.gather(*self.monitoring_tasks.values(), return_exceptions=True)
 
         if self.session:
             await self.session.close()
@@ -270,9 +267,7 @@ class ExchangeHealthMonitor:
         checks = {}
 
         # 1. Проверка подключения и API health
-        connectivity_result = await self._check_connectivity(
-            exchange_name, endpoint_config
-        )
+        connectivity_result = await self._check_connectivity(exchange_name, endpoint_config)
         checks[CheckType.CONNECTIVITY] = connectivity_result
         checks[CheckType.API_HEALTH] = connectivity_result  # Одновременно проверяем API
 
@@ -293,9 +288,7 @@ class ExchangeHealthMonitor:
 
         # Обрабатываем изменение статуса
         if overall_status != status.overall_status:
-            await self._handle_status_change(
-                exchange_name, status.overall_status, overall_status
-            )
+            await self._handle_status_change(exchange_name, status.overall_status, overall_status)
 
         status.overall_status = overall_status
 
@@ -312,7 +305,7 @@ class ExchangeHealthMonitor:
         self._add_metrics(status, checks)
 
     async def _check_connectivity(
-        self, exchange_name: str, endpoint_config: Dict[str, str]
+        self, exchange_name: str, endpoint_config: dict[str, str]
     ) -> HealthCheckResult:
         """Проверка подключения к бирже"""
         start_time = time.time()
@@ -343,7 +336,9 @@ class ExchangeHealthMonitor:
                             error_message = None
                         else:
                             status = HealthStatus.WARNING
-                            error_message = f"Unexpected status: {actual_status}, expected: {expected_status}"
+                            error_message = (
+                                f"Unexpected status: {actual_status}, expected: {expected_status}"
+                            )
 
                     return HealthCheckResult(
                         check_type=CheckType.CONNECTIVITY,
@@ -361,7 +356,7 @@ class ExchangeHealthMonitor:
                         details={"http_status": response.status},
                     )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return HealthCheckResult(
                 check_type=CheckType.CONNECTIVITY,
                 status=HealthStatus.CRITICAL,
@@ -377,7 +372,7 @@ class ExchangeHealthMonitor:
             )
 
     async def _check_latency(
-        self, exchange_name: str, endpoint_config: Dict[str, str]
+        self, exchange_name: str, endpoint_config: dict[str, str]
     ) -> HealthCheckResult:
         """Проверка латентности (множественные запросы)"""
         latencies = []
@@ -490,9 +485,7 @@ class ExchangeHealthMonitor:
                 error_message=str(e),
             )
 
-    def _calculate_overall_status(
-        self, checks: Dict[CheckType, HealthCheckResult]
-    ) -> HealthStatus:
+    def _calculate_overall_status(self, checks: dict[CheckType, HealthCheckResult]) -> HealthStatus:
         """Вычисление общего статуса на основе всех проверок"""
         if not checks:
             return HealthStatus.UNKNOWN
@@ -518,9 +511,7 @@ class ExchangeHealthMonitor:
         self, exchange_name: str, old_status: HealthStatus, new_status: HealthStatus
     ):
         """Обработка изменения статуса биржи"""
-        self.logger.info(
-            f"Статус {exchange_name}: {old_status.value} → {new_status.value}"
-        )
+        self.logger.info(f"Статус {exchange_name}: {old_status.value} → {new_status.value}")
 
         # Генерируем алерт
         if new_status == HealthStatus.CRITICAL:
@@ -528,15 +519,10 @@ class ExchangeHealthMonitor:
                 exchange_name, "CRITICAL", f"Exchange {exchange_name} is critical"
             )
         elif new_status == HealthStatus.HEALTHY and old_status == HealthStatus.CRITICAL:
-            await self._send_alert(
-                exchange_name, "RECOVERY", f"Exchange {exchange_name} recovered"
-            )
+            await self._send_alert(exchange_name, "RECOVERY", f"Exchange {exchange_name} recovered")
 
         # Выполняем recovery действия
-        if (
-            exchange_name in self.recovery_handlers
-            and new_status == HealthStatus.CRITICAL
-        ):
+        if exchange_name in self.recovery_handlers and new_status == HealthStatus.CRITICAL:
             try:
                 await self.recovery_handlers[exchange_name](exchange_name, new_status)
             except Exception as e:
@@ -568,7 +554,7 @@ class ExchangeHealthMonitor:
             status.uptime_percentage = max(0.0, status.uptime_percentage - 1.0)
 
     def _add_metrics(
-        self, status: ExchangeHealthStatus, checks: Dict[CheckType, HealthCheckResult]
+        self, status: ExchangeHealthStatus, checks: dict[CheckType, HealthCheckResult]
     ):
         """Добавление метрик"""
         current_time = datetime.now()
@@ -604,20 +590,18 @@ class ExchangeHealthMonitor:
         """Добавление обработчика восстановления для биржи"""
         self.recovery_handlers[exchange_name.lower()] = handler
 
-    def get_exchange_status(self, exchange_name: str) -> Optional[ExchangeHealthStatus]:
+    def get_exchange_status(self, exchange_name: str) -> ExchangeHealthStatus | None:
         """Получение статуса биржи"""
         return self.exchange_status.get(exchange_name.lower())
 
-    def get_all_statuses(self) -> Dict[str, ExchangeHealthStatus]:
+    def get_all_statuses(self) -> dict[str, ExchangeHealthStatus]:
         """Получение статусов всех бирж"""
         return self.exchange_status.copy()
 
-    def get_health_summary(self) -> Dict[str, Any]:
+    def get_health_summary(self) -> dict[str, Any]:
         """Получение сводки по здоровью всех бирж"""
         total_exchanges = len(self.exchange_status)
-        healthy_count = sum(
-            1 for status in self.exchange_status.values() if status.is_healthy
-        )
+        healthy_count = sum(1 for status in self.exchange_status.values() if status.is_healthy)
 
         summary = {
             "total_exchanges": total_exchanges,
@@ -642,7 +626,7 @@ class ExchangeHealthMonitor:
 
 
 # Глобальный экземпляр health monitor
-_global_health_monitor: Optional[ExchangeHealthMonitor] = None
+_global_health_monitor: ExchangeHealthMonitor | None = None
 
 
 def get_health_monitor() -> ExchangeHealthMonitor:

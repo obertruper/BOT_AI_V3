@@ -15,7 +15,7 @@ def create_model_config():
 
     # Загружаем ML конфигурацию
     config_path = Path("config/ml/ml_config.yaml")
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         ml_config = yaml.safe_load(f)
 
     # Базовая конфигурация модели (адаптированная из LLM TRANSFORM)

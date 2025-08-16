@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Unit tests for Order Manager with SL/TP integration
 """
@@ -76,9 +75,7 @@ class TestOrderManagerWithSLTP:
         return order
 
     @pytest.mark.asyncio
-    async def test_init_with_sltp_manager(
-        self, mock_exchange_registry, mock_sltp_manager
-    ):
+    async def test_init_with_sltp_manager(self, mock_exchange_registry, mock_sltp_manager):
         """Тест инициализации с SL/TP Manager"""
         # Act
         order_manager = OrderManager(
@@ -94,9 +91,7 @@ class TestOrderManagerWithSLTP:
     async def test_init_without_sltp_manager(self, mock_exchange_registry):
         """Тест инициализации без SL/TP Manager"""
         # Act
-        order_manager = OrderManager(
-            exchange_registry=mock_exchange_registry, sltp_manager=None
-        )
+        order_manager = OrderManager(exchange_registry=mock_exchange_registry, sltp_manager=None)
 
         # Assert
         assert order_manager.sltp_integration is None
@@ -110,9 +105,7 @@ class TestOrderManagerWithSLTP:
             mock_get_db.return_value.__aenter__.return_value = mock_db
 
             # Act
-            order = await order_manager.create_order_from_signal(
-                test_signal, "test_trader"
-            )
+            order = await order_manager.create_order_from_signal(test_signal, "test_trader")
 
             # Assert
             assert order is not None
@@ -141,9 +134,7 @@ class TestOrderManagerWithSLTP:
         mock_exchange_registry.get_exchange.return_value = mock_exchange
 
         # Mock SL/TP integration
-        order_manager.sltp_integration.handle_filled_order = AsyncMock(
-            return_value=True
-        )
+        order_manager.sltp_integration.handle_filled_order = AsyncMock(return_value=True)
 
         with patch("trading.orders.order_manager.get_async_db") as mock_get_db:
             mock_db = AsyncMock()
@@ -172,14 +163,10 @@ class TestOrderManagerWithSLTP:
             assert test_order.order_id not in order_manager._active_orders
 
     @pytest.mark.asyncio
-    async def test_update_order_status_to_filled_without_sltp(
-        self, mock_exchange_registry
-    ):
+    async def test_update_order_status_to_filled_without_sltp(self, mock_exchange_registry):
         """Тест обновления статуса без SL/TP Manager"""
         # Arrange
-        order_manager = OrderManager(
-            exchange_registry=mock_exchange_registry, sltp_manager=None
-        )
+        order_manager = OrderManager(exchange_registry=mock_exchange_registry, sltp_manager=None)
 
         test_order = Order(
             exchange="bybit",
@@ -250,9 +237,7 @@ class TestOrderManagerWithSLTP:
                     mock_exchange.place_order.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cancel_order(
-        self, order_manager, test_order, mock_exchange_registry
-    ):
+    async def test_cancel_order(self, order_manager, test_order, mock_exchange_registry):
         """Тест отмены ордера"""
         # Arrange
         order_manager._active_orders[test_order.order_id] = test_order
@@ -304,9 +289,7 @@ class TestOrderManagerWithSLTP:
         assert order2 in btc_orders
 
     @pytest.mark.asyncio
-    async def test_sync_orders_with_exchange(
-        self, order_manager, mock_exchange_registry
-    ):
+    async def test_sync_orders_with_exchange(self, order_manager, mock_exchange_registry):
         """Тест синхронизации ордеров с биржей"""
         # Arrange
         test_order = Mock(
@@ -366,16 +349,13 @@ class TestOrderManagerWithSLTP:
         assert order_manager._map_exchange_status("new") == OrderStatus.OPEN
         assert order_manager._map_exchange_status("open") == OrderStatus.OPEN
         assert (
-            order_manager._map_exchange_status("partially_filled")
-            == OrderStatus.PARTIALLY_FILLED
+            order_manager._map_exchange_status("partially_filled") == OrderStatus.PARTIALLY_FILLED
         )
         assert order_manager._map_exchange_status("filled") == OrderStatus.FILLED
         assert order_manager._map_exchange_status("canceled") == OrderStatus.CANCELLED
         assert order_manager._map_exchange_status("rejected") == OrderStatus.REJECTED
         assert order_manager._map_exchange_status("expired") == OrderStatus.EXPIRED
-        assert (
-            order_manager._map_exchange_status("unknown") == OrderStatus.OPEN
-        )  # default
+        assert order_manager._map_exchange_status("unknown") == OrderStatus.OPEN  # default
 
 
 if __name__ == "__main__":

@@ -83,9 +83,7 @@ async def test_ml_uniqueness():
             print(
                 f"   • Returns 15m: {prediction.get('predictions', {}).get('returns_15m', 0):.6f}"
             )
-            print(
-                f"   • Returns 1h: {prediction.get('predictions', {}).get('returns_1h', 0):.6f}"
-            )
+            print(f"   • Returns 1h: {prediction.get('predictions', {}).get('returns_1h', 0):.6f}")
 
             # Проверяем первые несколько значений features
             print(f"   • First 5 features: {features_array[0, -1, :5]}")
@@ -131,10 +129,7 @@ async def test_ml_uniqueness():
 
                 # Сравниваем ключевые метрики
                 same_type = pred1.get("signal_type") == pred2.get("signal_type")
-                same_conf = (
-                    abs(pred1.get("confidence", 0) - pred2.get("confidence", 0))
-                    < 0.0001
-                )
+                same_conf = abs(pred1.get("confidence", 0) - pred2.get("confidence", 0)) < 0.0001
 
                 ret1_15m = pred1.get("predictions", {}).get("returns_15m", 0)
                 ret2_15m = pred2.get("predictions", {}).get("returns_15m", 0)
@@ -162,9 +157,7 @@ async def test_ml_uniqueness():
         print("❌ ТЕСТ ПРОВАЛЕН: Обнаружены дублирующиеся предсказания")
         print("\n🔧 Рекомендации:")
         if unique_hashes != len(features_hashes):
-            print(
-                "   1. Проверить загрузку данных - возможно загружаются одинаковые данные"
-            )
+            print("   1. Проверить загрузку данных - возможно загружаются одинаковые данные")
         if not all_different:
             print("   2. Проверить модель - возможно проблема с инференсом")
             print("   3. Проверить кеширование - возможно кеш не учитывает символ")

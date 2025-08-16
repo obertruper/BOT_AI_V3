@@ -164,18 +164,14 @@ class MLPredictionAnalyzer:
                 logger.info(f"  {tf}: {score:+.4f} → {direction}")
 
             # Long levels (8-11)
-            logger.info(
-                "\n📊 Long Target Probabilities (вероятность достижения целей лонга):"
-            )
+            logger.info("\n📊 Long Target Probabilities (вероятность достижения целей лонга):")
             long_targets = ["1% за 4ч", "2% за 4ч", "3% за 12ч", "5% за 12ч"]
             for i, target in enumerate(long_targets):
                 prob = 1 / (1 + np.exp(-predictions[8 + i]))  # Sigmoid
                 logger.info(f"  {target}: {prob:.1%}")
 
             # Short levels (12-15)
-            logger.info(
-                "\n📉 Short Target Probabilities (вероятность достижения целей шорта):"
-            )
+            logger.info("\n📉 Short Target Probabilities (вероятность достижения целей шорта):")
             for i, target in enumerate(long_targets):
                 prob = 1 / (1 + np.exp(-predictions[12 + i]))  # Sigmoid
                 logger.info(f"  {target}: {prob:.1%}")
@@ -201,9 +197,7 @@ class MLPredictionAnalyzer:
             direction_scores = predictions[4:8]
 
             # Используем веса для временных фреймов
-            timeframe_weights = np.array(
-                [0.4, 0.3, 0.2, 0.1]
-            )  # Больший вес коротким TF
+            timeframe_weights = np.array([0.4, 0.3, 0.2, 0.1])  # Больший вес коротким TF
             weighted_direction = np.average(direction_scores, weights=timeframe_weights)
 
             logger.info(f"\n📊 Взвешенное направление: {weighted_direction:.4f}")
@@ -236,12 +230,8 @@ class MLPredictionAnalyzer:
                 stop_loss = current_price * (1 - stop_loss_pct)
                 take_profit = current_price * (1 + take_profit_pct)
 
-                logger.info(
-                    f"📍 Stop Loss: ${stop_loss:.2f} (-{stop_loss_pct * 100:.1f}%)"
-                )
-                logger.info(
-                    f"🎯 Take Profit: ${take_profit:.2f} (+{take_profit_pct * 100:.1f}%)"
-                )
+                logger.info(f"📍 Stop Loss: ${stop_loss:.2f} (-{stop_loss_pct * 100:.1f}%)")
+                logger.info(f"🎯 Take Profit: ${take_profit:.2f} (+{take_profit_pct * 100:.1f}%)")
 
             elif signal_type == "SHORT":
                 # Для шорта
@@ -254,12 +244,8 @@ class MLPredictionAnalyzer:
                 stop_loss = current_price * (1 + stop_loss_pct)
                 take_profit = current_price * (1 - take_profit_pct)
 
-                logger.info(
-                    f"📍 Stop Loss: ${stop_loss:.2f} (+{stop_loss_pct * 100:.1f}%)"
-                )
-                logger.info(
-                    f"🎯 Take Profit: ${take_profit:.2f} (-{take_profit_pct * 100:.1f}%)"
-                )
+                logger.info(f"📍 Stop Loss: ${stop_loss:.2f} (+{stop_loss_pct * 100:.1f}%)")
+                logger.info(f"🎯 Take Profit: ${take_profit:.2f} (-{take_profit_pct * 100:.1f}%)")
 
             # 8. Проверяем пороги уверенности
             logger.info(f"\n{'=' * 50}")
@@ -277,9 +263,7 @@ class MLPredictionAnalyzer:
                     "direction_confidence_threshold", 0.25
                 ),
                 "min_confidence": self.config["model"].get("confidence_threshold", 0.0),
-                "trading_min": self.config["trading"].get(
-                    "min_confidence_threshold", 0.3
-                ),
+                "trading_min": self.config["trading"].get("min_confidence_threshold", 0.3),
             }
 
             logger.info("\n⚙️ Настроенные пороги:")
@@ -303,9 +287,7 @@ class MLPredictionAnalyzer:
                 # Проверяем согласованность future returns с направлением
                 avg_return = np.mean(future_returns)
                 if signal_type == "LONG" and avg_return < 0:
-                    problems.append(
-                        f"⚠️ LONG сигнал при отрицательном avg return: {avg_return:.4f}"
-                    )
+                    problems.append(f"⚠️ LONG сигнал при отрицательном avg return: {avg_return:.4f}")
                 elif signal_type == "SHORT" and avg_return > 0:
                     problems.append(
                         f"⚠️ SHORT сигнал при положительном avg return: {avg_return:.4f}"
@@ -313,9 +295,7 @@ class MLPredictionAnalyzer:
 
             # Проверка 3: Несбалансированные SL/TP
             if signal_type in ["LONG", "SHORT"]:
-                risk_reward = (
-                    take_profit_pct / stop_loss_pct if stop_loss_pct > 0 else 0
-                )
+                risk_reward = take_profit_pct / stop_loss_pct if stop_loss_pct > 0 else 0
                 if risk_reward < 1.5:
                     problems.append(
                         f"❌ Плохое соотношение риск/прибыль: {risk_reward:.2f} (должно быть > 1.5)"
@@ -342,18 +322,12 @@ class MLPredictionAnalyzer:
                 recommendations.append("1. Увеличить confidence_threshold до 0.3-0.4")
 
             if config_thresholds["direction_confidence"] < 0.4:
-                recommendations.append(
-                    "2. Увеличить direction_confidence_threshold до 0.4-0.5"
-                )
+                recommendations.append("2. Увеличить direction_confidence_threshold до 0.4-0.5")
 
             if signal_type != "NEUTRAL" and confidence < 0.5:
-                recommendations.append(
-                    "3. Рассмотреть пропуск сделок с уверенностью < 0.5"
-                )
+                recommendations.append("3. Рассмотреть пропуск сделок с уверенностью < 0.5")
 
-            recommendations.append(
-                "4. Использовать адаптивные SL/TP на основе волатильности"
-            )
+            recommendations.append("4. Использовать адаптивные SL/TP на основе волатильности")
             recommendations.append("5. Добавить фильтрацию по risk metrics")
 
             for rec in recommendations:
@@ -366,9 +340,7 @@ class MLPredictionAnalyzer:
                 "weighted_direction": weighted_direction,
                 "future_returns": future_returns.tolist(),
                 "stop_loss_pct": stop_loss_pct if signal_type != "NEUTRAL" else None,
-                "take_profit_pct": take_profit_pct
-                if signal_type != "NEUTRAL"
-                else None,
+                "take_profit_pct": take_profit_pct if signal_type != "NEUTRAL" else None,
                 "problems": problems,
                 "recommendations": recommendations,
             }

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Движок исполнения ордеров
 
@@ -11,7 +10,7 @@ import logging
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from database.models.base_models import Order, OrderSide, OrderStatus, OrderType
 
@@ -35,9 +34,7 @@ class ExecutionEngine:
     - Частичное исполнение
     """
 
-    def __init__(
-        self, order_manager, exchange_registry, logger: Optional[logging.Logger] = None
-    ):
+    def __init__(self, order_manager, exchange_registry, logger: logging.Logger | None = None):
         self.order_manager = order_manager
         self.exchange_registry = exchange_registry
         self.logger = logger or logging.getLogger(__name__)
@@ -57,9 +54,7 @@ class ExecutionEngine:
             "avg_execution_time": 0.0,
         }
 
-    async def execute_order(
-        self, order: Order, mode: ExecutionMode = ExecutionMode.SMART
-    ) -> bool:
+    async def execute_order(self, order: Order, mode: ExecutionMode = ExecutionMode.SMART) -> bool:
         """
         Исполнить ордер
 
@@ -258,7 +253,7 @@ class ExecutionEngine:
 
         return False
 
-    async def _get_best_price(self, order: Order) -> Optional[Decimal]:
+    async def _get_best_price(self, order: Order) -> Decimal | None:
         """Получить лучшую цену для ордера"""
         try:
             exchange = await self.exchange_registry.get_exchange(order.exchange)
@@ -269,20 +264,16 @@ class ExecutionEngine:
 
             if order.side == OrderSide.BUY:
                 # Для покупки - лучший ask
-                return (
-                    Decimal(str(orderbook["asks"][0][0])) if orderbook["asks"] else None
-                )
+                return Decimal(str(orderbook["asks"][0][0])) if orderbook["asks"] else None
             else:
                 # Для продажи - лучший bid
-                return (
-                    Decimal(str(orderbook["bids"][0][0])) if orderbook["bids"] else None
-                )
+                return Decimal(str(orderbook["bids"][0][0])) if orderbook["bids"] else None
 
         except Exception as e:
             self.logger.error(f"Ошибка получения лучшей цены: {e}")
             return None
 
-    async def _analyze_market_conditions(self, order: Order) -> Dict[str, float]:
+    async def _analyze_market_conditions(self, order: Order) -> dict[str, float]:
         """Анализ рыночных условий"""
         try:
             exchange = await self.exchange_registry.get_exchange(order.exchange)
@@ -294,9 +285,7 @@ class ExecutionEngine:
             orderbook = await exchange.get_orderbook(order.symbol)
 
             # Рассчитываем метрики
-            volatility = (
-                (ticker["high"] - ticker["low"]) / ticker["last"] if ticker else 0
-            )
+            volatility = (ticker["high"] - ticker["low"]) / ticker["last"] if ticker else 0
 
             # Ликвидность на уровне нашего объема
             if order.side == OrderSide.BUY:
@@ -306,9 +295,9 @@ class ExecutionEngine:
 
             spread = 0
             if orderbook.get("asks") and orderbook.get("bids"):
-                spread = (
-                    orderbook["asks"][0][0] - orderbook["bids"][0][0]
-                ) / orderbook["bids"][0][0]
+                spread = (orderbook["asks"][0][0] - orderbook["bids"][0][0]) / orderbook["bids"][0][
+                    0
+                ]
 
             return {"volatility": volatility, "liquidity": liquidity, "spread": spread}
 
@@ -371,7 +360,7 @@ class ExecutionEngine:
                 current_avg * (total - 1) + execution_time
             ) / total
 
-    async def get_execution_stats(self) -> Dict[str, Any]:
+    async def get_execution_stats(self) -> dict[str, Any]:
         """Получить статистику исполнения"""
         stats = self._execution_stats.copy()
 

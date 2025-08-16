@@ -6,8 +6,9 @@ Create Date: 2025-01-30
 """
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "001_import_v2"
@@ -36,13 +37,9 @@ def upgrade():
     if "model_score" not in trades_columns:
         op.add_column("trades", sa.Column("model_score", sa.Float(), nullable=True))
     if "profit_probability" not in trades_columns:
-        op.add_column(
-            "trades", sa.Column("profit_probability", sa.Float(), nullable=True)
-        )
+        op.add_column("trades", sa.Column("profit_probability", sa.Float(), nullable=True))
     if "loss_probability" not in trades_columns:
-        op.add_column(
-            "trades", sa.Column("loss_probability", sa.Float(), nullable=True)
-        )
+        op.add_column("trades", sa.Column("loss_probability", sa.Float(), nullable=True))
     if "confidence" not in trades_columns:
         op.add_column("trades", sa.Column("confidence", sa.Float(), nullable=True))
     if "session_id" not in trades_columns:
@@ -53,13 +50,9 @@ def upgrade():
     if "trigger_by" not in orders_columns:
         op.add_column("orders", sa.Column("trigger_by", sa.String(50), nullable=True))
     if "sl_trigger_price" not in orders_columns:
-        op.add_column(
-            "orders", sa.Column("sl_trigger_price", sa.Float(), nullable=True)
-        )
+        op.add_column("orders", sa.Column("sl_trigger_price", sa.Float(), nullable=True))
     if "tp_trigger_price" not in orders_columns:
-        op.add_column(
-            "orders", sa.Column("tp_trigger_price", sa.Float(), nullable=True)
-        )
+        op.add_column("orders", sa.Column("tp_trigger_price", sa.Float(), nullable=True))
     if "sl_order_id" not in orders_columns:
         op.add_column("orders", sa.Column("sl_order_id", sa.String(100), nullable=True))
     if "tp_order_id" not in orders_columns:
@@ -69,13 +62,9 @@ def upgrade():
     signals_columns = [col["name"] for col in inspector.get_columns("signals")]
     # indicators уже существует как JSON, проверяем ml_predictions и processing_time
     if "ml_predictions" not in signals_columns:
-        op.add_column(
-            "signals", sa.Column("ml_predictions", postgresql.JSONB(), nullable=True)
-        )
+        op.add_column("signals", sa.Column("ml_predictions", postgresql.JSONB(), nullable=True))
     if "processing_time" not in signals_columns:
-        op.add_column(
-            "signals", sa.Column("processing_time", sa.Float(), nullable=True)
-        )
+        op.add_column("signals", sa.Column("processing_time", sa.Float(), nullable=True))
 
     # Проверяем существующие таблицы
     existing_tables = inspector.get_table_names()
@@ -205,12 +194,8 @@ def upgrade():
             sa.Column("sl_order_id", sa.String(100)),
             sa.Column("tp_order_id", sa.String(100)),
             sa.Column("status", sa.String(50), server_default="pending"),
-            sa.Column(
-                "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
-            ),
-            sa.Column(
-                "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()
-            ),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
             sa.Column("attempts", sa.Integer(), server_default="0"),
             sa.Column("sl_trigger_by", sa.String(50), server_default="LastPrice"),
             sa.Column("tp_trigger_by", sa.String(50), server_default="LastPrice"),

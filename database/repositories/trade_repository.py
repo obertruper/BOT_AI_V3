@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,7 @@ class TradeRepository:
     def __init__(self, db_session: AsyncSession):
         self.session = db_session
 
-    async def create_trade(self, trade_data: Dict[str, Any]) -> Trade:
+    async def create_trade(self, trade_data: dict[str, Any]) -> Trade:
         """Создает новую торговую операцию"""
         try:
             trade = Trade(**trade_data)
@@ -32,8 +32,8 @@ class TradeRepository:
             raise DatabaseError(f"Failed to create trade: {e}")
 
     async def get_trading_stats(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
-    ) -> Dict[str, Any]:
+        self, start_date: datetime | None = None, end_date: datetime | None = None
+    ) -> dict[str, Any]:
         """Получает статистику торговли"""
         try:
             query = select(

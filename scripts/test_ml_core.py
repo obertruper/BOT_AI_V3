@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Простой тест основных ML компонентов без зависимостей от бирж
 """
 
 import asyncio
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -28,7 +27,7 @@ def create_test_data() -> pd.DataFrame:
     # Генерируем 300 свечей (больше чем нужно для модели)
     n = 300
     timestamps = pd.date_range(
-        start=datetime.now(timezone.utc) - timedelta(hours=n / 4), periods=n, freq="15T"
+        start=datetime.now(UTC) - timedelta(hours=n / 4), periods=n, freq="15T"
     )
 
     # Генерируем реалистичные OHLCV данные
@@ -90,9 +89,7 @@ async def test_feature_engineering():
         # Генерируем признаки
         features = fe.create_features(test_data_with_symbol)
 
-        logger.info(
-            f"✅ Сгенерировано {features.shape[0]} строк и {features.shape[1]} признаков"
-        )
+        logger.info(f"✅ Сгенерировано {features.shape[0]} строк и {features.shape[1]} признаков")
         logger.info(f"   Последние 5 признаков: {list(features.columns)[-5:]}")
 
         # Проверяем что нет NaN в последних строках
@@ -136,9 +133,7 @@ async def test_ml_manager():
         logger.info("✅ ML Manager инициализирован")
 
         # Создаем тестовые признаки (240 признаков как ожидает модель)
-        features = np.random.randn(96, 240).astype(
-            np.float32
-        )  # 96 временных шагов, 240 признаков
+        features = np.random.randn(96, 240).astype(np.float32)  # 96 временных шагов, 240 признаков
         logger.info(f"Создан тестовый массив признаков: {features.shape}")
 
         # Тестируем предсказание
@@ -148,9 +143,7 @@ async def test_ml_manager():
         if isinstance(prediction, dict):
             for key, value in prediction.items():
                 if isinstance(value, (list, np.ndarray)):
-                    logger.info(
-                        f"   {key}: {len(value) if hasattr(value, '__len__') else value}"
-                    )
+                    logger.info(f"   {key}: {len(value) if hasattr(value, '__len__') else value}")
                 else:
                     logger.info(f"   {key}: {value}")
         else:
@@ -199,9 +192,7 @@ async def test_end_to_end():
             )
             # Дополняем или обрезаем до 240
             if features_array.shape[1] < 240:
-                padding = np.zeros(
-                    (features_array.shape[0], 240 - features_array.shape[1])
-                )
+                padding = np.zeros((features_array.shape[0], 240 - features_array.shape[1]))
                 features_array = np.concatenate([features_array, padding], axis=1)
             else:
                 features_array = features_array[:, :240]
@@ -234,9 +225,7 @@ async def test_end_to_end():
             logger.info("📊 Результат предсказания:")
             for key, value in prediction.items():
                 if isinstance(value, np.ndarray):
-                    logger.info(
-                        f"   {key}: shape={value.shape}, mean={np.mean(value):.4f}"
-                    )
+                    logger.info(f"   {key}: shape={value.shape}, mean={np.mean(value):.4f}")
                 elif isinstance(value, list):
                     logger.info(
                         f"   {key}: length={len(value)}, sample={value[:3] if len(value) > 3 else value}"

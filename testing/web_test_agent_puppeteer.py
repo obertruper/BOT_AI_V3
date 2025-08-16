@@ -17,12 +17,10 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Настройка логирования
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("WebTestAgentPuppeteer")
 
 
@@ -33,10 +31,10 @@ class PuppeteerTestResult:
     name: str
     status: str  # 'passed', 'failed', 'skipped'
     duration: float
-    screenshot_path: Optional[str] = None
-    error: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
-    performance_metrics: Optional[Dict[str, Any]] = None
+    screenshot_path: str | None = None
+    error: str | None = None
+    details: dict[str, Any] | None = None
+    performance_metrics: dict[str, Any] | None = None
 
 
 class WebTestAgentPuppeteer:
@@ -44,20 +42,18 @@ class WebTestAgentPuppeteer:
 
     def __init__(self, base_url: str = "http://localhost:5173"):
         self.base_url = base_url
-        self.results_dir = Path(
-            "/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/web_test_results"
-        )
+        self.results_dir = Path("/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/web_test_results")
         self.screenshots_dir = self.results_dir / "screenshots"
 
         # Создаем директории
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self.screenshots_dir.mkdir(parents=True, exist_ok=True)
 
-        self.test_results: List[PuppeteerTestResult] = []
+        self.test_results: list[PuppeteerTestResult] = []
 
         logger.info(f"🤖 WebTestAgentPuppeteer инициализирован для {base_url}")
 
-    async def run_comprehensive_tests(self) -> Dict[str, Any]:
+    async def run_comprehensive_tests(self) -> dict[str, Any]:
         """Запуск полного набора тестов с Puppeteer MCP"""
         logger.info("🚀 Запуск комплексного тестирования с Puppeteer MCP")
 
@@ -193,9 +189,7 @@ class WebTestAgentPuppeteer:
             duration = time.time() - start_time
 
             # Анализ результатов
-            success_rate = (
-                elements_check["totalElements"] / elements_check["expectedElements"]
-            )
+            success_rate = elements_check["totalElements"] / elements_check["expectedElements"]
             load_time = performance_metrics.get("loadComplete", 0)
 
             if success_rate >= 0.8 and load_time < 5000:  # 80% элементов + < 5 секунд
@@ -421,8 +415,7 @@ class WebTestAgentPuppeteer:
                     )
 
                     success_rate = (
-                        responsive_check["passedChecks"]
-                        / responsive_check["totalChecks"]
+                        responsive_check["passedChecks"] / responsive_check["totalChecks"]
                     )
 
                     responsive_results.append(
@@ -450,9 +443,7 @@ class WebTestAgentPuppeteer:
             # Общий анализ адаптивности
             successful_viewports = len([r for r in responsive_results if r["success"]])
             total_viewports = len(responsive_results)
-            overall_success = (
-                successful_viewports / total_viewports if total_viewports > 0 else 0
-            )
+            overall_success = successful_viewports / total_viewports if total_viewports > 0 else 0
 
             if overall_success >= 0.75:  # 75% viewports должны проходить
                 return PuppeteerTestResult(
@@ -574,9 +565,7 @@ class WebTestAgentPuppeteer:
                     performance_metrics=performance_metrics,
                     details={
                         "budget_violations": performance_issues,
-                        "performance_grade": "good"
-                        if not performance_issues
-                        else "acceptable",
+                        "performance_grade": "good" if not performance_issues else "acceptable",
                     },
                 )
             else:
@@ -708,14 +697,10 @@ class WebTestAgentPuppeteer:
             duration = time.time() - start_time
 
             # Анализ результатов
-            successful_interactions = len(
-                [r for r in interaction_results if r["success"]]
-            )
+            successful_interactions = len([r for r in interaction_results if r["success"]])
             total_interactions = len(interaction_results)
             success_rate = (
-                successful_interactions / total_interactions
-                if total_interactions > 0
-                else 0
+                successful_interactions / total_interactions if total_interactions > 0 else 0
             )
 
             if success_rate >= 0.7:  # 70% взаимодействий должны работать
@@ -862,9 +847,9 @@ class WebTestAgentPuppeteer:
             duration = time.time() - start_time
 
             # Анализ результатов WebSocket тестирования
-            websocket_working = websocket_test[
-                "connectionAttempted"
-            ] and websocket_test["finalState"] in ["connected", "clean_close"]
+            websocket_working = websocket_test["connectionAttempted"] and websocket_test[
+                "finalState"
+            ] in ["connected", "clean_close"]
 
             ui_shows_status = ui_indicator["foundIndicators"]
 
@@ -1013,9 +998,7 @@ class WebTestAgentPuppeteer:
 
             # Структурные элементы (30% от общего балла)
             structure_score = sum(accessibility_audit["structure"].values())
-            accessibility_score += (
-                structure_score * 30 / len(accessibility_audit["structure"])
-            )
+            accessibility_score += structure_score * 30 / len(accessibility_audit["structure"])
             max_score += 30
 
             if not accessibility_audit["structure"]["hasMainLandmark"]:
@@ -1045,34 +1028,24 @@ class WebTestAgentPuppeteer:
                     interactive["buttonsWithLabels"] / interactive["totalButtons"]
                 ) * 10
             if interactive["totalLinks"] > 0:
-                interactive_score += (
-                    interactive["linksWithText"] / interactive["totalLinks"]
-                ) * 10
+                interactive_score += (interactive["linksWithText"] / interactive["totalLinks"]) * 10
             if interactive["totalInputs"] > 0:
                 interactive_score += (
                     interactive["inputsWithLabels"] / interactive["totalInputs"]
                 ) * 10
             else:
-                interactive_score += (
-                    10  # Если нет полей ввода, засчитываем полные баллы
-                )
+                interactive_score += 10  # Если нет полей ввода, засчитываем полные баллы
 
             accessibility_score += interactive_score
             max_score += 30
 
             # ARIA и клавиатурная навигация (20% от общего балла)
-            aria_score = min(
-                20, accessibility_audit["aria"]["elementsWithAriaLabels"] * 2
-            )
-            keyboard_score = min(
-                10, accessibility_audit["keyboard"]["focusableElements"]
-            )
+            aria_score = min(20, accessibility_audit["aria"]["elementsWithAriaLabels"] * 2)
+            keyboard_score = min(10, accessibility_audit["keyboard"]["focusableElements"])
             accessibility_score += aria_score + keyboard_score
             max_score += 20
 
-            final_score = (
-                (accessibility_score / max_score * 100) if max_score > 0 else 0
-            )
+            final_score = (accessibility_score / max_score * 100) if max_score > 0 else 0
 
             if final_score >= 70:  # 70% - приемлемый уровень доступности
                 return PuppeteerTestResult(
@@ -1112,9 +1085,7 @@ class WebTestAgentPuppeteer:
 
     # Puppeteer MCP методы (реальная интеграция)
 
-    async def _puppeteer_navigate(
-        self, url: str, launch_options: Optional[Dict] = None
-    ) -> Dict:
+    async def _puppeteer_navigate(self, url: str, launch_options: dict | None = None) -> dict:
         """Навигация через Puppeteer MCP"""
         try:
             # Используем реальный Puppeteer MCP вызов
@@ -1127,9 +1098,7 @@ class WebTestAgentPuppeteer:
             await asyncio.sleep(2)
             return {"status": "navigated", "url": url}
 
-    async def _puppeteer_screenshot(
-        self, name: str, width: int = 1920, height: int = 1080
-    ) -> str:
+    async def _puppeteer_screenshot(self, name: str, width: int = 1920, height: int = 1080) -> str:
         """Создание скриншота через Puppeteer MCP"""
         try:
             from mcp import puppeteer_screenshot
@@ -1155,7 +1124,7 @@ class WebTestAgentPuppeteer:
             logger.info(f"📸 Имитация скриншота: {screenshot_path}")
             return str(screenshot_path)
 
-    async def _puppeteer_click(self, selector: str) -> Dict:
+    async def _puppeteer_click(self, selector: str) -> dict:
         """Клик по элементу через Puppeteer MCP"""
         try:
             from mcp import puppeteer_click
@@ -1166,7 +1135,7 @@ class WebTestAgentPuppeteer:
             await asyncio.sleep(0.5)
             return {"status": "clicked", "selector": selector}
 
-    async def _puppeteer_hover(self, selector: str) -> Dict:
+    async def _puppeteer_hover(self, selector: str) -> dict:
         """Наведение на элемент через Puppeteer MCP"""
         try:
             from mcp import puppeteer_hover
@@ -1303,7 +1272,7 @@ class WebTestAgentPuppeteer:
 
         return str(json_path)
 
-    def _analyze_performance(self) -> Dict[str, Any]:
+    def _analyze_performance(self) -> dict[str, Any]:
         """Анализ производительности из всех тестов"""
         perf_results = [r for r in self.test_results if r.performance_metrics]
 
@@ -1328,13 +1297,9 @@ class WebTestAgentPuppeteer:
             "average_load_time": (
                 sum(total_load_times) / len(total_load_times) if total_load_times else 0
             ),
-            "average_fcp": sum(total_fcp_times) / len(total_fcp_times)
-            if total_fcp_times
-            else 0,
+            "average_fcp": sum(total_fcp_times) / len(total_fcp_times) if total_fcp_times else 0,
             "average_transfer_size": (
-                sum(total_transfer_sizes) / len(total_transfer_sizes)
-                if total_transfer_sizes
-                else 0
+                sum(total_transfer_sizes) / len(total_transfer_sizes) if total_transfer_sizes else 0
             ),
             "tests_with_performance_data": len(perf_results),
         }
@@ -1351,14 +1316,14 @@ class WebTestAgentPuppeteer:
 
         return analysis
 
-    def _generate_recommendations(self) -> List[str]:
+    def _generate_recommendations(self) -> list[str]:
         """Генерация рекомендаций на основе результатов"""
         recommendations = []
 
         # Анализ успешности тестов
-        success_rate = len(
-            [r for r in self.test_results if r.status == "passed"]
-        ) / len(self.test_results)
+        success_rate = len([r for r in self.test_results if r.status == "passed"]) / len(
+            self.test_results
+        )
 
         if success_rate < 0.7:
             recommendations.append(
@@ -1409,9 +1374,7 @@ class WebTestAgentPuppeteer:
 
         return recommendations
 
-    async def _generate_html_report(
-        self, report_data: Dict[str, Any], timestamp: str
-    ) -> str:
+    async def _generate_html_report(self, report_data: dict[str, Any], timestamp: str) -> str:
         """Генерация красивого HTML отчета"""
         html_template = """
 <!DOCTYPE html>
@@ -1644,9 +1607,7 @@ class WebTestAgentPuppeteer:
         # Генерация карточек тестов
         test_cards = []
         for test in report_data["test_results"]:
-            status_class = (
-                "status-passed" if test["status"] == "passed" else "status-failed"
-            )
+            status_class = "status-passed" if test["status"] == "passed" else "status-failed"
             card_class = "test-passed" if test["status"] == "passed" else "test-failed"
 
             error_info = (

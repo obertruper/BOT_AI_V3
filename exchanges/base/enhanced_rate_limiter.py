@@ -7,7 +7,7 @@ import hashlib
 import json
 import time
 from collections import defaultdict, deque
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from core.logger import setup_logger
 
@@ -66,13 +66,13 @@ class EnhancedRateLimiter:
             self.limits = {"default": {"requests": 60, "window": 60}}
 
         # Трекеры запросов для каждого endpoint
-        self.request_trackers: Dict[str, deque] = defaultdict(deque)
+        self.request_trackers: dict[str, deque] = defaultdict(deque)
 
         # Кеш результатов
-        self.cache: Dict[str, Tuple[Any, float]] = {}
+        self.cache: dict[str, tuple[Any, float]] = {}
 
         # Блокировки для каждого endpoint
-        self.locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self.locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
         # Счетчики для статистики
         self.stats = {
@@ -83,13 +83,11 @@ class EnhancedRateLimiter:
         }
 
         # Backoff состояние
-        self.backoff_until: Dict[str, float] = {}
+        self.backoff_until: dict[str, float] = {}
 
         logger.info(f"EnhancedRateLimiter инициализирован для {exchange}")
 
-    async def acquire(
-        self, endpoint: str = "default", cache_key: Optional[str] = None
-    ) -> Optional[Any]:
+    async def acquire(self, endpoint: str = "default", cache_key: str | None = None) -> Any | None:
         """
         Получить разрешение на запрос или вернуть кешированный результат
 
@@ -117,9 +115,7 @@ class EnhancedRateLimiter:
             if endpoint in self.backoff_until:
                 wait_time = self.backoff_until[endpoint] - time.time()
                 if wait_time > 0:
-                    logger.warning(
-                        f"⏳ Rate limit backoff для {endpoint}: ждем {wait_time:.1f}s"
-                    )
+                    logger.warning(f"⏳ Rate limit backoff для {endpoint}: ждем {wait_time:.1f}s")
                     await asyncio.sleep(wait_time)
                     del self.backoff_until[endpoint]
 
@@ -158,7 +154,7 @@ class EnhancedRateLimiter:
         func,
         *args,
         endpoint: str = "default",
-        cache_key: Optional[str] = None,
+        cache_key: str | None = None,
         **kwargs,
     ) -> Any:
         """
@@ -231,14 +227,14 @@ class EnhancedRateLimiter:
         logger.error(f"❌ Все {self.max_retries} попыток исчерпаны для {endpoint}")
         raise last_error
 
-    def _get_cache_key(self, method: str, params: Dict[str, Any]) -> str:
+    def _get_cache_key(self, method: str, params: dict[str, Any]) -> str:
         """Генерация ключа кеша"""
         # Создаем уникальный ключ на основе метода и параметров
         key_data = {"method": method, "params": params, "exchange": self.exchange}
         key_str = json.dumps(key_data, sort_keys=True)
         return hashlib.md5(key_str.encode()).hexdigest()
 
-    def _get_from_cache(self, cache_key: str) -> Optional[Any]:
+    def _get_from_cache(self, cache_key: str) -> Any | None:
         """Получить данные из кеша"""
         if cache_key in self.cache:
             result, timestamp = self.cache[cache_key]
@@ -259,20 +255,16 @@ class EnhancedRateLimiter:
         # Ограничиваем размер кеша
         if len(self.cache) > 1000:
             # Удаляем самые старые записи
-            oldest_keys = sorted(self.cache.keys(), key=lambda k: self.cache[k][1])[
-                :100
-            ]
+            oldest_keys = sorted(self.cache.keys(), key=lambda k: self.cache[k][1])[:100]
 
             for key in oldest_keys:
                 del self.cache[key]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Получить статистику"""
         cache_hit_rate = 0
         if self.stats["total_requests"] > 0:
-            cache_hit_rate = (
-                self.stats["cache_hits"] / self.stats["total_requests"]
-            ) * 100
+            cache_hit_rate = (self.stats["cache_hits"] / self.stats["total_requests"]) * 100
 
         return {
             "total_requests": self.stats["total_requests"],
@@ -298,7 +290,7 @@ class EnhancedRateLimiter:
         self.cache.clear()
         logger.info("🗑️ Кеш rate limiter очищен")
 
-    def get_cached(self, cache_key: str) -> Optional[Any]:
+    def get_cached(self, cache_key: str) -> Any | None:
         """
         Получить кешированный результат
 

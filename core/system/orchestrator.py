@@ -13,7 +13,6 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Set
 
 from core.config.config_manager import ConfigManager, get_global_config_manager
 from core.exceptions import (
@@ -34,9 +33,9 @@ class HealthStatus:
 
     is_healthy: bool
     timestamp: datetime
-    issues: List[str]
-    warnings: List[str]
-    system_resources: Dict[str, float]
+    issues: list[str]
+    warnings: list[str]
+    system_resources: dict[str, float]
     active_traders: int
     total_trades: int
 
@@ -53,14 +52,14 @@ class SystemOrchestrator:
     - Graceful shutdown
     """
 
-    def __init__(self, config_manager: Optional[ConfigManager] = None):
+    def __init__(self, config_manager: ConfigManager | None = None):
         self.config_manager = config_manager or get_global_config_manager()
         self.logger_factory = get_global_logger_factory()
         self.logger = self.logger_factory.get_logger("system_orchestrator")
 
         # Основные компоненты
-        self.trader_manager: Optional[TraderManager] = None
-        self.trader_factory: Optional[TraderFactory] = None
+        self.trader_manager: TraderManager | None = None
+        self.trader_factory: TraderFactory | None = None
         self.health_checker = None  # Будет инициализирован позже
         self.exchange_registry = None  # Для проверки бирж
         self.trading_engine = None  # Торговый движок
@@ -72,19 +71,17 @@ class SystemOrchestrator:
 
         # TODO: Эти компоненты будут добавлены в следующих этапах
         self.system_monitor = None  # Инициализируем как None
-        self.db_manager = (
-            None  # Инициализируем как None, будет заполнено позже если нужно
-        )
+        self.db_manager = None  # Инициализируем как None, будет заполнено позже если нужно
         # self.api_server: Optional[APIServer] = None
 
         # Статус системы
         self.is_initialized = False
         self.is_running = False
-        self.startup_time: Optional[datetime] = None
+        self.startup_time: datetime | None = None
 
         # Трекинг компонентов
-        self.active_components: Set[str] = set()
-        self.failed_components: Set[str] = set()
+        self.active_components: set[str] = set()
+        self.failed_components: set[str] = set()
 
         # Настройки из конфигурации
         self.system_config = config_manager.get_system_config()
@@ -93,9 +90,9 @@ class SystemOrchestrator:
         )
 
         # Задачи мониторинга
-        self._monitoring_tasks: List[asyncio.Task] = []
+        self._monitoring_tasks: list[asyncio.Task] = []
 
-    async def get_status(self) -> Dict:
+    async def get_status(self) -> dict:
         """Получение статуса системы"""
         status = {
             "components": {
@@ -112,9 +109,7 @@ class SystemOrchestrator:
         # Получаем список бирж если доступен exchange_registry
         if self.exchange_registry:
             try:
-                status[
-                    "exchanges"
-                ] = await self.exchange_registry.get_available_exchanges()
+                status["exchanges"] = await self.exchange_registry.get_available_exchanges()
             except Exception:
                 pass
 
@@ -221,9 +216,7 @@ class SystemOrchestrator:
         except Exception as e:
             self.logger.error(f"❌ Ошибка при инициализации системы: {e}")
             await self._cleanup_on_error()
-            raise SystemInitializationError(
-                f"Не удалось инициализировать систему: {e}"
-            ) from e
+            raise SystemInitializationError(f"Не удалось инициализировать систему: {e}") from e
 
     async def start(self) -> None:
         """Запуск всей системы"""
@@ -357,9 +350,7 @@ class SystemOrchestrator:
 
         except Exception as e:
             self.logger.error(f"❌ Ошибка при остановке системы: {e}")
-            raise SystemShutdownError(
-                f"Не удалось корректно остановить систему: {e}"
-            ) from e
+            raise SystemShutdownError(f"Не удалось корректно остановить систему: {e}") from e
 
     async def health_check(self) -> HealthStatus:
         """Проверка здоровья всей системы"""
@@ -372,17 +363,13 @@ class SystemOrchestrator:
                 issues.append("Система не запущена")
 
             if self.failed_components:
-                issues.append(
-                    f"Сбойные компоненты: {', '.join(self.failed_components)}"
-                )
+                issues.append(f"Сбойные компоненты: {', '.join(self.failed_components)}")
 
             # Проверка трейдеров
             if self.trader_manager:
                 trader_health = await self.trader_manager.get_health_status()
                 if trader_health.failed_traders:
-                    issues.append(
-                        f"Сбойные трейдеры: {', '.join(trader_health.failed_traders)}"
-                    )
+                    issues.append(f"Сбойные трейдеры: {', '.join(trader_health.failed_traders)}")
                 if trader_health.warnings:
                     warnings.extend(trader_health.warnings)
 
@@ -391,14 +378,10 @@ class SystemOrchestrator:
             limits = self.system_config.get("limits", {})
 
             if resources["memory_percent"] > limits.get("max_memory_usage_mb", 80):
-                warnings.append(
-                    f"Высокое использование памяти: {resources['memory_percent']}%"
-                )
+                warnings.append(f"Высокое использование памяти: {resources['memory_percent']}%")
 
             if resources["cpu_percent"] > limits.get("max_cpu_usage_percent", 80):
-                warnings.append(
-                    f"Высокое использование CPU: {resources['cpu_percent']}%"
-                )
+                warnings.append(f"Высокое использование CPU: {resources['cpu_percent']}%")
 
             # Проверка базы данных
             if self.db_manager:
@@ -429,7 +412,7 @@ class SystemOrchestrator:
             self.logger.error(f"❌ Ошибка при проверке здоровья: {e}")
             raise HealthCheckError(f"Не удалось проверить здоровье системы: {e}") from e
 
-    async def get_system_status(self) -> Dict:
+    async def get_system_status(self) -> dict:
         """Получение полного статуса системы"""
         uptime = None
         if self.startup_time:
@@ -442,9 +425,7 @@ class SystemOrchestrator:
                 "version": "3.0.0",
                 "is_running": self.is_running,
                 "uptime_seconds": uptime,
-                "startup_time": self.startup_time.isoformat()
-                if self.startup_time
-                else None,
+                "startup_time": self.startup_time.isoformat() if self.startup_time else None,
             },
             "health": {
                 "is_healthy": health.is_healthy,
@@ -477,9 +458,7 @@ class SystemOrchestrator:
 
         # Проверка места на диске
         if resources["disk_free_gb"] < 1:
-            raise SystemInitializationError(
-                "Недостаточно места на диске (требуется минимум 1GB)"
-            )
+            raise SystemInitializationError("Недостаточно места на диске (требуется минимум 1GB)")
 
         self.logger.info("✅ Системные требования проверены")
 
@@ -496,9 +475,7 @@ class SystemOrchestrator:
             self.logger.info("⏭️ Инициализация базы данных отложена")
         except Exception as e:
             self.failed_components.add("database")
-            raise SystemInitializationError(
-                f"Не удалось инициализировать базу данных: {e}"
-            ) from e
+            raise SystemInitializationError(f"Не удалось инициализировать базу данных: {e}") from e
 
     async def _initialize_monitoring(self) -> None:
         """Инициализация системы мониторинга"""
@@ -558,9 +535,7 @@ class SystemOrchestrator:
             # Проверяем зависимости
             if not self.exchange_registry:
                 self.logger.warning("⚠️ Trading Engine требует Exchange Registry")
-                self.logger.info(
-                    f"   Exchange Registry статус: {self.exchange_registry}"
-                )
+                self.logger.info(f"   Exchange Registry статус: {self.exchange_registry}")
                 self.logger.info(f"   Active components: {self.active_components}")
                 return
 
@@ -610,9 +585,7 @@ class SystemOrchestrator:
         """Инициализация Telegram сервиса для уведомлений"""
         try:
             telegram_config = (
-                self.config_manager.get_system_config()
-                .get("notifications", {})
-                .get("telegram", {})
+                self.config_manager.get_system_config().get("notifications", {}).get("telegram", {})
             )
 
             if not telegram_config.get("enabled", False):
@@ -678,9 +651,7 @@ class SystemOrchestrator:
             self.logger.info("✅ AI Signal Generator инициализирован")
 
             # Связываем AI Signal Generator с Trading Engine
-            if self.trading_engine and hasattr(
-                self.ai_signal_generator, "set_trading_engine"
-            ):
+            if self.trading_engine and hasattr(self.ai_signal_generator, "set_trading_engine"):
                 self.ai_signal_generator.set_trading_engine(self.trading_engine)
                 self.logger.info("🔗 AI Signal Generator связан с Trading Engine")
 
@@ -709,9 +680,7 @@ class SystemOrchestrator:
             from pathlib import Path
 
             base_dir = Path(__file__).parent.parent.parent  # Корень проекта
-            default_model_path = (
-                base_dir / "models/saved/best_model_20250728_215703.pth"
-            )
+            default_model_path = base_dir / "models/saved/best_model_20250728_215703.pth"
 
             model_path = ml_config.get("model", {}).get("model_path") or ml_config.get(
                 "model", {}
@@ -742,9 +711,7 @@ class SystemOrchestrator:
             )
 
             # Связываем Signal Scheduler с Trading Engine
-            if self.trading_engine and hasattr(
-                self.signal_scheduler, "set_trading_engine"
-            ):
+            if self.trading_engine and hasattr(self.signal_scheduler, "set_trading_engine"):
                 self.signal_scheduler.set_trading_engine(self.trading_engine)
                 self.logger.info("🔗 Signal Scheduler связан с Trading Engine")
 

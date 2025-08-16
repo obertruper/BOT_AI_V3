@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ML Manager для управления PatchTST моделью в BOT Trading v3
 """
 
 import os
 import pickle
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import torch
 
 from core.logger import setup_logger
+from core.system.signal_deduplicator import signal_deduplicator
+from core.system.worker_coordinator import worker_coordinator
 from ml.logic.feature_engineering import (  # Оригинальная версия с 240+ признаками
     FeatureEngineer,
 )
 from ml.logic.patchtst_model import create_unified_model
+from ml.ml_prediction_logger import ml_prediction_logger
 
 logger = setup_logger("ml_manager")
 
@@ -47,7 +49,7 @@ class MLManager:
     Работает с PatchTST моделью для предсказания движений рынка.
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Инициализация ML менеджера.
 
@@ -115,9 +117,7 @@ class MLManager:
                             # Отключаем компиляцию для новых архитектур
                             os.environ["TORCH_COMPILE_DISABLE"] = "1"
 
-                        logger.info(
-                            f"✅ Успешно инициализирован GPU {best_gpu} ({props.name})"
-                        )
+                        logger.info(f"✅ Успешно инициализирован GPU {best_gpu} ({props.name})")
                         logger.info(
                             f"💾 GPU память доступна: {props.total_memory / 1024**3:.2f} GB"
                         )
@@ -160,9 +160,7 @@ class MLManager:
 
         # Пути к моделям - используем абсолютные пути
         base_dir = Path(__file__).parent.parent  # Корень проекта
-        model_dir = base_dir / config.get("ml", {}).get(
-            "model_directory", "models/saved"
-        )
+        model_dir = base_dir / config.get("ml", {}).get("model_directory", "models/saved")
         self.model_path = model_dir / "best_model_20250728_215703.pth"
         self.scaler_path = model_dir / "data_scaler.pkl"
 
@@ -176,6 +174,22 @@ class MLManager:
     async def initialize(self):
         """Инициализация и загрузка моделей"""
         try:
+            # Регистрируемся в координаторе воркеров
+            await worker_coordinator.start()
+            self.worker_id = await worker_coordinator.register_worker(
+                worker_type="ml_manager",
+                metadata={
+                    "device": str(self.device),
+                    "model_path": str(self.model_path),
+                    "num_features": self.num_features,
+                    "context_length": self.context_length,
+                },
+            )
+
+            if not self.worker_id:
+                logger.error("❌ Другой ML Manager уже активен. Завершаем работу.")
+                raise RuntimeError("Duplicate ML Manager detected")
+
             # Загружаем модель
             await self._load_model()
 
@@ -188,10 +202,15 @@ class MLManager:
             # Устанавливаем флаг инициализации
             self._initialized = True
 
-            logger.info("ML components initialized successfully")
+            # Отправляем heartbeat о готовности
+            await worker_coordinator.heartbeat(self.worker_id, status="running")
+
+            logger.info("✅ ML components initialized successfully")
 
         except Exception as e:
             logger.error(f"Error initializing ML components: {e}")
+            if hasattr(self, "worker_id") and self.worker_id:
+                await worker_coordinator.unregister_worker(self.worker_id)
             raise
 
     async def _load_model(self):
@@ -225,12 +244,8 @@ class MLManager:
                 checkpoint = torch.load(self.model_path, map_location=self.device)
             except Exception as cuda_error:
                 # Если ошибка CUDA, принудительно загружаем на CPU
-                logger.warning(
-                    f"Ошибка загрузки на {self.device}, используем CPU: {cuda_error}"
-                )
-                checkpoint = torch.load(
-                    self.model_path, map_location=torch.device("cpu")
-                )
+                logger.warning(f"Ошибка загрузки на {self.device}, используем CPU: {cuda_error}")
+                checkpoint = torch.load(self.model_path, map_location=torch.device("cpu"))
                 self.device = torch.device("cpu")
 
             self.model.load_state_dict(checkpoint["model_state_dict"])
@@ -269,13 +284,14 @@ class MLManager:
             raise
 
     async def predict(
-        self, input_data: Union[pd.DataFrame, np.ndarray]
-    ) -> Dict[str, Any]:
+        self, input_data: pd.DataFrame | np.ndarray, symbol: str | None = None
+    ) -> dict[str, Any]:
         """
         Делает предсказание на основе данных.
 
         Args:
             input_data: DataFrame с OHLCV данными (минимум 96 свечей) или numpy array с признаками
+            symbol: Опциональный символ для логирования (используется когда input_data это numpy array)
 
         Returns:
             Dict с предсказаниями и рекомендациями
@@ -330,9 +346,7 @@ class MLManager:
                         "⚠️ Отсутствует колонка 'symbol' в входных данных! Это может привести к неточным предсказаниям."
                     )
                     input_data = input_data.copy()
-                    input_data["symbol"] = (
-                        "UNKNOWN_SYMBOL"  # Помечаем как неизвестный символ
-                    )
+                    input_data["symbol"] = "UNKNOWN_SYMBOL"  # Помечаем как неизвестный символ
 
                 # Генерируем признаки - теперь это синхронный вызов
                 features_result = self.feature_engineer.create_features(input_data)
@@ -340,9 +354,7 @@ class MLManager:
                 # Обрабатываем результат - может быть DataFrame или ndarray
                 if isinstance(features_result, pd.DataFrame):
                     # Извлекаем числовые признаки из DataFrame
-                    numeric_cols = features_result.select_dtypes(
-                        include=[np.number]
-                    ).columns
+                    numeric_cols = features_result.select_dtypes(include=[np.number]).columns
                     # Исключаем целевые переменные и метаданные
                     feature_cols = [
                         col
@@ -423,12 +435,8 @@ class MLManager:
 
             # Мониторинг GPU памяти перед inference
             if self.device.type == "cuda":
-                gpu_memory_before = (
-                    torch.cuda.memory_allocated(self.device) / 1024**2
-                )  # MB
-                gpu_memory_cached = (
-                    torch.cuda.memory_reserved(self.device) / 1024**2
-                )  # MB
+                gpu_memory_before = torch.cuda.memory_allocated(self.device) / 1024**2  # MB
+                gpu_memory_cached = torch.cuda.memory_reserved(self.device) / 1024**2  # MB
                 logger.debug(
                     f"GPU Memory before inference: {gpu_memory_before:.1f}MB allocated, {gpu_memory_cached:.1f}MB cached"
                 )
@@ -445,12 +453,8 @@ class MLManager:
 
             # Мониторинг GPU памяти после inference
             if self.device.type == "cuda":
-                gpu_memory_after = (
-                    torch.cuda.memory_allocated(self.device) / 1024**2
-                )  # MB
-                logger.debug(
-                    f"GPU Memory after inference: {gpu_memory_after:.1f}MB allocated"
-                )
+                gpu_memory_after = torch.cuda.memory_allocated(self.device) / 1024**2  # MB
+                logger.debug(f"GPU Memory after inference: {gpu_memory_after:.1f}MB allocated")
                 logger.info(f"Inference time: {inference_time:.1f}ms on {self.device}")
 
             # Отладка выходов модели
@@ -463,14 +467,91 @@ class MLManager:
             # Интерпретируем результаты
             predictions = self._interpret_predictions(outputs)
 
+            # Логируем предсказание для анализа
+            try:
+                # Используем переданный symbol параметр если есть, иначе пытаемся извлечь из DataFrame
+                if symbol:
+                    # Используем переданный символ
+                    pass
+                elif isinstance(input_data, pd.DataFrame) and "symbol" in input_data.columns:
+                    symbol = input_data["symbol"].iloc[-1] if not input_data.empty else "UNKNOWN"
+                else:
+                    symbol = "UNKNOWN"
+
+                # Асинхронно логируем предсказание
+                import asyncio
+
+                if asyncio.iscoroutinefunction(ml_prediction_logger.log_prediction):
+                    await ml_prediction_logger.log_prediction(
+                        symbol=symbol,
+                        features=features_scaled[-1],  # Последняя временная точка
+                        model_outputs=outputs_np,
+                        predictions=predictions,
+                        market_data=input_data if isinstance(input_data, pd.DataFrame) else None,
+                    )
+                else:
+                    # Если метод синхронный, создаем задачу
+                    asyncio.create_task(
+                        ml_prediction_logger.log_prediction(
+                            symbol=symbol,
+                            features=features_scaled[-1],
+                            model_outputs=outputs_np,
+                            predictions=predictions,
+                            market_data=(
+                                input_data if isinstance(input_data, pd.DataFrame) else None
+                            ),
+                        )
+                    )
+            except Exception as log_error:
+                logger.warning(f"Не удалось залогировать предсказание: {log_error}")
+
+            # Отправляем heartbeat после успешного предсказания
+            try:
+                if hasattr(self, "worker_id") and self.worker_id:
+                    await worker_coordinator.heartbeat(
+                        self.worker_id, status="running", active_tasks=1
+                    )
+            except Exception as heartbeat_error:
+                logger.warning(f"Ошибка отправки heartbeat: {heartbeat_error}")
+
+            # Проверяем уникальность сигнала перед возвратом
+            try:
+                # Создаем сигнал для проверки дедупликации
+                signal_data = {
+                    "symbol": symbol,
+                    "direction": predictions.get("primary_direction", "NEUTRAL"),
+                    "strategy": "ml_patchtst",
+                    "timestamp": datetime.now(),
+                    "signal_strength": predictions.get("primary_confidence", 0.0),
+                    "price_level": predictions.get("primary_returns", {}).get("15m", 0.0),
+                }
+
+                # Проверяем уникальность сигнала
+                is_unique = await signal_deduplicator.check_and_register_signal(signal_data)
+                if not is_unique:
+                    logger.warning(f"🔄 Дубликат ML сигнала отфильтрован для {symbol}")
+                    predictions["is_duplicate"] = True
+                else:
+                    predictions["is_duplicate"] = False
+
+            except Exception as dedup_error:
+                logger.warning(f"Ошибка дедупликации сигнала: {dedup_error}")
+                predictions["is_duplicate"] = False
+
             logger.info(f"ML Manager возвращает предсказание: {predictions}")
             return predictions
 
         except Exception as e:
             logger.error(f"Error making prediction: {e}")
+            # Отправляем heartbeat об ошибке
+            try:
+                if hasattr(self, "worker_id") and self.worker_id:
+                    await worker_coordinator.heartbeat(self.worker_id, status="error")
+            except Exception as heartbeat_error:
+                logger.warning(f"Ошибка отправки heartbeat при ошибке: {heartbeat_error}")
             raise
 
-    def _interpret_predictions(self, outputs: torch.Tensor) -> Dict[str, Any]:
+    def _interpret_predictions(self, outputs: torch.Tensor) -> dict[str, Any]:
         """
         Интерпретация выходов модели.
 
@@ -535,9 +616,7 @@ class MLManager:
 
         # ПРАВИЛЬНАЯ ИНТЕРПРЕТАЦИЯ DIRECTIONS (12 значений = 4 таймфрейма × 3 класса)
         # Разбиваем на 4 группы по 3 логита
-        direction_logits_reshaped = direction_logits.reshape(
-            4, 3
-        )  # 4 таймфрейма × 3 класса
+        direction_logits_reshaped = direction_logits.reshape(4, 3)  # 4 таймфрейма × 3 класса
 
         # Применяем softmax к каждому таймфрейму
         directions = []
@@ -588,83 +667,109 @@ class MLManager:
         # Используем согласованность как дополнительный фактор
         # Если большинство таймфреймов согласны - сильный сигнал
 
-        # Считаем голоса за каждое направление
-        long_votes = np.sum(directions == 0)
-        short_votes = np.sum(directions == 1)
-        neutral_votes = np.sum(directions == 2)
+        # УПРОЩЕННАЯ ЛОГИКА: Фокус на ближайшие таймфреймы!
+        # Даем больший вес ближайшим предсказаниям
+        near_term_directions = directions[:2]  # 15m и 1h
+        far_term_directions = directions[2:]  # 4h и 12h
+        near_term_returns = future_returns[:2]  # Берем только 15m и 1h для расчетов
 
-        # ИСПРАВЛЕННАЯ ЛОГИКА: Определяем сигнал по большинству голосов
-        if long_votes >= 3:  # 3+ из 4 таймфреймов за LONG
-            signal_type = "LONG"
-        elif short_votes >= 3:  # 3+ из 4 таймфреймов за SHORT
-            signal_type = "SHORT"
-        elif neutral_votes >= 3:  # 3+ из 4 таймфреймов за NEUTRAL
+        # Считаем голоса с приоритетом на ближайшие таймфреймы
+        near_long = np.sum(near_term_directions == 0)
+        near_short = np.sum(near_term_directions == 1)
+        near_neutral = np.sum(near_term_directions == 2)
+
+        far_long = np.sum(far_term_directions == 0)
+        far_short = np.sum(far_term_directions == 1)
+
+        # УЛУЧШЕННАЯ ЛОГИКА С БАЛАНСИРОВКОЙ:
+        # 1. Проверяем максимальные вероятности для каждого класса
+        max_probs = []
+        for probs in direction_probs:
+            max_probs.append(np.max(probs))
+        avg_max_prob = np.mean(max_probs)
+
+        # Если модель неуверенна (все вероятности близки к 0.33), не торгуем
+        if avg_max_prob < 0.35:  # Снижен порог уверенности для лучшего баланса LONG/SHORT
             signal_type = "NEUTRAL"
-        else:
-            # Нет явного большинства - используем более гибкую логику
-            # Приоритет отдаем торговым сигналам (LONG/SHORT) над NEUTRAL
+            signal_strength = 0.2
+            logger.info(f"Модель неуверенна, avg_max_prob={avg_max_prob:.3f}")
 
-            if long_votes > short_votes and long_votes > neutral_votes:
-                # LONG больше всего голосов
+        # 2. Если оба ближайших таймфрейма согласны - сильный сигнал
+        elif near_long == 2:  # Оба ближайших за LONG
+            signal_type = "LONG"
+            signal_strength = 0.9  # Высокая уверенность
+        elif near_short == 2:  # Оба ближайших за SHORT
+            signal_type = "SHORT"
+            signal_strength = 0.9  # Высокая уверенность
+
+        # 3. Если ближайшие разделились, смотрим на дальние
+        elif near_long == 1 and near_short == 0:
+            # Один LONG в ближайших, проверяем поддержку дальних
+            if far_long >= 1:  # Есть поддержка от дальних
                 signal_type = "LONG"
-            elif short_votes > long_votes and short_votes > neutral_votes:
-                # SHORT больше всего голосов
-                signal_type = "SHORT"
-            elif long_votes == short_votes and long_votes > neutral_votes:
-                # LONG и SHORT равны, но больше NEUTRAL - используем взвешенное среднее
-                if weighted_direction < 1.0:
-                    signal_type = "LONG"  # Ближе к 0 (LONG)
-                else:
-                    signal_type = "SHORT"  # Ближе к 1 (SHORT)
+                signal_strength = 0.7
             else:
-                # NEUTRAL побеждает или ничья с торговыми сигналами
-                # Используем более мягкие пороги для взвешенного среднего
-                if weighted_direction < 0.5:
-                    signal_type = "LONG"  # Сильный LONG
-                elif weighted_direction > 1.5:
-                    signal_type = "NEUTRAL"  # Сильный NEUTRAL
-                elif weighted_direction > 1.2:
-                    signal_type = "SHORT"  # Умеренный SHORT
+                signal_type = "NEUTRAL"  # Нет поддержки
+                signal_strength = 0.4
+
+        elif near_short == 1 and near_long == 0:
+            # Один SHORT в ближайших, проверяем поддержку дальних
+            if far_short >= 1:  # Есть поддержка от дальних
+                signal_type = "SHORT"
+                signal_strength = 0.7
+            else:
+                signal_type = "NEUTRAL"  # Нет поддержки
+                signal_strength = 0.4
+
+        # 4. Конфликт в ближайших таймфреймах или все NEUTRAL
+        else:
+            # Используем предсказанные доходности для принятия решения
+            avg_near_return = np.mean(near_term_returns)
+
+            # Сбалансированный порог для торговых сигналов
+            if abs(avg_near_return) > 0.003:  # Более мягкий порог (0.3%) для баланса LONG/SHORT
+                if avg_near_return > 0:
+                    signal_type = "LONG"
                 else:
-                    # Промежуточная зона - решаем по силе сигнала
-                    if signal_strength > 0.4:  # Снижен с 0.6
-                        # При достаточной силе сигнала выбираем торговое направление
-                        if weighted_direction < 1.0:
-                            signal_type = "LONG"
-                        else:
-                            signal_type = "SHORT"
-                    else:
-                        signal_type = "NEUTRAL"
+                    signal_type = "SHORT"
+                signal_strength = 0.5  # Средняя уверенность
+            else:
+                signal_type = "NEUTRAL"
+                signal_strength = 0.3
 
-        # Рассчитываем уровни SL/TP на основе future_returns
-        # future_returns содержит предсказанные доходности для разных таймфреймов
+        # УПРОЩЕННЫЙ РАСЧЕТ SL/TP на основе силы сигнала и ближайших предсказаний
+        if signal_type in ["LONG", "SHORT"]:
+            # Используем адаптивные SL/TP в зависимости от силы сигнала
 
-        if signal_type == "LONG":
-            # Для LONG позиций:
-            # Stop Loss: используем минимальную (возможно отрицательную) доходность
-            # Take Profit: используем максимальную положительную доходность
+            # Базовые значения (консервативные)
+            base_sl = 0.01  # 1%
+            base_tp = 0.02  # 2%
 
-            # Берем минимальное значение как риск для stop loss
-            min_return = float(np.min(future_returns))
-            max_return = float(np.max(future_returns))
+            # Корректируем на основе силы сигнала
+            if signal_strength >= 0.8:  # Сильный сигнал
+                # Можем позволить чуть больший стоп и больший тейк
+                stop_loss_pct = base_sl * 1.5  # 1.5%
+                take_profit_pct = base_tp * 1.5  # 3%
+            elif signal_strength >= 0.6:  # Средний сигнал
+                stop_loss_pct = base_sl * 1.2  # 1.2%
+                take_profit_pct = base_tp * 1.2  # 2.4%
+            else:  # Слабый сигнал
+                # Очень консервативные параметры
+                stop_loss_pct = base_sl * 0.8  # 0.8%
+                take_profit_pct = base_tp * 0.8  # 1.6%
 
-            # Конвертируем в разумные проценты (ограничиваем диапазон)
-            # Stop Loss: от 1% до 5%
-            stop_loss_pct = np.clip(abs(min_return) * 100, 1.0, 5.0) / 100.0
+            # Дополнительная корректировка на основе предсказанных движений
+            avg_near_return = np.mean(near_term_returns)
+            volatility = np.std(near_term_returns)
 
-            # Take Profit: от 2% до 10%
-            take_profit_pct = np.clip(max_return * 100, 2.0, 10.0) / 100.0
+            # Если высокая волатильность - увеличиваем стопы
+            if volatility > 0.01:  # Волатильность > 1%
+                stop_loss_pct *= 1.2
+                take_profit_pct *= 1.2
 
-        elif signal_type == "SHORT":
-            # Для SHORT позиций логика инвертирована
-            min_return = float(np.min(future_returns))
-            max_return = float(np.max(future_returns))
-
-            # Stop Loss для SHORT = риск роста цены
-            stop_loss_pct = np.clip(abs(max_return) * 100, 1.0, 5.0) / 100.0
-
-            # Take Profit для SHORT = падение цены
-            take_profit_pct = np.clip(abs(min_return) * 100, 2.0, 10.0) / 100.0
+            # Финальная проверка диапазонов
+            stop_loss_pct = np.clip(stop_loss_pct, 0.005, 0.02)  # 0.5% - 2%
+            take_profit_pct = np.clip(take_profit_pct, 0.01, 0.04)  # 1% - 4%
 
         else:
             stop_loss_pct = None
@@ -689,14 +794,14 @@ class MLManager:
         # Увеличиваем базовую уверенность для торговых сигналов
         base_confidence = 0.4 if signal_type in ["LONG", "SHORT"] else 0.2
 
-        # Бонус за согласованность предсказаний
+        # Бонус за согласованность направлений (используем данные из нового подсчета)
         consistency_bonus = 0.0
-        max_votes = max(long_votes, short_votes, neutral_votes)
         if signal_type in ["LONG", "SHORT"]:
-            # Для торговых сигналов даем бонус даже при относительном большинстве
-            consistency_bonus = (
-                max_votes - 1
-            ) * 0.15  # 0.15 за каждый дополнительный голос
+            # Если большинство ближайших таймфреймов согласны - даем бонус
+            if len(set(near_term_directions)) == 1:  # Все ближайшие согласны
+                consistency_bonus = 0.3
+            elif near_term_directions[0] == near_term_directions[1]:  # Хотя бы два согласны
+                consistency_bonus = 0.15
 
         # Комбинированная уверенность с учетом типа сигнала
         combined_confidence = min(
@@ -713,9 +818,7 @@ class MLManager:
 
         # Логируем все предсказания для анализа
         sl_str = f"{stop_loss_pct:.3f}" if stop_loss_pct is not None else "не определен"
-        tp_str = (
-            f"{take_profit_pct:.3f}" if take_profit_pct is not None else "не определен"
-        )
+        tp_str = f"{take_profit_pct:.3f}" if take_profit_pct is not None else "не определен"
 
         logger.info(
             f"""
@@ -732,14 +835,36 @@ class MLManager:
 """
         )
 
+        # Подготавливаем детальные данные для логирования
+        direction_map = {0: "LONG", 1: "SHORT", 2: "NEUTRAL"}
+
         return {
             "signal_type": signal_type,
             "signal_strength": float(signal_strength),
             "confidence": float(combined_confidence),
+            "signal_confidence": float(combined_confidence),  # Для совместимости с логгером
             "success_probability": float(success_probability),
             "stop_loss_pct": stop_loss_pct,  # Процент, не абсолютная цена!
             "take_profit_pct": take_profit_pct,  # Процент, не абсолютная цена!
             "risk_level": risk_level,
+            "risk_score": float(avg_risk),  # Для логгера
+            "max_drawdown": float(risk_metrics[0]) if len(risk_metrics) > 0 else 0,
+            "max_rally": float(risk_metrics[1]) if len(risk_metrics) > 1 else 0,
+            "primary_timeframe": "15m",  # Основной таймфрейм
+            # Детализированные предсказания для логгера
+            "returns_15m": float(future_returns[0]),
+            "returns_1h": float(future_returns[1]),
+            "returns_4h": float(future_returns[2]),
+            "returns_12h": float(future_returns[3]),
+            # Направления и уверенность по таймфреймам
+            "direction_15m": direction_map.get(int(directions[0]), "NEUTRAL"),
+            "direction_1h": direction_map.get(int(directions[1]), "NEUTRAL"),
+            "direction_4h": direction_map.get(int(directions[2]), "NEUTRAL"),
+            "direction_12h": direction_map.get(int(directions[3]), "NEUTRAL"),
+            "confidence_15m": float(confidence_scores[0]),
+            "confidence_1h": float(confidence_scores[1]),
+            "confidence_4h": float(confidence_scores[2]),
+            "confidence_12h": float(confidence_scores[3]),
             "predictions": {
                 "returns_15m": float(future_returns[0]),
                 "returns_1h": float(future_returns[1]),
@@ -749,7 +874,7 @@ class MLManager:
                 "directions_by_timeframe": directions.tolist(),  # [15m, 1h, 4h, 12h]
                 "direction_probabilities": [p.tolist() for p in direction_probs],
             },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     async def update_model(self, new_model_path: str):
@@ -780,7 +905,7 @@ class MLManager:
                 backup_path.rename(self.model_path)
             raise
 
-    def get_model_info(self) -> Dict[str, Any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Получение информации о модели"""
         return {
             "model_type": "UnifiedPatchTST",

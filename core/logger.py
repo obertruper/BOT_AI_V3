@@ -56,9 +56,7 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
         console_level = logger.level  # Используем тот же уровень, что и у логгера
     else:
         console_level = (
-            logging.WARNING
-            if os.getenv("ENVIRONMENT") == "production"
-            else logging.INFO
+            logging.WARNING if os.getenv("ENVIRONMENT") == "production" else logging.INFO
         )
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(console_level)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Скрипт автоматического применения исправлений 499 ошибок
 Применяет оптимизации к существующим файлам для предотвращения 499 ошибок
@@ -45,10 +44,8 @@ class Fix499Applier:
 
         try:
             # Создаем резервную копию
-            backup_path = (
-                f"{file_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            )
-            with open(file_path, "r", encoding="utf-8") as f:
+            backup_path = f"{file_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            with open(file_path, encoding="utf-8") as f:
                 original_content = f.read()
 
             with open(backup_path, "w", encoding="utf-8") as f:
@@ -143,9 +140,7 @@ class Fix499Applier:
                         break
 
                 insert_pos = "\n".join(lines[: i + 1])
-                modified_content = (
-                    insert_pos + reconnect_method + "\n" + "\n".join(lines[i + 1 :])
-                )
+                modified_content = insert_pos + reconnect_method + "\n" + "\n".join(lines[i + 1 :])
 
         return modified_content
 
@@ -167,10 +162,8 @@ class Fix499Applier:
 
         try:
             # Создаем резервную копию
-            backup_path = (
-                f"{file_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            )
-            with open(file_path, "r", encoding="utf-8") as f:
+            backup_path = f"{file_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            with open(file_path, encoding="utf-8") as f:
                 original_content = f.read()
 
             with open(backup_path, "w", encoding="utf-8") as f:
@@ -209,9 +202,7 @@ class Fix499Applier:
                 )
 
         # Добавляем обработку исключений к асинхронным функциям
-        async_func_pattern = (
-            r"(async def [^:]+:\s*\n)(\s*)(.*?)(\n\s*return|\n\s*pass|\n\s*$)"
-        )
+        async_func_pattern = r"(async def [^:]+:\s*\n)(\s*)(.*?)(\n\s*return|\n\s*pass|\n\s*$)"
 
         def add_exception_handling(match):
             func_def = match.group(1)
@@ -394,9 +385,7 @@ if __name__ == "__main__":
         }
 
         # Сохраняем отчет
-        report_file = (
-            f"logs/application_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        )
+        report_file = f"logs/application_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False, default=str)
 

@@ -16,9 +16,9 @@ from .strategies import router as strategies_router
 from .traders import router as traders_router
 
 __all__ = [
-    "traders_router",
-    "monitoring_router",
-    "exchanges_router",
-    "strategies_router",
     "auth_router",
+    "exchanges_router",
+    "monitoring_router",
+    "strategies_router",
+    "traders_router",
 ]

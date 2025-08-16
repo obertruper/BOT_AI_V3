@@ -174,9 +174,7 @@ class TestMLSignalProcessor:
         assert await signal_processor.validate_signal(invalid_signal) is False
 
     @pytest.mark.asyncio
-    async def test_convert_predictions_to_signal(
-        self, signal_processor, sample_predictions
-    ):
+    async def test_convert_predictions_to_signal(self, signal_processor, sample_predictions):
         """Тест конвертации предсказаний модели в сигнал"""
         await signal_processor.initialize()
 

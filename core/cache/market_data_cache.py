@@ -4,8 +4,8 @@
 
 import asyncio
 from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import pandas as pd
 
@@ -29,16 +29,16 @@ class MarketDataCache:
             ttl_seconds: Время жизни последней свечи (для обновления)
         """
         # Основной кеш: symbol -> DataFrame с OHLCV данными
-        self._data_cache: Dict[str, pd.DataFrame] = {}
+        self._data_cache: dict[str, pd.DataFrame] = {}
 
         # Метаданные кеша
-        self._cache_metadata: Dict[str, Dict] = {}
+        self._cache_metadata: dict[str, dict] = {}
 
         # Время последнего обновления для каждого символа
-        self._last_update: Dict[str, datetime] = {}
+        self._last_update: dict[str, datetime] = {}
 
         # Блокировки для потокобезопасности
-        self._locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
         # Настройки
         self.cache_size = cache_size
@@ -52,13 +52,9 @@ class MarketDataCache:
             "last_candles_updated": 0,
         }
 
-        logger.info(
-            f"MarketDataCache инициализирован: size={cache_size}, ttl={ttl_seconds}s"
-        )
+        logger.info(f"MarketDataCache инициализирован: size={cache_size}, ttl={ttl_seconds}s")
 
-    async def get_data(
-        self, symbol: str, required_candles: int = 96
-    ) -> Optional[pd.DataFrame]:
+    async def get_data(self, symbol: str, required_candles: int = 96) -> pd.DataFrame | None:
         """
         Получить данные из кеша
 
@@ -99,7 +95,7 @@ class MarketDataCache:
             is_complete: True если это полная загрузка, False для инкрементального обновления
         """
         async with self._locks[symbol]:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
             if is_complete:
                 # Полная замена данных
@@ -109,9 +105,7 @@ class MarketDataCache:
                     "candles_count": len(new_data),
                     "needs_last_update": False,
                 }
-                logger.info(
-                    f"📊 {symbol}: Загружено {len(new_data)} исторических свечей в кеш"
-                )
+                logger.info(f"📊 {symbol}: Загружено {len(new_data)} исторических свечей в кеш")
 
             else:
                 # Инкрементальное обновление
@@ -120,9 +114,7 @@ class MarketDataCache:
 
                     # Объединяем данные, удаляя дубликаты по timestamp
                     combined_df = pd.concat([existing_df, new_data])
-                    combined_df = combined_df[
-                        ~combined_df.index.duplicated(keep="last")
-                    ]
+                    combined_df = combined_df[~combined_df.index.duplicated(keep="last")]
                     combined_df = combined_df.sort_index()
 
                     # Ограничиваем размер кеша
@@ -144,9 +136,7 @@ class MarketDataCache:
 
             self._last_update[symbol] = current_time
 
-    async def update_last_candle(
-        self, symbol: str, last_candle: Dict[str, Any]
-    ) -> None:
+    async def update_last_candle(self, symbol: str, last_candle: dict[str, Any]) -> None:
         """
         Обновить только последнюю свечу (real-time обновление)
 
@@ -161,9 +151,7 @@ class MarketDataCache:
             df = self._data_cache[symbol]
 
             # Создаем timestamp для последней свечи
-            timestamp = pd.Timestamp(
-                last_candle.get("timestamp", datetime.now(timezone.utc)), tz="UTC"
-            )
+            timestamp = pd.Timestamp(last_candle.get("timestamp", datetime.now(UTC)), tz="UTC")
 
             # Обновляем последнюю строку если timestamp совпадает
             if len(df) > 0 and df.index[-1] == timestamp:
@@ -183,13 +171,11 @@ class MarketDataCache:
 
                 # Ограничиваем размер
                 if len(self._data_cache[symbol]) > self.cache_size:
-                    self._data_cache[symbol] = self._data_cache[symbol].iloc[
-                        -self.cache_size :
-                    ]
+                    self._data_cache[symbol] = self._data_cache[symbol].iloc[-self.cache_size :]
 
                 logger.debug(f"📊 {symbol}: Добавлена новая свеча {timestamp}")
 
-            self._last_update[symbol] = datetime.now(timezone.utc)
+            self._last_update[symbol] = datetime.now(UTC)
             self._cache_metadata[symbol]["needs_last_update"] = False
 
     def _is_last_candle_stale(self, symbol: str) -> bool:
@@ -205,10 +191,10 @@ class MarketDataCache:
         if symbol not in self._last_update:
             return True
 
-        age = (datetime.now(timezone.utc) - self._last_update[symbol]).total_seconds()
+        age = (datetime.now(UTC) - self._last_update[symbol]).total_seconds()
         return age > self.ttl_seconds
 
-    def needs_update(self, symbol: str) -> Tuple[bool, str]:
+    def needs_update(self, symbol: str) -> tuple[bool, str]:
         """
         Проверить, нужно ли обновление данных
 
@@ -235,14 +221,10 @@ class MarketDataCache:
 
         return False, "none"
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Получить статистику кеша"""
         total_requests = self.stats["cache_hits"] + self.stats["cache_misses"]
-        hit_rate = (
-            (self.stats["cache_hits"] / total_requests * 100)
-            if total_requests > 0
-            else 0
-        )
+        hit_rate = (self.stats["cache_hits"] / total_requests * 100) if total_requests > 0 else 0
 
         return {
             "cache_hits": self.stats["cache_hits"],
@@ -254,7 +236,7 @@ class MarketDataCache:
             "total_candles": sum(len(df) for df in self._data_cache.values()),
         }
 
-    def clear_cache(self, symbol: Optional[str] = None) -> None:
+    def clear_cache(self, symbol: str | None = None) -> None:
         """
         Очистить кеш
 
@@ -279,7 +261,7 @@ class MarketDataCache:
             logger.info("🗑️ Весь кеш очищен")
 
     async def preload_symbols(
-        self, symbols: List[str], data_loader_func, required_candles: int = 1000
+        self, symbols: list[str], data_loader_func, required_candles: int = 1000
     ) -> None:
         """
         Предзагрузка данных для списка символов
@@ -304,9 +286,7 @@ class MarketDataCache:
             success_count = sum(1 for r in results if not isinstance(r, Exception))
             logger.info(f"✅ Предзагружено {success_count}/{len(tasks)} символов")
 
-    async def _preload_single(
-        self, symbol: str, data_loader_func, required_candles: int
-    ) -> None:
+    async def _preload_single(self, symbol: str, data_loader_func, required_candles: int) -> None:
         """Предзагрузка данных для одного символа"""
         try:
             data = await data_loader_func(symbol, limit=required_candles)

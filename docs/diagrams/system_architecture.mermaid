@@ -1,0 +1,99 @@
+graph TB
+    %% Основные компоненты
+    subgraph "Точка входа"
+        UL[unified_launcher.py<br/>Главный лаунчер]
+    end
+
+    subgraph "Координация"
+        SO[SystemOrchestrator<br/>Оркестратор системы]
+        WC[WorkerCoordinator<br/>Координатор воркеров]
+    end
+
+    subgraph "ML подсистема"
+        MLM[ML Manager<br/>Менеджер ML]
+        MLSP[ML Signal Processor<br/>Обработчик сигналов ML]
+        TST[UnifiedPatchTST<br/>ML модель]
+    end
+
+    subgraph "Торговая подсистема"
+        TE[Trading Engine<br/>Торговый движок]
+        OM[Order Manager<br/>Менеджер ордеров]
+        EE[Execution Engine<br/>Движок исполнения]
+    end
+
+    subgraph "Системные компоненты"
+        SD[SignalDeduplicator<br/>Дедупликатор сигналов]
+        RL[RateLimiter<br/>Ограничитель запросов]
+        BM[BalanceManager<br/>Менеджер балансов]
+        PM[ProcessMonitor<br/>Монитор процессов]
+    end
+
+    subgraph "Биржи"
+        EX1[Bybit API]
+        EX2[Binance API]
+        EX3[OKX API]
+        EX4[Gate.io API]
+        EX5[KuCoin API]
+        EX6[HTX API]
+        EX7[BingX API]
+    end
+
+    subgraph "Хранилище"
+        PG[(PostgreSQL:5555<br/>База данных)]
+        RD[(Redis:6379<br/>Кеш)]
+    end
+
+    %% Связи между компонентами
+    UL --> SO
+    SO --> WC
+    SO --> MLM
+    SO --> TE
+
+    WC -.->|регистрация| MLM
+    WC -.->|регистрация| TE
+
+    MLM --> TST
+    TST --> MLSP
+    MLSP --> SD
+    SD -->|уникальные| TE
+
+    TE --> RL
+    RL -->|проверка лимитов| OM
+    OM --> BM
+    BM -->|резервирование| EE
+
+    EE --> EX1
+    EE --> EX2
+    EE --> EX3
+    EE --> EX4
+    EE --> EX5
+    EE --> EX6
+    EE --> EX7
+
+    PM -.->|мониторинг| MLM
+    PM -.->|мониторинг| TE
+    PM -.->|мониторинг| WC
+
+    SD --> PG
+    SD --> RD
+    BM --> PG
+    BM --> RD
+    RL --> RD
+    WC --> RD
+
+    %% Стили
+    classDef entryPoint fill:#4CAF50,stroke:#2E7D32,stroke-width:3px,color:#fff
+    classDef coordinator fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    classDef ml fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
+    classDef trading fill:#9C27B0,stroke:#6A1B9A,stroke-width:2px,color:#fff
+    classDef system fill:#00BCD4,stroke:#00838F,stroke-width:2px,color:#fff
+    classDef exchange fill:#FFC107,stroke:#F57C00,stroke-width:2px,color:#000
+    classDef storage fill:#607D8B,stroke:#37474F,stroke-width:2px,color:#fff
+
+    class UL entryPoint
+    class SO,WC coordinator
+    class MLM,MLSP,TST ml
+    class TE,OM,EE trading
+    class SD,RL,BM,PM system
+    class EX1,EX2,EX3,EX4,EX5,EX6,EX7 exchange
+    class PG,RD storage

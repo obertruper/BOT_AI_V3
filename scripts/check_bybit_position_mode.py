@@ -58,9 +58,7 @@ async def check_and_set_position_mode():
             )
 
             # Пробуем установить режим согласно конфигурации
-            logger.info(
-                f"🔧 Устанавливаем режим: {'Hedge' if config_hedge_mode else 'One-way'}"
-            )
+            logger.info(f"🔧 Устанавливаем режим: {'Hedge' if config_hedge_mode else 'One-way'}")
 
             # Проверяем открытые позиции
             positions = await client.get_positions()
@@ -114,9 +112,7 @@ async def check_and_set_position_mode():
 
                 # Сразу отменяем
                 await asyncio.sleep(1)
-                cancel_response = await client.cancel_order(
-                    "XRPUSDT", response.order_id
-                )
+                cancel_response = await client.cancel_order("XRPUSDT", response.order_id)
                 if cancel_response.success:
                     logger.info("✅ Тестовый ордер отменен")
             else:

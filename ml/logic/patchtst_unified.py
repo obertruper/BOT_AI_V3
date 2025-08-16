@@ -3,8 +3,6 @@
 Решает проблему несоответствия размерностей: модель выдает точное количество выходов из конфига
 """
 
-from typing import Dict, List, Optional
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -160,7 +158,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
     3. Правильное соответствие с целевыми переменными из датасета
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         super().__init__()
         self.config = config
         model_config = config.get("model", {})
@@ -174,9 +172,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
         self.n_features = model_config.get(
             "input_size", 240
         )  # Дефолт 240 для совместимости со старыми моделями
-        self.context_window = model_config.get(
-            "context_window", 96
-        )  # Дефолт 96 для совместимости
+        self.context_window = model_config.get("context_window", 96)  # Дефолт 96 для совместимости
         self.patch_len = model_config.get("patch_len", 16)
         self.stride = model_config.get("stride", 8)
 
@@ -206,9 +202,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
 
         # Позиционное кодирование
         self.n_patches = (self.context_window - self.patch_len) // self.stride + 1
-        self.positional_encoding = PositionalEncoding(
-            d_model=self.d_model, max_len=self.n_patches
-        )
+        self.positional_encoding = PositionalEncoding(d_model=self.d_model, max_len=self.n_patches)
 
         # Основной энкодер
         self.encoder = PatchTSTEncoder(
@@ -297,9 +291,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
     def _init_weights(self):
         """Инициализация весов модели с учетом конфигурации"""
         # Проверяем конфигурацию для direction head init
-        direction_init_config = self.config.get("model", {}).get(
-            "direction_head_init", {}
-        )
+        direction_init_config = self.config.get("model", {}).get("direction_head_init", {})
         init_method = direction_init_config.get("method", "balanced")
         bias_init = direction_init_config.get("bias_init", "balanced")
         weight_scale = direction_init_config.get("weight_scale", 0.1)
@@ -356,9 +348,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
 
             elif isinstance(module, nn.Conv1d):
                 # Kaiming инициализация с уменьшенным масштабом
-                nn.init.kaiming_normal_(
-                    module.weight, mode="fan_in", nonlinearity="leaky_relu"
-                )
+                nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="leaky_relu")
                 # Дополнительное масштабирование для стабильности
                 with torch.no_grad():
                     module.weight.mul_(0.7)
@@ -404,9 +394,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
         future_returns = self.future_returns_head(x_projected)  # (B, 4)
 
         # Direction head выдает логиты для 3 классов на каждый таймфрейм
-        direction_logits = self.direction_head(
-            x_projected
-        )  # (B, 12) = 4 таймфрейма * 3 класса
+        direction_logits = self.direction_head(x_projected)  # (B, 12) = 4 таймфрейма * 3 класса
 
         # ОТЛАДКА: Проверяем выходы direction head
         if not hasattr(self, "_logged_direction_head") and self.training:
@@ -536,7 +524,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
 
         return l2_loss * self.config.get("model", {}).get("direction_l2_weight", 0.001)
 
-    def get_output_names(self) -> List[str]:
+    def get_output_names(self) -> list[str]:
         """Возвращает имена всех выходов в правильном порядке (20 переменных v4.0)"""
         return [
             # A. Базовые возвраты (0-3)
@@ -573,7 +561,7 @@ class UnifiedTradingLoss(nn.Module):
     Комбинирует regression и classification losses с weighted focus на крупные движения
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         super().__init__()
         self.config = config
         loss_config = config.get("loss", {})
@@ -593,15 +581,13 @@ class UnifiedTradingLoss(nn.Module):
 
         # Loss функции (исправлено для mixed precision)
         self.mse_loss = nn.MSELoss(reduction="none")
-        self.bce_with_logits_loss = nn.BCEWithLogitsLoss(
-            reduction="none"
-        )  # Безопасно для autocast
+        self.bce_with_logits_loss = nn.BCEWithLogitsLoss(reduction="none")  # Безопасно для autocast
 
     def forward(
         self,
         predictions: torch.Tensor,
         targets: torch.Tensor,
-        price_changes: Optional[torch.Tensor] = None,
+        price_changes: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Вычисление loss для v4.0 с weighted focus на крупные движения
@@ -630,9 +616,7 @@ class UnifiedTradingLoss(nn.Module):
         normalized_targets[:, :4] = targets[:, :4] / 100.0
 
         # Базовый MSE loss
-        future_return_loss = self.mse_loss(
-            predictions[:, :4], normalized_targets[:, :4]
-        )
+        future_return_loss = self.mse_loss(predictions[:, :4], normalized_targets[:, :4])
 
         # Взвешивание для крупных движений
         if price_changes is not None:
@@ -662,18 +646,14 @@ class UnifiedTradingLoss(nn.Module):
 
         for i in range(4):  # Для каждого таймфрейма
             # Базовый MSE
-            base_loss = self.mse_loss(
-                pred_directions[:, i], true_directions[:, i] / 2.0
-            )
+            base_loss = self.mse_loss(pred_directions[:, i], true_directions[:, i] / 2.0)
 
             # Дополнительный штраф за противоположное направление
             # Если истинное = 0 (UP), а предсказано = 1 (DOWN) или наоборот
             pred_class = torch.round(pred_directions[:, i] * 2).clamp(0, 2)
             true_class = true_directions[:, i]
 
-            wrong_direction_mask = (
-                (true_class == 0) & (pred_class == 1)
-            ) | (  # True UP, Pred DOWN
+            wrong_direction_mask = ((true_class == 0) & (pred_class == 1)) | (  # True UP, Pred DOWN
                 (true_class == 1) & (pred_class == 0)
             )  # True DOWN, Pred UP
 
@@ -688,14 +668,10 @@ class UnifiedTradingLoss(nn.Module):
         losses.append(direction_loss * self.signal_weight)
 
         # 3. Достижение уровней LONG (индексы 8-11) - бинарная классификация
-        long_levels_loss = self.bce_with_logits_loss(
-            predictions[:, 8:12], targets[:, 8:12]
-        )
+        long_levels_loss = self.bce_with_logits_loss(predictions[:, 8:12], targets[:, 8:12])
 
         # Взвешивание для положительных примеров (когда цель достигнута)
-        positive_weight = (
-            2.0  # Больше веса на правильное предсказание достижения уровня
-        )
+        positive_weight = 2.0  # Больше веса на правильное предсказание достижения уровня
         weights = torch.ones_like(long_levels_loss)
         weights[targets[:, 8:12] == 1] = positive_weight
 
@@ -703,9 +679,7 @@ class UnifiedTradingLoss(nn.Module):
         losses.append(long_levels_loss * self.tp_weight)
 
         # 4. Достижение уровней SHORT (индексы 12-15) - бинарная классификация
-        short_levels_loss = self.bce_with_logits_loss(
-            predictions[:, 12:16], targets[:, 12:16]
-        )
+        short_levels_loss = self.bce_with_logits_loss(predictions[:, 12:16], targets[:, 12:16])
 
         # Аналогичное взвешивание
         weights = torch.ones_like(short_levels_loss)
@@ -751,7 +725,7 @@ class DirectionalTradingLoss(nn.Module):
     def __init__(
         self,
         commission: float = 0.001,
-        class_weights: Optional[List[float]] = None,
+        class_weights: list[float] | None = None,
         profit_focus_weight: float = 10.0,
     ):
         super().__init__()
@@ -766,9 +740,9 @@ class DirectionalTradingLoss(nn.Module):
 
     def forward(
         self,
-        predictions: Dict[str, torch.Tensor],
-        targets: Dict[str, torch.Tensor],
-        price_changes: Dict[str, torch.Tensor],
+        predictions: dict[str, torch.Tensor],
+        targets: dict[str, torch.Tensor],
+        price_changes: dict[str, torch.Tensor],
     ) -> torch.Tensor:
         """
         Вычисление loss с учетом потенциальной прибыли
@@ -825,9 +799,7 @@ class DirectionalTradingLoss(nn.Module):
             ) | (  # Предсказали UP, было DOWN
                 (predicted_direction == 1) & (actual_direction == 0)
             )  # Предсказали DOWN, было UP
-            direction_penalty = (
-                wrong_direction_mask.float() * torch.abs(price_change) * 2
-            )
+            direction_penalty = wrong_direction_mask.float() * torch.abs(price_change) * 2
 
             # Штраф за false positives (торговля когда нужно было ждать)
             false_positive_penalty = (
@@ -855,7 +827,7 @@ class DirectionalMultiTaskLoss(nn.Module):
     Основана на научных исследованиях 2024 года по crypto direction prediction
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         super().__init__()
         self.config = config
 
@@ -867,18 +839,14 @@ class DirectionalMultiTaskLoss(nn.Module):
         # Веса для разных типов задач из конфигурации
         task_weights = config.get("loss", {}).get("task_weights", {})
         self.future_returns_weight = task_weights.get("future_returns", 1.0)
-        self.directions_weight = task_weights.get(
-            "directions", 3.0
-        )  # Больший вес для направлений
+        self.directions_weight = task_weights.get("directions", 3.0)  # Больший вес для направлений
         self.long_levels_weight = task_weights.get("long_levels", 1.0)
         self.short_levels_weight = task_weights.get("short_levels", 1.0)
         self.risk_metrics_weight = task_weights.get("risk_metrics", 0.5)
 
         # Параметры для direction focus
         self.large_move_weight = config.get("loss", {}).get("large_move_weight", 5.0)
-        self.min_movement_threshold = config.get("loss", {}).get(
-            "large_move_threshold", 0.003
-        )
+        self.min_movement_threshold = config.get("loss", {}).get("large_move_threshold", 0.003)
 
         # Loss функции
         self.mse_loss = nn.MSELoss(reduction="none")
@@ -892,18 +860,14 @@ class DirectionalMultiTaskLoss(nn.Module):
         class_weights = torch.tensor(config_weights)  # LONG, SHORT, FLAT
 
         # КРИТИЧНО: Логируем фактические веса классов
-        print(
-            f"🔥 DirectionalMultiTaskLoss инициализирована с весами классов: {config_weights}"
-        )
+        print(f"🔥 DirectionalMultiTaskLoss инициализирована с весами классов: {config_weights}")
         print(f"   - LONG weight: {config_weights[0]}")
         print(f"   - SHORT weight: {config_weights[1]}")
         print(f"   - FLAT weight: {config_weights[2]}")
 
         # Метод 2: Динамическая адаптация весов на основе батча
         # Это позволит модели адаптироваться к локальным распределениям
-        self.use_dynamic_weights = config.get("loss", {}).get(
-            "use_dynamic_class_weights", True
-        )
+        self.use_dynamic_weights = config.get("loss", {}).get("use_dynamic_class_weights", True)
         self.class_weight_momentum = 0.9  # Экспоненциальное скользящее среднее
 
         # Инициализируем начальные веса
@@ -913,9 +877,7 @@ class DirectionalMultiTaskLoss(nn.Module):
 
         # CrossEntropy с начальными весами
         self.cross_entropy_loss = nn.CrossEntropyLoss(
-            weight=self.class_weights.cuda()
-            if torch.cuda.is_available()
-            else self.class_weights,
+            weight=self.class_weights.cuda() if torch.cuda.is_available() else self.class_weights,
             reduction="none",
         )
         self.bce_with_logits_loss = nn.BCEWithLogitsLoss(reduction="none")
@@ -935,23 +897,17 @@ class DirectionalMultiTaskLoss(nn.Module):
         self.label_smoothing = config.get("model", {}).get("label_smoothing", 0.2)
 
         # Штраф за неправильное направление
-        self.wrong_direction_penalty = config.get("loss", {}).get(
-            "wrong_direction_penalty", 3.0
-        )
+        self.wrong_direction_penalty = config.get("loss", {}).get("wrong_direction_penalty", 3.0)
 
         # Активные losses для поэтапного обучения
         self.active_losses = ["all"]  # По умолчанию все losses активны
 
         # КРИТИЧНО: Параметры для предотвращения схлопывания модели
-        self.auto_adjust_on_collapse = config.get("loss", {}).get(
-            "auto_adjust_on_collapse", False
-        )
+        self.auto_adjust_on_collapse = config.get("loss", {}).get("auto_adjust_on_collapse", False)
         self.collapse_threshold = config.get("loss", {}).get("collapse_threshold", 0.75)
         self.min_entropy = config.get("loss", {}).get("min_entropy", 0.6)
         self.entropy_min_weight = config.get("loss", {}).get("entropy_min_weight", 0.2)
-        self.min_entropy_threshold = config.get("model", {}).get(
-            "min_entropy_threshold", 0.5
-        )
+        self.min_entropy_threshold = config.get("model", {}).get("min_entropy_threshold", 0.5)
 
         print("⚡ Параметры предотвращения схлопывания:")
         print(f"   - auto_adjust_on_collapse: {self.auto_adjust_on_collapse}")
@@ -960,7 +916,7 @@ class DirectionalMultiTaskLoss(nn.Module):
         print(f"   - entropy_min_weight: {self.entropy_min_weight}")
         print(f"   - min_entropy_threshold: {self.min_entropy_threshold}")
 
-    def set_active_losses(self, active_losses: List[str]):
+    def set_active_losses(self, active_losses: list[str]):
         """
         Устанавливает активные loss компоненты для поэтапного обучения
 
@@ -1005,12 +961,8 @@ class DirectionalMultiTaskLoss(nn.Module):
 
         # Вычисляем текущие частоты
         if self.total_samples > 100:  # Начинаем адаптацию после 100 примеров
-            current_frequencies = (
-                self.running_class_counts / self.running_class_counts.sum()
-            )
-            current_frequencies = current_frequencies.clamp(
-                min=0.01
-            )  # Избегаем деления на 0
+            current_frequencies = self.running_class_counts / self.running_class_counts.sum()
+            current_frequencies = current_frequencies.clamp(min=0.01)  # Избегаем деления на 0
 
             # Вычисляем новые веса: inverse frequency с квадратным корнем
             new_weights = torch.sqrt(1.0 / current_frequencies)
@@ -1036,9 +988,7 @@ class DirectionalMultiTaskLoss(nn.Module):
         else:
             return base_weight
 
-    def apply_label_smoothing(
-        self, targets: torch.Tensor, num_classes: int = 3
-    ) -> torch.Tensor:
+    def apply_label_smoothing(self, targets: torch.Tensor, num_classes: int = 3) -> torch.Tensor:
         """
         Применяет label smoothing к целевым меткам
 
@@ -1084,9 +1034,7 @@ class DirectionalMultiTaskLoss(nn.Module):
             ce_loss = ce_loss * target_weights
         else:
             # Обычный weighted cross entropy с динамическими весами
-            ce_loss = F.cross_entropy(
-                logits, targets, weight=dynamic_weights, reduction="none"
-            )
+            ce_loss = F.cross_entropy(logits, targets, weight=dynamic_weights, reduction="none")
 
         # Focal loss модификация
         pt = torch.exp(-ce_loss)
@@ -1153,10 +1101,7 @@ class DirectionalMultiTaskLoss(nn.Module):
                     normalized_entropy = entropy / max_entropy
                     mean_entropy = normalized_entropy.mean().item()
 
-                    if (
-                        self.auto_adjust_on_collapse
-                        and mean_entropy < self.collapse_threshold
-                    ):
+                    if self.auto_adjust_on_collapse and mean_entropy < self.collapse_threshold:
                         pred_classes = torch.argmax(probs, dim=-1)
                         flat_ratio = (pred_classes == 2).float().mean().item()
                         if flat_ratio > 0.85:
@@ -1171,9 +1116,7 @@ class DirectionalMultiTaskLoss(nn.Module):
                                 current_class_weights / current_class_weights.mean()
                             )
 
-                    entropy_penalty = (
-                        self.min_entropy_threshold - normalized_entropy
-                    ).clamp(min=0)
+                    entropy_penalty = (self.min_entropy_threshold - normalized_entropy).clamp(min=0)
                     entropy_loss = entropy_penalty.mean() * entropy_weight
 
                 direction_loss = 0
@@ -1192,10 +1135,7 @@ class DirectionalMultiTaskLoss(nn.Module):
                         self._debug_logged = True
                         logits_sample = direction_logits[0, i, :].detach().cpu().numpy()
                         probs_sample = (
-                            torch.softmax(direction_logits[0, i, :], dim=-1)
-                            .detach()
-                            .cpu()
-                            .numpy()
+                            torch.softmax(direction_logits[0, i, :], dim=-1).detach().cpu().numpy()
                         )
                         self.logger.info(
                             "🔍 DEBUG - Пример логитов и вероятностей для первого сэмпла:"
@@ -1209,9 +1149,7 @@ class DirectionalMultiTaskLoss(nn.Module):
                         self.logger.info(
                             f"   Предсказанный класс: {pred_classes[0].item()}, Истинный класс: {true_classes[0].item()}"
                         )
-                        self.logger.info(
-                            f"   Веса классов: {current_class_weights.cpu().numpy()}"
-                        )
+                        self.logger.info(f"   Веса классов: {current_class_weights.cpu().numpy()}")
 
                     wrong_direction_penalty = (
                         ((pred_classes == 0) & (true_classes == 1))
@@ -1260,12 +1198,8 @@ class DirectionalMultiTaskLoss(nn.Module):
         # 5. Risk Metrics Loss (индексы 16-19) - MSE для регрессии
         if use_all_losses or "risk_metrics" in self.active_losses:
             risk_metrics_pred = outputs[:, 16:20]
-            risk_metrics_target = (
-                targets[:, 16:20] / 100.0
-            )  # Нормализуем если в процентах
-            risk_metrics_loss = self.mse_loss(
-                risk_metrics_pred, risk_metrics_target
-            ).mean()
+            risk_metrics_target = targets[:, 16:20] / 100.0  # Нормализуем если в процентах
+            risk_metrics_loss = self.mse_loss(risk_metrics_pred, risk_metrics_target).mean()
             losses.append(risk_metrics_loss * self.risk_metrics_weight)
 
         # 6. Confidence Loss - обучаем предсказывать правильность предсказаний
@@ -1275,9 +1209,7 @@ class DirectionalMultiTaskLoss(nn.Module):
             true_classes = targets[:, 4:8].long()
             correct_predictions = (pred_classes == true_classes).float()
             confidence_targets = correct_predictions * 2 - 1
-            confidence_loss = F.mse_loss(
-                confidence_scores, confidence_targets, reduction="mean"
-            )
+            confidence_loss = F.mse_loss(confidence_scores, confidence_targets, reduction="mean")
             losses.append(confidence_loss * 0.1)
 
         if len(losses) > 0:
@@ -1291,6 +1223,6 @@ class DirectionalMultiTaskLoss(nn.Module):
         return total_loss
 
 
-def create_unified_model(config: Dict) -> UnifiedPatchTSTForTrading:
+def create_unified_model(config: dict) -> UnifiedPatchTSTForTrading:
     """Создание унифицированной модели"""
     return UnifiedPatchTSTForTrading(config)

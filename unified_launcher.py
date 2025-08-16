@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Единая точка входа для запуска всей системы BOT_AI_V3
 
@@ -20,7 +19,7 @@ import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import psutil
 from dotenv import load_dotenv
@@ -50,7 +49,7 @@ def is_port_in_use(port: int, host: str = "localhost") -> bool:
             return True
 
 
-def find_processes_using_port(port: int) -> List[Dict[str, Any]]:
+def find_processes_using_port(port: int) -> list[dict[str, Any]]:
     """Поиск процессов, использующих указанный порт"""
     processes = []
 
@@ -63,9 +62,7 @@ def find_processes_using_port(port: int) -> List[Dict[str, Any]]:
                             "pid": proc.info["pid"],
                             "name": proc.info["name"],
                             "cmdline": (
-                                " ".join(proc.info["cmdline"])
-                                if proc.info["cmdline"]
-                                else ""
+                                " ".join(proc.info["cmdline"]) if proc.info["cmdline"] else ""
                             ),
                             "status": proc.status(),
                         }
@@ -77,7 +74,7 @@ def find_processes_using_port(port: int) -> List[Dict[str, Any]]:
     return processes
 
 
-def kill_processes_on_port(port: int, force: bool = False) -> List[int]:
+def kill_processes_on_port(port: int, force: bool = False) -> list[int]:
     """Завершение процессов, использующих порт"""
     killed_pids = []
     processes = find_processes_using_port(port)
@@ -97,9 +94,7 @@ def kill_processes_on_port(port: int, force: bool = False) -> List[int]:
                 try:
                     proc.wait(timeout=5)
                     killed_pids.append(pid)
-                    logger.info(
-                        f"✅ Процесс {proc_info['name']} (PID: {pid}) корректно завершен"
-                    )
+                    logger.info(f"✅ Процесс {proc_info['name']} (PID: {pid}) корректно завершен")
                 except psutil.TimeoutExpired:
                     # Если не завершился, убиваем принудительно
                     proc.kill()
@@ -110,9 +105,7 @@ def kill_processes_on_port(port: int, force: bool = False) -> List[int]:
             else:
                 proc.kill()
                 killed_pids.append(pid)
-                logger.warning(
-                    f"⚠️ Процесс {proc_info['name']} (PID: {pid}) принудительно завершен"
-                )
+                logger.warning(f"⚠️ Процесс {proc_info['name']} (PID: {pid}) принудительно завершен")
 
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
             logger.debug(f"Не удалось завершить процесс {pid}: {e}")
@@ -147,7 +140,7 @@ class UnifiedLauncher:
 
         # Состояние системы
         self.is_running = False
-        self.startup_time: Optional[datetime] = None
+        self.startup_time: datetime | None = None
         self.shutdown_event = asyncio.Event()
 
         # Компоненты для запуска
@@ -157,7 +150,7 @@ class UnifiedLauncher:
         self.pid_dir = Path("logs/pids")
         self.pid_dir.mkdir(parents=True, exist_ok=True)
 
-    def _get_components_config(self) -> Dict[str, Dict[str, Any]]:
+    def _get_components_config(self) -> dict[str, dict[str, Any]]:
         """Получение конфигурации компонентов в зависимости от режима"""
         base_config = self.unified_config.get("components", {})
 
@@ -195,8 +188,7 @@ class UnifiedLauncher:
                 "env": {
                     "UNIFIED_MODE": "true",
                     "PYTHONPATH": str(Path(__file__).parent),
-                    "PATH": f"{Path(__file__).parent}/venv/bin:"
-                    + os.environ.get("PATH", ""),
+                    "PATH": f"{Path(__file__).parent}/venv/bin:" + os.environ.get("PATH", ""),
                 },
             },
             "frontend": {
@@ -278,9 +270,7 @@ class UnifiedLauncher:
         # Проверка Node.js для frontend
         if self.components_config["frontend"]["enabled"]:
             try:
-                result = subprocess.run(
-                    ["node", "--version"], capture_output=True, text=True
-                )
+                result = subprocess.run(["node", "--version"], capture_output=True, text=True)
                 if result.returncode == 0:
                     logger.info(f"✅ Node.js {result.stdout.strip()}")
                 else:
@@ -320,9 +310,7 @@ class UnifiedLauncher:
                 processes = find_processes_using_port(port)
 
                 for proc_info in processes:
-                    logger.info(
-                        f"   🔍 Процесс: {proc_info['name']} (PID: {proc_info['pid']})"
-                    )
+                    logger.info(f"   🔍 Процесс: {proc_info['name']} (PID: {proc_info['pid']})")
                     logger.info(f"   📝 Команда: {proc_info['cmdline'][:100]}...")
 
                 # Определяем, нужно ли освобождать порт
@@ -368,9 +356,7 @@ class UnifiedLauncher:
                     else:
                         logger.warning(f"⚠️ Не удалось освободить порт {port}")
                 else:
-                    logger.warning(
-                        f"⚠️ Порт {port} занят сторонним процессом. Возможны конфликты!"
-                    )
+                    logger.warning(f"⚠️ Порт {port} занят сторонним процессом. Возможны конфликты!")
             else:
                 logger.info(f"✅ Порт {port} ({comp_name}) свободен")
 
@@ -417,9 +403,7 @@ class UnifiedLauncher:
 
                 # Ждем готовности компонента
                 if comp_config.get("health_check_endpoint"):
-                    await self._wait_for_component(
-                        comp_name, comp_config["health_check_endpoint"]
-                    )
+                    await self._wait_for_component(comp_name, comp_config["health_check_endpoint"])
 
             except Exception as e:
                 logger.error(f"❌ Ошибка запуска {comp_config['name']}: {e}")
@@ -471,14 +455,10 @@ class UnifiedLauncher:
                 ]
 
                 if unhealthy_components:
-                    logger.warning(
-                        f"🏥 Найдено {len(unhealthy_components)} нездоровых компонентов"
-                    )
+                    logger.warning(f"🏥 Найдено {len(unhealthy_components)} нездоровых компонентов")
 
                     # Ограничиваем количество одновременных перезапусков
-                    for comp_name, status in unhealthy_components[
-                        :2
-                    ]:  # Максимум 2 одновременно
+                    for comp_name, status in unhealthy_components[:2]:  # Максимум 2 одновременно
                         error_msg = status.get("error", "Unknown error")
 
                         # Пропускаем временные сетевые ошибки
@@ -486,14 +466,10 @@ class UnifiedLauncher:
                             skip_err in error_msg
                             for skip_err in ["timeout", "connection", "broken pipe"]
                         ):
-                            logger.debug(
-                                f"🔄 Пропуск временной ошибки {comp_name}: {error_msg}"
-                            )
+                            logger.debug(f"🔄 Пропуск временной ошибки {comp_name}: {error_msg}")
                             continue
 
-                        logger.warning(
-                            f"🔄 Планируется перезапуск {comp_name}: {error_msg}"
-                        )
+                        logger.warning(f"🔄 Планируется перезапуск {comp_name}: {error_msg}")
                         asyncio.create_task(self._safe_restart_component(comp_name))
 
                 # Сбор метрик с оптимизированной частотой
@@ -517,9 +493,7 @@ class UnifiedLauncher:
                 if consecutive_errors <= 3:
                     logger.warning(f"Ошибка мониторинга #{consecutive_errors}: {e}")
                 elif consecutive_errors == max_errors:
-                    logger.error(
-                        f"Критическое количество ошибок мониторинга: {consecutive_errors}"
-                    )
+                    logger.error(f"Критическое количество ошибок мониторинга: {consecutive_errors}")
                     # Увеличиваем интервал проверки при частых ошибках
                     await asyncio.sleep(60)
                     continue
@@ -538,9 +512,7 @@ class UnifiedLauncher:
             # Проверяем, не перезапускался ли компонент недавно
             proc_info = self.process_manager.get_process_info(comp_name)
             if proc_info and proc_info.get("restart_count", 0) >= 3:
-                logger.warning(
-                    f"⏸️ Пропуск перезапуска {comp_name} - слишком много попыток"
-                )
+                logger.warning(f"⏸️ Пропуск перезапуска {comp_name} - слишком много попыток")
                 return
 
             await self.process_manager.restart_component(comp_name)
@@ -549,7 +521,7 @@ class UnifiedLauncher:
         except Exception as e:
             logger.error(f"❌ Ошибка перезапуска {comp_name}: {e}")
 
-    async def _collect_metrics(self) -> Dict[str, float]:
+    async def _collect_metrics(self) -> dict[str, float]:
         """Сбор системных метрик"""
         metrics = {
             "cpu_percent": psutil.cpu_percent(interval=1),
@@ -571,9 +543,7 @@ class UnifiedLauncher:
         for comp_name, comp_config in self.components_config.items():
             if comp_config.get("enabled"):
                 status = (
-                    "✅ Запущен"
-                    if comp_name in self.process_manager.processes
-                    else "❌ Остановлен"
+                    "✅ Запущен" if comp_name in self.process_manager.processes else "❌ Остановлен"
                 )
                 logger.info(f"  {comp_config['name']}: {status}")
 

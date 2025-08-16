@@ -9,7 +9,7 @@ REST API для управления биржами:
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -30,10 +30,10 @@ class ExchangeInfo(BaseModel):
     name: str
     display_name: str
     status: str  # connected, disconnected, error
-    capabilities: Dict[str, bool]
-    supported_symbols: List[str]
-    api_limits: Dict[str, Any]
-    last_heartbeat: Optional[datetime] = None
+    capabilities: dict[str, bool]
+    supported_symbols: list[str]
+    api_limits: dict[str, Any]
+    last_heartbeat: datetime | None = None
 
 
 class ExchangeConfig(BaseModel):
@@ -43,7 +43,7 @@ class ExchangeConfig(BaseModel):
     api_key: str
     api_secret: str
     sandbox: bool = False
-    additional_params: Optional[Dict[str, Any]] = None
+    additional_params: dict[str, Any] | None = None
 
 
 class ConnectionTest(BaseModel):
@@ -51,15 +51,15 @@ class ConnectionTest(BaseModel):
 
     exchange: str
     success: bool
-    latency_ms: Optional[float] = None
-    error_message: Optional[str] = None
+    latency_ms: float | None = None
+    error_message: str | None = None
     timestamp: datetime
 
 
 # =================== ENDPOINTS ===================
 
 
-@router.get("/", response_model=List[ExchangeInfo])
+@router.get("/", response_model=list[ExchangeInfo])
 async def get_exchanges():
     """Получить список всех доступных бирж"""
     try:
@@ -73,9 +73,7 @@ async def get_exchanges():
                 info = ExchangeInfo(
                     name=exchange_name,
                     display_name=exchange_client.name.title(),
-                    status="connected"
-                    if exchange_client.is_connected()
-                    else "disconnected",
+                    status="connected" if exchange_client.is_connected() else "disconnected",
                     capabilities=exchange_client.capabilities.__dict__,
                     supported_symbols=await exchange_client.get_supported_symbols(),
                     api_limits=exchange_client.get_api_limits(),
@@ -99,7 +97,7 @@ async def get_exchanges():
 
     except Exception as e:
         logger.error(f"Ошибка получения списка бирж: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения бирж: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения бирж: {e!s}")
 
 
 @router.get("/{exchange_name}", response_model=ExchangeInfo)
@@ -135,12 +133,10 @@ async def get_exchange_info(exchange_name: str):
         raise
     except Exception as e:
         logger.error(f"Ошибка получения информации о бирже {exchange_name}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения информации: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения информации: {e!s}")
 
 
-@router.post("/connect", response_model=Dict[str, Any])
+@router.post("/connect", response_model=dict[str, Any])
 async def connect_exchange(config: ExchangeConfig):
     """Подключить новую биржу"""
     try:
@@ -192,7 +188,7 @@ async def connect_exchange(config: ExchangeConfig):
         raise
     except Exception as e:
         logger.error(f"Ошибка подключения биржи {config.exchange}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка подключения: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка подключения: {e!s}")
 
 
 @router.post("/{exchange_name}/test", response_model=ConnectionTest)
@@ -203,9 +199,7 @@ async def test_exchange_connection(exchange_name: str):
         exchange_client = exchange_registry.get_exchange(exchange_name)
 
         if not exchange_client:
-            raise HTTPException(
-                status_code=404, detail=f"Биржа {exchange_name} не подключена"
-            )
+            raise HTTPException(status_code=404, detail=f"Биржа {exchange_name} не подключена")
 
         start_time = datetime.now()
 
@@ -228,9 +222,7 @@ async def test_exchange_connection(exchange_name: str):
             timestamp=end_time,
         )
 
-        logger.info(
-            f"Тест подключения к {exchange_name}: {'успешно' if success else 'неудачно'}"
-        )
+        logger.info(f"Тест подключения к {exchange_name}: {'успешно' if success else 'неудачно'}")
 
         return test_result
 
@@ -238,7 +230,7 @@ async def test_exchange_connection(exchange_name: str):
         raise
     except Exception as e:
         logger.error(f"Ошибка тестирования подключения к {exchange_name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка тестирования: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка тестирования: {e!s}")
 
 
 # =================== DEPENDENCY INJECTION ===================

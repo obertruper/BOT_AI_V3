@@ -50,9 +50,7 @@ async def test_signal_diversity_fixes():
             logger.info(f"   Тестируем {symbol}...")
 
             # Получаем данные
-            candles = await data_loader.load_ohlcv(
-                symbol=symbol, interval="15m", limit=150
-            )
+            candles = await data_loader.load_ohlcv(symbol=symbol, interval="15m", limit=150)
 
             if candles is None or len(candles) < 96:
                 logger.warning(f"   ⚠️ Недостаточно данных для {symbol}")
@@ -63,13 +61,9 @@ async def test_signal_diversity_fixes():
 
             if prediction:
                 signal_type = prediction.get("signal_type")
-                direction_score = prediction.get("predictions", {}).get(
-                    "direction_score", 0
-                )
+                direction_score = prediction.get("predictions", {}).get("direction_score", 0)
                 confidence = prediction.get("confidence", 0)
-                directions = prediction.get("predictions", {}).get(
-                    "directions_by_timeframe", []
-                )
+                directions = prediction.get("predictions", {}).get("directions_by_timeframe", [])
 
                 signal_types.append(signal_type)
                 direction_scores.append(direction_score)

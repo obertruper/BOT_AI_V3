@@ -3,8 +3,9 @@
 ## Системный контекст
 
 Ты - Senior DevOps/SRE инженер с экспертизой в:
+
 - Python async/await архитектуре
-- PostgreSQL и миграциях данных  
+- PostgreSQL и миграциях данных
 - Криптовалютных биржевых API
 - ML системах в production
 - High-frequency trading системах
@@ -33,6 +34,7 @@ class TradingEngine:
 ```
 
 **Проверь**:
+
 - Все ли критические пути стали асинхронными?
 - Правильно ли обрабатываются race conditions?
 - Есть ли deadlock-и в async/await коде?
@@ -79,25 +81,25 @@ CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
 async def verify_ml_pipeline():
     # 1. Загрузка данных
     data = await db.fetch("""
-        SELECT * FROM processed_market_data 
-        WHERE symbol = $1 
-        ORDER BY timestamp DESC 
+        SELECT * FROM processed_market_data
+        WHERE symbol = $1
+        ORDER BY timestamp DESC
         LIMIT 200
     """, "BTCUSDT")
-    
+
     # 2. Feature engineering (240+ features)
     features = FeatureEngineer.calculate_features(data)
     assert features.shape[1] >= 240
-    
+
     # 3. Модель inference
     model = MLManager.get_model()
     predictions = await model.predict_async(features)
-    
+
     # 4. Проверка уникальности
     btc_pred = predictions["BTCUSDT"]
     eth_pred = predictions["ETHUSDT"]
     assert btc_pred != eth_pred  # Предсказания должны быть уникальными
-    
+
     # 5. Signal generation
     signal = SignalGenerator.create_from_prediction(predictions)
     assert signal.confidence > 0 and signal.confidence < 1
@@ -117,18 +119,18 @@ class ExchangeVerification:
             position_idx=1,  # Long position в hedge mode
             reduce_only=False
         )
-        
+
         # 2. Place order
         result = await exchange.place_order(order)
         assert result.order_id is not None
-        
+
         # 3. Modify order (SL/TP)
         await exchange.modify_order(
             order_id=result.order_id,
             stop_loss=95000,
             take_profit=105000
         )
-        
+
         # 4. Partial close (Enhanced SL/TP)
         await exchange.close_position_partial(
             symbol="BTCUSDT",
@@ -148,25 +150,25 @@ from memory_profiler import profile
 async def performance_test():
     # Замер latency
     start = time.perf_counter()
-    
+
     # 1. Signal processing
     signals = []
     for _ in range(1000):
         signal = await generate_ml_signal("BTCUSDT")
         signals.append(signal)
-    
+
     signal_time = time.perf_counter() - start
     assert signal_time < 1.0  # <1ms per signal
-    
+
     # 2. Order execution
     start = time.perf_counter()
     orders = await asyncio.gather(*[
         place_order_async(sig) for sig in signals[:10]
     ])
-    
+
     order_time = time.perf_counter() - start
     assert order_time < 0.5  # <50ms per order
-    
+
     # 3. Memory usage
     import psutil
     process = psutil.Process()
@@ -180,26 +182,26 @@ async def performance_test():
 class ResilienceTest:
     async def test_exchange_failover(self):
         # 1. Симулируем сбой primary exchange
-        with mock.patch('exchanges.bybit.client.get_balance', 
+        with mock.patch('exchanges.bybit.client.get_balance',
                        side_effect=ConnectionError):
-            
+
             # 2. Система должна переключиться
             balance = await exchange_manager.get_total_balance()
             assert balance > 0  # Получили баланс с другой биржи
-            
+
     async def test_database_reconnect(self):
         # 1. Обрываем соединение
         await db.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity")
-        
+
         # 2. Пытаемся записать
         await asyncio.sleep(1)
         order = await db.save_order(test_order)
         assert order.id is not None  # Реконнект успешен
-        
+
     async def test_ml_model_fallback(self):
         # 1. Портим модель
         MLManager._model = None
-        
+
         # 2. Запрашиваем предсказание
         prediction = await MLManager.predict(data)
         assert prediction is not None  # Fallback на простую модель
@@ -213,7 +215,7 @@ pytest tests/integration/ -v --asyncio-mode=auto
 
 # Критические тесты:
 # - test_full_trading_cycle.py
-# - test_enhanced_sltp_flow.py  
+# - test_enhanced_sltp_flow.py
 # - test_multi_exchange_arbitrage.py
 # - test_ml_signal_to_order.py
 # - test_risk_limits_enforcement.py
@@ -230,7 +232,7 @@ class MigrationVerifier:
     def __init__(self):
         self.results = {}
         self.critical_issues = []
-        
+
     async def run_all_checks(self) -> Dict:
         checks = [
             ("Database Schema", self.check_database_schema),
@@ -241,7 +243,7 @@ class MigrationVerifier:
             ("Performance", self.check_performance),
             ("Data Integrity", self.check_data_integrity)
         ]
-        
+
         for name, check_func in checks:
             try:
                 result = await check_func()
@@ -249,9 +251,9 @@ class MigrationVerifier:
             except Exception as e:
                 self.results[name] = {"status": "FAILED", "error": str(e)}
                 self.critical_issues.append(f"{name}: {e}")
-                
+
         return self.generate_report()
-        
+
     async def check_enhanced_sltp(self) -> Dict:
         # Детальная проверка всех функций Enhanced SL/TP
         checks = {
@@ -260,28 +262,28 @@ class MigrationVerifier:
             "trailing_stop": False,
             "database_tracking": False
         }
-        
+
         # 1. Проверка конфигурации
         config = ConfigManager.get_config()
         sltp_config = config.get("enhanced_sltp", {})
-        
+
         if sltp_config.get("partial_take_profit", {}).get("levels"):
             checks["partial_tp_levels"] = True
-            
+
         # 2. Проверка методов
         manager = EnhancedSLTPManager()
         if hasattr(manager, 'check_partial_tp'):
             checks["profit_protection"] = True
-            
+
         # 3. Проверка БД
         table_exists = await db.fetchval("""
             SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables 
+                SELECT 1 FROM information_schema.tables
                 WHERE table_name = 'partial_tp_history'
             )
         """)
         checks["database_tracking"] = table_exists
-        
+
         return {
             "status": "PASSED" if all(checks.values()) else "FAILED",
             "details": checks
@@ -351,7 +353,7 @@ echo "✓ Checking environment..."
 python3 --version
 psql --version
 
-# 2. Database verification  
+# 2. Database verification
 echo "✓ Verifying database..."
 python3 scripts/verify_database_migration.py
 
@@ -395,13 +397,13 @@ critical_issues:
   - issue: "Position index handling broken"
     severity: CRITICAL
     fix: "Update order creation logic"
-    
+
 performance_comparison:
   signal_latency:
     v2: 100ms
     v3: 45ms
     improvement: 55%
-    
+
 recommendations:
   immediate:
     - "Fix position_idx in order creation"

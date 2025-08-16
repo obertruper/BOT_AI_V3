@@ -96,9 +96,7 @@ async def test_enhanced_sltp():
         )
 
         # Создание Enhanced SL/TP Manager
-        enhanced_manager = EnhancedSLTPManager(
-            exchange_client=exchange_client, config=sltp_config
-        )
+        enhanced_manager = EnhancedSLTPManager(exchange_client=exchange_client, config=sltp_config)
         logger.info("Enhanced SL/TP Manager создан")
 
         # Получение текущих позиций
@@ -125,13 +123,9 @@ async def test_enhanced_sltp():
 
             # Расчет прибыли
             if position.side == "Buy":
-                profit_pct = (
-                    (current_price - position.entry_price) / position.entry_price
-                ) * 100
+                profit_pct = ((current_price - position.entry_price) / position.entry_price) * 100
             else:
-                profit_pct = (
-                    (position.entry_price - current_price) / position.entry_price
-                ) * 100
+                profit_pct = ((position.entry_price - current_price) / position.entry_price) * 100
 
             logger.info(f"Текущая прибыль: {profit_pct:.2f}%")
 
@@ -155,9 +149,7 @@ async def test_enhanced_sltp():
 
             # 3. Проверка трейлинг стопа
             logger.info("\n--- Проверка Trailing Stop ---")
-            trailing_updated = await enhanced_manager.update_trailing_stop(
-                position, current_price
-            )
+            trailing_updated = await enhanced_manager.update_trailing_stop(position, current_price)
             if trailing_updated:
                 logger.success("✅ Трейлинг стоп обновлен!")
             else:

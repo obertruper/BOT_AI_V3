@@ -30,9 +30,7 @@ async def monitor_signal_balance():
 
     async with get_async_db() as db:
         # Общее количество сигналов
-        total_query = select(func.count(Signal.id)).where(
-            Signal.created_at >= time_window
-        )
+        total_query = select(func.count(Signal.id)).where(Signal.created_at >= time_window)
         total_result = await db.execute(total_query)
         total_signals = total_result.scalar()
 
@@ -42,18 +40,14 @@ async def monitor_signal_balance():
 
         # Количество LONG сигналов
         long_query = select(func.count(Signal.id)).where(
-            and_(
-                Signal.created_at >= time_window, Signal.signal_type == SignalType.LONG
-            )
+            and_(Signal.created_at >= time_window, Signal.signal_type == SignalType.LONG)
         )
         long_result = await db.execute(long_query)
         long_signals = long_result.scalar()
 
         # Количество SHORT сигналов
         short_query = select(func.count(Signal.id)).where(
-            and_(
-                Signal.created_at >= time_window, Signal.signal_type == SignalType.SHORT
-            )
+            and_(Signal.created_at >= time_window, Signal.signal_type == SignalType.SHORT)
         )
         short_result = await db.execute(short_query)
         short_signals = short_result.scalar()
@@ -93,9 +87,7 @@ async def monitor_signal_balance():
         logger.info("📊 Статистика по символам:")
 
         symbols_query = (
-            select(
-                Signal.symbol, Signal.signal_type, func.count(Signal.id).label("count")
-            )
+            select(Signal.symbol, Signal.signal_type, func.count(Signal.id).label("count"))
             .where(Signal.created_at >= time_window)
             .group_by(Signal.symbol, Signal.signal_type)
         )

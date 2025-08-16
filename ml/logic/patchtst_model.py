@@ -14,7 +14,6 @@ PatchTST модель для BOT Trading v3
 
 import logging
 import math
-from typing import Dict, List
 
 import torch
 import torch.nn as nn
@@ -30,9 +29,7 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
 
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
@@ -185,7 +182,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
     3. 20 выходных переменных для комплексного анализа рынка
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         super().__init__()
         self.config = config
         model_config = config.get("model", {})
@@ -222,9 +219,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
 
         # Позиционное кодирование
         self.n_patches = (self.context_window - self.patch_len) // self.stride + 1
-        self.positional_encoding = PositionalEncoding(
-            d_model=self.d_model, max_len=self.n_patches
-        )
+        self.positional_encoding = PositionalEncoding(d_model=self.d_model, max_len=self.n_patches)
 
         # Основной энкодер
         self.encoder = PatchTSTEncoder(
@@ -312,9 +307,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
                     nn.init.constant_(module.bias, 0)
 
             elif isinstance(module, nn.Conv1d):
-                nn.init.kaiming_normal_(
-                    module.weight, mode="fan_in", nonlinearity="leaky_relu"
-                )
+                nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="leaky_relu")
                 with torch.no_grad():
                     module.weight.mul_(0.7)
 
@@ -387,9 +380,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
 
         # Объединяем все выходы - ИСПРАВЛЕНО: возвращаем логиты вместо классов
         # Для direction нам нужны сырые логиты для дифференцируемости
-        direction_scores = torch.mean(
-            direction_logits_reshaped, dim=-1
-        )  # (B, 4) - средний score
+        direction_scores = torch.mean(direction_logits_reshaped, dim=-1)  # (B, 4) - средний score
 
         outputs = torch.cat(
             [
@@ -410,7 +401,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
 
         return outputs
 
-    def get_output_names(self) -> List[str]:
+    def get_output_names(self) -> list[str]:
         """Возвращает имена всех выходов"""
         return [
             # Future returns
@@ -447,7 +438,7 @@ class DirectionalMultiTaskLoss(nn.Module):
     Комбинирует MSE для регрессии, CrossEntropy для классификации и BCE для бинарных задач
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         super().__init__()
         self.config = config
 
@@ -461,9 +452,7 @@ class DirectionalMultiTaskLoss(nn.Module):
 
         # Параметры для direction focus
         self.large_move_weight = config.get("loss", {}).get("large_move_weight", 5.0)
-        self.min_movement_threshold = config.get("loss", {}).get(
-            "large_move_threshold", 0.003
-        )
+        self.min_movement_threshold = config.get("loss", {}).get("large_move_threshold", 0.003)
 
         # Loss функции
         self.mse_loss = nn.MSELoss(reduction="none")
@@ -475,11 +464,7 @@ class DirectionalMultiTaskLoss(nn.Module):
 
         # CrossEntropy с весами
         self.cross_entropy_loss = nn.CrossEntropyLoss(
-            weight=(
-                self.class_weights.cuda()
-                if torch.cuda.is_available()
-                else self.class_weights
-            ),
+            weight=(self.class_weights.cuda() if torch.cuda.is_available() else self.class_weights),
             reduction="none",
         )
 
@@ -488,9 +473,7 @@ class DirectionalMultiTaskLoss(nn.Module):
         self.focal_gamma = config.get("loss", {}).get("focal_gamma", 2.0)
 
         # Штраф за неправильное направление
-        self.wrong_direction_penalty = config.get("loss", {}).get(
-            "wrong_direction_penalty", 3.0
-        )
+        self.wrong_direction_penalty = config.get("loss", {}).get("wrong_direction_penalty", 3.0)
 
     def focal_loss(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """Focal Loss для борьбы с несбалансированными классами"""
@@ -539,9 +522,7 @@ class DirectionalMultiTaskLoss(nn.Module):
 
             direction_loss = 0
             for i in range(4):
-                focal_loss_val = self.focal_loss(
-                    direction_logits[:, i, :], direction_targets[:, i]
-                )
+                focal_loss_val = self.focal_loss(direction_logits[:, i, :], direction_targets[:, i])
 
                 pred_classes = torch.argmax(direction_logits[:, i, :], dim=-1)
                 true_classes = direction_targets[:, i]
@@ -560,17 +541,13 @@ class DirectionalMultiTaskLoss(nn.Module):
         # 3. Long Levels Loss (индексы 8-11)
         long_levels_pred = outputs[:, 8:12]
         long_levels_target = targets[:, 8:12]
-        long_levels_loss = self.bce_with_logits_loss(
-            long_levels_pred, long_levels_target
-        ).mean()
+        long_levels_loss = self.bce_with_logits_loss(long_levels_pred, long_levels_target).mean()
         losses.append(long_levels_loss * self.long_levels_weight)
 
         # 4. Short Levels Loss (индексы 12-15)
         short_levels_pred = outputs[:, 12:16]
         short_levels_target = targets[:, 12:16]
-        short_levels_loss = self.bce_with_logits_loss(
-            short_levels_pred, short_levels_target
-        ).mean()
+        short_levels_loss = self.bce_with_logits_loss(short_levels_pred, short_levels_target).mean()
         losses.append(short_levels_loss * self.short_levels_weight)
 
         # 5. Risk Metrics Loss (индексы 16-19)
@@ -584,7 +561,7 @@ class DirectionalMultiTaskLoss(nn.Module):
         return total_loss
 
 
-def create_unified_model(config: Dict) -> UnifiedPatchTSTForTrading:
+def create_unified_model(config: dict) -> UnifiedPatchTSTForTrading:
     """Создание унифицированной модели"""
     return UnifiedPatchTSTForTrading(config)
 
@@ -655,9 +632,7 @@ def load_model_safe(
         for key, reason in incompatible_keys[:5]:  # Показываем первые 5
             logger.debug(f"  - {key}: {reason}")
 
-    logger.info(
-        f"Successfully loaded {len(compatible_state_dict)} out of {len(state_dict)} keys"
-    )
+    logger.info(f"Successfully loaded {len(compatible_state_dict)} out of {len(state_dict)} keys")
 
     return model
 
@@ -666,9 +641,9 @@ def load_model_safe(
 UnifiedPatchTST = UnifiedPatchTSTForTrading
 
 __all__ = [
+    "DirectionalMultiTaskLoss",
     "UnifiedPatchTST",
     "UnifiedPatchTSTForTrading",
     "create_unified_model",
     "load_model_safe",
-    "DirectionalMultiTaskLoss",
 ]

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Планировщик для генерации ML сигналов каждую минуту
 Координирует работу всех ML компонентов для real-time торговли
@@ -8,8 +7,8 @@
 import asyncio
 import signal
 import sys
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from core.config.config_manager import ConfigManager
 from core.exceptions import SignalGenerationError
@@ -26,7 +25,7 @@ class SignalScheduler:
     с использованием ML модели
     """
 
-    def __init__(self, config_manager: Optional[ConfigManager] = None):
+    def __init__(self, config_manager: ConfigManager | None = None):
         """
         Args:
             config_manager: Менеджер конфигурации
@@ -48,9 +47,9 @@ class SignalScheduler:
 
         # Состояние
         self._running = False
-        self._tasks: Dict[str, asyncio.Task] = {}
-        self._last_signals: Dict[str, Any] = {}
-        self._error_counts: Dict[str, int] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
+        self._last_signals: dict[str, Any] = {}
+        self._error_counts: dict[str, int] = {}
         self._max_errors = 5  # Максимум ошибок подряд перед отключением символа
 
         logger.info(
@@ -139,7 +138,7 @@ class SignalScheduler:
 
         while self._running:
             try:
-                start_time = datetime.now(timezone.utc)
+                start_time = datetime.now(UTC)
 
                 # Генерируем сигнал
                 signal = await self._generate_signal(symbol)
@@ -163,7 +162,7 @@ class SignalScheduler:
                     logger.debug(f"Нет сигнала для {symbol}")
 
                 # Вычисляем время до следующего запуска
-                elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+                elapsed = (datetime.now(UTC) - start_time).total_seconds()
                 sleep_time = max(0, self.interval_seconds - elapsed)
 
                 if sleep_time > 0:
@@ -188,7 +187,7 @@ class SignalScheduler:
                 # Ждем перед повтором
                 await asyncio.sleep(self.interval_seconds)
 
-    async def _generate_signal(self, symbol: str) -> Optional[Any]:
+    async def _generate_signal(self, symbol: str) -> Any | None:
         """
         Генерация сигнала для символа
 
@@ -228,11 +227,7 @@ class SignalScheduler:
 
                 # Собираем статистику
                 active_symbols = len(
-                    [
-                        s
-                        for s in self.symbols
-                        if s in self._tasks and not self._tasks[s].done()
-                    ]
+                    [s for s in self.symbols if s in self._tasks and not self._tasks[s].done()]
                 )
 
                 total_signals = len(self._last_signals)
@@ -240,20 +235,15 @@ class SignalScheduler:
                     [
                         s
                         for s in self._last_signals.values()
-                        if (datetime.now(timezone.utc) - s["timestamp"]).total_seconds()
-                        < 300
+                        if (datetime.now(UTC) - s["timestamp"]).total_seconds() < 300
                     ]
                 )
 
-                error_symbols = [
-                    s for s, count in self._error_counts.items() if count > 0
-                ]
+                error_symbols = [s for s, count in self._error_counts.items() if count > 0]
 
                 # Получаем статистику от процессора
                 processor_stats = {}
-                if self.signal_processor and hasattr(
-                    self.signal_processor, "get_metrics"
-                ):
+                if self.signal_processor and hasattr(self.signal_processor, "get_metrics"):
                     processor_stats = await self.signal_processor.get_metrics()
 
                 logger.info(
@@ -268,7 +258,7 @@ class SignalScheduler:
             except Exception as e:
                 logger.error(f"Ошибка в мониторинге: {e}")
 
-    async def get_status(self) -> Dict[str, Any]:
+    async def get_status(self) -> dict[str, Any]:
         """Получение текущего статуса планировщика"""
         status = {
             "running": self._running,
@@ -284,8 +274,7 @@ class SignalScheduler:
             },
             "processor_stats": (
                 await self.signal_processor.get_metrics()
-                if self.signal_processor
-                and hasattr(self.signal_processor, "get_metrics")
+                if self.signal_processor and hasattr(self.signal_processor, "get_metrics")
                 else {}
             ),
         }

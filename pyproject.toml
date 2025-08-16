@@ -1,0 +1,212 @@
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | build
+  | dist
+  | migrations
+  | __pycache__
+  | node_modules
+  | data
+  | logs
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "ARG",  # flake8-unused-arguments
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "DTZ",  # flake8-datetimez
+    "RUF",  # Ruff-specific rules
+    "ASYNC", # flake8-async
+    "S",    # flake8-bandit (security)
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "B010",  # do not call setattr with a constant attribute value
+    "S101",  # use of assert detected
+    "S105",  # possible hardcoded password
+    "S106",  # possible hardcoded password
+    "S107",  # possible hardcoded password
+    "S108",  # probable insecure usage of temp file/directory
+    "S311",  # standard pseudo-random generators are not suitable for cryptography
+    "S603",  # subprocess without shell equals true
+    "S607",  # start process with partial executable path
+]
+
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "migrations",
+    "node_modules",
+    "data",
+    "logs",
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101", "ARG", "S"]
+"scripts/*" = ["S101", "S603", "S607"]
+"**/test_*.py" = ["S101", "ARG", "S"]
+
+[tool.ruff.isort]
+known-first-party = ["core", "trading", "exchanges", "ml", "database", "web", "utils"]
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_any_generics = false
+ignore_missing_imports = true
+follow_imports = "normal"
+show_error_codes = true
+no_implicit_reexport = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+check_untyped_defs = true
+
+exclude = [
+    "venv",
+    ".venv",
+    "migrations",
+    "build",
+    "dist",
+    "tests",
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = """
+    -ra
+    -q
+    --strict-markers
+    --ignore=data
+    --ignore=logs
+    --ignore=venv
+    --ignore=.venv
+    --ignore=node_modules
+    --ignore=build
+    --ignore=dist
+"""
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "requires_db: marks tests that require database",
+    "requires_redis: marks tests that require redis",
+    "requires_exchange: marks tests that require exchange connection",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+    "*/migrations/*",
+    "*/node_modules/*",
+    "*/build/*",
+    "*/dist/*",
+    "*/data/*",
+    "*/logs/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["core", "trading", "exchanges", "ml", "database", "web", "utils"]
+skip = ["venv", ".venv", "migrations", "node_modules"]
+skip_glob = ["**/migrations/*.py"]
+
+[tool.pylint.messages_control]
+disable = [
+    "C0111",  # missing-docstring
+    "C0103",  # invalid-name
+    "C0301",  # line-too-long
+    "R0903",  # too-few-public-methods
+    "R0913",  # too-many-arguments
+    "W0212",  # protected-access
+    "W0613",  # unused-argument
+    "W0703",  # broad-except
+    "E1101",  # no-member
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv", "node_modules"]
+skips = ["B101", "B601", "B602", "B603", "B607"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "3.0.0"
+tag_format = "v$version"
+version_files = [
+    "pyproject.toml:version",
+]
+
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bot-ai-v3"
+version = "3.0.0"
+description = "High-performance algorithmic cryptocurrency trading platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "BOT_AI_V3 Team", email = "admin@botai.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]

@@ -7,21 +7,21 @@
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Optional, Tuple, Any
 from decimal import Decimal
-import pandas as pd
-import numpy as np
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc
-from sqlalchemy.dialects.postgresql import insert
+from typing import Any, Dict, List, Optional, Tuple
 
-from core.logger import setup_logger
-from database.connections import get_async_db
-from database.models.market_data import RawMarketData, MarketDataSnapshot, MarketType
-from exchanges.factory import ExchangeFactory
+import numpy as np
+import pandas as pd
+from sqlalchemy import and_, desc, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from core.config.config_manager import ConfigManager
 from core.exceptions import DataLoadError, ExchangeError
-
+from core.logger import setup_logger
+from database.connections import get_async_db
+from database.models.market_data import MarketDataSnapshot, MarketType, RawMarketData
+from exchanges.factory import ExchangeFactory
 
 logger = setup_logger(__name__)
 
@@ -62,6 +62,7 @@ class DataLoader:
             
             # Получаем API ключи из переменных окружения
             import os
+
             from dotenv import load_dotenv
             load_dotenv()
             

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Менеджер процессов для управления компонентами системы
 """
@@ -9,7 +8,7 @@ import os
 import signal
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import psutil
 
@@ -27,7 +26,7 @@ class ProcessInfo:
         pid: int,
         command: str,
         auto_restart: bool = True,
-        cwd: Optional[str] = None,
+        cwd: str | None = None,
     ):
         self.name = name
         self.pid = pid
@@ -36,7 +35,7 @@ class ProcessInfo:
         self.cwd = cwd
         self.start_time = datetime.now()
         self.restart_count = 0
-        self.process: Optional[asyncio.subprocess.Process] = None
+        self.process: asyncio.subprocess.Process | None = None
 
 
 class ProcessManager:
@@ -51,10 +50,10 @@ class ProcessManager:
     """
 
     def __init__(self):
-        self.processes: Dict[str, ProcessInfo] = {}
+        self.processes: dict[str, ProcessInfo] = {}
         self.log_dir = Path("logs/processes")
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self._monitoring_tasks: Dict[str, asyncio.Task] = {}
+        self._monitoring_tasks: dict[str, asyncio.Task] = {}
         self.is_running = False
 
     async def initialize(self):
@@ -66,8 +65,8 @@ class ProcessManager:
         self,
         name: str,
         command: str,
-        cwd: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
         auto_restart: bool = True,
     ) -> int:
         """
@@ -130,9 +129,7 @@ class ProcessManager:
             self.processes[name] = proc_info
 
             # Запускаем мониторинг процесса
-            monitor_task = asyncio.create_task(
-                self._monitor_process(name, stdout_log, stderr_log)
-            )
+            monitor_task = asyncio.create_task(self._monitor_process(name, stdout_log, stderr_log))
             self._monitoring_tasks[name] = monitor_task
 
             logger.info(f"✅ Компонент {name} запущен с PID {process.pid}")
@@ -161,7 +158,9 @@ class ProcessManager:
                     now = datetime.now()
 
                     # Буферизуем логи для уменьшения I/O операций
-                    log_line = f"[{now.strftime('%H:%M:%S')}] {line.decode('utf-8', errors='replace')}"
+                    log_line = (
+                        f"[{now.strftime('%H:%M:%S')}] {line.decode('utf-8', errors='replace')}"
+                    )
                     log_buffer.append(log_line.encode("utf-8"))
 
                     # Сброс буфера каждые 5 секунд или при накоплении 50 строк
@@ -173,9 +172,7 @@ class ProcessManager:
 
                     # Выводим только критические ошибки для снижения шума
                     line_str = line.decode("utf-8", errors="replace").strip()
-                    if b"CRITICAL" in line or (
-                        b"ERROR" in line and b"BrokenPipeError" not in line
-                    ):
+                    if b"CRITICAL" in line or (b"ERROR" in line and b"BrokenPipeError" not in line):
                         logger.error(f"[{name}] {line_str}")
                     elif b"timeout" in line.lower() or b"connection" in line.lower():
                         logger.warning(f"[{name}] {line_str}")
@@ -218,26 +215,18 @@ class ProcessManager:
             if return_code != 0:
                 # Анализируем причину завершения
                 if return_code == -1 or "BrokenPipeError" in str(return_code):
-                    logger.debug(
-                        f"🔄 Компонент {name} завершился из-за pipe/timeout ошибки"
-                    )
+                    logger.debug(f"🔄 Компонент {name} завершился из-за pipe/timeout ошибки")
                 else:
-                    logger.error(
-                        f"❌ Компонент {name} завершился с кодом {return_code}"
-                    )
+                    logger.error(f"❌ Компонент {name} завершился с кодом {return_code}")
 
                 # Интеллектуальный перезапуск с экспоненциальной задержкой
                 if proc_info.auto_restart and self.is_running:
                     proc_info.restart_count += 1
-                    max_restarts = (
-                        3 if name == "core" else 5
-                    )  # Меньше перезапусков для core
+                    max_restarts = 3 if name == "core" else 5  # Меньше перезапусков для core
 
                     if proc_info.restart_count <= max_restarts:
                         # Экспоненциальная задержка: 2^attempt секунд (2, 4, 8, 16...)
-                        delay = min(
-                            2**proc_info.restart_count, 60
-                        )  # Максимум 60 секунд
+                        delay = min(2**proc_info.restart_count, 60)  # Максимум 60 секунд
 
                         logger.info(
                             f"🔄 Перезапуск {name} через {delay}с (попытка {proc_info.restart_count}/{max_restarts})"
@@ -269,17 +258,13 @@ class ProcessManager:
                             # Восстанавливаем счетчик
                             if name in self.processes:
                                 self.processes[name].restart_count = restart_count
-                                logger.info(
-                                    f"✅ Компонент {name} перезапущен успешно (PID: {pid})"
-                                )
+                                logger.info(f"✅ Компонент {name} перезапущен успешно (PID: {pid})")
                         except Exception as e:
                             logger.error(f"❌ Ошибка перезапуска {name}: {e}")
                             # Увеличиваем задержку при ошибке перезапуска
                             await asyncio.sleep(30)
                     else:
-                        logger.error(
-                            f"❌ Превышен лимит перезапусков для {name} ({max_restarts})"
-                        )
+                        logger.error(f"❌ Превышен лимит перезапусков для {name} ({max_restarts})")
                         if name in self.processes:
                             del self.processes[name]
             else:
@@ -320,7 +305,7 @@ class ProcessManager:
             try:
                 await asyncio.wait_for(process.wait(), timeout=timeout)
                 logger.info(f"✅ Компонент {name} остановлен")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Принудительное завершение
                 logger.warning(f"⚠️ Принудительная остановка {name}")
                 if os.name != "nt":
@@ -386,7 +371,7 @@ class ProcessManager:
 
         logger.info("✅ Все процессы остановлены")
 
-    def get_process_info(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_process_info(self, name: str) -> dict[str, Any] | None:
         """Получение информации о процессе"""
         if name not in self.processes:
             return None
@@ -415,7 +400,7 @@ class ProcessManager:
                 "restart_count": proc_info.restart_count,
             }
 
-    def get_all_processes_info(self) -> List[Dict[str, Any]]:
+    def get_all_processes_info(self) -> list[dict[str, Any]]:
         """Получение информации о всех процессах"""
         info_list = []
         for name in self.processes:

@@ -48,9 +48,7 @@ def check_npm_packages():
     print("📦 MCP пакеты в package.json:\n")
 
     deps = package_data.get("dependencies", {})
-    mcp_packages = {
-        k: v for k, v in deps.items() if "modelcontextprotocol" in k or "mcp" in k
-    }
+    mcp_packages = {k: v for k, v in deps.items() if "modelcontextprotocol" in k or "mcp" in k}
 
     for package, version in mcp_packages.items():
         print(f"• {package}: {version}")

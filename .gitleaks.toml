@@ -1,0 +1,63 @@
+# Gitleaks configuration for detecting secrets
+title = "BOT_AI_V3 Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "exchange-api-key"
+description = "Exchange API Key"
+regex = '''(?i)(bybit|binance|okx|gate|kucoin|htx|bingx)[-_]?(api)?[-_]?key[^:=]*[:=]\s*['"]?([a-zA-Z0-9\-_]{20,})'''
+tags = ["key", "api", "exchange"]
+
+[[rules]]
+id = "exchange-api-secret"
+description = "Exchange API Secret"
+regex = '''(?i)(bybit|binance|okx|gate|kucoin|htx|bingx)[-_]?(api)?[-_]?secret[^:=]*[:=]\s*['"]?([a-zA-Z0-9\-_]{20,})'''
+tags = ["secret", "api", "exchange"]
+
+[[rules]]
+id = "postgres-password"
+description = "PostgreSQL Password"
+regex = '''(?i)(pg|postgres|postgresql)[-_]?password[^:=]*[:=]\s*['"]?([a-zA-Z0-9\-_!@#$%^&*()]{8,})'''
+tags = ["password", "database"]
+
+[[rules]]
+id = "jwt-token"
+description = "JWT Token"
+regex = '''eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*'''
+tags = ["jwt", "token"]
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram Bot Token"
+regex = '''(?i)telegram[-_]?(bot)?[-_]?token[^:=]*[:=]\s*['"]?([0-9]{8,10}:[a-zA-Z0-9_-]{35})'''
+tags = ["token", "telegram"]
+
+[[rules]]
+id = "database-url"
+description = "Database Connection URL with credentials"
+regex = '''(?i)(postgres|postgresql|mysql|mongodb|redis)://[^:]+:[^@]+@[^/]+/[^\s]+'''
+tags = ["database", "credentials"]
+
+# Allowlist for test/example files
+[[allowlist]]
+paths = [
+    ".env.example",
+    ".env.test",
+    "**/*test*.py",
+    "**/test_*.py",
+    "tests/**",
+    "docs/**/*.md",
+    "README.md"
+]
+
+[[allowlist]]
+regexes = [
+    '''test_pass''',
+    '''test_user''',
+    '''pragma: allowlist secret''',
+    '''# pragma: allowlist''',
+    '''fake[-_]?api[-_]?key''',
+    '''dummy[-_]?secret'''
+]

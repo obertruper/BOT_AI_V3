@@ -63,13 +63,9 @@ async def check_database():
                 print(f"  Take Profit: ${s['suggested_take_profit']}")
                 print(f"  Создан: {s['created_at']}")
                 if s["indicators"]:
-                    print(
-                        f"  Индикаторы: {json.dumps(s['indicators'], indent=4)[:200]}..."
-                    )
+                    print(f"  Индикаторы: {json.dumps(s['indicators'], indent=4)[:200]}...")
                 if s["metadata"]:
-                    print(
-                        f"  Метаданные: {json.dumps(s['metadata'], indent=4)[:200]}..."
-                    )
+                    print(f"  Метаданные: {json.dumps(s['metadata'], indent=4)[:200]}...")
 
         # Распределение по типам
         type_dist = await conn.fetch(
@@ -222,16 +218,12 @@ async def check_database():
                     # Показываем первые несколько индикаторов
                     if isinstance(indicators, dict):
                         indicators_sample = dict(list(indicators.items())[:5])
-                        print(
-                            f"  Примеры индикаторов: {json.dumps(indicators_sample, indent=4)}"
-                        )
+                        print(f"  Примеры индикаторов: {json.dumps(indicators_sample, indent=4)}")
                 if latest["ml_features"]:
                     ml_features = latest["ml_features"]
                     if isinstance(ml_features, str):
                         ml_features = json.loads(ml_features)
-                    print(
-                        f"  Количество ML features: {len(ml_features) if ml_features else 0}"
-                    )
+                    print(f"  Количество ML features: {len(ml_features) if ml_features else 0}")
 
         # 6. ТЕХНИЧЕСКИЕ ИНДИКАТОРЫ
         print("\n📉 ТЕХНИЧЕСКИЕ ИНДИКАТОРЫ (technical_indicators):")

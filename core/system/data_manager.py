@@ -4,8 +4,8 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
-from typing import Any, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
@@ -35,7 +35,7 @@ class DataManager:
         )
 
         self.is_running = False
-        self.update_task: Optional[asyncio.Task] = None
+        self.update_task: asyncio.Task | None = None
         self.exchanges = {}
 
         # Список торговых пар из конфигурации
@@ -133,7 +133,6 @@ class DataManager:
 
         try:
             # Проверка свежести данных для каждого символа
-            from datetime import timezone
 
             for symbol in self.trading_pairs:
                 latest_data = await self._get_latest_data_time(symbol)
@@ -141,9 +140,9 @@ class DataManager:
                 if latest_data:
                     # Исправляем timezone - если naive, считаем что это UTC
                     if latest_data.tzinfo is None:
-                        latest_data = latest_data.replace(tzinfo=timezone.utc)
+                        latest_data = latest_data.replace(tzinfo=UTC)
 
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     age = now - latest_data
 
                     if age > timedelta(hours=1):
@@ -193,9 +192,7 @@ class DataManager:
             # Подсчет успешных обновлений
             success_count = sum(1 for r in results if not isinstance(r, Exception))
             if success_count > 0:
-                logger.info(
-                    f"✅ Обновлено {success_count}/{len(self.trading_pairs)} символов"
-                )
+                logger.info(f"✅ Обновлено {success_count}/{len(self.trading_pairs)} символов")
 
             # Логирование ошибок
             for i, result in enumerate(results):
@@ -214,14 +211,13 @@ class DataManager:
 
             if latest_time:
                 # Загружаем только новые данные с правильной timezone
-                from datetime import timezone
 
                 # Убеждаемся что latest_time в UTC
                 if latest_time.tzinfo is None:
                     # Если naive, считаем что это UTC
-                    latest_time = latest_time.replace(tzinfo=timezone.utc)
+                    latest_time = latest_time.replace(tzinfo=UTC)
 
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
                 start_time = latest_time + timedelta(minutes=15)
 
                 if start_time >= end_time:
@@ -255,16 +251,14 @@ class DataManager:
 
             if candles:
                 await self._save_candles(symbol, candles)
-                logger.info(
-                    f"✅ {symbol}: загружено {len(candles)} исторических свечей"
-                )
+                logger.info(f"✅ {symbol}: загружено {len(candles)} исторических свечей")
             else:
                 logger.warning(f"⚠️ {symbol}: не удалось загрузить исторические данные")
 
         except Exception as e:
             logger.error(f"Ошибка загрузки истории для {symbol}: {e}")
 
-    async def _save_candles(self, symbol: str, candles: List[Any]) -> None:
+    async def _save_candles(self, symbol: str, candles: list[Any]) -> None:
         """Сохранение свечей в базу данных"""
         if not candles:
             return
@@ -312,7 +306,7 @@ class DataManager:
         except Exception as e:
             logger.error(f"Ошибка сохранения свечей для {symbol}: {e}")
 
-    async def _get_latest_data_time(self, symbol: str) -> Optional[datetime]:
+    async def _get_latest_data_time(self, symbol: str) -> datetime | None:
         """Получение времени последних данных"""
         try:
             result = await AsyncPGPool.fetch(
@@ -334,7 +328,7 @@ class DataManager:
             logger.error(f"Ошибка получения последнего времени для {symbol}: {e}")
             return None
 
-    async def force_update(self, symbols: Optional[List[str]] = None) -> None:
+    async def force_update(self, symbols: list[str] | None = None) -> None:
         """Принудительное обновление данных"""
         if symbols is None:
             symbols = self.trading_pairs

@@ -53,10 +53,8 @@ async def check_ml_system():
         # Проверка ML Manager
         logger.info("\n🧠 Инициализация ML Manager...")
         # ML Manager ожидает полную конфигурацию ML из файла ml_config.yaml
-        ml_config_path = os.path.join(
-            os.path.dirname(__file__), "config", "ml", "ml_config.yaml"
-        )
-        with open(ml_config_path, "r") as f:
+        ml_config_path = os.path.join(os.path.dirname(__file__), "config", "ml", "ml_config.yaml")
+        with open(ml_config_path) as f:
             ml_full_config = yaml.safe_load(f)
         ml_manager = MLManager(config=ml_full_config)
         logger.info(f"✅ ML Manager инициализирован на устройстве: {ml_manager.device}")
@@ -87,9 +85,7 @@ async def check_ml_system():
                 "low": np.random.uniform(90, 100, 100),
                 "close": np.random.uniform(95, 115, 100),
                 "volume": np.random.uniform(1000, 10000, 100),
-                "timestamp": pd.date_range(
-                    start="2025-08-09", periods=100, freq="15min"
-                ),
+                "timestamp": pd.date_range(start="2025-08-09", periods=100, freq="15min"),
             }
         )
 
@@ -105,15 +101,9 @@ async def check_ml_system():
                 prediction = await ml_manager.predict(features, symbol="BTCUSDT")
                 if prediction:
                     logger.info("✅ ML предсказание получено:")
-                    logger.info(
-                        f"   - Signal Type: {prediction.get('signal_type', 'N/A')}"
-                    )
-                    logger.info(
-                        f"   - Confidence: {prediction.get('confidence', 0):.2%}"
-                    )
-                    logger.info(
-                        f"   - Risk Level: {prediction.get('risk_level', 'N/A')}"
-                    )
+                    logger.info(f"   - Signal Type: {prediction.get('signal_type', 'N/A')}")
+                    logger.info(f"   - Confidence: {prediction.get('confidence', 0):.2%}")
+                    logger.info(f"   - Risk Level: {prediction.get('risk_level', 'N/A')}")
                 else:
                     logger.error("❌ Предсказание не получено")
             except Exception as e:

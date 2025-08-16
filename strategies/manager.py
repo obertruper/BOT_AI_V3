@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from exchanges.registry import ExchangeRegistry
 from trading.signals.signal_processor import SignalProcessor
@@ -41,10 +41,10 @@ class StrategyMetrics:
     sharpe_ratio: float = 0.0
     max_drawdown: float = 0.0
     avg_trade_duration: timedelta = field(default_factory=lambda: timedelta(0))
-    last_signal_time: Optional[datetime] = None
+    last_signal_time: datetime | None = None
     error_count: int = 0
     uptime: timedelta = field(default_factory=lambda: timedelta(0))
-    start_time: Optional[datetime] = None
+    start_time: datetime | None = None
 
 
 @dataclass
@@ -54,14 +54,14 @@ class StrategyInstance:
     strategy_id: str
     strategy_name: str
     strategy: StrategyABC
-    config: Dict[str, Any]
+    config: dict[str, Any]
     state: StrategyState = StrategyState.INACTIVE
     metrics: StrategyMetrics = field(default_factory=StrategyMetrics)
-    task: Optional[asyncio.Task] = None
-    error_message: Optional[str] = None
-    trader_id: Optional[str] = None
-    exchange_name: Optional[str] = None
-    symbols: List[str] = field(default_factory=list)
+    task: asyncio.Task | None = None
+    error_message: str | None = None
+    trader_id: str | None = None
+    exchange_name: str | None = None
+    symbols: list[str] = field(default_factory=list)
 
 
 class StrategyManager:
@@ -78,7 +78,7 @@ class StrategyManager:
 
     def __init__(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         exchange_registry: ExchangeRegistry,
         signal_processor: SignalProcessor,
     ):
@@ -92,11 +92,11 @@ class StrategyManager:
         self.factory = StrategyFactory(self.registry)
 
         # Активные стратегии
-        self.strategies: Dict[str, StrategyInstance] = {}
+        self.strategies: dict[str, StrategyInstance] = {}
 
         # Состояние менеджера
         self._running = False
-        self._monitoring_task: Optional[asyncio.Task] = None
+        self._monitoring_task: asyncio.Task | None = None
 
         # Настройки
         self.max_strategies = config.get("max_strategies", 10)
@@ -105,7 +105,7 @@ class StrategyManager:
         self.max_restart_attempts = config.get("max_restart_attempts", 3)
 
         # Метрики
-        self._restart_attempts: Dict[str, int] = {}
+        self._restart_attempts: dict[str, int] = {}
 
     async def initialize(self) -> bool:
         """Инициализация менеджера стратегий"""
@@ -163,7 +163,7 @@ class StrategyManager:
             self.logger.error(f"Ошибка создания стратегий: {e}")
             raise
 
-    async def create_strategy(self, config: Dict[str, Any]) -> Optional[str]:
+    async def create_strategy(self, config: dict[str, Any]) -> str | None:
         """Создание новой стратегии"""
         try:
             strategy_id = config["id"]
@@ -277,7 +277,7 @@ class StrategyManager:
                 instance.task.cancel()
                 try:
                     await asyncio.wait_for(instance.task, timeout=timeout)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.warning(f"Таймаут остановки стратегии {strategy_id}")
                 except asyncio.CancelledError:
                     pass
@@ -450,9 +450,7 @@ class StrategyManager:
 
                     # Обновление времени последнего сигнала
                     if hasattr(instance.strategy, "last_signal_time"):
-                        instance.metrics.last_signal_time = (
-                            instance.strategy.last_signal_time
-                        )
+                        instance.metrics.last_signal_time = instance.strategy.last_signal_time
 
                     # Пауза между шагами
                     step_delay = instance.config.get("step_delay", 1.0)
@@ -468,9 +466,7 @@ class StrategyManager:
         except asyncio.CancelledError:
             self.logger.debug(f"Задача стратегии {instance.strategy_id} отменена")
         except Exception as e:
-            self.logger.error(
-                f"Критическая ошибка в стратегии {instance.strategy_id}: {e}"
-            )
+            self.logger.error(f"Критическая ошибка в стратегии {instance.strategy_id}: {e}")
             instance.state = StrategyState.ERROR
             instance.error_message = str(e)
 
@@ -494,13 +490,8 @@ class StrategyManager:
         try:
             for strategy_id, instance in self.strategies.items():
                 # Обновление метрик времени работы
-                if (
-                    instance.metrics.start_time
-                    and instance.state == StrategyState.ACTIVE
-                ):
-                    instance.metrics.uptime = (
-                        datetime.now() - instance.metrics.start_time
-                    )
+                if instance.metrics.start_time and instance.state == StrategyState.ACTIVE:
+                    instance.metrics.uptime = datetime.now() - instance.metrics.start_time
 
                 # Проверка на зависшие стратегии
                 if instance.state == StrategyState.ACTIVE and instance.task:
@@ -517,8 +508,7 @@ class StrategyManager:
                 if (
                     instance.state == StrategyState.ERROR
                     and self.restart_failed_strategies
-                    and self._restart_attempts.get(strategy_id, 0)
-                    < self.max_restart_attempts
+                    and self._restart_attempts.get(strategy_id, 0) < self.max_restart_attempts
                 ):
                     self.logger.info(f"Попытка перезапуска стратегии {strategy_id}")
                     self._restart_attempts[strategy_id] += 1
@@ -546,34 +536,24 @@ class StrategyManager:
                     instance.metrics.successful_trades = strategy_metrics.get(
                         "successful_trades", 0
                     )
-                    instance.metrics.failed_trades = strategy_metrics.get(
-                        "failed_trades", 0
-                    )
+                    instance.metrics.failed_trades = strategy_metrics.get("failed_trades", 0)
                     instance.metrics.total_pnl = strategy_metrics.get("total_pnl", 0.0)
                     instance.metrics.win_rate = strategy_metrics.get("win_rate", 0.0)
-                    instance.metrics.sharpe_ratio = strategy_metrics.get(
-                        "sharpe_ratio", 0.0
-                    )
-                    instance.metrics.max_drawdown = strategy_metrics.get(
-                        "max_drawdown", 0.0
-                    )
+                    instance.metrics.sharpe_ratio = strategy_metrics.get("sharpe_ratio", 0.0)
+                    instance.metrics.max_drawdown = strategy_metrics.get("max_drawdown", 0.0)
 
                     # Обновление времени последнего сигнала
                     last_signal = strategy_metrics.get("last_signal_time")
                     if last_signal:
                         if isinstance(last_signal, str):
-                            instance.metrics.last_signal_time = datetime.fromisoformat(
-                                last_signal
-                            )
+                            instance.metrics.last_signal_time = datetime.fromisoformat(last_signal)
                         elif isinstance(last_signal, datetime):
                             instance.metrics.last_signal_time = last_signal
 
         except Exception as e:
-            self.logger.error(
-                f"Ошибка обновления метрик стратегии {instance.strategy_id}: {e}"
-            )
+            self.logger.error(f"Ошибка обновления метрик стратегии {instance.strategy_id}: {e}")
 
-    def get_strategy_status(self, strategy_id: str) -> Optional[Dict[str, Any]]:
+    def get_strategy_status(self, strategy_id: str) -> dict[str, Any] | None:
         """Получение статуса стратегии"""
         if strategy_id not in self.strategies:
             return None
@@ -608,14 +588,13 @@ class StrategyManager:
             "config": instance.config,
         }
 
-    def get_all_strategies_status(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_strategies_status(self) -> dict[str, dict[str, Any]]:
         """Получение статуса всех стратегий"""
         return {
-            strategy_id: self.get_strategy_status(strategy_id)
-            for strategy_id in self.strategies
+            strategy_id: self.get_strategy_status(strategy_id) for strategy_id in self.strategies
         }
 
-    def get_summary_metrics(self) -> Dict[str, Any]:
+    def get_summary_metrics(self) -> dict[str, Any]:
         """Получение сводных метрик"""
         total_strategies = len(self.strategies)
         active_strategies = len(
@@ -625,21 +604,14 @@ class StrategyManager:
             [s for s in self.strategies.values() if s.state == StrategyState.ERROR]
         )
 
-        total_signals = sum(
-            s.metrics.signals_generated for s in self.strategies.values()
-        )
+        total_signals = sum(s.metrics.signals_generated for s in self.strategies.values())
         total_trades = sum(
-            s.metrics.successful_trades + s.metrics.failed_trades
-            for s in self.strategies.values()
+            s.metrics.successful_trades + s.metrics.failed_trades for s in self.strategies.values()
         )
         total_pnl = sum(s.metrics.total_pnl for s in self.strategies.values())
 
         # Средний винрейт
-        win_rates = [
-            s.metrics.win_rate
-            for s in self.strategies.values()
-            if s.metrics.win_rate > 0
-        ]
+        win_rates = [s.metrics.win_rate for s in self.strategies.values() if s.metrics.win_rate > 0]
         avg_win_rate = sum(win_rates) / len(win_rates) if win_rates else 0.0
 
         return {
@@ -667,9 +639,7 @@ class StrategyManager:
             if self._monitoring_task and self._monitoring_task.done():
                 exception = self._monitoring_task.exception()
                 if exception:
-                    self.logger.error(
-                        f"Задача мониторинга завершилась с ошибкой: {exception}"
-                    )
+                    self.logger.error(f"Задача мониторинга завершилась с ошибкой: {exception}")
                     return False
 
             # Проверка критических стратегий

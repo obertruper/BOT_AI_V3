@@ -11,7 +11,6 @@ import sys
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List
 
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent))
@@ -82,7 +81,7 @@ class TradingMonitor:
             logger.error(f"Ошибка инициализации: {e}")
             return False
 
-    async def get_account_info(self) -> Dict:
+    async def get_account_info(self) -> dict:
         """Получение информации об аккаунте"""
         try:
             balances = await self.exchange_client.get_balances()
@@ -99,7 +98,7 @@ class TradingMonitor:
             logger.error(f"Ошибка получения баланса: {e}")
             return {"balances": {}, "total_usdt": 0}
 
-    async def get_active_positions(self) -> List[Dict]:
+    async def get_active_positions(self) -> list[dict]:
         """Получение активных позиций"""
         try:
             positions = await self.exchange_client.get_positions()
@@ -111,9 +110,7 @@ class TradingMonitor:
                     active.append(
                         {
                             "symbol": pos.get("symbol"),
-                            "side": "LONG"
-                            if float(pos.get("size", 0)) > 0
-                            else "SHORT",
+                            "side": "LONG" if float(pos.get("size", 0)) > 0 else "SHORT",
                             "size": abs(float(pos.get("size", 0))),
                             "entry_price": float(pos.get("entry_price", 0)),
                             "mark_price": float(pos.get("mark_price", 0)),
@@ -128,7 +125,7 @@ class TradingMonitor:
             logger.error(f"Ошибка получения позиций: {e}")
             return []
 
-    async def get_recent_signals(self, limit: int = 10) -> List[Dict]:
+    async def get_recent_signals(self, limit: int = 10) -> list[dict]:
         """Получение последних ML сигналов"""
         try:
             from sqlalchemy import desc, select
@@ -158,7 +155,7 @@ class TradingMonitor:
             logger.error(f"Ошибка получения сигналов: {e}")
             return []
 
-    async def get_recent_orders(self, limit: int = 10) -> List[Dict]:
+    async def get_recent_orders(self, limit: int = 10) -> list[dict]:
         """Получение последних ордеров"""
         try:
             from sqlalchemy import desc, select
@@ -274,9 +271,7 @@ class TradingMonitor:
         header_text.append("🤖 BOT_AI_V3 - ", style="bold cyan")
         header_text.append("Live Trading Monitor", style="bold white")
         header_text.append(f"\n⏱️ Uptime: {hours}h {minutes}m", style="dim")
-        header_text.append(
-            f" | 📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", style="dim"
-        )
+        header_text.append(f" | 📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", style="dim")
 
         return Panel(header_text, style="bold blue")
 
@@ -365,11 +360,7 @@ class TradingMonitor:
 
         for sig in signals:
             signal_style = (
-                "green"
-                if sig["type"] == "LONG"
-                else "red"
-                if sig["type"] == "SHORT"
-                else "yellow"
+                "green" if sig["type"] == "LONG" else "red" if sig["type"] == "SHORT" else "yellow"
             )
             table.add_row(
                 sig["time"].strftime("%H:%M:%S"),

@@ -5,7 +5,6 @@
 
 import logging
 from threading import RLock
-from typing import Dict, List, Optional, Type
 
 from .base import StrategyABC
 
@@ -39,16 +38,16 @@ class StrategyRegistry:
         if self._initialized:
             return
 
-        self._strategies: Dict[str, Type[StrategyABC]] = {}
-        self._metadata: Dict[str, Dict[str, any]] = {}
+        self._strategies: dict[str, type[StrategyABC]] = {}
+        self._metadata: dict[str, dict[str, any]] = {}
         self._initialized = True
         logger.info("StrategyRegistry initialized")
 
     def register(
         self,
         name: str,
-        strategy_class: Type[StrategyABC],
-        metadata: Optional[Dict[str, any]] = None,
+        strategy_class: type[StrategyABC],
+        metadata: dict[str, any] | None = None,
     ) -> None:
         """
         Регистрация стратегии в реестре
@@ -103,7 +102,7 @@ class StrategyRegistry:
             del self._metadata[name]
             logger.info(f"Unregistered strategy: {name}")
 
-    def get_strategy_class(self, name: str) -> Type[StrategyABC]:
+    def get_strategy_class(self, name: str) -> type[StrategyABC]:
         """
         Получение класса стратегии по имени
 
@@ -124,7 +123,7 @@ class StrategyRegistry:
 
             return self._strategies[name]
 
-    def get_metadata(self, name: str) -> Dict[str, any]:
+    def get_metadata(self, name: str) -> dict[str, any]:
         """
         Получение метаданных стратегии
 
@@ -140,7 +139,7 @@ class StrategyRegistry:
 
             return self._metadata[name].copy()
 
-    def list_strategies(self) -> List[str]:
+    def list_strategies(self) -> list[str]:
         """
         Получение списка всех зарегистрированных стратегий
 
@@ -150,7 +149,7 @@ class StrategyRegistry:
         with self._lock:
             return list(self._strategies.keys())
 
-    def get_all_metadata(self) -> Dict[str, Dict[str, any]]:
+    def get_all_metadata(self) -> dict[str, dict[str, any]]:
         """
         Получение метаданных всех стратегий
 
@@ -173,7 +172,7 @@ class StrategyRegistry:
         with self._lock:
             return name in self._strategies
 
-    def get_strategies_by_tag(self, tag: str) -> List[str]:
+    def get_strategies_by_tag(self, tag: str) -> list[str]:
         """
         Получение стратегий по тегу
 
@@ -212,7 +211,7 @@ def register_strategy(name: str, **metadata):
             pass
     """
 
-    def decorator(strategy_class: Type[StrategyABC]):
+    def decorator(strategy_class: type[StrategyABC]):
         registry = StrategyRegistry()
         registry.register(name, strategy_class, metadata)
         return strategy_class

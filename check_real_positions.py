@@ -52,9 +52,7 @@ async def check():
         print("\n" + "=" * 80)
         print("БАЛАНС АККАУНТА:")
         print(f"  Доступный баланс: ${usdt_balance.get('available_balance', 0):.2f}")
-        print(
-            f"  Используется в позициях: ${usdt_balance.get('position_margin', 0):.2f}"
-        )
+        print(f"  Используется в позициях: ${usdt_balance.get('position_margin', 0):.2f}")
         print(f"  Общий баланс: ${usdt_balance.get('total_balance', 0):.2f}")
 
         # Проверяем открытые ордера

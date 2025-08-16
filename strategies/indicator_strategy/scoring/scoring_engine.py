@@ -5,7 +5,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -20,11 +20,11 @@ class ScoringResult:
     """Результат расчета скоринга"""
 
     total_score: float  # Общий скор от -100 до +100
-    category_scores: Dict[str, float]  # Скоры по категориям
-    weighted_scores: Dict[str, float]  # Взвешенные скоры
-    active_weights: Dict[str, float]  # Использованные веса
+    category_scores: dict[str, float]  # Скоры по категориям
+    weighted_scores: dict[str, float]  # Взвешенные скоры
+    active_weights: dict[str, float]  # Использованные веса
     confidence: float  # Уверенность в сигнале
-    details: Dict[str, Any]  # Дополнительные детали
+    details: dict[str, Any]  # Дополнительные детали
 
 
 class ScoringEngine:
@@ -40,8 +40,8 @@ class ScoringEngine:
 
     def __init__(
         self,
-        base_weights: Optional[Dict[str, float]] = None,
-        regime_multipliers: Optional[Dict[str, Dict[str, float]]] = None,
+        base_weights: dict[str, float] | None = None,
+        regime_multipliers: dict[str, dict[str, float]] | None = None,
         use_dynamic_weights: bool = True,
     ):
         """
@@ -67,7 +67,7 @@ class ScoringEngine:
         self._avg_score = 0.0
 
     def calculate_score(
-        self, indicators: Dict[str, Dict[str, Any]], market_regime: Optional[str] = None
+        self, indicators: dict[str, dict[str, Any]], market_regime: str | None = None
     ) -> ScoringResult:
         """
         Расчет общего скора на основе индикаторов
@@ -142,15 +142,11 @@ class ScoringEngine:
             },
         )
 
-        logger.debug(
-            f"Scoring result: score={total_score:.2f}, confidence={confidence:.2f}"
-        )
+        logger.debug(f"Scoring result: score={total_score:.2f}, confidence={confidence:.2f}")
 
         return result
 
-    def _calculate_category_scores(
-        self, indicators: Dict[str, Dict[str, Any]]
-    ) -> Dict[str, float]:
+    def _calculate_category_scores(self, indicators: dict[str, dict[str, Any]]) -> dict[str, float]:
         """
         Расчет скоров для каждой категории индикаторов
 
@@ -191,7 +187,7 @@ class ScoringEngine:
                 # Взвешенное среднее по силе сигналов
                 if sum(strengths) > 0:
                     category_score = sum(
-                        s * w for s, w in zip(scores, strengths)
+                        s * w for s, w in zip(scores, strengths, strict=False)
                     ) / sum(strengths)
                 else:
                     category_score = np.mean(scores)
@@ -201,7 +197,7 @@ class ScoringEngine:
         return category_scores
 
     def _calculate_confidence(
-        self, category_scores: Dict[str, float], indicators: Dict[str, Any]
+        self, category_scores: dict[str, float], indicators: dict[str, Any]
     ) -> float:
         """
         Расчет уверенности в сигнале
@@ -225,10 +221,7 @@ class ScoringEngine:
             indicators_factor = 100
         elif total_indicators >= min_indicators:
             indicators_factor = (
-                50
-                + (total_indicators - min_indicators)
-                / (max_indicators - min_indicators)
-                * 50
+                50 + (total_indicators - min_indicators) / (max_indicators - min_indicators) * 50
             )
         else:
             indicators_factor = total_indicators / min_indicators * 50
@@ -238,18 +231,12 @@ class ScoringEngine:
         # 2. Фактор согласованности
         if category_scores:
             # Проверяем, все ли категории дают сигналы в одном направлении
-            positive_categories = sum(
-                1 for score in category_scores.values() if score > 10
-            )
-            negative_categories = sum(
-                1 for score in category_scores.values() if score < -10
-            )
+            positive_categories = sum(1 for score in category_scores.values() if score > 10)
+            negative_categories = sum(1 for score in category_scores.values() if score < -10)
             total_categories = len(category_scores)
 
             if total_categories > 0:
-                agreement_ratio = (
-                    max(positive_categories, negative_categories) / total_categories
-                )
+                agreement_ratio = max(positive_categories, negative_categories) / total_categories
                 agreement_factor = agreement_ratio * 100
                 confidence_factors.append(agreement_factor)
 
@@ -267,7 +254,7 @@ class ScoringEngine:
 
         return min(max(confidence, 0), 100)
 
-    def _count_active_indicators(self, indicators: Dict[str, Dict[str, Any]]) -> int:
+    def _count_active_indicators(self, indicators: dict[str, dict[str, Any]]) -> int:
         """Подсчет количества активных индикаторов"""
         count = 0
 
@@ -279,7 +266,7 @@ class ScoringEngine:
 
         return count
 
-    def _calculate_agreement_level(self, category_scores: Dict[str, float]) -> str:
+    def _calculate_agreement_level(self, category_scores: dict[str, float]) -> str:
         """Определение уровня согласованности сигналов"""
         if not category_scores:
             return "none"
@@ -318,7 +305,7 @@ class ScoringEngine:
         alpha = 0.1  # Коэффициент сглаживания
         self._avg_score = (1 - alpha) * self._avg_score + alpha * score
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Получение статистики работы движка"""
         return {
             "calculations_count": self._calculations_count,

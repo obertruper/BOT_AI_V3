@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Адаптер для преобразования выходов UnifiedPatchTST модели в торговые сигналы
 Адаптировано из LLM TRANSFORM для BOT_AI_V3
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional, Union
 
 import numpy as np
 import torch
@@ -41,9 +39,9 @@ class ModelOutputAdapter:
 
     def adapt_model_outputs(
         self,
-        raw_outputs: Union[torch.Tensor, np.ndarray],
-        symbols: Optional[List[str]] = None,
-    ) -> Dict[str, Dict]:
+        raw_outputs: torch.Tensor | np.ndarray,
+        symbols: list[str] | None = None,
+    ) -> dict[str, dict]:
         """
         Преобразует сырые выходы модели в структурированный формат
 
@@ -82,7 +80,7 @@ class ModelOutputAdapter:
 
         return predictions_by_symbol
 
-    def _create_signal_format(self, outputs: np.ndarray) -> Dict:
+    def _create_signal_format(self, outputs: np.ndarray) -> dict:
         """
         Создает структуру предсказаний для торговой системы
         """
@@ -128,14 +126,10 @@ class ModelOutputAdapter:
             confidence = max(avg_long_prob, avg_short_prob)
 
         # Рассчитываем силу сигнала
-        signal_strength = self._calculate_signal_strength(
-            directions, future_returns, volatilities
-        )
+        signal_strength = self._calculate_signal_strength(directions, future_returns, volatilities)
 
         # Риск метрики
-        risk_metrics = self._calculate_risk_metrics(
-            future_returns, volatilities, price_ranges
-        )
+        risk_metrics = self._calculate_risk_metrics(future_returns, volatilities, price_ranges)
 
         return {
             "signal_type": signal_type,
@@ -145,10 +139,10 @@ class ModelOutputAdapter:
             # Детальные предсказания
             "predictions": {
                 "future_returns": {
-                    tf: float(ret) for tf, ret in zip(self.timeframes, future_returns)
+                    tf: float(ret) for tf, ret in zip(self.timeframes, future_returns, strict=False)
                 },
                 "directions": {
-                    tf: int(dir) for tf, dir in zip(self.timeframes, directions)
+                    tf: int(dir) for tf, dir in zip(self.timeframes, directions, strict=False)
                 },
                 "direction_probabilities": {
                     tf: {
@@ -156,27 +150,27 @@ class ModelOutputAdapter:
                         "flat": float(probs[1]),
                         "up": float(probs[2]),
                     }
-                    for tf, probs in zip(self.timeframes, direction_probs)
+                    for tf, probs in zip(self.timeframes, direction_probs, strict=False)
                 },
                 "volatilities": {
-                    tf: float(vol) for tf, vol in zip(self.timeframes, volatilities)
+                    tf: float(vol) for tf, vol in zip(self.timeframes, volatilities, strict=False)
                 },
                 "volume_changes": {
-                    tf: float(vc) for tf, vc in zip(self.timeframes, volume_changes)
+                    tf: float(vc) for tf, vc in zip(self.timeframes, volume_changes, strict=False)
                 },
                 "price_ranges": {
-                    tf: float(pr) for tf, pr in zip(self.timeframes, price_ranges)
+                    tf: float(pr) for tf, pr in zip(self.timeframes, price_ranges, strict=False)
                 },
             },
             # Вероятности прибыли
             "profit_probabilities": {
                 "long": {
                     tf: float(prob)
-                    for tf, prob in zip(self.timeframes, long_profit_probs)
+                    for tf, prob in zip(self.timeframes, long_profit_probs, strict=False)
                 },
                 "short": {
                     tf: float(prob)
-                    for tf, prob in zip(self.timeframes, short_profit_probs)
+                    for tf, prob in zip(self.timeframes, short_profit_probs, strict=False)
                 },
             },
             # Риск метрики
@@ -196,9 +190,7 @@ class ModelOutputAdapter:
             # Создаем псевдо-вероятности на основе предсказанного класса
             prob = np.zeros(3)
             if 0 <= dir_value <= 2:
-                prob[int(dir_value)] = (
-                    0.8  # Высокая вероятность для предсказанного класса
-                )
+                prob[int(dir_value)] = 0.8  # Высокая вероятность для предсказанного класса
                 prob[(int(dir_value) + 1) % 3] = 0.15  # Средняя для соседнего
                 prob[(int(dir_value) + 2) % 3] = 0.05  # Низкая для противоположного
             else:
@@ -241,15 +233,13 @@ class ModelOutputAdapter:
         volatility_factor = 1.0 - min(avg_volatility, 1.0)
 
         # Комбинируем факторы
-        strength = (
-            0.4 * direction_agreement + 0.4 * return_strength + 0.2 * volatility_factor
-        )
+        strength = 0.4 * direction_agreement + 0.4 * return_strength + 0.2 * volatility_factor
 
         return np.clip(strength, 0.0, 1.0)
 
     def _calculate_risk_metrics(
         self, returns: np.ndarray, volatilities: np.ndarray, price_ranges: np.ndarray
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Рассчитывает метрики риска
         """
@@ -284,9 +274,9 @@ class ModelOutputAdapter:
     def calculate_trading_levels(
         self,
         current_price: float,
-        predictions: Dict[str, Any],
+        predictions: dict[str, Any],
         risk_tolerance: float = 0.02,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Рассчитывает уровни stop loss и take profit
 
@@ -306,9 +296,7 @@ class ModelOutputAdapter:
         base_risk = min(risk_tolerance, risk_metrics.get("avg_volatility", 0.02))
 
         # Take profit на основе ожидаемых returns
-        expected_return = np.mean(
-            [future_returns.get("1h", 0), future_returns.get("4h", 0)]
-        )
+        expected_return = np.mean([future_returns.get("1h", 0), future_returns.get("4h", 0)])
 
         # Risk/reward ratio
         risk_reward_ratio = 2.0 if risk_metrics.get("risk_level") == "LOW" else 1.5

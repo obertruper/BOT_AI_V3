@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOT_AI_V3 - Архитектура проекта</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 20px;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            text-transform: uppercase;
+        }
+        .content {
+            padding: 40px;
+        }
+        .diagram-container {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 40px;
+            overflow-x: auto;
+        }
+        .mermaid {
+            text-align: center;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+        .legend-item {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid;
+        }
+        .legend-item.root { border-left-color: #ff6b6b; }
+        .legend-item.entry { border-left-color: #4ecdc4; }
+        .legend-item.core { border-left-color: #45b7d1; }
+        .legend-item.ml { border-left-color: #96ceb4; }
+        .legend-item.data { border-left-color: #ffeaa7; }
+        .legend-item.api { border-left-color: #dfe6e9; }
+        .legend-item.exchange { border-left-color: #a29bfe; }
+        .legend-item.monitor { border-left-color: #fd79a8; }
+
+        .legend-item h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .legend-item p {
+            margin: 0;
+            color: #666;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        .flow-description {
+            background: #e8f4fd;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .flow-description h2 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .flow-steps {
+            display: grid;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .flow-step {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .flow-step-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .flow-step-text {
+            color: #2c3e50;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 BOT_AI_V3</h1>
+            <p>Архитектура системы алгоритмической торговли криптовалютами</p>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">673</div>
+                    <div class="stat-label">Файлов</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">207K+</div>
+                    <div class="stat-label">Строк кода</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">7</div>
+                    <div class="stat-label">Бирж</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">240+</div>
+                    <div class="stat-label">ML признаков</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="diagram-container">
+                <div class="mermaid">
+flowchart TB
+    %% Стили для разных типов компонентов
+    classDef rootStyle fill:#ff6b6b,stroke:#333,stroke-width:4px,color:#fff
+    classDef entryStyle fill:#4ecdc4,stroke:#333,stroke-width:2px,color:#fff
+    classDef coreStyle fill:#45b7d1,stroke:#333,stroke-width:2px,color:#fff
+    classDef mlStyle fill:#96ceb4,stroke:#333,stroke-width:2px,color:#fff
+    classDef dataStyle fill:#ffeaa7,stroke:#333,stroke-width:2px,color:#333
+    classDef apiStyle fill:#dfe6e9,stroke:#333,stroke-width:2px,color:#333
+    classDef exchangeStyle fill:#a29bfe,stroke:#333,stroke-width:2px,color:#fff
+    classDef monitorStyle fill:#fd79a8,stroke:#333,stroke-width:2px,color:#fff
+
+    %% Основные компоненты
+    BOT_AI_V3["🤖 BOT_AI_V3<br/>Root System<br/>673 files, 207K+ LOC"]:::rootStyle
+    UnifiedLauncher["🚀 UnifiedLauncher<br/>Entry Point<br/>unified_launcher.py"]:::entryStyle
+    SystemOrchestrator["🎯 SystemOrchestrator<br/>Core Component<br/>orchestrator.py"]:::coreStyle
+
+    %% Trading компоненты
+    TradingEngine["💹 TradingEngine<br/>Trading Core<br/>engine.py:597"]:::coreStyle
+    OrderManager["📋 OrderManager<br/>Order Management<br/>order_manager.py"]:::coreStyle
+    RiskManager["⚠️ RiskManager<br/>Risk Control<br/>5x leverage, 2% risk"]:::coreStyle
+    SignalGenerator["📡 SignalGenerator<br/>Signal Generation<br/>ai_signal_generator.py"]:::coreStyle
+
+    %% ML компоненты
+    MLManager["🧠 MLManager<br/>ML System<br/>UnifiedPatchTST"]:::mlStyle
+    MLSignalProcessor["⚡ MLSignalProcessor<br/>ML Processing<br/>Unique predictions/min"]:::mlStyle
+    FeatureEngineering["🔧 FeatureEngineering<br/>ML Features<br/>240+ indicators"]:::mlStyle
+
+    %% Data компоненты
+    DataManager["📊 DataManager<br/>Data Management<br/>Real-time updates"]:::dataStyle
+    PostgreSQL[("🗄️ PostgreSQL<br/>Database<br/>Port 5555")]:::dataStyle
+
+    %% Exchange компоненты
+    ExchangeManager["🏦 ExchangeManager<br/>7 Exchanges<br/>Bybit, Binance, OKX..."]:::exchangeStyle
+
+    %% Web компоненты
+    WebAPI["🌐 WebAPI<br/>REST API<br/>Port 8080"]:::apiStyle
+    Frontend["💻 Frontend<br/>React + TS<br/>Port 5173"]:::apiStyle
+
+    %% Utility компоненты
+    ConfigManager["⚙️ ConfigManager<br/>Configuration<br/>YAML configs"]:::monitorStyle
+    HealthMonitor["❤️ HealthMonitor<br/>Monitoring<br/>health_monitor.py"]:::monitorStyle
+    AlembicMigrations["🔄 AlembicMigrations<br/>DB Migrations<br/>alembic/"]:::dataStyle
+
+    %% Связи - Entry flow
+    BOT_AI_V3 ==>|entry point| UnifiedLauncher
+    UnifiedLauncher -->|starts| SystemOrchestrator
+    UnifiedLauncher -->|launches| WebAPI
+    UnifiedLauncher -->|launches| Frontend
+
+    %% Связи - Core orchestration
+    SystemOrchestrator -->|coordinates| TradingEngine
+    SystemOrchestrator -->|manages| MLManager
+    SystemOrchestrator -->|controls| DataManager
+    SystemOrchestrator -.->|monitors with| HealthMonitor
+
+    %% Связи - Trading flow
+    TradingEngine <-->|signals| SignalGenerator
+    TradingEngine -->|validates| RiskManager
+    TradingEngine -->|creates| OrderManager
+    RiskManager -->|approves| OrderManager
+    OrderManager ==>|executes| ExchangeManager
+
+    %% Связи - ML flow
+    MLManager -->|uses| FeatureEngineering
+    MLManager ==>|predictions| MLSignalProcessor
+    MLSignalProcessor -->|provides| SignalGenerator
+    FeatureEngineering <-->|processes| DataManager
+
+    %% Связи - Data flow
+    DataManager <-->|sync| ExchangeManager
+    DataManager ==>|stores| PostgreSQL
+    OrderManager -->|logs| PostgreSQL
+    SignalGenerator -->|saves| PostgreSQL
+    ExchangeManager -->|trades| PostgreSQL
+    HealthMonitor -.->|metrics| PostgreSQL
+
+    %% Связи - Web flow
+    Frontend <-->|API calls| WebAPI
+    WebAPI <-->|queries| SystemOrchestrator
+    WebAPI -->|reads| PostgreSQL
+
+    %% Связи - Configuration
+    ConfigManager -.->|configures| SystemOrchestrator
+    ConfigManager -.->|settings| TradingEngine
+    AlembicMigrations ==>|migrates| PostgreSQL
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item root">
+                    <h3>🔴 Root System</h3>
+                    <p>Главная система торговли. 673 файла, 207K+ строк кода, Python 3.8+</p>
+                </div>
+                <div class="legend-item entry">
+                    <h3>🟢 Entry Point</h3>
+                    <p>Точка входа и запуска всех процессов системы</p>
+                </div>
+                <div class="legend-item core">
+                    <h3>🔵 Trading Core</h3>
+                    <p>Основные торговые компоненты: engine, orders, risk management</p>
+                </div>
+                <div class="legend-item ml">
+                    <h3>🟣 ML System</h3>
+                    <p>Machine Learning: UnifiedPatchTST модель, 240+ признаков, GPU</p>
+                </div>
+                <div class="legend-item data">
+                    <h3>🟡 Data Layer</h3>
+                    <p>PostgreSQL (порт 5555), управление данными, кэширование</p>
+                </div>
+                <div class="legend-item exchange">
+                    <h3>🟠 Exchanges</h3>
+                    <p>Интеграция с 7 биржами через API и WebSocket</p>
+                </div>
+                <div class="legend-item api">
+                    <h3>⚪ Web Interface</h3>
+                    <p>REST API (8080) и React Frontend (5173)</p>
+                </div>
+                <div class="legend-item monitor">
+                    <h3>🔴 Utilities</h3>
+                    <p>Конфигурация, мониторинг, миграции БД</p>
+                </div>
+            </div>
+
+            <div class="flow-description">
+                <h2>📈 Поток данных в системе</h2>
+                <div class="flow-steps">
+                    <div class="flow-step">
+                        <div class="flow-step-number">1</div>
+                        <div class="flow-step-text"><strong>Запуск:</strong> BOT_AI_V3 → UnifiedLauncher → SystemOrchestrator</div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-step-number">2</div>
+                        <div class="flow-step-text"><strong>Сбор данных:</strong> ExchangeManager ↔ DataManager → PostgreSQL</div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-step-number">3</div>
+                        <div class="flow-step-text"><strong>ML обработка:</strong> DataManager → FeatureEngineering → MLManager → MLSignalProcessor</div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-step-number">4</div>
+                        <div class="flow-step-text"><strong>Генерация сигналов:</strong> MLSignalProcessor → SignalGenerator → TradingEngine</div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-step-number">5</div>
+                        <div class="flow-step-text"><strong>Исполнение:</strong> TradingEngine → RiskManager → OrderManager → ExchangeManager</div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-step-number">6</div>
+                        <div class="flow-step-text"><strong>Мониторинг:</strong> HealthMonitor → PostgreSQL, WebAPI → Frontend</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>BOT_AI_V3 v3.0.0 | Последнее обновление: Январь 2025</p>
+            <p>High-performance algorithmic cryptocurrency trading platform</p>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                curve: 'basis',
+                padding: 20
+            }
+        });
+    </script>
+</body>
+</html>

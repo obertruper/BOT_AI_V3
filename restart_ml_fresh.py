@@ -59,7 +59,7 @@ def verify_ml_thresholds():
     print("🔍 Проверяем пороги ML модели...")
 
     ml_manager_path = "ml/ml_manager.py"
-    with open(ml_manager_path, "r") as f:
+    with open(ml_manager_path) as f:
         content = f.read()
 
     # Проверяем новые пороги
@@ -98,7 +98,7 @@ async def start_system():
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=5.0)
             if stdout:
                 print(stdout.decode()[:1000])
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Процесс все еще работает - это хорошо
             print("  Система работает...")
 

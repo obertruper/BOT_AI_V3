@@ -4,18 +4,17 @@
 """
 
 from pathlib import Path
-from typing import Dict
 
 import yaml
 
 
-def check_agent_file(file_path: Path) -> Dict:
+def check_agent_file(file_path: Path) -> dict:
     """Проверка файла агента на корректность."""
     errors = []
     warnings = []
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         # Проверка наличия YAML frontmatter

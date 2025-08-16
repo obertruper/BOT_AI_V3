@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Прямое тестирование генерации ML сигналов
 """
@@ -79,9 +78,7 @@ async def test_ml_signals():
 
         # Генерируем сигнал
         logger.info("\n🤖 Генерация ML сигнала...")
-        signal = await signal_processor.process_realtime_signal(
-            symbol=symbol, exchange=exchange
-        )
+        signal = await signal_processor.process_realtime_signal(symbol=symbol, exchange=exchange)
 
         if signal:
             logger.info(

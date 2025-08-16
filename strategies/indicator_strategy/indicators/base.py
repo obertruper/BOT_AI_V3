@@ -6,7 +6,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import pandas as pd
 
@@ -19,7 +19,7 @@ class IndicatorConfig:
 
     name: str
     enabled: bool = True
-    params: Dict[str, Any] = None
+    params: dict[str, Any] = None
 
     def __post_init__(self):
         if self.params is None:
@@ -33,11 +33,11 @@ class IndicatorResult:
     name: str
     signal: int  # -1 (продавать), 0 (нейтрально), 1 (покупать)
     strength: float  # 0-100 сила сигнала
-    value: Union[float, Dict[str, float]]  # Значение индикатора
+    value: float | dict[str, float]  # Значение индикатора
 
     # Дополнительные данные
-    timestamp: Optional[pd.Timestamp] = None
-    metadata: Optional[Dict[str, Any]] = None
+    timestamp: pd.Timestamp | None = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
         # Валидация сигнала
@@ -51,7 +51,7 @@ class IndicatorResult:
         if self.metadata is None:
             self.metadata = {}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование в словарь"""
         result = {"signal": self.signal, "strength": self.strength, "value": self.value}
 
@@ -107,7 +107,7 @@ class IndicatorBase(ABC):
         pass
 
     @abstractmethod
-    def get_required_columns(self) -> List[str]:
+    def get_required_columns(self) -> list[str]:
         """Получение списка необходимых колонок данных"""
         pass
 
@@ -139,14 +139,12 @@ class IndicatorBase(ABC):
         # Проверка минимального количества данных
         min_periods = self.get_min_periods()
         if len(data) < min_periods:
-            logger.warning(
-                f"Insufficient data for {self.name}: {len(data)} < {min_periods}"
-            )
+            logger.warning(f"Insufficient data for {self.name}: {len(data)} < {min_periods}")
             return False
 
         return True
 
-    def safe_calculate(self, data: pd.DataFrame) -> Optional[IndicatorResult]:
+    def safe_calculate(self, data: pd.DataFrame) -> IndicatorResult | None:
         """
         Безопасный расчет индикатора с обработкой ошибок
 

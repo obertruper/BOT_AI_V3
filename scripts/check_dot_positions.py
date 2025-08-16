@@ -123,9 +123,7 @@ async def check_dot_positions():
         duplicate_signals = await AsyncPGPool.fetch(duplicate_signals_query)
 
         if duplicate_signals:
-            logger.info(
-                f"⚠️ Найдено {len(duplicate_signals)} типов дублирующих сигналов:"
-            )
+            logger.info(f"⚠️ Найдено {len(duplicate_signals)} типов дублирующих сигналов:")
             for signal in duplicate_signals:
                 logger.info(
                     f"  {signal['symbol']}: {signal['signal_type']} strength={signal['strength']} confidence={signal['confidence']} (count={signal['count']})"

@@ -11,7 +11,6 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -38,8 +37,8 @@ class IntegratedBotSystem:
     """Интегрированная система с Core и Web API"""
 
     def __init__(self):
-        self.orchestrator: Optional[SystemOrchestrator] = None
-        self.config_manager: Optional[ConfigManager] = None
+        self.orchestrator: SystemOrchestrator | None = None
+        self.config_manager: ConfigManager | None = None
         self.shutdown_event = asyncio.Event()
         self.web_server = None
         self.web_thread = None

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Монитор здоровья компонентов системы
 """
@@ -7,7 +6,7 @@
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import aiohttp
 import psutil
@@ -44,13 +43,13 @@ class HealthMonitor:
     """
 
     def __init__(self):
-        self.components: Dict[str, ComponentHealth] = {}
-        self.components_config: Dict[str, Dict[str, Any]] = {}
+        self.components: dict[str, ComponentHealth] = {}
+        self.components_config: dict[str, dict[str, Any]] = {}
         self.is_running = False
-        self._monitoring_task: Optional[asyncio.Task] = None
-        self.session: Optional[aiohttp.ClientSession] = None
+        self._monitoring_task: asyncio.Task | None = None
+        self.session: aiohttp.ClientSession | None = None
 
-    async def initialize(self, components_config: Dict[str, Dict[str, Any]]):
+    async def initialize(self, components_config: dict[str, dict[str, Any]]):
         """
         Инициализация мониторинга
 
@@ -68,11 +67,9 @@ class HealthMonitor:
         self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5))
 
         self.is_running = True
-        logger.info(
-            f"✅ HealthMonitor инициализирован для {len(self.components)} компонентов"
-        )
+        logger.info(f"✅ HealthMonitor инициализирован для {len(self.components)} компонентов")
 
-    async def check_all(self) -> Dict[str, Dict[str, Any]]:
+    async def check_all(self) -> dict[str, dict[str, Any]]:
         """
         Проверка здоровья всех компонентов
 
@@ -98,9 +95,7 @@ class HealthMonitor:
 
         return results
 
-    async def _check_component(
-        self, comp_name: str, comp_config: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _check_component(self, comp_name: str, comp_config: dict[str, Any]) -> dict[str, Any]:
         """Проверка здоровья отдельного компонента"""
         health = self.components[comp_name]
         health.last_check = datetime.now()
@@ -108,9 +103,7 @@ class HealthMonitor:
         try:
             # HTTP health check если есть endpoint
             if comp_config.get("health_check_endpoint"):
-                await self._http_health_check(
-                    health, comp_config["health_check_endpoint"]
-                )
+                await self._http_health_check(health, comp_config["health_check_endpoint"])
             else:
                 # Process-based health check
                 await self._process_health_check(health, comp_name)
@@ -143,9 +136,7 @@ class HealthMonitor:
             start_time = asyncio.get_event_loop().time()
 
             async with self.session.get(endpoint) as response:
-                health.response_time_ms = (
-                    asyncio.get_event_loop().time() - start_time
-                ) * 1000
+                health.response_time_ms = (asyncio.get_event_loop().time() - start_time) * 1000
 
                 if response.status == 200:
                     health.healthy = True
@@ -160,7 +151,7 @@ class HealthMonitor:
                                 "ok",
                                 "degraded",
                             ]
-                        if "error" in data and data["error"]:
+                        if data.get("error"):
                             health.error = data["error"]
                     except:
                         pass  # Игнорируем ошибки парсинга JSON
@@ -168,7 +159,7 @@ class HealthMonitor:
                     health.healthy = False
                     health.error = f"HTTP {response.status}"
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             health.healthy = False
             health.error = "Timeout"
             health.response_time_ms = 5000
@@ -229,7 +220,7 @@ class HealthMonitor:
         except:
             pass  # Игнорируем ошибки сбора метрик
 
-    def _health_to_dict(self, health: ComponentHealth) -> Dict[str, Any]:
+    def _health_to_dict(self, health: ComponentHealth) -> dict[str, Any]:
         """Преобразование объекта здоровья в словарь"""
         return {
             "name": health.name,
@@ -243,7 +234,7 @@ class HealthMonitor:
             "cpu_percent": round(health.cpu_percent, 2),
         }
 
-    async def get_summary(self) -> Dict[str, Any]:
+    async def get_summary(self) -> dict[str, Any]:
         """Получение сводки по здоровью системы"""
         total = len(self.components)
         healthy = sum(1 for h in self.components.values() if h.healthy)
@@ -263,8 +254,7 @@ class HealthMonitor:
             "healthy_components": healthy,
             "unhealthy_components": unhealthy,
             "components": {
-                name: self._health_to_dict(health)
-                for name, health in self.components.items()
+                name: self._health_to_dict(health) for name, health in self.components.items()
             },
         }
 

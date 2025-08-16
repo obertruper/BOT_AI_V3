@@ -9,7 +9,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import asyncpg
 import ccxt.pro as ccxt
@@ -112,7 +112,7 @@ async def create_tables(pool):
 
 async def check_existing_data(
     pool, symbol: str, exchange: str, interval_minutes: int
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Проверка существующих данных для символа"""
     async with pool.acquire() as conn:
         result = await conn.fetchrow(
@@ -143,7 +143,7 @@ async def find_data_gaps(
     interval_minutes: int,
     start_date: datetime,
     end_date: datetime,
-) -> List[Dict]:
+) -> list[dict]:
     """Поиск пропусков в данных"""
     async with pool.acquire() as conn:
         # Получаем все временные метки
@@ -178,9 +178,7 @@ async def find_data_gaps(
                     {
                         "start": prev_time,
                         "end": curr_time,
-                        "missing_candles": int(
-                            actual_delta.total_seconds() / 60 / interval_minutes
-                        )
+                        "missing_candles": int(actual_delta.total_seconds() / 60 / interval_minutes)
                         - 1,
                     }
                 )
@@ -195,7 +193,7 @@ async def load_symbol_data(
     start_date: datetime,
     end_date: datetime,
     pool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Загрузка данных для одного символа с учетом пропусков"""
     start_time = datetime.now()
     stats = {
@@ -257,9 +255,9 @@ async def load_symbol_data(
 
                 # Обновляем позицию
                 last_timestamp = candles[-1][0]
-                current_start = datetime.fromtimestamp(
-                    last_timestamp / 1000
-                ) + timedelta(minutes=interval_minutes)
+                current_start = datetime.fromtimestamp(last_timestamp / 1000) + timedelta(
+                    minutes=interval_minutes
+                )
 
                 # Небольшая задержка для rate limit
                 await asyncio.sleep(0.1)
@@ -357,7 +355,7 @@ async def load_symbol_data(
 
 async def load_symbols_batch(
     exchange,
-    symbols: List[str],
+    symbols: list[str],
     interval_minutes: int,
     start_date: datetime,
     end_date: datetime,
@@ -377,9 +375,7 @@ async def load_symbols_batch(
         # Загружаем батч параллельно
         tasks = []
         for symbol in batch:
-            task = load_symbol_data(
-                exchange, symbol, interval_minutes, start_date, end_date, pool
-            )
+            task = load_symbol_data(exchange, symbol, interval_minutes, start_date, end_date, pool)
             tasks.append(task)
 
         # Ждем завершения батча
@@ -415,9 +411,7 @@ async def main():
     start_date = end_date - timedelta(days=90)  # 3 месяца
     interval_minutes = 15  # 15-минутные свечи
 
-    logger.info(
-        f"📅 Период: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
-    )
+    logger.info(f"📅 Период: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}")
     logger.info(f"📈 Символы ({len(symbols)}): {', '.join(symbols[:5])}...")
     logger.info(f"⏱️ Интервал: {interval_minutes} минут")
 

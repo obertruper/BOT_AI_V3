@@ -91,11 +91,11 @@ trader:
     partial_take_profit:
       enabled: true
       levels:
-        - percent: 0.012   # 1.2%
+        - percent: 1.2   # 1.2%
           close_ratio: 0.20
-        - percent: 0.024   # 2.4%
+        - percent: 2.4   # 2.4%
           close_ratio: 0.30
-        - percent: 0.035   # 3.5%
+        - percent: 3.5   # 3.5%
           close_ratio: 0.30
 
   # Параметры исполнения

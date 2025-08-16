@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Скрипт исправления проблем с WebSocket соединениями
 Автоматически исправляет проблемы с WebSocket, которые вызывают 499 ошибки
@@ -11,7 +10,6 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import List
 
 # Добавляем корень проекта в путь
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -47,7 +45,7 @@ class WebSocketConnectionFixer:
         print(f"   📄 Анализ: {file_path}")
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             issues = []
@@ -78,7 +76,7 @@ class WebSocketConnectionFixer:
         except Exception as e:
             print(f"      ❌ Ошибка анализа: {e}")
 
-    def _check_timeout_issues(self, content: str) -> List[str]:
+    def _check_timeout_issues(self, content: str) -> list[str]:
         """Проверка проблем с таймаутами"""
         issues = []
 
@@ -108,15 +106,13 @@ class WebSocketConnectionFixer:
                             f"Слишком короткий reconnect_delay: {value}s (рекомендуется >= 5s)"
                         )
                     elif "timeout" in pattern and value < 30:
-                        issues.append(
-                            f"Слишком короткий timeout: {value}s (рекомендуется >= 30s)"
-                        )
+                        issues.append(f"Слишком короткий timeout: {value}s (рекомендуется >= 30s)")
                 except ValueError:
                     pass
 
         return issues
 
-    def _check_error_handling(self, content: str) -> List[str]:
+    def _check_error_handling(self, content: str) -> list[str]:
         """Проверка обработки ошибок"""
         issues = []
 
@@ -134,7 +130,7 @@ class WebSocketConnectionFixer:
 
         return issues
 
-    def _check_reconnection_issues(self, content: str) -> List[str]:
+    def _check_reconnection_issues(self, content: str) -> list[str]:
         """Проверка проблем с переподключениями"""
         issues = []
 
@@ -358,9 +354,7 @@ async def _schedule_reconnect(self):
         }
 
         # Сохраняем отчет
-        report_file = (
-            f"logs/websocket_fix_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        )
+        report_file = f"logs/websocket_fix_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False, default=str)
 

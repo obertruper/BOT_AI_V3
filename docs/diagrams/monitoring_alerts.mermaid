@@ -1,0 +1,94 @@
+flowchart LR
+    subgraph "Компоненты системы"
+        MLM[ML Manager]
+        TE[Trading Engine]
+        OM[Order Manager]
+        EE[Execution Engine]
+    end
+
+    subgraph "Process Monitor"
+        HB[Heartbeat<br/>Receiver]
+        MC[Metrics<br/>Collector]
+        AR[Alert<br/>Rules]
+        AE[Alert<br/>Engine]
+    end
+
+    subgraph "Метрики"
+        CPU[CPU Usage]
+        MEM[Memory Usage]
+        ERR[Error Rate]
+        LAT[Latency]
+        TPS[Tasks/sec]
+    end
+
+    subgraph "Правила алертов"
+        R1[Heartbeat Timeout<br/>> 120s]
+        R2[High Error Rate<br/>> 10/min]
+        R3[Memory Usage<br/>> 90%]
+        R4[CPU Usage<br/>> 80%]
+        R5[Component Down]
+    end
+
+    subgraph "Действия"
+        LOG[Логирование]
+        EMAIL[Email Alert]
+        TG[Telegram Alert]
+        REST[Restart Component]
+        ESC[Escalation]
+    end
+
+    %% Heartbeat поток
+    MLM -->|heartbeat| HB
+    TE -->|heartbeat| HB
+    OM -->|heartbeat| HB
+    EE -->|heartbeat| HB
+
+    %% Сбор метрик
+    MLM -->|metrics| MC
+    TE -->|metrics| MC
+    MC --> CPU
+    MC --> MEM
+    MC --> ERR
+    MC --> LAT
+    MC --> TPS
+
+    %% Проверка правил
+    HB --> R1
+    ERR --> R2
+    MEM --> R3
+    CPU --> R4
+    HB --> R5
+
+    %% Правила к движку алертов
+    R1 --> AR
+    R2 --> AR
+    R3 --> AR
+    R4 --> AR
+    R5 --> AR
+
+    AR --> AE
+
+    %% Действия по алертам
+    AE -->|всегда| LOG
+    AE -->|warning| EMAIL
+    AE -->|critical| TG
+    AE -->|critical| REST
+    AE -->|multiple| ESC
+
+    %% Стили
+    style HB fill:#4CAF50
+    style MC fill:#2196F3
+    style AR fill:#FF9800
+    style AE fill:#F44336
+
+    style R1 fill:#FFE0B2
+    style R2 fill:#FFE0B2
+    style R3 fill:#FFE0B2
+    style R4 fill:#FFE0B2
+    style R5 fill:#FFCDD2
+
+    style LOG fill:#E0E0E0
+    style EMAIL fill:#FFF9C4
+    style TG fill:#BBDEFB
+    style REST fill:#FFCCBC
+    style ESC fill:#F8BBD0

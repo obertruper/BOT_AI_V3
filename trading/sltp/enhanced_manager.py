@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Enhanced SL/TP Manager для BOT Trading v3
 
@@ -8,7 +7,7 @@ Enhanced SL/TP Manager для BOT Trading v3
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
@@ -16,9 +15,28 @@ from database.models import Order
 from database.models.signal import Signal
 from exchanges.base.models import Position
 
+# Импортируем утилиты из нового модуля
+try:
+    from .utils import calculate_pnl_percentage, normalize_percentage, round_price, round_qty
+except ImportError:
+    # Fallback если модуль utils еще не импортирован
+    def round_qty(symbol: str, qty: float) -> float:
+        """Округляет количество согласно правилам символа"""
+        return round(qty, 3)
+
+    def round_price(symbol: str, price: float) -> float:
+        """Округляет цену согласно правилам символа"""
+        return round(price, 4)
+
+    def normalize_percentage(value: float) -> float:
+        """Нормализация процентов"""
+        if value < 0.1:
+            return value * 100
+        return value
+
 
 # Добавим недостающие функции из V2
-def get_last_price(symbol: str) -> Optional[float]:
+def get_last_price(symbol: str) -> float | None:
     """Получает последнюю цену для символа"""
     try:
         # Заглушка - в реальной системе будет запрос к бирже
@@ -27,26 +45,6 @@ def get_last_price(symbol: str) -> Optional[float]:
     except Exception as e:
         logger.error(f"Ошибка получения цены для {symbol}: {e}")
         return None
-
-
-def round_qty(symbol: str, qty: float) -> float:
-    """Округляет количество согласно правилам символа"""
-    try:
-        # Заглушка - в реальной системе будет получение настроек из exchanges
-
-        # Временное решение - округляем до 3 знаков
-        return round(qty, 3)
-    except Exception:
-        return round(qty, 3)
-
-
-def round_price(symbol: str, price: float) -> float:
-    """Округляет цену согласно правилам символа"""
-    try:
-        # Заглушка - в реальной системе будет получение настроек из exchanges
-        return round(price, 4)
-    except Exception:
-        return round(price, 4)
 
 
 from .models import (
@@ -132,10 +130,10 @@ class EnhancedSLTPManager:
         self.config = self._load_config()
 
         # Кэш активных SL/TP ордеров
-        self._active_orders: Dict[str, List[SLTPOrder]] = {}
+        self._active_orders: dict[str, list[SLTPOrder]] = {}
 
         # История изменений
-        self._history: List[SLTPHistory] = []
+        self._history: list[SLTPHistory] = []
 
         logger.info("Успешно инициализирован EnhancedSLTPManager")
 
@@ -166,19 +164,17 @@ class EnhancedSLTPManager:
         partial_tp_settings = sltp_settings.get("partial_take_profit", {})
         if partial_tp_settings.get("enabled", False):
             config.partial_tp_enabled = True
-            config.partial_tp_update_sl = partial_tp_settings.get(
-                "update_sl_after_partial", True
-            )
+            config.partial_tp_update_sl = partial_tp_settings.get("update_sl_after_partial", True)
             levels = partial_tp_settings.get("levels", [])
             for i, level_data in enumerate(levels):
                 level = PartialTPLevel(
                     level=i + 1,
                     price=0,  # Будет рассчитано позже
                     quantity=0,  # Будет рассчитано позже
-                    percentage=level_data.get(
-                        "percent", 0
-                    ),  # Используем percent как в конфиге
+                    percentage=level_data.get("percent", 0),  # Используем percent как в конфиге
                 )
+                # Нормализуем проценты (конвертируем 0.012 в 1.2)
+                level.percentage = normalize_percentage(level.percentage)
                 # Добавляем close_ratio для совместимости с V2
                 level.close_ratio = level_data.get("close_ratio", 0)
                 config.partial_tp_levels.append(level)
@@ -193,12 +189,8 @@ class EnhancedSLTPManager:
             config.profit_protection.breakeven_offset = profit_protection.get(
                 "breakeven_offset", 0.2
             )
-            config.profit_protection.lock_percent = profit_protection.get(
-                "lock_percent", []
-            )
-            config.profit_protection.max_updates = profit_protection.get(
-                "max_updates", 5
-            )
+            config.profit_protection.lock_percent = profit_protection.get("lock_percent", [])
+            config.profit_protection.max_updates = profit_protection.get("max_updates", 5)
 
         # Волатильность
         volatility = sltp_settings.get("volatility_adjustment", {})
@@ -211,9 +203,9 @@ class EnhancedSLTPManager:
     async def create_sltp_orders(
         self,
         position,  # Union[Position, TradingPosition, любой объект с атрибутами позиции]
-        signal: Optional[Signal] = None,
-        custom_config: Optional[SLTPConfig] = None,
-    ) -> List[SLTPOrder]:
+        signal: Signal | None = None,
+        custom_config: SLTPConfig | None = None,
+    ) -> list[SLTPOrder]:
         """
         Создает SL/TP ордера для позиции.
 
@@ -244,11 +236,7 @@ class EnhancedSLTPManager:
                 if sl_order:
                     orders.append(sl_order)
 
-            if (
-                config.take_profit
-                and config.take_profit > 0
-                and not config.partial_tp_enabled
-            ):
+            if config.take_profit and config.take_profit > 0 and not config.partial_tp_enabled:
                 # Проверяем, передана ли абсолютная цена или процент
                 if config.take_profit > 1:  # Вероятно абсолютная цена
                     tp_price = config.take_profit
@@ -256,9 +244,7 @@ class EnhancedSLTPManager:
                     tp_price = self._calculate_tp_price(
                         position.entry_price, position.side, config.take_profit * 100
                     )
-                tp_order = await self._create_take_profit_order(
-                    position, tp_price, position.size
-                )
+                tp_order = await self._create_take_profit_order(position, tp_price, position.size)
                 if tp_order:
                     orders.append(tp_order)
 
@@ -282,18 +268,14 @@ class EnhancedSLTPManager:
                     reason="Initial SL/TP setup",
                 )
 
-            logger.info(
-                f"Создано {len(orders)} SL/TP ордеров для позиции {position.id}"
-            )
+            logger.info(f"Создано {len(orders)} SL/TP ордеров для позиции {position.id}")
 
         except Exception as e:
             logger.error(f"Ошибка создания SL/TP ордеров: {e}")
 
         return orders
 
-    async def update_trailing_stop(
-        self, position, current_price: float
-    ) -> Optional[SLTPOrder]:
+    async def update_trailing_stop(self, position, current_price: float) -> SLTPOrder | None:
         """
         Обновляет трейлинг стоп.
 
@@ -350,9 +332,7 @@ class EnhancedSLTPManager:
 
         return None
 
-    async def update_profit_protection(
-        self, position, current_price: float
-    ) -> Optional[SLTPOrder]:
+    async def update_profit_protection(self, position, current_price: float) -> SLTPOrder | None:
         """
         Обновляет защиту прибыли.
 
@@ -391,29 +371,20 @@ class EnhancedSLTPManager:
                 lock = level["lock"]
 
                 if profit_pct >= trigger:
-                    logger.info(
-                        f"Активирован уровень защиты: {trigger}% -> фиксация {lock}%"
-                    )
+                    logger.info(f"Активирован уровень защиты: {trigger}% -> фиксация {lock}%")
 
                     # Рассчитываем новый SL на основе уровня фиксации
                     if position.side.upper() in ["BUY", "LONG"]:
-                        lock_amount = (current_price - position.entry_price) * (
-                            lock / profit_pct
-                        )
+                        lock_amount = (current_price - position.entry_price) * (lock / profit_pct)
                         new_sl = position.entry_price + lock_amount
                     else:  # SELL/SHORT
-                        lock_amount = (position.entry_price - current_price) * (
-                            lock / profit_pct
-                        )
+                        lock_amount = (position.entry_price - current_price) * (lock / profit_pct)
                         new_sl = position.entry_price - lock_amount
 
                     break
 
         # Проверяем условие безубытка, если не нашли уровень защиты
-        if (
-            new_sl is None
-            and profit_pct >= self.config.profit_protection.breakeven_percent
-        ):
+        if new_sl is None and profit_pct >= self.config.profit_protection.breakeven_percent:
             logger.info(f"Активирован безубыток (профит: {profit_pct:.2f}%)")
 
             offset = self.config.profit_protection.breakeven_offset / 100.0
@@ -427,17 +398,13 @@ class EnhancedSLTPManager:
             return None
 
         # Округляем цену защиты
-        protection_price = round(
-            new_sl, 6
-        )  # Временно, потом заменим на правильное округление
+        protection_price = round(new_sl, 6)  # Временно, потом заменим на правильное округление
 
         # Проверяем, улучшает ли новый SL текущий
         if current_sl and self._is_better_stop_loss(
             current_sl_price, protection_price, position.side
         ):
-            updated_order = await self._update_stop_loss_order(
-                current_sl, protection_price
-            )
+            updated_order = await self._update_stop_loss_order(current_sl, protection_price)
 
             if updated_order:
                 self._add_history(
@@ -453,9 +420,7 @@ class EnhancedSLTPManager:
 
         return None
 
-    async def check_partial_tp(
-        self, position, current_price: Optional[float] = None
-    ) -> bool:
+    async def check_partial_tp(self, position, current_price: float | None = None) -> bool:
         """
         Проверяет и выполняет частичное закрытие позиции при достижении уровней TP.
 
@@ -496,13 +461,12 @@ class EnhancedSLTPManager:
             for order in sltp_order:
                 if hasattr(order, "extra_data") and order.extra_data:
                     executed = order.extra_data.get("partial_tp_executed", [])
-                    executed_levels.extend(
-                        [level.get("percent", 0) for level in executed]
-                    )
+                    executed_levels.extend([level.get("percent", 0) for level in executed])
 
             # Проверяем каждый уровень частичного TP
             for level_config in self.config.partial_tp_levels:
-                level_percent = level_config.percentage  # percent из конфига
+                # Нормализуем процент на случай если в конфиге указано как доля (0.01 = 1%)
+                level_percent = normalize_percentage(level_config.percentage)
 
                 # Проверяем, не был ли уровень уже выполнен
                 if level_percent in executed_levels:
@@ -550,9 +514,7 @@ class EnhancedSLTPManager:
                                     "order_type": "Market",
                                     "qty": close_qty,
                                     "reduce_only": True,
-                                    "position_idx": self._get_position_idx(
-                                        position.side
-                                    ),
+                                    "position_idx": self._get_position_idx(position.side),
                                 }
                             )
 
@@ -581,6 +543,21 @@ class EnhancedSLTPManager:
                                 if self.config.partial_tp_update_sl:
                                     await self._update_sl_after_partial_tp(position)
 
+                                # Сохраняем информацию о выполненном уровне
+                                for order in self._active_orders.get(position.id, []):
+                                    if not hasattr(order, "extra_data"):
+                                        order.extra_data = {}
+                                    if "partial_tp_executed" not in order.extra_data:
+                                        order.extra_data["partial_tp_executed"] = []
+                                    order.extra_data["partial_tp_executed"].append(
+                                        {
+                                            "percent": level_percent,
+                                            "qty": close_qty,
+                                            "price": current_price,
+                                            "timestamp": datetime.now().isoformat(),
+                                        }
+                                    )
+
                                 return True
                             else:
                                 # Обновляем историю с ошибкой
@@ -607,10 +584,15 @@ class EnhancedSLTPManager:
         position = PositionAdapter(position)
 
         try:
+            # Проверяем наличие exchange_client
+            if not self.exchange_client:
+                logger.warning("Нет exchange_client для обновления SL")
+                return False
+
             # Устанавливаем SL в безубыток с небольшим смещением
             offset = 0.001  # 0.1%
 
-            if position.side == "Buy":
+            if position.side.upper() in ["BUY", "LONG"]:
                 new_sl = position.entry_price * (1 + offset)
             else:
                 new_sl = position.entry_price * (1 - offset)
@@ -618,9 +600,22 @@ class EnhancedSLTPManager:
             # Округляем цену с помощью локальной функции
             new_sl = round_price(position.symbol, new_sl)
 
-            # Обновляем SL
-            response = await self.exchange_client.set_stop_loss(
-                position.symbol, new_sl, position.size
+            # Обновляем SL через создание ордера стоп-лосс
+            # Определяем position_idx
+            position_idx = self._get_position_idx(position.side)
+
+            response = await self.exchange_client.create_order(
+                {
+                    "symbol": position.symbol,
+                    "side": "Sell" if position.side.upper() in ["BUY", "LONG"] else "Buy",
+                    "order_type": "Market",
+                    "qty": position.size,  # Используем оставшееся количество
+                    "trigger_price": new_sl,
+                    "trigger_by": "LastPrice",
+                    "order_link_id": f"SL_{position.symbol}_{datetime.now().timestamp()}",
+                    "position_idx": position_idx,
+                    "reduce_only": True,
+                }
             )
 
             if response.success:
@@ -641,7 +636,7 @@ class EnhancedSLTPManager:
 
     async def process_partial_tp_fill(
         self, position, filled_order: Order
-    ) -> Optional[List[SLTPOrder]]:
+    ) -> list[SLTPOrder] | None:
         """
         Обрабатывает частичное закрытие TP.
 
@@ -674,9 +669,7 @@ class EnhancedSLTPManager:
             # Обновляем SL для оставшейся позиции
             current_sl = self._get_active_stop_loss(position.id)
             if current_sl:
-                updated_sl = await self._update_sl_quantity(
-                    current_sl, remaining_quantity
-                )
+                updated_sl = await self._update_sl_quantity(current_sl, remaining_quantity)
                 if updated_sl:
                     updated_orders.append(updated_sl)
 
@@ -686,9 +679,7 @@ class EnhancedSLTPManager:
                 if not level.filled and level.order_id:
                     tp_order = self._get_order_by_id(level.order_id)
                     if tp_order:
-                        updated_tp = await self._update_tp_quantity(
-                            tp_order, remaining_quantity
-                        )
+                        updated_tp = await self._update_tp_quantity(tp_order, remaining_quantity)
                         if updated_tp:
                             updated_orders.append(updated_tp)
 
@@ -715,10 +706,10 @@ class EnhancedSLTPManager:
         symbol: str,
         side: str,
         entry_price: float,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-        trade_qty: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        trade_qty: float | None = None,
+    ) -> dict[str, Any]:
         """
         Регистрирует SL/TP ордера для сделки (совместимость с V2).
 
@@ -774,12 +765,12 @@ class EnhancedSLTPManager:
             logger.error(f"[register_sltp_orders] => Ошибка: {e}")
             return {
                 "success": False,
-                "message": f"Ошибка: {str(e)}",
+                "message": f"Ошибка: {e!s}",
                 "sl_order_id": None,
                 "tp_order_id": None,
             }
 
-    async def check_and_fix_sltp(self, trade_id: str) -> Dict[str, Any]:
+    async def check_and_fix_sltp(self, trade_id: str) -> dict[str, Any]:
         """
         Проверяет и исправляет SL/TP ордера для сделки (совместимость с V2).
 
@@ -816,7 +807,7 @@ class EnhancedSLTPManager:
 
         except Exception as e:
             logger.error(f"[check_and_fix_sltp] => Ошибка: {e}")
-            return {"success": False, "message": f"Ошибка: {str(e)}", "fixed": False}
+            return {"success": False, "message": f"Ошибка: {e!s}", "fixed": False}
 
     async def cancel_all_orders(self, position_id: str) -> bool:
         """
@@ -856,18 +847,14 @@ class EnhancedSLTPManager:
 
     # Вспомогательные методы
 
-    def _calculate_sl_price(
-        self, entry_price: float, side: str, sl_percent: float
-    ) -> float:
+    def _calculate_sl_price(self, entry_price: float, side: str, sl_percent: float) -> float:
         """Рассчитывает цену стоп-лосс"""
         if side.upper() in ["BUY", "LONG"]:
             return entry_price * (1 - sl_percent / 100)
         else:
             return entry_price * (1 + sl_percent / 100)
 
-    def _calculate_tp_price(
-        self, entry_price: float, side: str, tp_percent: float
-    ) -> float:
+    def _calculate_tp_price(self, entry_price: float, side: str, tp_percent: float) -> float:
         """Рассчитывает цену тейк-профит"""
         if side.upper() in ["BUY", "LONG"]:
             return entry_price * (1 + tp_percent / 100)
@@ -918,7 +905,7 @@ class EnhancedSLTPManager:
         else:
             return new_sl < current_sl
 
-    def _get_active_stop_loss(self, position_id: str) -> Optional[SLTPOrder]:
+    def _get_active_stop_loss(self, position_id: str) -> SLTPOrder | None:
         """Получает активный SL ордер"""
         orders = self._active_orders.get(position_id, [])
         for order in orders:
@@ -929,7 +916,7 @@ class EnhancedSLTPManager:
                 return order
         return None
 
-    def _get_order_by_id(self, order_id: str) -> Optional[SLTPOrder]:
+    def _get_order_by_id(self, order_id: str) -> SLTPOrder | None:
         """Получает ордер по ID"""
         for orders in self._active_orders.values():
             for order in orders:
@@ -942,9 +929,9 @@ class EnhancedSLTPManager:
         position_id: str,
         action: str,
         order_type: str,
-        old_price: Optional[float] = None,
-        new_price: Optional[float] = None,
-        reason: Optional[str] = None,
+        old_price: float | None = None,
+        new_price: float | None = None,
+        reason: str | None = None,
     ):
         """Добавляет запись в историю"""
         history = SLTPHistory(
@@ -964,9 +951,7 @@ class EnhancedSLTPManager:
 
     # Методы для работы с биржей
 
-    async def _create_stop_loss_order(
-        self, position, sl_price: float
-    ) -> Optional[SLTPOrder]:
+    async def _create_stop_loss_order(self, position, sl_price: float) -> SLTPOrder | None:
         """Создает SL ордер на бирже"""
         position = PositionAdapter(position)
 
@@ -1000,7 +985,7 @@ class EnhancedSLTPManager:
 
     async def _create_take_profit_order(
         self, position, tp_price: float, quantity: float
-    ) -> Optional[SLTPOrder]:
+    ) -> SLTPOrder | None:
         """Создает TP ордер на бирже"""
         position = PositionAdapter(position)
 
@@ -1033,8 +1018,8 @@ class EnhancedSLTPManager:
         return None
 
     async def _create_partial_tp_orders(
-        self, position, levels: List[PartialTPLevel]
-    ) -> List[SLTPOrder]:
+        self, position, levels: list[PartialTPLevel]
+    ) -> list[SLTPOrder]:
         """Создает частичные TP ордера"""
         position = PositionAdapter(position)
         orders = []
@@ -1046,14 +1031,10 @@ class EnhancedSLTPManager:
 
             # Рассчитываем цену TP
             tp_percent = self.config.take_profit * (level.level * 0.3 + 0.7)
-            level.price = self._calculate_tp_price(
-                position.entry_price, position.side, tp_percent
-            )
+            level.price = self._calculate_tp_price(position.entry_price, position.side, tp_percent)
 
             # Создаем ордер
-            order = await self._create_take_profit_order(
-                position, level.price, level.quantity
-            )
+            order = await self._create_take_profit_order(position, level.price, level.quantity)
 
             if order:
                 order.level = level.level
@@ -1062,9 +1043,7 @@ class EnhancedSLTPManager:
 
         return orders
 
-    async def _update_stop_loss_order(
-        self, order: SLTPOrder, new_price: float
-    ) -> Optional[SLTPOrder]:
+    async def _update_stop_loss_order(self, order: SLTPOrder, new_price: float) -> SLTPOrder | None:
         """Обновляет SL ордер"""
         if not self.exchange_client:
             return None
@@ -1102,17 +1081,13 @@ class EnhancedSLTPManager:
             logger.error(f"Ошибка обновления SL: {e}")
             return None
 
-    async def _update_sl_quantity(
-        self, order: SLTPOrder, new_quantity: float
-    ) -> Optional[SLTPOrder]:
+    async def _update_sl_quantity(self, order: SLTPOrder, new_quantity: float) -> SLTPOrder | None:
         """Обновляет количество в SL ордере"""
         # Аналогично _update_stop_loss_order, но с той же ценой
         order.quantity = new_quantity
         return await self._update_stop_loss_order(order, order.trigger_price)
 
-    async def _update_tp_quantity(
-        self, order: SLTPOrder, new_quantity: float
-    ) -> Optional[SLTPOrder]:
+    async def _update_tp_quantity(self, order: SLTPOrder, new_quantity: float) -> SLTPOrder | None:
         """Обновляет количество в TP ордере"""
         # Пересчитываем количество для уровня
         if order.level:
@@ -1158,24 +1133,20 @@ class EnhancedSLTPManager:
             logger.error(f"Ошибка отмены ордера: {e}")
             return False
 
-    def get_history(self, position_id: Optional[str] = None) -> List[SLTPHistory]:
+    def get_history(self, position_id: str | None = None) -> list[SLTPHistory]:
         """Получает историю изменений"""
         if position_id:
             return [h for h in self._history if h.position_id == position_id]
         return self._history.copy()
 
-    def get_active_orders(
-        self, position_id: Optional[str] = None
-    ) -> Dict[str, List[SLTPOrder]]:
+    def get_active_orders(self, position_id: str | None = None) -> dict[str, list[SLTPOrder]]:
         """Получает активные ордера"""
         if position_id:
             return {position_id: self._active_orders.get(position_id, [])}
         return self._active_orders.copy()
 
     # Методы для работы с partial_tp_history
-    def _create_partial_tp_history(
-        self, history_entry: Dict[str, Any]
-    ) -> Optional[int]:
+    def _create_partial_tp_history(self, history_entry: dict[str, Any]) -> int | None:
         """Создает запись в таблице partial_tp_history"""
         try:
             # Пока что заглушка - в реальной системе будет работать с БД
@@ -1186,7 +1157,7 @@ class EnhancedSLTPManager:
             logger.error(f"Ошибка создания записи partial_tp_history: {e}")
             return None
 
-    def _update_partial_tp_history(self, history_entry: Dict[str, Any]) -> bool:
+    def _update_partial_tp_history(self, history_entry: dict[str, Any]) -> bool:
         """Обновляет запись в таблице partial_tp_history"""
         try:
             # Пока что заглушка - в реальной системе будет работать с БД

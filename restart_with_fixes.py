@@ -32,9 +32,7 @@ async def main():
 
     # 1. Проверяем что процессы остановлены
     print("\n🛑 Проверяем что старые процессы остановлены...")
-    result = os.system(
-        "ps aux | grep -E 'python.*(unified_launcher|main\.py)' | grep -v grep"
-    )
+    result = os.system(r"ps aux | grep -E 'python.*(unified_launcher|main\.py)' | grep -v grep")
     if result == 0:
         print("⚠️ Обнаружены работающие процессы, останавливаем...")
         os.system("pkill -f 'python.*unified_launcher' 2>/dev/null")
@@ -112,9 +110,7 @@ async def main():
 
         # Проверяем что NEUTRAL сигналы есть
         if "neutral" in type_dist:
-            print(
-                f"\n✅ NEUTRAL сигналы генерируются корректно: {type_dist['neutral']} шт"
-            )
+            print(f"\n✅ NEUTRAL сигналы генерируются корректно: {type_dist['neutral']} шт")
 
         print("\n📝 Последние сигналы:")
         for sig in signals[:5]:
@@ -145,9 +141,7 @@ async def main():
     print("✅ Перезапуск завершен")
     print("\n📊 Команды для мониторинга:")
     print("  # Следить за сигналами:")
-    print(
-        "  tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep -E 'NEUTRAL|signal'"
-    )
+    print("  tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep -E 'NEUTRAL|signal'")
     print("\n  # Проверить статус:")
     print("  python3 unified_launcher.py --status")
     print("\n  # Мониторинг ML сигналов:")

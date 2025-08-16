@@ -3,8 +3,9 @@
 """
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 import pandas as pd
 
@@ -51,7 +52,7 @@ class SmartDataManager:
 
         # Состояние
         self.is_running = False
-        self.update_task: Optional[asyncio.Task] = None
+        self.update_task: asyncio.Task | None = None
         self.exchanges = {}
         self.websocket_connections = {}
 
@@ -72,14 +73,12 @@ class SmartDataManager:
         )
 
         # Время последнего сохранения в БД для каждого символа
-        self._last_db_save: Dict[str, datetime] = {}
+        self._last_db_save: dict[str, datetime] = {}
 
         # Колбэки для обновлений
-        self._update_callbacks: List[Callable] = []
+        self._update_callbacks: list[Callable] = []
 
-        logger.info(
-            f"SmartDataManager инициализирован для {len(self.trading_pairs)} пар"
-        )
+        logger.info(f"SmartDataManager инициализирован для {len(self.trading_pairs)} пар")
 
     async def start(self) -> None:
         """Запуск умного менеджера данных"""
@@ -213,13 +212,10 @@ class SmartDataManager:
             # 1. Пробуем загрузить из БД
             db_data = await self._load_from_database(symbol)
 
-            if (
-                db_data is not None
-                and len(db_data) >= self.data_config["min_candles_for_ml"]
-            ):
+            if db_data is not None and len(db_data) >= self.data_config["min_candles_for_ml"]:
                 # Проверяем актуальность
                 last_time = db_data.index[-1]
-                age = (datetime.now(timezone.utc) - last_time).total_seconds() / 3600
+                age = (datetime.now(UTC) - last_time).total_seconds() / 3600
 
                 if age < 1:  # Данные свежие (менее часа)
                     await self.cache.update_data(symbol, db_data, is_complete=True)
@@ -235,7 +231,7 @@ class SmartDataManager:
             logger.error(f"Ошибка загрузки {symbol}: {e}")
             raise
 
-    async def _load_from_database(self, symbol: str) -> Optional[pd.DataFrame]:
+    async def _load_from_database(self, symbol: str) -> pd.DataFrame | None:
         """Загрузка данных из БД"""
         try:
             result = await AsyncPGPool.fetch(
@@ -399,9 +395,7 @@ class SmartDataManager:
                     "close": float(last_candle.close_price),
                     "volume": float(last_candle.volume),
                     "turnover": (
-                        float(last_candle.turnover)
-                        if hasattr(last_candle, "turnover")
-                        else 0
+                        float(last_candle.turnover) if hasattr(last_candle, "turnover") else 0
                     ),
                 }
 
@@ -415,18 +409,18 @@ class SmartDataManager:
             logger.error(f"Ошибка обновления последней свечи {symbol}: {e}")
 
     async def _check_and_save_completed_candle(
-        self, symbol: str, candle_data: Dict[str, Any]
+        self, symbol: str, candle_data: dict[str, Any]
     ) -> None:
         """
         Проверка и сохранение завершенной свечи в БД
         """
         try:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
             candle_time = candle_data["timestamp"].to_pydatetime()
 
             # Убеждаемся что candle_time также в UTC timezone для сравнения
             if candle_time.tzinfo is None:
-                candle_time = candle_time.replace(tzinfo=timezone.utc)
+                candle_time = candle_time.replace(tzinfo=UTC)
 
             # Проверяем, прошло ли 15 минут с начала свечи
             if (current_time - candle_time).total_seconds() >= 900:
@@ -442,9 +436,7 @@ class SmartDataManager:
         except Exception as e:
             logger.error(f"Ошибка сохранения завершенной свечи {symbol}: {e}")
 
-    async def _save_single_candle(
-        self, symbol: str, candle_data: Dict[str, Any]
-    ) -> None:
+    async def _save_single_candle(self, symbol: str, candle_data: dict[str, Any]) -> None:
         """Сохранение одной свечи в БД"""
         try:
             timestamp = int(candle_data["timestamp"].timestamp() * 1000)
@@ -480,7 +472,7 @@ class SmartDataManager:
         except Exception as e:
             logger.error(f"Ошибка сохранения свечи {symbol}: {e}")
 
-    async def _save_candles_to_db(self, symbol: str, candles: List[Any]) -> None:
+    async def _save_candles_to_db(self, symbol: str, candles: list[Any]) -> None:
         """Сохранение списка свечей в БД"""
         for candle in candles:
             try:
@@ -507,9 +499,7 @@ class SmartDataManager:
                         "low": float(candle.low_price),
                         "close": float(candle.close_price),
                         "volume": float(candle.volume),
-                        "turnover": float(candle.turnover)
-                        if hasattr(candle, "turnover")
-                        else 0,
+                        "turnover": float(candle.turnover) if hasattr(candle, "turnover") else 0,
                     }
 
                 if candle_data:
@@ -517,7 +507,7 @@ class SmartDataManager:
             except Exception as e:
                 logger.error(f"Ошибка сохранения свечи: {e}")
 
-    def _candles_to_dataframe(self, candles: List[Any]) -> pd.DataFrame:
+    def _candles_to_dataframe(self, candles: list[Any]) -> pd.DataFrame:
         """Преобразование свечей в DataFrame"""
         data = []
         for candle in candles:
@@ -546,9 +536,7 @@ class SmartDataManager:
                         "low": float(candle.low_price),
                         "close": float(candle.close_price),
                         "volume": float(candle.volume),
-                        "turnover": float(candle.turnover)
-                        if hasattr(candle, "turnover")
-                        else 0,
+                        "turnover": float(candle.turnover) if hasattr(candle, "turnover") else 0,
                     }
                 )
 
@@ -559,9 +547,7 @@ class SmartDataManager:
 
         return df
 
-    async def get_data(
-        self, symbol: str, required_candles: int = 96
-    ) -> Optional[pd.DataFrame]:
+    async def get_data(self, symbol: str, required_candles: int = 96) -> pd.DataFrame | None:
         """
         Получить данные для символа (из кеша)
 
@@ -578,6 +564,6 @@ class SmartDataManager:
         """Регистрация callback для уведомления об обновлениях"""
         self._update_callbacks.append(callback)
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Получить статистику кеша"""
         return self.cache.get_stats()

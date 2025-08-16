@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Web Testing Agent с MCP Puppeteer
 
@@ -11,7 +10,7 @@ import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Этот скрипт предназначен для запуска через Claude Code
 # который имеет доступ к MCP Puppeteer серверу
@@ -28,7 +27,7 @@ class WebTestingAgentMCP:
     def __init__(self):
         self.base_url = "http://localhost:5173"
         self.api_url = "http://localhost:8080"
-        self.test_results: List[Dict[str, Any]] = []
+        self.test_results: list[dict[str, Any]] = []
         self.screenshots_dir = Path("test_results/screenshots")
         self.screenshots_dir.mkdir(parents=True, exist_ok=True)
 
@@ -37,7 +36,7 @@ class WebTestingAgentMCP:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{timestamp}] [{level}] {message}")
 
-    async def test_dashboard_load(self) -> Dict[str, Any]:
+    async def test_dashboard_load(self) -> dict[str, Any]:
         """Тест загрузки dashboard"""
         self.log("🔍 Тестирование загрузки Dashboard...")
 
@@ -69,7 +68,7 @@ class WebTestingAgentMCP:
         self.test_results.append(result)
         return result
 
-    async def test_trader_cards(self) -> Dict[str, Any]:
+    async def test_trader_cards(self) -> dict[str, Any]:
         """Тест карточек трейдеров"""
         self.log("🔍 Проверка карточек трейдеров...")
 
@@ -106,7 +105,7 @@ class WebTestingAgentMCP:
         self.test_results.append(result)
         return result
 
-    async def test_click_trader(self) -> Dict[str, Any]:
+    async def test_click_trader(self) -> dict[str, Any]:
         """Тест клика по трейдеру"""
         self.log("🔍 Тестирование клика по трейдеру...")
 
@@ -151,7 +150,7 @@ class WebTestingAgentMCP:
         self.test_results.append(result)
         return result
 
-    async def test_form_interaction(self) -> Dict[str, Any]:
+    async def test_form_interaction(self) -> dict[str, Any]:
         """Тест взаимодействия с формами"""
         self.log("🔍 Тестирование форм...")
 
@@ -191,7 +190,7 @@ class WebTestingAgentMCP:
         self.test_results.append(result)
         return result
 
-    async def test_responsive_views(self) -> Dict[str, Any]:
+    async def test_responsive_views(self) -> dict[str, Any]:
         """Тест адаптивности"""
         self.log("🔍 Тестирование адаптивности...")
 
@@ -248,7 +247,7 @@ class WebTestingAgentMCP:
         self.test_results.append(result)
         return result
 
-    async def test_api_calls(self) -> Dict[str, Any]:
+    async def test_api_calls(self) -> dict[str, Any]:
         """Тест API вызовов из интерфейса"""
         self.log("🔍 Проверка API вызовов...")
 

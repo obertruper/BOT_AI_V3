@@ -151,19 +151,13 @@ async def test_ml_pipeline():
 
                         print("📊 Голосование по таймфреймам:")
                         print(f"   LONG: {long_count}/4 ({long_count / 4 * 100:.1f}%)")
-                        print(
-                            f"   SHORT: {short_count}/4 ({short_count / 4 * 100:.1f}%)"
-                        )
-                        print(
-                            f"   NEUTRAL: {neutral_count}/4 ({neutral_count / 4 * 100:.1f}%)"
-                        )
+                        print(f"   SHORT: {short_count}/4 ({short_count / 4 * 100:.1f}%)")
+                        print(f"   NEUTRAL: {neutral_count}/4 ({neutral_count / 4 * 100:.1f}%)")
 
                         if neutral_count >= 3:
                             print("❌ Проблема: 3+ таймфреймов предсказывают NEUTRAL")
                         elif long_count < 3 and short_count < 3:
-                            print(
-                                "❌ Проблема: Нет явного большинства (нужно 3+ голосов)"
-                            )
+                            print("❌ Проблема: Нет явного большинства (нужно 3+ голосов)")
 
             except Exception as e:
                 print(f"❌ Ошибка обработки {symbol}: {e}")
@@ -179,9 +173,7 @@ async def test_ml_pipeline():
 
         # Создаем тестовый тензор
         device = ml_manager.device
-        test_input = torch.randn(1, 96, 240).to(
-            device
-        )  # batch_size=1, context=96, features=240
+        test_input = torch.randn(1, 96, 240).to(device)  # batch_size=1, context=96, features=240
 
         print(f"🧠 Модель: {type(ml_manager.model).__name__}")
         print(f"💻 Device: {device}")
@@ -193,9 +185,7 @@ async def test_ml_pipeline():
             raw_output = ml_manager.model(test_input)
 
         print(f"📊 Output shape: {raw_output.shape}")
-        print(
-            f"📊 Output range: [{raw_output.min().item():.6f}, {raw_output.max().item():.6f}]"
-        )
+        print(f"📊 Output range: [{raw_output.min().item():.6f}, {raw_output.max().item():.6f}]")
         print(f"📊 Output mean: {raw_output.mean().item():.6f}")
         print(f"📊 Output std: {raw_output.std().item():.6f}")
 
@@ -229,9 +219,7 @@ async def test_ml_pipeline():
         print("-" * 40)
 
         # Проверяем основные проблемы
-        all_neutral = all(
-            np.argmax(direction_logits_reshaped[i]) == 2 for i in range(4)
-        )
+        all_neutral = all(np.argmax(direction_logits_reshaped[i]) == 2 for i in range(4))
         small_returns = all(abs(r) < 0.001 for r in future_returns)
 
         if all_neutral:

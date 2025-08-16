@@ -152,9 +152,7 @@ async def simulate_trade_cycle():
 
     for new_price in price_movements:
         current_price = new_price
-        profit_pct = (
-            (current_price - position["entry_price"]) / position["entry_price"]
-        ) * 100
+        profit_pct = ((current_price - position["entry_price"]) / position["entry_price"]) * 100
 
         # Обновление PnL
         unrealized_pnl = (current_price - position["entry_price"]) * position["size"]
@@ -163,9 +161,7 @@ async def simulate_trade_cycle():
         # Активация trailing stop при 1% прибыли
         if profit_pct >= 1.0 and not trailing_activated:
             trailing_activated = True
-            trade_logger.log_trailing_activated(
-                position["id"], current_price, profit_pct
-            )
+            trade_logger.log_trailing_activated(position["id"], current_price, profit_pct)
 
         # Обновление trailing stop
         if trailing_activated and current_price > highest_price:
@@ -173,9 +169,7 @@ async def simulate_trade_cycle():
             new_sl = current_price * 0.995  # 0.5% trailing distance
 
             if new_sl > current_sl:
-                trade_logger.log_trailing_update(
-                    position["id"], current_sl, new_sl, current_price
-                )
+                trade_logger.log_trailing_update(position["id"], current_sl, new_sl, current_price)
                 current_sl = new_sl
                 updates_count += 1
 
@@ -253,9 +247,7 @@ async def simulate_trade_cycle():
     close_price = 51100
     final_pnl = (close_price - position["entry_price"]) * position["size"]
 
-    trade_logger.log_position_closed(
-        position["id"], close_price, final_pnl, "TP достигнут"
-    )
+    trade_logger.log_position_closed(position["id"], close_price, final_pnl, "TP достигнут")
 
     trade_logger.log_sltp_triggered(position["id"], "TP", close_price, final_pnl)
     await asyncio.sleep(0.5)

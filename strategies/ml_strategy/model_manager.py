@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Менеджер для управления ML моделями в торговых стратегиях
 Обеспечивает загрузку, обновление и мониторинг моделей
@@ -11,7 +10,7 @@ import pickle
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import torch
 import yaml
@@ -35,7 +34,7 @@ class ModelManager:
         self,
         models_dir: str = "models",
         cache_dir: str = "cache/models",
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
     ):
         """
         Инициализация менеджера моделей
@@ -54,10 +53,10 @@ class ModelManager:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Кеш загруженных моделей
-        self.loaded_models: Dict[str, Dict[str, Any]] = {}
+        self.loaded_models: dict[str, dict[str, Any]] = {}
 
         # Метрики производительности моделей
-        self.model_metrics: Dict[str, Dict[str, Any]] = {}
+        self.model_metrics: dict[str, dict[str, Any]] = {}
 
         # Конфигурация
         self.config = self._load_config()
@@ -65,12 +64,12 @@ class ModelManager:
         # Устройство для вычислений
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def _load_config(self) -> Dict[str, Any]:
+    def _load_config(self) -> dict[str, Any]:
         """Загрузка конфигурации менеджера"""
         config_path = self.models_dir / "manager_config.yaml"
 
         if config_path.exists():
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 return yaml.safe_load(f)
         else:
             # Конфигурация по умолчанию
@@ -84,8 +83,8 @@ class ModelManager:
             }
 
     async def load_model(
-        self, model_name: str, version: Optional[str] = None
-    ) -> Tuple[Any, Dict[str, Any]]:
+        self, model_name: str, version: str | None = None
+    ) -> tuple[Any, dict[str, Any]]:
         """
         Загрузка модели с кешированием
 
@@ -121,9 +120,7 @@ class ModelManager:
             # Очищаем старый кеш если превышен лимит
             await self._cleanup_cache()
 
-            self.logger.info(
-                f"Модель {model_name} v{version or 'latest'} успешно загружена"
-            )
+            self.logger.info(f"Модель {model_name} v{version or 'latest'} успешно загружена")
 
             return model_data["model"], model_data["metadata"]
 
@@ -131,14 +128,14 @@ class ModelManager:
             self.logger.error(f"Ошибка загрузки модели {model_name}: {e}")
             raise
 
-    async def _load_model_components(self, model_path: Path) -> Dict[str, Any]:
+    async def _load_model_components(self, model_path: Path) -> dict[str, Any]:
         """Загрузка всех компонентов модели"""
         model_dir = model_path.parent
 
         # Загрузка метаданных
         metadata_path = model_dir / "metadata.json"
         if metadata_path.exists():
-            with open(metadata_path, "r") as f:
+            with open(metadata_path) as f:
                 metadata = json.load(f)
         else:
             metadata = {}
@@ -166,9 +163,7 @@ class ModelManager:
             if isinstance(checkpoint, dict) and "metrics" in checkpoint:
                 metadata["training_metrics"] = checkpoint["metrics"]
         except Exception as e:
-            self.logger.warning(
-                f"Ошибка при безопасной загрузке, пробуем стандартный метод: {e}"
-            )
+            self.logger.warning(f"Ошибка при безопасной загрузке, пробуем стандартный метод: {e}")
             # Фоллбэк на стандартную загрузку
             checkpoint = torch.load(model_path, map_location=self.device)
             if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
@@ -198,7 +193,7 @@ class ModelManager:
             "loaded_at": datetime.utcnow(),
         }
 
-    def _get_model_path(self, model_name: str, version: Optional[str] = None) -> Path:
+    def _get_model_path(self, model_name: str, version: str | None = None) -> Path:
         """Получение пути к модели"""
         if version:
             return self.models_dir / model_name / f"v{version}" / "model.pth"
@@ -208,9 +203,7 @@ class ModelManager:
             if not model_dir.exists():
                 return self.models_dir / model_name / "model.pth"
 
-            versions = [
-                d for d in model_dir.iterdir() if d.is_dir() and d.name.startswith("v")
-            ]
+            versions = [d for d in model_dir.iterdir() if d.is_dir() and d.name.startswith("v")]
             if versions:
                 latest_version = sorted(versions, key=lambda x: x.name)[-1]
                 return latest_version / "model.pth"
@@ -255,9 +248,7 @@ class ModelManager:
 
             # Обновляем метаданные
             metadata = {
-                "version": version
-                if self.config.get("model_versioning", True)
-                else "latest",
+                "version": version if self.config.get("model_versioning", True) else "latest",
                 "updated_at": datetime.utcnow().isoformat(),
                 "source": new_model_path,
             }
@@ -288,18 +279,14 @@ class ModelManager:
             return "1.0"
 
         versions = [
-            d.name[1:]
-            for d in model_dir.iterdir()
-            if d.is_dir() and d.name.startswith("v")
+            d.name[1:] for d in model_dir.iterdir() if d.is_dir() and d.name.startswith("v")
         ]
 
         if not versions:
             return "1.0"
 
         # Парсим версии и увеличиваем
-        latest_version = sorted(versions, key=lambda x: [int(p) for p in x.split(".")])[
-            -1
-        ]
+        latest_version = sorted(versions, key=lambda x: [int(p) for p in x.split(".")])[-1]
         major, minor = map(int, latest_version.split("."))
 
         return f"{major}.{minor + 1}"
@@ -335,8 +322,8 @@ class ModelManager:
     def track_prediction(
         self,
         model_name: str,
-        prediction: Dict[str, Any],
-        actual_outcome: Optional[Dict[str, Any]] = None,
+        prediction: dict[str, Any],
+        actual_outcome: dict[str, Any] | None = None,
     ):
         """
         Отслеживание предсказаний модели для оценки производительности
@@ -377,7 +364,7 @@ class ModelManager:
             self._update_performance_metrics(model_name, prediction, actual_outcome)
 
     def _update_performance_metrics(
-        self, model_name: str, prediction: Dict[str, Any], outcome: Dict[str, Any]
+        self, model_name: str, prediction: dict[str, Any], outcome: dict[str, Any]
     ):
         """Обновление метрик производительности"""
         metrics = self.model_metrics[model_name]
@@ -393,13 +380,11 @@ class ModelManager:
 
         # Рассчитываем точность
         if metrics["total_predictions"] > 0:
-            metrics["accuracy"] = (
-                metrics["correct_predictions"] / metrics["total_predictions"]
-            )
+            metrics["accuracy"] = metrics["correct_predictions"] / metrics["total_predictions"]
 
         metrics["last_update"] = datetime.utcnow()
 
-    def get_model_performance(self, model_name: str) -> Dict[str, Any]:
+    def get_model_performance(self, model_name: str) -> dict[str, Any]:
         """Получение метрик производительности модели"""
         if model_name not in self.model_metrics:
             return {
@@ -419,7 +404,7 @@ class ModelManager:
             "status": self._get_performance_status(metrics),
         }
 
-    def _get_performance_status(self, metrics: Dict[str, Any]) -> str:
+    def _get_performance_status(self, metrics: dict[str, Any]) -> str:
         """Определение статуса производительности"""
         if metrics["total_predictions"] < 100:
             return "insufficient_data"
@@ -436,7 +421,7 @@ class ModelManager:
 
     async def run_ab_test(
         self, model_a: str, model_b: str, test_duration_hours: int = 24
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Запуск A/B теста между двумя моделями
 
@@ -475,7 +460,7 @@ class ModelManager:
 
         return ab_test
 
-    def get_recommended_model(self, model_type: str = "patchtst") -> Optional[str]:
+    def get_recommended_model(self, model_type: str = "patchtst") -> str | None:
         """
         Получение рекомендованной модели на основе производительности
 
@@ -486,9 +471,7 @@ class ModelManager:
             Имя рекомендованной модели или None
         """
         # Фильтруем модели по типу
-        relevant_models = [
-            name for name in self.model_metrics.keys() if model_type in name.lower()
-        ]
+        relevant_models = [name for name in self.model_metrics.keys() if model_type in name.lower()]
 
         if not relevant_models:
             # Возвращаем дефолтную модель
@@ -540,7 +523,7 @@ class ModelManager:
 
 
 # Глобальный экземпляр менеджера
-_model_manager: Optional[ModelManager] = None
+_model_manager: ModelManager | None = None
 
 
 def get_model_manager() -> ModelManager:

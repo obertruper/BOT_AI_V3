@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Менеджер ордеров
 
@@ -9,7 +8,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from database.connections import get_async_db
 from database.models.base_models import (
@@ -38,19 +36,20 @@ class OrderManager:
     def __init__(
         self,
         exchange_registry,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
         sltp_manager=None,
     ):
         self.exchange_registry = exchange_registry
         self.logger = logger or logging.getLogger(__name__)
-        self._active_orders: Dict[str, Order] = {}
-        self._order_locks: Dict[str, asyncio.Lock] = {}
+        self._active_orders: dict[str, Order] = {}
+        self._order_locks: dict[str, asyncio.Lock] = {}
         # Интеграция с SL/TP Manager
         self.sltp_integration = SLTPIntegration(sltp_manager) if sltp_manager else None
+        # Защита от дублирования ордеров
+        self._recent_orders: dict[str, float] = {}  # symbol -> last_order_time
+        self._duplicate_check_interval = 60  # секунд между одинаковыми ордерами
 
-    async def create_order_from_signal(
-        self, signal: Signal, trader_id: str
-    ) -> Optional[Order]:
+    async def create_order_from_signal(self, signal: Signal, trader_id: str) -> Order | None:
         """
         Создание ордера из торгового сигнала
 
@@ -62,6 +61,14 @@ class OrderManager:
             Order или None если создание не удалось
         """
         try:
+            # Проверка на дублирование ордеров
+            if await self._is_duplicate_order(signal):
+                self.logger.warning(
+                    f"⚠️ Дублирующий ордер для {signal.symbol} отклонен "
+                    f"(менее {self._duplicate_check_interval}с с предыдущего)"
+                )
+                return None
+
             # Определяем тип и сторону ордера
             order_side = self._get_order_side(signal.signal_type)
             if not order_side:
@@ -76,19 +83,13 @@ class OrderManager:
                 symbol=signal.symbol,
                 order_id=self._generate_order_id(),
                 side=order_side,
-                order_type=OrderType.LIMIT
-                if signal.suggested_price
-                else OrderType.MARKET,
+                order_type=OrderType.LIMIT if signal.suggested_price else OrderType.MARKET,
                 status=OrderStatus.PENDING,
                 price=float(signal.suggested_price) if signal.suggested_price else None,
                 quantity=float(signal.suggested_quantity),
-                stop_loss=float(signal.suggested_stop_loss)
-                if signal.suggested_stop_loss
-                else None,
+                stop_loss=float(signal.suggested_stop_loss) if signal.suggested_stop_loss else None,
                 take_profit=(
-                    float(signal.suggested_take_profit)
-                    if signal.suggested_take_profit
-                    else None
+                    float(signal.suggested_take_profit) if signal.suggested_take_profit else None
                 ),
                 strategy_name=signal.strategy_name,
                 trader_id=trader_id,
@@ -108,6 +109,11 @@ class OrderManager:
             # Добавляем в активные
             self._active_orders[order.order_id] = order
             self._order_locks[order.order_id] = asyncio.Lock()
+
+            # Обновляем время последнего ордера для защиты от дублирования
+            import time
+
+            self._recent_orders[signal.symbol] = time.time()
 
             self.logger.info(
                 f"Создан ордер {order.order_id}: {order.side.value} {order.quantity} "
@@ -133,9 +139,7 @@ class OrderManager:
         async with self._order_locks.get(order.order_id, asyncio.Lock()):
             try:
                 # Проверяем, является ли order.side строкой или enum
-                side_str = (
-                    order.side if isinstance(order.side, str) else order.side.value
-                )
+                side_str = order.side if isinstance(order.side, str) else order.side.value
                 self.logger.info(
                     f"📤 Отправка ордера на биржу: {side_str} {order.quantity} {order.symbol} "
                     f"@ {order.price or 'MARKET'} на {order.exchange}"
@@ -167,9 +171,7 @@ class OrderManager:
                 )
 
                 if not exchange:
-                    self.logger.error(
-                        f"❌ Не удалось создать подключение к {order.exchange}"
-                    )
+                    self.logger.error(f"❌ Не удалось создать подключение к {order.exchange}")
                     return False
 
                 await exchange.initialize()
@@ -179,14 +181,10 @@ class OrderManager:
                 try:
                     # Получаем плечо из конфигурации
                     leverage = float(
-                        self.config.get("trading", {})
-                        .get("orders", {})
-                        .get("default_leverage", 5)
+                        self.config.get("trading", {}).get("orders", {}).get("default_leverage", 5)
                     )
 
-                    self.logger.info(
-                        f"⚙️ Устанавливаем плечо {leverage}x для {order.symbol}"
-                    )
+                    self.logger.info(f"⚙️ Устанавливаем плечо {leverage}x для {order.symbol}")
                     leverage_set = await exchange.set_leverage(order.symbol, leverage)
 
                     if leverage_set:
@@ -229,9 +227,7 @@ class OrderManager:
                 order_request = OrderRequest(
                     symbol=order.symbol,
                     side=order_side_map.get(order.side.value, ExchangeOrderSide.BUY),
-                    order_type=order_type_map.get(
-                        order.order_type.value, ExchangeOrderType.LIMIT
-                    ),
+                    order_type=order_type_map.get(order.order_type.value, ExchangeOrderType.LIMIT),
                     quantity=order.quantity,
                     price=order.price if order.order_type.value == "limit" else None,
                     # ВАЖНО: Добавляем SL/TP из ордера
@@ -326,8 +322,8 @@ class OrderManager:
         self,
         order_id: str,
         new_status: OrderStatus,
-        filled_quantity: Optional[float] = None,
-        average_price: Optional[float] = None,
+        filled_quantity: float | None = None,
+        average_price: float | None = None,
     ):
         """Обновление статуса ордера"""
         order = self._active_orders.get(order_id)
@@ -351,17 +347,13 @@ class OrderManager:
                 if self.sltp_integration:
                     try:
                         # Получаем клиент биржи
-                        exchange = await self.exchange_registry.get_exchange(
-                            order.exchange
-                        )
+                        exchange = await self.exchange_registry.get_exchange(order.exchange)
                         if exchange:
                             success = await self.sltp_integration.handle_filled_order(
                                 order, exchange
                             )
                             if success:
-                                self.logger.info(
-                                    f"✅ SL/TP ордера созданы для {order.symbol}"
-                                )
+                                self.logger.info(f"✅ SL/TP ордера созданы для {order.symbol}")
                             else:
                                 self.logger.warning(
                                     f"⚠️ Не удалось создать SL/TP для {order.symbol}"
@@ -376,8 +368,8 @@ class OrderManager:
             await self._update_order_in_db(order)
 
     async def get_active_orders(
-        self, exchange: Optional[str] = None, symbol: Optional[str] = None
-    ) -> List[Order]:
+        self, exchange: str | None = None, symbol: str | None = None
+    ) -> list[Order]:
         """Получить активные ордера"""
         orders = list(self._active_orders.values())
 
@@ -420,14 +412,12 @@ class OrderManager:
                     )
                 else:
                     # Ордер не найден на бирже - возможно исполнен или отменен
-                    await self.update_order_status(
-                        order.order_id, OrderStatus.CANCELLED
-                    )
+                    await self.update_order_status(order.order_id, OrderStatus.CANCELLED)
 
         except Exception as e:
             self.logger.error(f"Ошибка синхронизации ордеров с {exchange_name}: {e}")
 
-    def _get_order_side(self, signal_type) -> Optional[OrderSide]:
+    def _get_order_side(self, signal_type) -> OrderSide | None:
         """Определение стороны ордера по типу сигнала"""
         mapping = {
             SignalType.LONG: OrderSide.BUY,
@@ -465,6 +455,44 @@ class OrderManager:
                 await db.commit()
         except Exception as e:
             self.logger.error(f"Ошибка обновления ордера в БД: {e}")
+
+    async def _is_duplicate_order(self, signal: Signal) -> bool:
+        """
+        Проверка на дублирование ордера
+
+        Args:
+            signal: Торговый сигнал
+
+        Returns:
+            bool: True если ордер дублирующий
+        """
+        import time
+
+        symbol = signal.symbol
+        current_time = time.time()
+
+        # Проверяем есть ли недавний ордер для этого символа
+        if symbol in self._recent_orders:
+            last_order_time = self._recent_orders[symbol]
+            time_since_last = current_time - last_order_time
+
+            # Если прошло меньше установленного интервала
+            if time_since_last < self._duplicate_check_interval:
+                return True
+
+        # Дополнительно проверяем активные ордера для этого символа
+        active_orders_count = sum(
+            1
+            for order in self._active_orders.values()
+            if order.symbol == symbol and order.status in [OrderStatus.PENDING, OrderStatus.OPEN]
+        )
+
+        # Если уже есть активный ордер по этому символу
+        if active_orders_count > 0:
+            self.logger.warning(f"⚠️ Уже есть {active_orders_count} активных ордеров для {symbol}")
+            return True
+
+        return False
 
     async def health_check(self) -> bool:
         """Проверка здоровья компонента"""

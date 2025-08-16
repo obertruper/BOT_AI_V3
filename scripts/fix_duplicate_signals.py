@@ -114,9 +114,7 @@ async def fix_duplicate_signals():
         duplicate_orders = await AsyncPGPool.fetch(duplicate_orders_query)
 
         if duplicate_orders:
-            logger.info(
-                f"📋 Найдено {len(duplicate_orders)} типов дублирующих ордеров:"
-            )
+            logger.info(f"📋 Найдено {len(duplicate_orders)} типов дублирующих ордеров:")
             for order in duplicate_orders:
                 logger.info(
                     f"  {order['symbol']}: {order['side']} {order['order_type']} {order['status']} {order['quantity']} (count={order['count']})"

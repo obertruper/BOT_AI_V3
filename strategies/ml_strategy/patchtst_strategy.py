@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ML торговая стратегия на основе UnifiedPatchTST модели
 Использует предсказания нейронной сети для генерации торговых сигналов
@@ -9,7 +8,7 @@ import logging
 import pickle
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -38,8 +37,8 @@ class PatchTSTStrategy(BaseStrategy):
         symbol: str = "BTC/USDT",
         exchange: str = "binance",
         timeframe: str = "15m",
-        parameters: Optional[Dict[str, Any]] = None,
-        logger: Optional[logging.Logger] = None,
+        parameters: dict[str, Any] | None = None,
+        logger: logging.Logger | None = None,
     ):
         """
         Инициализация ML стратегии
@@ -64,18 +63,12 @@ class PatchTSTStrategy(BaseStrategy):
 
         # Пути к моделям
         self.model_path = self.parameters.get("model_path", "models/patchtst/model.pth")
-        self.scaler_path = self.parameters.get(
-            "scaler_path", "models/patchtst/scaler.pkl"
-        )
-        self.config_path = self.parameters.get(
-            "config_path", "models/patchtst/config.pkl"
-        )
+        self.scaler_path = self.parameters.get("scaler_path", "models/patchtst/scaler.pkl")
+        self.config_path = self.parameters.get("config_path", "models/patchtst/config.pkl")
 
         # Параметры торговли
         self.min_confidence = self.parameters.get("min_confidence", 0.6)
-        self.min_profit_probability = self.parameters.get(
-            "min_profit_probability", 0.65
-        )
+        self.min_profit_probability = self.parameters.get("min_profit_probability", 0.65)
         self.max_risk_threshold = self.parameters.get("max_risk_threshold", 0.03)  # 3%
         self.position_sizing_mode = self.parameters.get("position_sizing_mode", "kelly")
 
@@ -85,10 +78,10 @@ class PatchTSTStrategy(BaseStrategy):
         )
 
         # ML компоненты
-        self.model: Optional[UnifiedPatchTSTForTrading] = None
-        self.scaler: Optional[StandardScaler] = None
-        self.feature_engineer: Optional[FeatureEngineer] = None
-        self.model_config: Optional[Dict] = None
+        self.model: UnifiedPatchTSTForTrading | None = None
+        self.scaler: StandardScaler | None = None
+        self.feature_engineer: FeatureEngineer | None = None
+        self.model_config: dict | None = None
 
         # Буфер для накопления данных
         self.price_buffer = []
@@ -109,9 +102,7 @@ class PatchTSTStrategy(BaseStrategy):
     async def on_start(self):
         """Инициализация при запуске стратегии"""
         await self._load_models()
-        self.logger.info(
-            f"PatchTST стратегия инициализирована на устройстве: {self.device}"
-        )
+        self.logger.info(f"PatchTST стратегия инициализирована на устройстве: {self.device}")
 
     async def on_stop(self):
         """Очистка при остановке стратегии"""
@@ -156,12 +147,12 @@ class PatchTSTStrategy(BaseStrategy):
             self.logger.error(f"Ошибка загрузки моделей: {e}")
             raise
 
-    def get_required_indicators(self) -> List[str]:
+    def get_required_indicators(self) -> list[str]:
         """Список необходимых индикаторов"""
         # PatchTST использует свой feature engineering
         return []
 
-    async def analyze(self, market_data: Dict[str, Any]) -> Optional[Signal]:
+    async def analyze(self, market_data: dict[str, Any]) -> Signal | None:
         """
         Анализ рыночных данных с помощью ML модели
 
@@ -205,7 +196,7 @@ class PatchTSTStrategy(BaseStrategy):
             self.logger.error(f"Ошибка в analyze: {e}", exc_info=True)
             return None
 
-    def _update_price_buffer(self, market_data: Dict[str, Any]):
+    def _update_price_buffer(self, market_data: dict[str, Any]):
         """Обновление буфера ценовых данных"""
         if "candles" not in market_data:
             return
@@ -233,7 +224,7 @@ class PatchTSTStrategy(BaseStrategy):
         if len(self.price_buffer) > max_buffer_size:
             self.price_buffer = self.price_buffer[-max_buffer_size:]
 
-    def _prepare_features(self) -> Optional[pd.DataFrame]:
+    def _prepare_features(self) -> pd.DataFrame | None:
         """Подготовка признаков для модели"""
         try:
             # Создаем DataFrame из буфера
@@ -269,9 +260,7 @@ class PatchTSTStrategy(BaseStrategy):
             self.logger.error(f"Ошибка подготовки признаков: {e}")
             return None
 
-    async def _get_model_predictions(
-        self, features_df: pd.DataFrame
-    ) -> Optional[np.ndarray]:
+    async def _get_model_predictions(self, features_df: pd.DataFrame) -> np.ndarray | None:
         """Получение предсказаний от модели"""
         try:
             # Преобразуем в numpy массив
@@ -298,8 +287,8 @@ class PatchTSTStrategy(BaseStrategy):
             return None
 
     def _analyze_predictions(
-        self, predictions: np.ndarray, market_data: Dict[str, Any]
-    ) -> Optional[Signal]:
+        self, predictions: np.ndarray, market_data: dict[str, Any]
+    ) -> Signal | None:
         """
         Анализ предсказаний модели и генерация торгового сигнала
 
@@ -314,12 +303,8 @@ class PatchTSTStrategy(BaseStrategy):
             # Извлекаем компоненты предсказаний
             future_returns = predictions[0:4]
             directions = predictions[4:8]
-            long_probs = 1 / (
-                1 + np.exp(-predictions[8:12])
-            )  # Sigmoid для вероятностей
-            short_probs = 1 / (
-                1 + np.exp(-predictions[12:16])
-            )  # Sigmoid для вероятностей
+            long_probs = 1 / (1 + np.exp(-predictions[8:12]))  # Sigmoid для вероятностей
+            short_probs = 1 / (1 + np.exp(-predictions[12:16]))  # Sigmoid для вероятностей
             risk_metrics = predictions[16:20]
 
             # Взвешенное голосование по направлениям
@@ -372,9 +357,7 @@ class PatchTSTStrategy(BaseStrategy):
             # Анализ рисков
             max_risk = np.max(np.abs(risk_values))
             if max_risk > self.max_risk_threshold:
-                self.logger.debug(
-                    f"Высокий риск: {max_risk:.2%} > {self.max_risk_threshold:.2%}"
-                )
+                self.logger.debug(f"Высокий риск: {max_risk:.2%} > {self.max_risk_threshold:.2%}")
                 return None
 
             # Расчет силы сигнала
@@ -392,9 +375,7 @@ class PatchTSTStrategy(BaseStrategy):
             signal = Signal(
                 symbol=self.symbol,
                 exchange=self.exchange,
-                signal_type=SignalType.LONG
-                if primary_direction == "LONG"
-                else SignalType.SHORT,
+                signal_type=SignalType.LONG if primary_direction == "LONG" else SignalType.SHORT,
                 strength=float(signal_strength),
                 confidence=float(direction_confidence),
                 stop_loss=stop_loss,
@@ -470,7 +451,7 @@ class PatchTSTStrategy(BaseStrategy):
         current_price: float,
         risk_values: np.ndarray,
         profit_probs: np.ndarray,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Расчет уровней stop-loss и take-profit"""
         # Базовый риск на основе предсказаний модели
         base_risk = np.mean(np.abs(risk_values))
@@ -502,9 +483,7 @@ class PatchTSTStrategy(BaseStrategy):
 
         return float(stop_loss), float(take_profit)
 
-    async def calculate_position_size(
-        self, signal: Signal, account_balance: Decimal
-    ) -> Decimal:
+    async def calculate_position_size(self, signal: Signal, account_balance: Decimal) -> Decimal:
         """
         Расчет размера позиции на основе Kelly Criterion или фиксированного риска
 
@@ -524,9 +503,7 @@ class PatchTSTStrategy(BaseStrategy):
             avg_win_prob = np.mean(list(profit_probs.values())) if profit_probs else 0.5
 
             # Ожидаемый выигрыш/проигрыш
-            current_price = (
-                float(self._price_history[-1]["close"]) if self._price_history else 1.0
-            )
+            current_price = float(self._price_history[-1]["close"]) if self._price_history else 1.0
 
             if signal.take_profit and signal.stop_loss:
                 win_amount = abs(signal.take_profit - current_price) / current_price
@@ -571,7 +548,7 @@ class PatchTSTStrategy(BaseStrategy):
 
         return position_size
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Получить метрики производительности стратегии"""
         base_metrics = super().get_metrics()
 

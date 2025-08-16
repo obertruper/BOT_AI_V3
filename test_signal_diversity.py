@@ -113,16 +113,10 @@ async def test_signal_generation():
         if signal_counts["TOTAL"] > 0:
             long_pct = (signal_counts.get("LONG", 0) / signal_counts["TOTAL"]) * 100
             short_pct = (signal_counts.get("SHORT", 0) / signal_counts["TOTAL"]) * 100
-            neutral_pct = (
-                signal_counts.get("NEUTRAL", 0) / signal_counts["TOTAL"]
-            ) * 100
+            neutral_pct = (signal_counts.get("NEUTRAL", 0) / signal_counts["TOTAL"]) * 100
 
-            logger.info(
-                f"📈 LONG сигналов:    {signal_counts.get('LONG', 0)} ({long_pct:.1f}%)"
-            )
-            logger.info(
-                f"📉 SHORT сигналов:   {signal_counts.get('SHORT', 0)} ({short_pct:.1f}%)"
-            )
+            logger.info(f"📈 LONG сигналов:    {signal_counts.get('LONG', 0)} ({long_pct:.1f}%)")
+            logger.info(f"📉 SHORT сигналов:   {signal_counts.get('SHORT', 0)} ({short_pct:.1f}%)")
             logger.info(
                 f"⚪ NEUTRAL сигналов: {signal_counts.get('NEUTRAL', 0)} ({neutral_pct:.1f}%)"
             )
@@ -141,9 +135,7 @@ async def test_signal_generation():
                 logger.error("❌ ПРОБЛЕМА: Нет SHORT сигналов вообще!")
             else:
                 logger.info("✅ УСПЕХ: Сигналы сбалансированы!")
-                logger.info(
-                    f"   Соотношение LONG/SHORT: {long_pct:.1f}% / {short_pct:.1f}%"
-                )
+                logger.info(f"   Соотношение LONG/SHORT: {long_pct:.1f}% / {short_pct:.1f}%")
 
                 if 30 <= long_pct <= 70 and 30 <= short_pct <= 70:
                     logger.info("🎯 ОТЛИЧНО: Идеальный баланс сигналов для торговли!")

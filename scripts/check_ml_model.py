@@ -62,9 +62,7 @@ def check_model_loading():
 
         # Загружаем веса
         device = torch.device("cpu")  # Используем CPU для совместимости
-        checkpoint = torch.load(
-            "models/saved/best_model_20250728_215703.pth", map_location=device
-        )
+        checkpoint = torch.load("models/saved/best_model_20250728_215703.pth", map_location=device)
 
         if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
             model.load_state_dict(checkpoint["model_state_dict"])

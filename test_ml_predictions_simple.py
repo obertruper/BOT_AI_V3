@@ -55,9 +55,7 @@ async def test_predictions():
             features[:, 0:10] -= np.linspace(0, 1, 96).reshape(-1, 1)
         else:
             # Боковое движение
-            features[:, 0:10] += (
-                np.sin(np.linspace(0, 4 * np.pi, 96)).reshape(-1, 1) * 0.5
-            )
+            features[:, 0:10] += np.sin(np.linspace(0, 4 * np.pi, 96)).reshape(-1, 1) * 0.5
 
         try:
             # Получаем предсказание

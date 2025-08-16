@@ -14,7 +14,7 @@ Web Integration Layer для BOT_Trading v3.0
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
+from typing import Any
 
 import uvicorn
 
@@ -48,9 +48,9 @@ class WebIntegration:
             orchestrator: Главный оркестратор системы BOT_Trading v3.0
         """
         self.orchestrator = orchestrator
-        self.web_server: Optional[uvicorn.Server] = None
-        self.event_bridge: Optional[EventBridge] = None
-        self.data_adapters: Optional[DataAdapters] = None
+        self.web_server: uvicorn.Server | None = None
+        self.event_bridge: EventBridge | None = None
+        self.data_adapters: DataAdapters | None = None
         self.is_running = False
 
         # Конфигурация веб-сервера
@@ -109,9 +109,7 @@ class WebIntegration:
                 f"Не удалось загрузить веб-конфигурацию, используем значения по умолчанию: {e}"
             )
 
-    async def start_web_server(
-        self, host: Optional[str] = None, port: Optional[int] = None
-    ):
+    async def start_web_server(self, host: str | None = None, port: int | None = None):
         """
         Запуск веб-сервера
 
@@ -167,9 +165,7 @@ class WebIntegration:
             self.web_server = uvicorn.Server(config)
             self.is_running = True
 
-            logger.info(
-                f"Веб-сервер готов к запуску на http://{actual_host}:{actual_port}"
-            )
+            logger.info(f"Веб-сервер готов к запуску на http://{actual_host}:{actual_port}")
 
             # Запускаем сервер (блокирующий вызов)
             await self.web_server.serve()
@@ -262,7 +258,7 @@ class WebIntegration:
         """Проверить запущен ли веб-сервер"""
         return self.is_running
 
-    def get_web_server_info(self) -> Dict[str, Any]:
+    def get_web_server_info(self) -> dict[str, Any]:
         """Получить информацию о веб-сервере"""
         return {
             "is_running": self.is_running,
@@ -274,7 +270,7 @@ class WebIntegration:
             "url": f"http://{self.host}:{self.port}" if self.is_running else None,
         }
 
-    def get_integration_status(self) -> Dict[str, Any]:
+    def get_integration_status(self) -> dict[str, Any]:
         """Получить статус интеграции"""
         return {
             "web_integration": {
@@ -285,19 +281,13 @@ class WebIntegration:
             "orchestrator": {
                 "available": self.orchestrator is not None,
                 "trader_manager": (
-                    self.orchestrator.trader_manager is not None
-                    if self.orchestrator
-                    else False
+                    self.orchestrator.trader_manager is not None if self.orchestrator else False
                 ),
                 "exchange_factory": (
-                    self.orchestrator.exchange_factory is not None
-                    if self.orchestrator
-                    else False
+                    self.orchestrator.exchange_factory is not None if self.orchestrator else False
                 ),
                 "config_manager": (
-                    self.orchestrator.config_manager is not None
-                    if self.orchestrator
-                    else False
+                    self.orchestrator.config_manager is not None if self.orchestrator else False
                 ),
             },
             "event_bridge": {
@@ -366,7 +356,7 @@ async def create_web_integration(orchestrator: SystemOrchestrator) -> WebIntegra
 
 def check_web_integration_requirements(
     orchestrator: SystemOrchestrator,
-) -> Dict[str, bool]:
+) -> dict[str, bool]:
     """
     Проверка требований для веб-интеграции
 

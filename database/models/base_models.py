@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Базовые модели для торгового бота
 """
@@ -157,9 +156,7 @@ class Balance(Base):
     usd_value = Column(Float)
 
     # Временные метки
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Владелец
     trader_id = Column(String(100))

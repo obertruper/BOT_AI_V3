@@ -161,9 +161,7 @@ async def analyze():
 
         if trades and trades.total_trades > 0:
             win_rate = (
-                (trades.profitable / trades.total_trades * 100)
-                if trades.total_trades > 0
-                else 0
+                (trades.profitable / trades.total_trades * 100) if trades.total_trades > 0 else 0
             )
             print(f"  Всего сделок: {trades.total_trades}")
             print(f"  Прибыльных: {trades.profitable or 0}")
@@ -187,9 +185,7 @@ async def analyze():
         )
         last_signal = result.fetchone()
         if last_signal and last_signal.last_time:
-            minutes_ago = (
-                datetime.utcnow() - last_signal.last_time
-            ).total_seconds() / 60
+            minutes_ago = (datetime.utcnow() - last_signal.last_time).total_seconds() / 60
             print(f"  Последний сигнал: {minutes_ago:.1f} мин назад")
 
         # Последний ордер
@@ -203,9 +199,7 @@ async def analyze():
         )
         last_order = result.fetchone()
         if last_order and last_order.last_time:
-            minutes_ago = (
-                datetime.utcnow() - last_order.last_time
-            ).total_seconds() / 60
+            minutes_ago = (datetime.utcnow() - last_order.last_time).total_seconds() / 60
             print(f"  Последний ордер: {minutes_ago:.1f} мин назад")
 
         print("\n" + "=" * 80)

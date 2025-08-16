@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Миграционный скрипт для перехода с v2 на v3
 
@@ -15,15 +14,13 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import asyncpg
 import yaml
 
 # Добавляем корневую директорию в path
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from core.logger import setup_logger
 
@@ -104,7 +101,7 @@ class MigrationV2toV3:
         # Мигрируем конфиги из v2
         v2_config = self.v2_path / "config.yaml"
         if v2_config.exists():
-            with open(v2_config, "r", encoding="utf-8") as f:
+            with open(v2_config, encoding="utf-8") as f:
                 v2_data = yaml.safe_load(f)
 
             # Преобразуем в формат v3
@@ -139,7 +136,7 @@ class MigrationV2toV3:
 
             logger.info("Конфигурации успешно мигрированы")
 
-    def _convert_config_to_v3(self, v2_config: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_config_to_v3(self, v2_config: dict[str, Any]) -> dict[str, Any]:
         """Преобразует конфигурацию v2 в v3"""
         v3_config = {
             "system": {
@@ -151,9 +148,7 @@ class MigrationV2toV3:
                     "port": 5555,
                     "name": "bot_trading_v3",
                     "user": "obertruper",
-                    "password": v2_config.get("postgres", {}).get(
-                        "password", "postgres"
-                    ),
+                    "password": v2_config.get("postgres", {}).get("password", "postgres"),
                 },
                 "exchanges": {
                     "bybit": {
@@ -191,7 +186,7 @@ class MigrationV2toV3:
             logger.warning("Конфигурация v2 не найдена, пропускаем миграцию БД")
             return
 
-        with open(v2_config_path, "r") as f:
+        with open(v2_config_path) as f:
             v2_config = yaml.safe_load(f)
 
         # Подключаемся к БД v2
@@ -370,9 +365,7 @@ async def main():
         default="/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3",
         help="Путь к директории v3",
     )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Тестовый запуск без изменений"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Тестовый запуск без изменений")
 
     args = parser.parse_args()
 

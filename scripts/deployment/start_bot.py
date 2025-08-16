@@ -70,9 +70,7 @@ async def start_bot():
         status = await orchestrator.get_system_status()
         print("\n📊 СТАТУС СИСТЕМЫ:")
         print(f"   - Запущен: {status['system']['is_running']}")
-        print(
-            f"   - Здоровье: {'✅ OK' if status['health']['is_healthy'] else '❌ ПРОБЛЕМЫ'}"
-        )
+        print(f"   - Здоровье: {'✅ OK' if status['health']['is_healthy'] else '❌ ПРОБЛЕМЫ'}")
         print(f"   - Активные компоненты: {len(status['components']['active'])}")
         print(f"   - Активные трейдеры: {status['traders']['active']}")
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Тестовый скрипт для проверки real-time генерации ML сигналов
 """
@@ -79,13 +78,9 @@ async def test_indicator_calculation():
         )
 
         logger.info("✅ Рассчитано индикаторов:")
-        logger.info(
-            f"   Технических: {len(indicators.get('technical_indicators', {}))}"
-        )
+        logger.info(f"   Технических: {len(indicators.get('technical_indicators', {}))}")
         logger.info(f"   ML признаков: {len(indicators.get('ml_features', {}))}")
-        logger.info(
-            f"   Микроструктура: {len(indicators.get('microstructure_features', {}))}"
-        )
+        logger.info(f"   Микроструктура: {len(indicators.get('microstructure_features', {}))}")
 
         # Примеры индикаторов
         tech = indicators.get("technical_indicators", {})
@@ -169,9 +164,7 @@ async def test_signal_generation():
         await signal_processor.initialize()
 
         # Генерируем сигнал
-        signal = await signal_processor.process_realtime_signal(
-            symbol="BTCUSDT", exchange="bybit"
-        )
+        signal = await signal_processor.process_realtime_signal(symbol="BTCUSDT", exchange="bybit")
 
         if signal:
             logger.info("✅ Сгенерирован сигнал:")

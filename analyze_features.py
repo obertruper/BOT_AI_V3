@@ -129,55 +129,35 @@ async def analyze_features():
         if ma_features:
             print(f"\n   📉 Moving Averages ({len(ma_features)}):")
             for feat in ma_features[:5]:
-                idx = (
-                    columns.index(feat)
-                    if isinstance(columns, list)
-                    else columns.get_loc(feat)
-                )
+                idx = columns.index(feat) if isinstance(columns, list) else columns.get_loc(feat)
                 val = features_np[:, idx][0]
                 print(f"      {feat}: все значения = {val:.6f}")
 
         if rsi_features:
             print(f"\n   📊 RSI ({len(rsi_features)}):")
             for feat in rsi_features[:5]:
-                idx = (
-                    columns.index(feat)
-                    if isinstance(columns, list)
-                    else columns.get_loc(feat)
-                )
+                idx = columns.index(feat) if isinstance(columns, list) else columns.get_loc(feat)
                 val = features_np[:, idx][0]
                 print(f"      {feat}: все значения = {val:.6f}")
 
         if bb_features:
             print(f"\n   📈 Bollinger Bands ({len(bb_features)}):")
             for feat in bb_features[:5]:
-                idx = (
-                    columns.index(feat)
-                    if isinstance(columns, list)
-                    else columns.get_loc(feat)
-                )
+                idx = columns.index(feat) if isinstance(columns, list) else columns.get_loc(feat)
                 val = features_np[:, idx][0]
                 print(f"      {feat}: все значения = {val:.6f}")
 
         if macd_features:
             print(f"\n   📊 MACD ({len(macd_features)}):")
             for feat in macd_features[:5]:
-                idx = (
-                    columns.index(feat)
-                    if isinstance(columns, list)
-                    else columns.get_loc(feat)
-                )
+                idx = columns.index(feat) if isinstance(columns, list) else columns.get_loc(feat)
                 val = features_np[:, idx][0]
                 print(f"      {feat}: все значения = {val:.6f}")
 
         if other_features:
             print(f"\n   🔧 Другие ({len(other_features)}):")
             for feat in other_features[:10]:
-                idx = (
-                    columns.index(feat)
-                    if isinstance(columns, list)
-                    else columns.get_loc(feat)
-                )
+                idx = columns.index(feat) if isinstance(columns, list) else columns.get_loc(feat)
                 val = features_np[:, idx][0]
                 print(f"      {feat}: все значения = {val:.6f}")
 
@@ -226,9 +206,7 @@ async def analyze_features():
         import ta
 
         # RSI через ta
-        rsi_indicator = ta.momentum.RSIIndicator(
-            close=pd.Series(close_prices), window=14
-        )
+        rsi_indicator = ta.momentum.RSIIndicator(close=pd.Series(close_prices), window=14)
         rsi_values = rsi_indicator.rsi()
         print(f"   ta.RSI: последние 5 значений = {rsi_values.tail().values}")
 

@@ -10,7 +10,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import tiktoken
 
@@ -26,7 +26,7 @@ class TokenUsage:
     total_tokens: int
     cost_usd: float
     agent: str
-    task_id: Optional[str] = None
+    task_id: str | None = None
     cached: bool = False
 
 
@@ -46,11 +46,11 @@ class PromptCache:
     def __init__(self, cache_dir: Path):
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.memory_cache: Dict[str, Tuple[str, float]] = {}
+        self.memory_cache: dict[str, tuple[str, float]] = {}
         self.hit_count = 0
         self.miss_count = 0
 
-    def get(self, prompt: str, max_age: int = 3600) -> Optional[str]:
+    def get(self, prompt: str, max_age: int = 3600) -> str | None:
         """Получить результат из кеша"""
         prompt_hash = self._hash_prompt(prompt)
 
@@ -65,7 +65,7 @@ class PromptCache:
         cache_file = self.cache_dir / f"{prompt_hash}.json"
         if cache_file.exists():
             try:
-                with open(cache_file, "r", encoding="utf-8") as f:
+                with open(cache_file, encoding="utf-8") as f:
                     data = json.load(f)
 
                 if time.time() - data["timestamp"] < max_age:
@@ -105,7 +105,7 @@ class PromptCache:
         """Хешировать промпт"""
         return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Получить статистику кеша"""
         total = self.hit_count + self.miss_count
         hit_rate = self.hit_count / total if total > 0 else 0
@@ -131,17 +131,13 @@ class TokenManager:
         "gpt-4o-mini": {"input": 0.15, "output": 0.6},
     }
 
-    def __init__(
-        self, db_path: Optional[Path] = None, cache_dir: Optional[Path] = None
-    ):
+    def __init__(self, db_path: Path | None = None, cache_dir: Path | None = None):
         self.db_path = db_path or Path.home() / ".bot_trading" / "token_usage.db"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.cache = PromptCache(
-            cache_dir or Path.home() / ".bot_trading" / "prompt_cache"
-        )
+        self.cache = PromptCache(cache_dir or Path.home() / ".bot_trading" / "prompt_cache")
         self.budget = TokenBudget()
-        self.current_usage: Dict[str, int] = defaultdict(int)
+        self.current_usage: dict[str, int] = defaultdict(int)
 
         self._init_db()
         self._load_current_usage()
@@ -210,9 +206,7 @@ class TokenManager:
             # Fallback: примерный подсчет
             return len(text) // 4
 
-    def estimate_cost(
-        self, prompt: str, expected_output_tokens: int, model: str
-    ) -> float:
+    def estimate_cost(self, prompt: str, expected_output_tokens: int, model: str) -> float:
         """Оценить стоимость запроса"""
         prompt_tokens = self.count_tokens(prompt, model)
 
@@ -223,9 +217,7 @@ class TokenManager:
 
         return input_cost + output_cost
 
-    def can_afford(
-        self, estimated_tokens: int, task_id: Optional[str] = None
-    ) -> Tuple[bool, str]:
+    def can_afford(self, estimated_tokens: int, task_id: str | None = None) -> tuple[bool, str]:
         """Проверить, можем ли мы позволить себе запрос"""
         # Проверяем дневной лимит
         if self.current_usage["daily"] + estimated_tokens > self.budget.daily_limit:
@@ -248,7 +240,7 @@ class TokenManager:
         prompt_tokens: int,
         completion_tokens: int,
         agent: str,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
         cached: bool = False,
     ) -> TokenUsage:
         """Записать использование токенов"""
@@ -326,7 +318,7 @@ class TokenManager:
         if daily_usage_pct >= self.budget.alert_threshold:
             print(f"⚠️  WARNING: Daily token usage at {daily_usage_pct:.1%} of limit!")
 
-    def get_usage_report(self, period: str = "daily") -> Dict[str, Any]:
+    def get_usage_report(self, period: str = "daily") -> dict[str, Any]:
         """Получить отчет об использовании"""
         if period == "daily":
             start_date = datetime.now().date()
@@ -412,9 +404,7 @@ class TokenManager:
             },
         }
 
-    def optimize_model_selection(
-        self, task_complexity: int, budget_conscious: bool = True
-    ) -> str:
+    def optimize_model_selection(self, task_complexity: int, budget_conscious: bool = True) -> str:
         """Выбрать оптимальную модель на основе сложности задачи и бюджета"""
         if budget_conscious:
             if task_complexity <= 3:
@@ -427,7 +417,7 @@ class TokenManager:
             # Всегда используем лучшую модель
             return "claude-3-opus-20250514"
 
-    def batch_optimize(self, prompts: List[str]) -> List[List[str]]:
+    def batch_optimize(self, prompts: list[str]) -> list[list[str]]:
         """Оптимизировать батчи для минимизации токенов"""
         # Группируем похожие промпты
         batches = []

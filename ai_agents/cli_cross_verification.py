@@ -16,7 +16,6 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Добавляем путь к проекту
 sys.path.append(str(Path(__file__).parent.parent))
@@ -31,7 +30,7 @@ class CrossVerificationCLI:
         self.cross_verifier = AutomatedCrossVerification()
 
     async def start_verification(
-        self, description: str, task_content: str, max_iterations: Optional[int] = None
+        self, description: str, task_content: str, max_iterations: int | None = None
     ):
         """Запуск новой кросс-верификации"""
         print(f"🚀 Запуск кросс-верификации: {description}")
@@ -172,15 +171,11 @@ def main():
     list_parser = subparsers.add_parser("list", help="Список всех задач")
 
     # Команда feedback
-    feedback_parser = subparsers.add_parser(
-        "feedback", help="Отправить feedback по задаче"
-    )
+    feedback_parser = subparsers.add_parser("feedback", help="Отправить feedback по задаче")
     feedback_parser.add_argument("task_id", help="ID задачи")
 
     # Команда interactive
-    interactive_parser = subparsers.add_parser(
-        "interactive", help="Интерактивный режим"
-    )
+    interactive_parser = subparsers.add_parser("interactive", help="Интерактивный режим")
 
     args = parser.parse_args()
 
@@ -194,9 +189,7 @@ def main():
     # Выполняем команды
     if args.command == "start":
         asyncio.run(
-            cli.start_verification(
-                args.description, args.task_content, args.max_iterations
-            )
+            cli.start_verification(args.description, args.task_content, args.max_iterations)
         )
 
     elif args.command == "status":

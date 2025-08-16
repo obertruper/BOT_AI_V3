@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Улучшенный мониторинг системы BOT Trading v3
 С детальным анализом работы риск-менеджмента и ML-интеграции
@@ -88,9 +87,7 @@ class EnhancedSystemMonitor:
             print(
                 f"   ✅ ML Integration: {'Включена' if ml_config.get('enabled') else 'Отключена'}"
             )
-            print(
-                f"   ✅ Monitoring: {'Настроен' if monitoring_config else 'Не настроен'}"
-            )
+            print(f"   ✅ Monitoring: {'Настроен' if monitoring_config else 'Не настроен'}")
 
             # Проверка профилей риска
             profiles = risk_config.get("risk_profiles", {})
@@ -112,9 +109,7 @@ class EnhancedSystemMonitor:
             # Проверяем, что config_manager инициализирован
             if not self.config_manager:
                 print("   ❌ ConfigManager не инициализирован")
-                self.monitoring_data["api_issues"].append(
-                    "ConfigManager not initialized"
-                )
+                self.monitoring_data["api_issues"].append("ConfigManager not initialized")
                 return
 
             # Проверяем конфигурацию бирж
@@ -136,9 +131,7 @@ class EnhancedSystemMonitor:
 
                 if not api_key or not api_secret:
                     print("         ❌ API ключи отсутствуют")
-                    self.monitoring_data["api_issues"].append(
-                        f"{exchange_name}: Missing API keys"
-                    )
+                    self.monitoring_data["api_issues"].append(f"{exchange_name}: Missing API keys")
                 else:
                     # Проверяем формат ключей
                     if len(api_key) < 10:
@@ -147,9 +140,7 @@ class EnhancedSystemMonitor:
                             f"{exchange_name}: API key too short"
                         )
                     else:
-                        print(
-                            f"         ✅ API ключ: {'*' * (len(api_key) - 4) + api_key[-4:]}"
-                        )
+                        print(f"         ✅ API ключ: {'*' * (len(api_key) - 4) + api_key[-4:]}")
 
                     if len(api_secret) < 10:
                         print("         ⚠️ API секрет слишком короткий")
@@ -166,9 +157,7 @@ class EnhancedSystemMonitor:
                 print(f"         🧪 Testnet: {'Да' if testnet else 'Нет'}")
 
                 # Проверяем настройки подписи
-                signature_algorithm = exchange_config.get(
-                    "signature_algorithm", "HMAC-SHA256"
-                )
+                signature_algorithm = exchange_config.get("signature_algorithm", "HMAC-SHA256")
                 print(f"         🔐 Алгоритм подписи: {signature_algorithm}")
 
         except Exception as e:
@@ -185,9 +174,7 @@ class EnhancedSystemMonitor:
                 print("   ❌ RiskManager не инициализирован")
                 return
 
-            print(
-                f"   ✅ RiskManager: {'Включен' if self.risk_manager.enabled else 'Отключен'}"
-            )
+            print(f"   ✅ RiskManager: {'Включен' if self.risk_manager.enabled else 'Отключен'}")
             print(f"   📊 Текущий профиль: {self.risk_manager.current_profile}")
             print(f"   💰 Риск на сделку: {self.risk_manager.risk_per_trade:.2%}")
             print(f"   🎯 Максимум позиций: {self.risk_manager.max_positions}")
@@ -206,9 +193,7 @@ class EnhancedSystemMonitor:
 
             # Проверка рисков
             risk_check = await self.risk_manager.check_signal_risk(test_signal)
-            print(
-                f"   🔍 Проверка рисков: {'✅ Прошла' if risk_check else '❌ Не прошла'}"
-            )
+            print(f"   🔍 Проверка рисков: {'✅ Прошла' if risk_check else '❌ Не прошла'}")
 
             self.monitoring_data["risk_checks"] += 1
 
@@ -275,9 +260,7 @@ class EnhancedSystemMonitor:
 
         except Exception as e:
             print(f"   ❌ Ошибка подключения к БД: {e}")
-            self.monitoring_data["database_issues"].append(
-                f"Database connection error: {e}"
-            )
+            self.monitoring_data["database_issues"].append(f"Database connection error: {e}")
 
     async def _check_logs_detailed(self):
         """Детальная проверка логов с анализом ошибок"""
@@ -306,26 +289,20 @@ class EnhancedSystemMonitor:
                     print(f"      Обновлен: {last_modified.strftime('%H:%M:%S')}")
 
                     # Анализируем последние 200 строк для детальных ошибок
-                    with open(log_file, "r", encoding="utf-8") as f:
+                    with open(log_file, encoding="utf-8") as f:
                         lines = f.readlines()
                         recent_lines = lines[-200:] if len(lines) > 200 else lines
 
                         # Подсчитываем ошибки по типам
                         error_count = sum(1 for line in recent_lines if "ERROR" in line)
-                        warning_count = sum(
-                            1 for line in recent_lines if "WARNING" in line
-                        )
+                        warning_count = sum(1 for line in recent_lines if "WARNING" in line)
 
                         print(f"      Ошибки (последние 200 строк): {error_count}")
-                        print(
-                            f"      Предупреждения (последние 200 строк): {warning_count}"
-                        )
+                        print(f"      Предупреждения (последние 200 строк): {warning_count}")
 
                         # Анализируем специфические ошибки
                         api_errors = [
-                            line
-                            for line in recent_lines
-                            if "API" in line and "ERROR" in line
+                            line for line in recent_lines if "API" in line and "ERROR" in line
                         ]
                         signature_errors = [
                             line
@@ -353,17 +330,13 @@ class EnhancedSystemMonitor:
                             print(f"      🔐 Ошибки подписи: {len(signature_errors)}")
                             for error in signature_errors[-3:]:
                                 print(f"         • {error.strip()}")
-                            self.monitoring_data["api_issues"].extend(
-                                signature_errors[-3:]
-                            )
+                            self.monitoring_data["api_issues"].extend(signature_errors[-3:])
 
                         if database_errors:
                             print(f"      🗄️ Ошибки БД: {len(database_errors)}")
                             for error in database_errors[-3:]:
                                 print(f"         • {error.strip()}")
-                            self.monitoring_data["database_issues"].extend(
-                                database_errors[-3:]
-                            )
+                            self.monitoring_data["database_issues"].extend(database_errors[-3:])
 
                         if signal_errors:
                             print(f"      📡 Ошибки сигналов: {len(signal_errors)}")
@@ -404,9 +377,7 @@ class EnhancedSystemMonitor:
         }
 
         # Сохраняем отчет
-        report_file = (
-            f"logs/monitoring_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        )
+        report_file = f"logs/monitoring_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False, default=str)
 

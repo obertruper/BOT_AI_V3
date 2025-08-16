@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Пример использования улучшенной системы управления рисками
 Адаптировано из BOT_AI_V2 для BOT Trading v3
@@ -7,7 +6,7 @@
 
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -20,10 +19,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, Any]:
     """Загружает конфигурацию рисков"""
     try:
-        with open("config/risk_management.yaml", "r", encoding="utf-8") as f:
+        with open("config/risk_management.yaml", encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return config
     except Exception as e:

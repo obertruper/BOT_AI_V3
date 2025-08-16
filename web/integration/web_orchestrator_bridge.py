@@ -6,7 +6,7 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -95,7 +95,7 @@ class WebOrchestratorBridge:
 
     # =================== TRADERS ===================
 
-    async def get_traders(self) -> List[Dict[str, Any]]:
+    async def get_traders(self) -> list[dict[str, Any]]:
         """Получение списка всех трейдеров"""
         try:
             if self.use_mock:
@@ -144,10 +144,7 @@ class WebOrchestratorBridge:
             # Реальная интеграция с trader_manager
             if self.trader_manager:
                 traders = self.trader_manager.get_all_traders()
-                return [
-                    self.data_adapter.trader_to_response(trader)
-                    for trader in traders.values()
-                ]
+                return [self.data_adapter.trader_to_response(trader) for trader in traders.values()]
 
             return []
 
@@ -155,7 +152,7 @@ class WebOrchestratorBridge:
             self.logger.error(f"Ошибка получения трейдеров: {e}")
             raise
 
-    async def get_trader(self, trader_id: str) -> Optional[Dict[str, Any]]:
+    async def get_trader(self, trader_id: str) -> dict[str, Any] | None:
         """Получение данных конкретного трейдера"""
         try:
             if self.use_mock:
@@ -232,9 +229,7 @@ class WebOrchestratorBridge:
 
     # =================== POSITIONS ===================
 
-    async def get_positions(
-        self, trader_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def get_positions(self, trader_id: str | None = None) -> list[dict[str, Any]]:
         """Получение списка позиций"""
         try:
             if self.use_mock:
@@ -272,7 +267,7 @@ class WebOrchestratorBridge:
 
     # =================== SYSTEM STATUS ===================
 
-    async def get_system_status(self) -> Dict[str, Any]:
+    async def get_system_status(self) -> dict[str, Any]:
         """Получение статуса системы"""
         try:
             if self.use_mock:
@@ -302,12 +297,12 @@ class WebOrchestratorBridge:
 
     # =================== EVENTS ===================
 
-    async def subscribe_to_events(self, event_types: List[str], callback):
+    async def subscribe_to_events(self, event_types: list[str], callback):
         """Подписка на события системы"""
         for event_type in event_types:
             await self.event_bridge.subscribe(EventType(event_type), callback)
 
-    async def emit_system_event(self, event_type: str, data: Dict[str, Any]):
+    async def emit_system_event(self, event_type: str, data: dict[str, Any]):
         """Отправка системного события"""
         await self.event_bridge.emit_event(EventType(event_type), data)
 
@@ -327,7 +322,7 @@ class WebOrchestratorBridge:
 
 
 # Глобальный экземпляр моста
-_bridge_instance: Optional[WebOrchestratorBridge] = None
+_bridge_instance: WebOrchestratorBridge | None = None
 
 
 def get_web_orchestrator_bridge() -> WebOrchestratorBridge:

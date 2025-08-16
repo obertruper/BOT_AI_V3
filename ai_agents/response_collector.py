@@ -12,7 +12,6 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from mcp__playwright__browser_press_key import mcp__playwright__browser_press_key
 
@@ -31,7 +30,7 @@ class ResponseChunk:
     content: str
     chunk_number: int
     is_complete: bool = False
-    metadata: Dict = None
+    metadata: dict = None
 
 
 @dataclass
@@ -41,9 +40,9 @@ class AIResponse:
     ai_system: str
     chat_id: str
     full_content: str
-    chunks: List[ResponseChunk]
+    chunks: list[ResponseChunk]
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
     is_streaming: bool = True
     word_count: int = 0
     estimated_tokens: int = 0
@@ -52,7 +51,7 @@ class AIResponse:
 class ResponseCollector:
     """Система сбора длинных ответов от AI"""
 
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: dict = None):
         self.config = config or self._default_config()
 
         # Селекторы для разных AI систем
@@ -80,7 +79,7 @@ class ResponseCollector:
             },
         }
 
-    def _default_config(self) -> Dict:
+    def _default_config(self) -> dict:
         """Дефолтная конфигурация"""
         return {
             "max_wait_time": 300,  # 5 минут максимум ожидания
@@ -158,7 +157,7 @@ class ResponseCollector:
             response.end_time = datetime.now()
             return response
 
-    def _get_collection_config(self, expected_length: str) -> Dict:
+    def _get_collection_config(self, expected_length: str) -> dict:
         """Конфигурация сбора в зависимости от ожидаемой длины"""
         configs = {
             "short": {
@@ -210,7 +209,7 @@ class ResponseCollector:
         # Если контент изменился - это streaming
         return len(snapshot2) != len(snapshot1)
 
-    async def _collect_streaming_response(self, response: AIResponse, config: Dict):
+    async def _collect_streaming_response(self, response: AIResponse, config: dict):
         """Сбор streaming ответа по частям"""
         logger.info(f"Сбор streaming ответа от {response.ai_system}")
 
@@ -227,14 +226,10 @@ class ResponseCollector:
                 snapshot = await mcp__playwright__browser_snapshot()
 
                 # Извлекаем текст ответа
-                current_content = self._extract_response_text(
-                    snapshot, response.ai_system
-                )
+                current_content = self._extract_response_text(snapshot, response.ai_system)
 
                 # Если контент изменился
-                if current_content != last_content and len(current_content) > len(
-                    last_content
-                ):
+                if current_content != last_content and len(current_content) > len(last_content):
                     chunk = ResponseChunk(
                         timestamp=datetime.now(),
                         content=current_content,
@@ -247,9 +242,7 @@ class ResponseCollector:
                     chunk_number += 1
                     stable_count = 0
 
-                    logger.debug(
-                        f"Chunk {chunk_number}: +{len(current_content)} символов"
-                    )
+                    logger.debug(f"Chunk {chunk_number}: +{len(current_content)} символов")
 
                     # Автопрокрутка если ответ длинный
                     if len(current_content) > 2000:
@@ -287,7 +280,7 @@ class ResponseCollector:
         # Финальный контент
         response.full_content = last_content
 
-    async def _collect_static_response(self, response: AIResponse, config: Dict):
+    async def _collect_static_response(self, response: AIResponse, config: dict):
         """Сбор статического ответа"""
         logger.info(f"Сбор статического ответа от {response.ai_system}")
 
@@ -424,10 +417,10 @@ class ResponseCollector:
 
     async def collect_multiple_responses(
         self,
-        ai_systems: List[str],
-        chat_ids: Dict[str, str],
+        ai_systems: list[str],
+        chat_ids: dict[str, str],
         expected_length: str = "medium",
-    ) -> Dict[str, AIResponse]:
+    ) -> dict[str, AIResponse]:
         """Параллельный сбор ответов от нескольких AI систем"""
         logger.info(f"Параллельный сбор ответов от {len(ai_systems)} AI систем")
 
@@ -471,7 +464,7 @@ class EnhancedResponseHandler:
 
     async def enhanced_send_task_to_all_chats(
         self, task, expected_length: str = "long"
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         Улучшенная отправка с умным сбором длинных ответов
 
@@ -489,10 +482,7 @@ class EnhancedResponseHandler:
         # Сначала отправляем запросы (используем существующую логику)
         # Затем умно собираем ответы
 
-        chat_ids = {
-            ai_system: session.chat_id
-            for ai_system, session in task.chat_sessions.items()
-        }
+        chat_ids = {ai_system: session.chat_id for ai_system, session in task.chat_sessions.items()}
 
         # Собираем ответы через улучшенную систему
         ai_responses = await self.collector.collect_multiple_responses(

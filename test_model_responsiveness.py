@@ -83,9 +83,7 @@ async def test_model_responsiveness():
     signal_up = pred_up.get("signal_type")
     conf_up = pred_up.get("confidence", 0)
     raw_up = pred_up.get("predictions", {}).get("returns_15m", 0)
-    logger.info(
-        f"  Результат: {signal_up}, confidence: {conf_up:.3f}, return_15m: {raw_up:.6f}"
-    )
+    logger.info(f"  Результат: {signal_up}, confidence: {conf_up:.3f}, return_15m: {raw_up:.6f}")
 
     # Тест 6: Сильный нисходящий тренд
     logger.info("\n📊 Тест 6: Входные данные = НИСХОДЯЩИЙ ТРЕНД")
@@ -146,13 +144,9 @@ async def test_model_responsiveness():
 
         # Проверяем логику
         if signal_up == "LONG" and signal_down == "SHORT":
-            logger.info(
-                "✅ Логика предсказаний корректна (тренд вверх → LONG, тренд вниз → SHORT)"
-            )
+            logger.info("✅ Логика предсказаний корректна (тренд вверх → LONG, тренд вниз → SHORT)")
         elif signal_up == "SHORT" and signal_down == "LONG":
-            logger.warning(
-                "⚠️ Логика инвертирована (тренд вверх → SHORT, тренд вниз → LONG)"
-            )
+            logger.warning("⚠️ Логика инвертирована (тренд вверх → SHORT, тренд вниз → LONG)")
         else:
             logger.warning("⚠️ Модель не различает тренды")
 

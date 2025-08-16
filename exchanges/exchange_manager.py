@@ -3,7 +3,7 @@ Exchange Manager для управления экземплярами бирж
 """
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any
 
 from core.logger import setup_logger
 from exchanges.factory import ExchangeFactory, ExchangeType
@@ -12,7 +12,7 @@ from exchanges.factory import ExchangeFactory, ExchangeType
 class ExchangeManager:
     """Менеджер для управления экземплярами бирж"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Инициализация менеджера бирж
 
@@ -21,7 +21,7 @@ class ExchangeManager:
         """
         self.logger = setup_logger("exchange_manager")
         self.config = config
-        self.exchanges: Dict[str, Any] = {}
+        self.exchanges: dict[str, Any] = {}
         self._initialized = False
 
     async def initialize(self):
@@ -51,9 +51,7 @@ class ExchangeManager:
                 env_testnet_name = f"{exchange_name.upper()}_TESTNET"
 
                 api_key = os.getenv(env_key_name) or exchange_config.get("api_key", "")
-                api_secret = os.getenv(env_secret_name) or exchange_config.get(
-                    "api_secret", ""
-                )
+                api_secret = os.getenv(env_secret_name) or exchange_config.get("api_secret", "")
                 testnet = os.getenv(
                     env_testnet_name, "false"
                 ).lower() == "true" or exchange_config.get("testnet", False)
@@ -61,15 +59,11 @@ class ExchangeManager:
                 # Проверяем наличие API ключей
                 if not api_key or not api_secret:
                     self.logger.warning(f"⚠️ Нет API ключей для биржи {exchange_name}")
-                    self.logger.debug(
-                        f"   Проверялись: {env_key_name}, {env_secret_name}"
-                    )
+                    self.logger.debug(f"   Проверялись: {env_key_name}, {env_secret_name}")
                     continue
 
                 self.logger.info(f"✅ Найдены API ключи для {exchange_name}")
-                self.logger.debug(
-                    f"   API Key: {api_key[:10]}..." if api_key else "NONE"
-                )
+                self.logger.debug(f"   API Key: {api_key[:10]}..." if api_key else "NONE")
                 self.logger.debug(f"   Testnet: {testnet}")
 
                 # Преобразуем строку в ExchangeType
@@ -98,9 +92,7 @@ class ExchangeManager:
                 self.logger.error(f"❌ Ошибка инициализации биржи {exchange_name}: {e}")
 
         self._initialized = True
-        self.logger.info(
-            f"✅ Exchange Manager инициализирован с {len(self.exchanges)} биржами"
-        )
+        self.logger.info(f"✅ Exchange Manager инициализирован с {len(self.exchanges)} биржами")
 
     async def get_exchange(self, exchange_name: str):
         """
@@ -117,7 +109,7 @@ class ExchangeManager:
 
         return self.exchanges.get(exchange_name)
 
-    async def get_available_exchanges(self) -> List[str]:
+    async def get_available_exchanges(self) -> list[str]:
         """Получение списка доступных бирж"""
         if not self._initialized:
             await self.initialize()
@@ -141,13 +133,9 @@ class ExchangeManager:
                     try:
                         result = await exchange.health_check()
                         if not result:
-                            self.logger.warning(
-                                f"Health check failed для биржи {exchange_name}"
-                            )
+                            self.logger.warning(f"Health check failed для биржи {exchange_name}")
                     except Exception as e:
-                        self.logger.error(
-                            f"Ошибка health check для {exchange_name}: {e}"
-                        )
+                        self.logger.error(f"Ошибка health check для {exchange_name}: {e}")
 
             return True
 

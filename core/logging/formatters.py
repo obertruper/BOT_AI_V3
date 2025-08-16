@@ -13,7 +13,7 @@ import json
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class LogLevel(Enum):
@@ -59,12 +59,11 @@ class TraderFormatter(BaseFormatter):
     def __init__(
         self,
         trader_id: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         include_metrics: bool = True,
     ):
         format_string = (
-            "%(isotime)s [TRADER:%(trader_id)s] %(levelname)-8s "
-            "%(name)s:%(lineno)d - %(message)s"
+            "%(isotime)s [TRADER:%(trader_id)s] %(levelname)-8s %(name)s:%(lineno)d - %(message)s"
         )
         if include_metrics:
             format_string += " | %(trader_metrics)s"
@@ -90,7 +89,7 @@ class TraderFormatter(BaseFormatter):
 
         return super().format(record)
 
-    def _format_metrics(self, metrics: Dict[str, Any]) -> str:
+    def _format_metrics(self, metrics: dict[str, Any]) -> str:
         """Форматирование метрик трейдера"""
         parts = []
 
@@ -119,8 +118,7 @@ class ExchangeFormatter(BaseFormatter):
 
     def __init__(self, exchange_name: str, include_api_metrics: bool = True):
         format_string = (
-            "%(isotime)s [EXCHANGE:%(exchange_name)s] %(levelname)-8s "
-            "%(name)s - %(message)s"
+            "%(isotime)s [EXCHANGE:%(exchange_name)s] %(levelname)-8s %(name)s - %(message)s"
         )
         if include_api_metrics:
             format_string += " | %(api_metrics)s"
@@ -142,7 +140,7 @@ class ExchangeFormatter(BaseFormatter):
 
         return super().format(record)
 
-    def _format_api_metrics(self, metrics: Dict[str, Any]) -> str:
+    def _format_api_metrics(self, metrics: dict[str, Any]) -> str:
         """Форматирование API метрик"""
         parts = []
 
@@ -169,7 +167,7 @@ class StrategyFormatter(BaseFormatter):
     - Используемые индикаторы
     """
 
-    def __init__(self, strategy_name: str, trader_id: Optional[str] = None):
+    def __init__(self, strategy_name: str, trader_id: str | None = None):
         format_string = "%(isotime)s [STRATEGY:%(strategy_name)s"
         if trader_id:
             format_string += ":%(trader_id)s"
@@ -193,7 +191,7 @@ class StrategyFormatter(BaseFormatter):
 
         return super().format(record)
 
-    def _format_signal_info(self, signal: Dict[str, Any]) -> str:
+    def _format_signal_info(self, signal: dict[str, Any]) -> str:
         """Форматирование информации о сигнале"""
         parts = []
 
@@ -224,7 +222,7 @@ class MLFormatter(BaseFormatter):
     - Model performance метрики
     """
 
-    def __init__(self, model_name: str, model_version: Optional[str] = None):
+    def __init__(self, model_name: str, model_version: str | None = None):
         format_string = "%(isotime)s [ML:%(model_name)s"
         if model_version:
             format_string += ":%(model_version)s"
@@ -248,7 +246,7 @@ class MLFormatter(BaseFormatter):
 
         return super().format(record)
 
-    def _format_ml_info(self, ml_data: Dict[str, Any]) -> str:
+    def _format_ml_info(self, ml_data: dict[str, Any]) -> str:
         """Форматирование ML информации"""
         parts = []
 
@@ -278,8 +276,7 @@ class SystemFormatter(BaseFormatter):
 
     def __init__(self, component_name: str, include_system_metrics: bool = True):
         format_string = (
-            "%(isotime)s [SYSTEM:%(component_name)s] %(levelname)-8s "
-            "%(name)s - %(message)s"
+            "%(isotime)s [SYSTEM:%(component_name)s] %(levelname)-8s %(name)s - %(message)s"
         )
         if include_system_metrics:
             format_string += " | %(system_metrics)s"
@@ -301,7 +298,7 @@ class SystemFormatter(BaseFormatter):
 
         return super().format(record)
 
-    def _format_system_metrics(self, metrics: Dict[str, Any]) -> str:
+    def _format_system_metrics(self, metrics: dict[str, Any]) -> str:
         """Форматирование системных метрик"""
         parts = []
 
@@ -326,7 +323,7 @@ class JSONStructuredFormatter(logging.Formatter):
     Создает JSON записи для легкой обработки в системах мониторинга
     """
 
-    def __init__(self, component_type: str, component_id: Optional[str] = None):
+    def __init__(self, component_type: str, component_id: str | None = None):
         super().__init__()
         self.component_type = component_type
         self.component_id = component_id
@@ -410,19 +407,13 @@ class MultiLineFormatter(BaseFormatter):
             lines = formatted.split("\n")
             if len(lines) > 1:
                 # Первая строка как есть, остальные с отступом
-                formatted = (
-                    lines[0]
-                    + "\n"
-                    + "\n".join(self.indent + line for line in lines[1:])
-                )
+                formatted = lines[0] + "\n" + "\n".join(self.indent + line for line in lines[1:])
 
         return formatted
 
 
 # Фабричные функции для создания форматтеров
-def create_trader_formatter(
-    trader_id: str, session_id: Optional[str] = None
-) -> TraderFormatter:
+def create_trader_formatter(trader_id: str, session_id: str | None = None) -> TraderFormatter:
     """Создание форматтера для трейдера"""
     return TraderFormatter(trader_id, session_id)
 
@@ -433,15 +424,13 @@ def create_exchange_formatter(exchange_name: str) -> ExchangeFormatter:
 
 
 def create_strategy_formatter(
-    strategy_name: str, trader_id: Optional[str] = None
+    strategy_name: str, trader_id: str | None = None
 ) -> StrategyFormatter:
     """Создание форматтера для стратегии"""
     return StrategyFormatter(strategy_name, trader_id)
 
 
-def create_ml_formatter(
-    model_name: str, model_version: Optional[str] = None
-) -> MLFormatter:
+def create_ml_formatter(model_name: str, model_version: str | None = None) -> MLFormatter:
     """Создание форматтера для ML компонента"""
     return MLFormatter(model_name, model_version)
 
@@ -452,7 +441,7 @@ def create_system_formatter(component_name: str) -> SystemFormatter:
 
 
 def create_json_formatter(
-    component_type: str, component_id: Optional[str] = None
+    component_type: str, component_id: str | None = None
 ) -> JSONStructuredFormatter:
     """Создание JSON форматтера"""
     return JSONStructuredFormatter(component_type, component_id)
@@ -460,7 +449,7 @@ def create_json_formatter(
 
 # Utility функции для добавления контекста в log records
 def add_trader_context(
-    record: logging.LogRecord, trader_id: str, metrics: Optional[Dict[str, Any]] = None
+    record: logging.LogRecord, trader_id: str, metrics: dict[str, Any] | None = None
 ):
     """Добавление контекста трейдера к log record"""
     record.trader_id = trader_id
@@ -471,7 +460,7 @@ def add_trader_context(
 def add_exchange_context(
     record: logging.LogRecord,
     exchange: str,
-    api_metrics: Optional[Dict[str, Any]] = None,
+    api_metrics: dict[str, Any] | None = None,
 ):
     """Добавление контекста биржи к log record"""
     record.exchange_name = exchange
@@ -483,7 +472,7 @@ def add_signal_context(
     record: logging.LogRecord,
     signal_type: str,
     symbol: str,
-    confidence: Optional[float] = None,
+    confidence: float | None = None,
 ):
     """Добавление контекста сигнала к log record"""
     signal_info = {"signal_type": signal_type, "symbol": symbol}
@@ -496,8 +485,8 @@ def add_signal_context(
 def add_ml_context(
     record: logging.LogRecord,
     prediction: Any,
-    confidence: Optional[float] = None,
-    model_score: Optional[float] = None,
+    confidence: float | None = None,
+    model_score: float | None = None,
 ):
     """Добавление ML контекста к log record"""
     ml_info = {"prediction": prediction}

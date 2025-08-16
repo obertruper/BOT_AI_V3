@@ -9,7 +9,7 @@ REST API для аутентификации и авторизации:
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -52,7 +52,7 @@ class LoginResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
-    user_info: Dict[str, Any]
+    user_info: dict[str, Any]
 
 
 class RefreshTokenRequest(BaseModel):
@@ -74,10 +74,10 @@ class UserInfo(BaseModel):
 
     user_id: str
     username: str
-    email: Optional[str] = None
+    email: str | None = None
     role: str
-    permissions: List[str]
-    last_login: Optional[datetime] = None
+    permissions: list[str]
+    last_login: datetime | None = None
     created_at: datetime
 
 
@@ -91,7 +91,7 @@ class ChangePasswordRequest(BaseModel):
 # =================== UTILITY FUNCTIONS ===================
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
     """Создание access token"""
     to_encode = data.copy()
     if expires_delta:
@@ -104,7 +104,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
     """Создание refresh token"""
     to_encode = data.copy()
     if expires_delta:
@@ -138,9 +138,7 @@ async def get_current_user(
     )
 
     try:
-        payload = jwt.decode(
-            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
-        )
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         user_id: str = payload.get("user_id")
         token_type: str = payload.get("type")
@@ -230,9 +228,7 @@ async def login(request: LoginRequest):
 
         # Создаем сессию
         session_manager = get_session_manager()
-        await session_manager.create_session(
-            user.user_id, access_token, request.remember_me
-        )
+        await session_manager.create_session(user.user_id, access_token, request.remember_me)
 
         user_info = {
             "user_id": user.user_id,
@@ -259,7 +255,7 @@ async def login(request: LoginRequest):
         raise
     except Exception as e:
         logger.error(f"Ошибка при входе пользователя {request.username}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка аутентификации: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка аутентификации: {e!s}")
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -268,9 +264,7 @@ async def refresh_token(request: RefreshTokenRequest):
     try:
         # Проверяем refresh token
         try:
-            payload = jwt.decode(
-                request.refresh_token, SECRET_KEY, algorithms=[ALGORITHM]
-            )
+            payload = jwt.decode(request.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
             username: str = payload.get("sub")
             user_id: str = payload.get("user_id")
 
@@ -314,9 +308,7 @@ async def refresh_token(request: RefreshTokenRequest):
         raise
     except Exception as e:
         logger.error(f"Ошибка обновления токена: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка обновления токена: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления токена: {e!s}")
 
 
 @router.post("/logout")
@@ -336,7 +328,7 @@ async def logout(current_user: dict = Depends(get_current_user)):
         logger.error(
             f"Ошибка при выходе пользователя {current_user.get('username', 'unknown')}: {e}"
         )
-        raise HTTPException(status_code=500, detail=f"Ошибка выхода: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка выхода: {e!s}")
 
 
 @router.get("/me", response_model=UserInfo)
@@ -367,9 +359,7 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
         logger.error(
             f"Ошибка получения информации о пользователе {current_user.get('user_id')}: {e}"
         )
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения информации: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения информации: {e!s}")
 
 
 @router.post("/change-password")
@@ -404,9 +394,7 @@ async def change_password(
 
         # Удаляем все сессии пользователя (кроме текущей)
         session_manager = get_session_manager()
-        await session_manager.delete_user_sessions(
-            current_user["user_id"], exclude_current=True
-        )
+        await session_manager.delete_user_sessions(current_user["user_id"], exclude_current=True)
 
         logger.info(f"Пользователь {current_user['username']} изменил пароль")
 
@@ -418,12 +406,10 @@ async def change_password(
         logger.error(
             f"Ошибка изменения пароля для пользователя {current_user.get('username')}: {e}"
         )
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка изменения пароля: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка изменения пароля: {e!s}")
 
 
-@router.get("/sessions", response_model=List[Dict[str, Any]])
+@router.get("/sessions", response_model=list[dict[str, Any]])
 async def get_user_sessions(current_user: dict = Depends(get_current_user)):
     """Получить активные сессии пользователя"""
     try:
@@ -446,18 +432,12 @@ async def get_user_sessions(current_user: dict = Depends(get_current_user)):
         return sessions_info
 
     except Exception as e:
-        logger.error(
-            f"Ошибка получения сессий для пользователя {current_user.get('user_id')}: {e}"
-        )
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения сессий: {str(e)}"
-        )
+        logger.error(f"Ошибка получения сессий для пользователя {current_user.get('user_id')}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения сессий: {e!s}")
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str, current_user: dict = Depends(get_current_user)
-):
+async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
     """Удалить конкретную сессию"""
     try:
         session_manager = get_session_manager()
@@ -469,9 +449,7 @@ async def delete_session(
 
         await session_manager.delete_session(session_id)
 
-        logger.info(
-            f"Удалена сессия {session_id} пользователя {current_user['username']}"
-        )
+        logger.info(f"Удалена сессия {session_id} пользователя {current_user['username']}")
 
         return {"message": "Сессия удалена"}
 
@@ -479,4 +457,4 @@ async def delete_session(
         raise
     except Exception as e:
         logger.error(f"Ошибка удаления сессии {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка удаления сессии: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления сессии: {e!s}")

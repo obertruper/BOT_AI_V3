@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Тестовый скрипт для проверки генерации ML сигналов
 """
@@ -48,9 +47,7 @@ async def test_signal_generation():
         logger.info(f"📊 Генерация сигнала для {symbol}...")
 
         # Генерируем сигнал
-        signal = await signal_processor.process_realtime_signal(
-            symbol=symbol, exchange=exchange
-        )
+        signal = await signal_processor.process_realtime_signal(symbol=symbol, exchange=exchange)
 
         if signal:
             logger.info(f"✅ Сгенерирован {signal.signal_type.value} сигнал:")
@@ -112,9 +109,7 @@ async def test_scheduler():
         final_status = await scheduler.get_status()
         logger.info("\n📊 Финальная статистика:")
         for symbol, data in final_status["symbols"].items():
-            logger.info(
-                f"   {symbol}: активен={data['active']}, ошибок={data['errors']}"
-            )
+            logger.info(f"   {symbol}: активен={data['active']}, ошибок={data['errors']}")
 
     except Exception as e:
         logger.error(f"❌ Ошибка: {e}")

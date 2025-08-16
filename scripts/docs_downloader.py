@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Система автоматического скачивания и обновления технической документации
 
@@ -24,7 +23,6 @@ import logging
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import aiohttp
 
@@ -64,26 +62,20 @@ class DocumentationDownloader:
             },
             "fastapi": {
                 "name": "FastAPI Web Framework",
-                "urls": [
-                    "https://raw.githubusercontent.com/tiangolo/fastapi/master/README.md"
-                ],
+                "urls": ["https://raw.githubusercontent.com/tiangolo/fastapi/master/README.md"],
                 "github_docs": "https://api.github.com/repos/tiangolo/fastapi/contents/docs",
                 "output_file": "fastapi_patterns.md",
                 "update_frequency": 7,
             },
             "pydantic": {
                 "name": "Pydantic Data Validation",
-                "urls": [
-                    "https://raw.githubusercontent.com/pydantic/pydantic/main/README.md"
-                ],
+                "urls": ["https://raw.githubusercontent.com/pydantic/pydantic/main/README.md"],
                 "output_file": "pydantic_validation.md",
                 "update_frequency": 7,
             },
             "uvicorn": {
                 "name": "Uvicorn ASGI Server",
-                "urls": [
-                    "https://raw.githubusercontent.com/encode/uvicorn/master/README.md"
-                ],
+                "urls": ["https://raw.githubusercontent.com/encode/uvicorn/master/README.md"],
                 "output_file": "uvicorn_deployment.md",
                 "update_frequency": 14,
             },
@@ -118,17 +110,13 @@ class DocumentationDownloader:
             # === Базы данных ===
             "postgresql": {
                 "name": "PostgreSQL Database",
-                "urls": [
-                    "https://raw.githubusercontent.com/postgres/postgres/master/README"
-                ],
+                "urls": ["https://raw.githubusercontent.com/postgres/postgres/master/README"],
                 "output_file": "postgresql_tuning.md",
                 "update_frequency": 30,
             },
             "redis": {
                 "name": "Redis In-Memory Database",
-                "urls": [
-                    "https://raw.githubusercontent.com/redis/redis/unstable/README.md"
-                ],
+                "urls": ["https://raw.githubusercontent.com/redis/redis/unstable/README.md"],
                 "output_file": "redis_caching.md",
                 "update_frequency": 14,
             },
@@ -143,26 +131,20 @@ class DocumentationDownloader:
             },
             "grafana": {
                 "name": "Grafana Dashboards",
-                "urls": [
-                    "https://raw.githubusercontent.com/grafana/grafana/main/README.md"
-                ],
+                "urls": ["https://raw.githubusercontent.com/grafana/grafana/main/README.md"],
                 "output_file": "grafana_dashboards.md",
                 "update_frequency": 14,
             },
             # === ML и Analytics ===
             "pandas": {
                 "name": "Pandas Data Analysis",
-                "urls": [
-                    "https://raw.githubusercontent.com/pandas-dev/pandas/main/README.md"
-                ],
+                "urls": ["https://raw.githubusercontent.com/pandas-dev/pandas/main/README.md"],
                 "output_file": "pandas_analysis.md",
                 "update_frequency": 14,
             },
             "numpy": {
                 "name": "NumPy Mathematical Computing",
-                "urls": [
-                    "https://raw.githubusercontent.com/numpy/numpy/main/README.md"
-                ],
+                "urls": ["https://raw.githubusercontent.com/numpy/numpy/main/README.md"],
                 "output_file": "numpy_computing.md",
                 "update_frequency": 21,
             },
@@ -185,9 +167,7 @@ class DocumentationDownloader:
             },
             "aiohttp": {
                 "name": "Aiohttp Async HTTP Client/Server",
-                "urls": [
-                    "https://raw.githubusercontent.com/aio-libs/aiohttp/master/README.rst"
-                ],
+                "urls": ["https://raw.githubusercontent.com/aio-libs/aiohttp/master/README.rst"],
                 "output_file": "aiohttp_async.md",
                 "update_frequency": 7,
             },
@@ -202,27 +182,21 @@ class DocumentationDownloader:
             # === Testing ===
             "pytest": {
                 "name": "Pytest Testing Framework",
-                "urls": [
-                    "https://raw.githubusercontent.com/pytest-dev/pytest/main/README.rst"
-                ],
+                "urls": ["https://raw.githubusercontent.com/pytest-dev/pytest/main/README.rst"],
                 "output_file": "pytest_testing.md",
                 "update_frequency": 14,
             },
             # === Security ===
             "cryptography": {
                 "name": "Cryptography Library",
-                "urls": [
-                    "https://raw.githubusercontent.com/pyca/cryptography/main/README.rst"
-                ],
+                "urls": ["https://raw.githubusercontent.com/pyca/cryptography/main/README.rst"],
                 "output_file": "cryptography_security.md",
                 "update_frequency": 14,
             },
             # === DevOps ===
             "docker": {
                 "name": "Docker Containerization",
-                "urls": [
-                    "https://raw.githubusercontent.com/docker/docs/main/README.md"
-                ],
+                "urls": ["https://raw.githubusercontent.com/docker/docs/main/README.md"],
                 "output_file": "docker_deployment.md",
                 "update_frequency": 21,
             },
@@ -241,17 +215,17 @@ class DocumentationDownloader:
         if self.session:
             await self.session.close()
 
-    def load_last_update_info(self) -> Dict:
+    def load_last_update_info(self) -> dict:
         """Загрузка информации о последнем обновлении"""
         if self.last_update_file.exists():
             try:
-                with open(self.last_update_file, "r", encoding="utf-8") as f:
+                with open(self.last_update_file, encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
                 logger.warning(f"Ошибка чтения файла обновлений: {e}")
         return {}
 
-    def save_last_update_info(self, info: Dict):
+    def save_last_update_info(self, info: dict):
         """Сохранение информации о последнем обновлении"""
         try:
             with open(self.last_update_file, "w", encoding="utf-8") as f:
@@ -271,7 +245,7 @@ class DocumentationDownloader:
 
         return datetime.now() - last_update > timedelta(days=frequency)
 
-    async def download_content(self, url: str) -> Optional[str]:
+    async def download_content(self, url: str) -> str | None:
         """Скачивание контента по URL"""
         try:
             async with self.session.get(url) as response:
@@ -297,9 +271,7 @@ class DocumentationDownloader:
 
         all_content = []
         all_content.append(f"# {source['name']} - Локальная документация")
-        all_content.append(
-            f"**Скачано**: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
-        )
+        all_content.append(f"**Скачано**: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
         all_content.append(
             f"**Автоматическое обновление**: каждые {source['update_frequency']} дней"
         )
@@ -334,9 +306,7 @@ class DocumentationDownloader:
                 "timestamp": datetime.now().isoformat(),
                 "files_count": len(source["urls"]),
                 "output_file": source["output_file"],
-                "content_hash": hashlib.md5(
-                    "\n".join(all_content).encode()
-                ).hexdigest(),
+                "content_hash": hashlib.md5("\n".join(all_content).encode()).hexdigest(),
             }
             self.save_last_update_info(last_updates)
 
@@ -347,7 +317,7 @@ class DocumentationDownloader:
             logger.error(f"Ошибка сохранения документации {library}: {e}")
             return False
 
-    async def download_github_docs(self, api_url: str) -> List[str]:
+    async def download_github_docs(self, api_url: str) -> list[str]:
         """Скачивание документации через GitHub API"""
         try:
             async with self.session.get(api_url) as response:
@@ -357,9 +327,7 @@ class DocumentationDownloader:
 
                     for file_info in files[:10]:  # Ограничиваем количество файлов
                         if file_info["name"].endswith(".md"):
-                            file_content = await self.download_content(
-                                file_info["download_url"]
-                            )
+                            file_content = await self.download_content(file_info["download_url"])
                             if file_content:
                                 docs_content.append(f"## {file_info['name']}")
                                 docs_content.append("")
@@ -386,11 +354,11 @@ class DocumentationDownloader:
 
         logger.info(f"Обновлено библиотек: {updated_count}")
 
-    def check_updates_needed(self) -> List[str]:
+    def check_updates_needed(self) -> list[str]:
         """Проверка каких библиотек требуют обновления"""
         return [lib for lib in self.sources.keys() if self.needs_update(lib)]
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """Получение статуса всех библиотек"""
         last_updates = self.load_last_update_info()
         status = {}
@@ -419,9 +387,7 @@ class DocumentationDownloader:
 async def main():
     """Главная функция"""
     parser = argparse.ArgumentParser(description="Менеджер документации BOT Trading v3")
-    parser.add_argument(
-        "--update-all", action="store_true", help="Обновить всю документацию"
-    )
+    parser.add_argument("--update-all", action="store_true", help="Обновить всю документацию")
     parser.add_argument(
         "--force",
         action="store_true",
@@ -433,9 +399,7 @@ async def main():
         action="store_true",
         help="Проверить какие библиотеки требуют обновления",
     )
-    parser.add_argument(
-        "--status", action="store_true", help="Показать статус всех библиотек"
-    )
+    parser.add_argument("--status", action="store_true", help="Показать статус всех библиотек")
 
     args = parser.parse_args()
 

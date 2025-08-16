@@ -6,7 +6,7 @@ Order Executor - обработчик исполнения ордеров
 
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.logger import setup_logger
 from database.connections.postgres import AsyncPGPool
@@ -120,15 +120,15 @@ class OrderExecutor:
                     return False
 
             except Exception as e:
-                await self._reject_order(order, f"Ошибка биржи: {str(e)}")
+                await self._reject_order(order, f"Ошибка биржи: {e!s}")
                 return False
 
         except Exception as e:
             logger.error(f"Критическая ошибка исполнения ордера: {e}")
-            await self._reject_order(order, f"Системная ошибка: {str(e)}")
+            await self._reject_order(order, f"Системная ошибка: {e!s}")
             return False
 
-    async def _validate_order(self, order: Order, exchange) -> Optional[str]:
+    async def _validate_order(self, order: Order, exchange) -> str | None:
         """Валидация параметров ордера"""
         try:
             # Проверка символа
@@ -155,7 +155,7 @@ class OrderExecutor:
             return None
 
         except Exception as e:
-            return f"Ошибка валидации: {str(e)}"
+            return f"Ошибка валидации: {e!s}"
 
     async def _check_balance(self, order: Order, exchange) -> bool:
         """Проверка достаточности баланса"""
@@ -169,9 +169,7 @@ class OrderExecutor:
                 available = balance.get("USDT", {}).get("free", 0)
 
                 if available < required:
-                    logger.warning(
-                        f"Недостаточно USDT: нужно {required}, есть {available}"
-                    )
+                    logger.warning(f"Недостаточно USDT: нужно {required}, есть {available}")
                     return False
             else:
                 # Для продажи нужна торгуемая валюта
@@ -255,7 +253,7 @@ class OrderExecutor:
         )
 
     async def _update_order_status(
-        self, order_id: int, status: OrderStatus, metadata: Dict[str, Any] = None
+        self, order_id: int, status: OrderStatus, metadata: dict[str, Any] = None
     ):
         """Обновляет статус ордера в БД"""
         try:
@@ -270,17 +268,13 @@ class OrderExecutor:
         except Exception as e:
             logger.error(f"Ошибка обновления статуса ордера: {e}")
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Возвращает статистику исполнителя"""
         return {
             "executed_count": self.executed_count,
             "rejected_count": self.rejected_count,
             "success_rate": (
-                (
-                    self.executed_count
-                    / (self.executed_count + self.rejected_count)
-                    * 100
-                )
+                (self.executed_count / (self.executed_count + self.rejected_count) * 100)
                 if (self.executed_count + self.rejected_count) > 0
                 else 0
             ),

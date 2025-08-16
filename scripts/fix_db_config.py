@@ -157,9 +157,7 @@ from database.connections import get_database_url
             content = script_file.read_text()
 
             # Заменяем жестко зашитый пароль на переменную окружения
-            content = re.sub(
-                r'PASSWORD=".*?"', 'PASSWORD="${SYNC_PASSWORD:-}"', content
-            )
+            content = re.sub(r'PASSWORD=".*?"', 'PASSWORD="${SYNC_PASSWORD:-}"', content)
 
             script_file.write_text(content)
             print(f"✅ Исправлен {script_path}")
@@ -178,9 +176,7 @@ from database.connections import get_database_url
     'host': os.getenv('PGHOST', 'localhost')
 }"""
 
-        content = re.sub(
-            r"conn_params = \{[^}]+\}", new_conn_params, content, flags=re.DOTALL
-        )
+        content = re.sub(r"conn_params = \{[^}]+\}", new_conn_params, content, flags=re.DOTALL)
 
         # Добавляем импорт os если его нет
         if "import os" not in content:

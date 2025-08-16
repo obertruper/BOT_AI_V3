@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Тест исправленной Enhanced SL/TP Manager системы
 """
@@ -137,9 +136,7 @@ async def test_enhanced_sltp_manager():
         symbol="BTCUSDT", side="Buy", size=1.0, entry_price=50000.0, mark_price=50000.0
     )
 
-    print(
-        f"Создана тестовая позиция: {position.symbol} {position.side} {position.size}"
-    )
+    print(f"Создана тестовая позиция: {position.symbol} {position.side} {position.size}")
 
     # Тест создания базовых SL/TP ордеров с конфигурацией
     try:
@@ -153,9 +150,7 @@ async def test_enhanced_sltp_manager():
         print(f"✅ Создано {len(orders)} SL/TP ордеров")
 
         for order in orders:
-            print(
-                f"  - {order.order_type}: {order.trigger_price} (qty: {order.quantity})"
-            )
+            print(f"  - {order.order_type}: {order.trigger_price} (qty: {order.quantity})")
     except Exception as e:
         print(f"❌ Ошибка создания SL/TP: {e}")
 
@@ -195,9 +190,7 @@ async def test_enhanced_sltp_manager():
     # Тест защиты прибыли
     try:
         current_price = 52000.0  # Прибыль 4%
-        protection_result = await manager.update_profit_protection(
-            position, current_price
-        )
+        protection_result = await manager.update_profit_protection(position, current_price)
         if protection_result:
             print(f"✅ Profit protection обновлен: {protection_result.trigger_price}")
         else:
@@ -235,9 +228,7 @@ def test_config_loading():
     print(f"Profit protection enabled: {config.profit_protection.enabled}")
 
     for level in config.partial_tp_levels:
-        print(
-            f"  Level {level.level}: {level.percentage}% -> close {level.close_ratio}"
-        )
+        print(f"  Level {level.level}: {level.percentage}% -> close {level.close_ratio}")
 
     print("✅ Конфигурация загружена корректно")
 

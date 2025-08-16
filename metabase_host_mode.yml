@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  metabase:
+    image: metabase/metabase:latest
+    container_name: bot_metabase_host
+    network_mode: host
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: metabase
+      MB_DB_PASS: metabase_password
+      MB_DB_HOST: localhost
+      JAVA_OPTS: "-Xmx2g"
+    volumes:
+      - metabase_data:/metabase.db
+    depends_on:
+      - postgres_metabase
+    restart: unless-stopped
+
+  postgres_metabase:
+    image: postgres:15
+    container_name: bot_postgres_metabase_host
+    ports:
+      - "15432:5432"  # Используем другой порт чтобы не конфликтовать
+    environment:
+      POSTGRES_DB: metabase
+      POSTGRES_USER: metabase
+      POSTGRES_PASSWORD: metabase_password
+    volumes:
+      - postgres_metabase_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  metabase_data:
+  postgres_metabase_data:

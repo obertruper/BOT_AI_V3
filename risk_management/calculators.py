@@ -4,7 +4,6 @@ Risk Calculator - калькулятор рисков для торговых о
 
 import logging
 from decimal import Decimal
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -12,11 +11,9 @@ logger = logging.getLogger(__name__)
 class RiskCalculator:
     """Калькулятор рисков"""
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         self.config = config
-        self.max_risk_per_trade = Decimal(
-            str(config.get("max_risk_per_trade", 0.02))
-        )  # 2%
+        self.max_risk_per_trade = Decimal(str(config.get("max_risk_per_trade", 0.02)))  # 2%
         self.max_position_size = Decimal(str(config.get("max_position_size", 1000)))
         self.min_position_size = Decimal(str(config.get("min_position_size", 10)))
 
@@ -25,7 +22,7 @@ class RiskCalculator:
         account_balance: Decimal,
         entry_price: Decimal,
         stop_loss: Decimal,
-        risk_percentage: Optional[Decimal] = None,
+        risk_percentage: Decimal | None = None,
     ) -> Decimal:
         """
         Рассчитать размер позиции на основе риска
@@ -87,8 +84,8 @@ class RiskCalculator:
         self,
         position_size: Decimal,
         entry_price: Decimal,
-        stop_loss: Optional[Decimal] = None,
-        account_balance: Optional[Decimal] = None,
+        stop_loss: Decimal | None = None,
+        account_balance: Decimal | None = None,
     ) -> bool:
         """
         Валидировать параметры риска

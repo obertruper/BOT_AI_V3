@@ -30,9 +30,7 @@ async def analyze():
 
         try:
             # Получаем предсказание
-            prediction = await ml_manager.get_trading_signals(
-                symbols=[symbol], exchange="bybit"
-            )
+            prediction = await ml_manager.get_trading_signals(symbols=[symbol], exchange="bybit")
 
             # Извлекаем предсказание для символа
             if prediction and symbol in prediction:
@@ -99,9 +97,7 @@ async def analyze():
                     print(
                         "    1. Модель обучена выдавать минимальную confidence для прохождения порога"
                     )
-                    print(
-                        "    2. Постпроцессинг корректирует confidence до порогового значения"
-                    )
+                    print("    2. Постпроцессинг корректирует confidence до порогового значения")
                     print("    3. Все компоненты формулы дают одинаковый результат")
 
             else:

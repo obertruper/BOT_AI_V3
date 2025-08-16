@@ -14,9 +14,10 @@ Event Bridge для BOT_Trading v3.0
 
 import asyncio
 import json
+from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -94,14 +95,14 @@ class EventBridge:
         self.config_manager = config_manager
 
         # WebSocket менеджер (будет инициализирован позже)
-        self.websocket_manager: Optional[Any] = None
+        self.websocket_manager: Any | None = None
 
         # Подписчики на события
-        self.event_handlers: Dict[EventType, List[Callable]] = {}
-        self.websocket_connections: Set = set()
+        self.event_handlers: dict[EventType, list[Callable]] = {}
+        self.websocket_connections: set = set()
 
         # Фильтры событий
-        self.event_filters: Dict[str, Callable] = {}
+        self.event_filters: dict[str, Callable] = {}
 
         # Состояние
         self._active = False
@@ -198,7 +199,7 @@ class EventBridge:
 
     # =================== EVENT HANDLERS ===================
 
-    async def _on_trader_started(self, trader_id: str, trader_info: Dict[str, Any]):
+    async def _on_trader_started(self, trader_id: str, trader_info: dict[str, Any]):
         """Обработчик события запуска трейдера"""
         await self.emit_event(
             EventType.TRADER_STARTED,
@@ -220,7 +221,7 @@ class EventBridge:
             },
         )
 
-    async def _on_trade_executed(self, trade_data: Dict[str, Any]):
+    async def _on_trade_executed(self, trade_data: dict[str, Any]):
         """Обработчик события выполнения сделки"""
         await self.emit_event(
             EventType.TRADE_OPENED,
@@ -235,7 +236,7 @@ class EventBridge:
             },
         )
 
-    async def _on_position_changed(self, position_data: Dict[str, Any]):
+    async def _on_position_changed(self, position_data: dict[str, Any]):
         """Обработчик события изменения позиции"""
         await self.emit_event(
             EventType.POSITION_UPDATED,
@@ -306,7 +307,7 @@ class EventBridge:
                 logger.error(f"Ошибка в periodic_heartbeat: {e}")
                 await asyncio.sleep(30)
 
-    async def _collect_system_metrics(self) -> Dict[str, Any]:
+    async def _collect_system_metrics(self) -> dict[str, Any]:
         """Сбор системных метрик"""
         try:
             import psutil
@@ -341,7 +342,7 @@ class EventBridge:
 
     # =================== EVENT EMISSION ===================
 
-    async def emit_event(self, event_type: EventType, data: Dict[str, Any]):
+    async def emit_event(self, event_type: EventType, data: dict[str, Any]):
         """
         Отправка события всем подписчикам
 
@@ -367,9 +368,7 @@ class EventBridge:
         except Exception as e:
             logger.error(f"Ошибка отправки события {event_type.value}: {e}")
 
-    async def _should_emit_event(
-        self, event_type: EventType, data: Dict[str, Any]
-    ) -> bool:
+    async def _should_emit_event(self, event_type: EventType, data: dict[str, Any]) -> bool:
         """Проверка нужно ли отправлять событие"""
         try:
             # Проверяем фильтры
@@ -383,7 +382,7 @@ class EventBridge:
             logger.error(f"Ошибка проверки фильтра события {event_type.value}: {e}")
             return True
 
-    async def _broadcast_to_websockets(self, message: Dict[str, Any]):
+    async def _broadcast_to_websockets(self, message: dict[str, Any]):
         """Отправка сообщения всем WebSocket подключениям"""
         if not self.websocket_connections:
             return
@@ -401,32 +400,26 @@ class EventBridge:
                 # Удаляем неработающее соединение
                 self.websocket_connections.discard(websocket)
 
-    async def _call_local_handlers(self, event_type: EventType, data: Dict[str, Any]):
+    async def _call_local_handlers(self, event_type: EventType, data: dict[str, Any]):
         """Вызов локальных обработчиков события"""
         if event_type in self.event_handlers:
             for handler in self.event_handlers[event_type]:
                 try:
                     await handler(data)
                 except Exception as e:
-                    logger.error(
-                        f"Ошибка в обработчике события {event_type.value}: {e}"
-                    )
+                    logger.error(f"Ошибка в обработчике события {event_type.value}: {e}")
 
     # =================== WEBSOCKET MANAGEMENT ===================
 
     def add_websocket_connection(self, websocket):
         """Добавить WebSocket соединение"""
         self.websocket_connections.add(websocket)
-        logger.info(
-            f"Добавлено WebSocket соединение. Всего: {len(self.websocket_connections)}"
-        )
+        logger.info(f"Добавлено WebSocket соединение. Всего: {len(self.websocket_connections)}")
 
     def remove_websocket_connection(self, websocket):
         """Удалить WebSocket соединение"""
         self.websocket_connections.discard(websocket)
-        logger.info(
-            f"Удалено WebSocket соединение. Осталось: {len(self.websocket_connections)}"
-        )
+        logger.info(f"Удалено WebSocket соединение. Осталось: {len(self.websocket_connections)}")
 
     # =================== EVENT SUBSCRIPTION ===================
 
@@ -455,7 +448,7 @@ class EventBridge:
     # =================== MANUAL EVENT TRIGGERS ===================
 
     async def trigger_trader_event(
-        self, trader_id: str, event_type: str, data: Dict[str, Any] = None
+        self, trader_id: str, event_type: str, data: dict[str, Any] = None
     ):
         """Ручная отправка события трейдера"""
         event_data = {"trader_id": trader_id, "event_type": event_type, **(data or {})}
@@ -467,9 +460,7 @@ class EventBridge:
         elif event_type == "error":
             await self.emit_event(EventType.TRADER_ERROR, event_data)
 
-    async def trigger_system_alert(
-        self, level: str, message: str, component: str = "system"
-    ):
+    async def trigger_system_alert(self, level: str, message: str, component: str = "system"):
         """Ручная отправка системного алерта"""
         await self.emit_event(
             EventType.SYSTEM_ALERT,
@@ -487,14 +478,12 @@ class EventBridge:
         """Проверить активен ли мост событий"""
         return self._active
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Получить статус моста событий"""
         return {
             "active": self._active,
             "websocket_connections": len(self.websocket_connections),
-            "event_handlers_count": sum(
-                len(handlers) for handlers in self.event_handlers.values()
-            ),
+            "event_handlers_count": sum(len(handlers) for handlers in self.event_handlers.values()),
             "event_filters_count": len(self.event_filters),
             "last_heartbeat": self._last_heartbeat.isoformat(),
             "components": {

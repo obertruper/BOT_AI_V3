@@ -160,9 +160,7 @@ async def test_real_trading():
                         print("   - data/logs/orders.log")
                         print("   - data/logs/sltp_operations.log")
             else:
-                print(
-                    f"\n❌ Ошибка: {response.error if response else 'Неизвестная ошибка'}"
-                )
+                print(f"\n❌ Ошибка: {response.error if response else 'Неизвестная ошибка'}")
 
         except Exception as e:
             print(f"\n❌ Ошибка: {e}")

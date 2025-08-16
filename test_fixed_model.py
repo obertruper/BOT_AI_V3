@@ -97,9 +97,7 @@ async def test_fixed_model():
             features_for_prediction = features.iloc[-96:]
         else:
             print("⚠️ Недостаточно данных, дополняем нулями")
-            padding = pd.DataFrame(
-                0, index=range(96 - len(features)), columns=features.columns
-            )
+            padding = pd.DataFrame(0, index=range(96 - len(features)), columns=features.columns)
             features_for_prediction = pd.concat([padding, features], ignore_index=True)
 
         # Преобразуем в numpy array

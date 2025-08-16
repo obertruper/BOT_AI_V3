@@ -3,7 +3,7 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -35,9 +35,7 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
     Расширенный FeatureEngineer с интеграцией существующих индикаторов проекта
     """
 
-    def __init__(
-        self, config=None, indicator_manager: Optional[IndicatorManager] = None
-    ):
+    def __init__(self, config=None, indicator_manager: IndicatorManager | None = None):
         """
         Инициализация с поддержкой indicator manager
 
@@ -89,12 +87,8 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
                 if "symbol" in df.columns:
                     for symbol in df["symbol"].unique():
                         symbol_data = df[df["symbol"] == symbol].copy()
-                        self._calculate_indicator_features(
-                            symbol_data, indicator, indicator_name
-                        )
-                        df.loc[df["symbol"] == symbol, symbol_data.columns] = (
-                            symbol_data
-                        )
+                        self._calculate_indicator_features(symbol_data, indicator, indicator_name)
+                        df.loc[df["symbol"] == symbol, symbol_data.columns] = symbol_data
                 else:
                     self._calculate_indicator_features(df, indicator, indicator_name)
 
@@ -168,9 +162,7 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
         # Дополнительные признаки на основе индикатора
         if f"{feature_prefix}_signal" in df.columns:
             # Изменение сигнала
-            df[f"{feature_prefix}_signal_change"] = df[
-                f"{feature_prefix}_signal"
-            ].diff()
+            df[f"{feature_prefix}_signal_change"] = df[f"{feature_prefix}_signal"].diff()
 
             # Консистентность сигнала
             df[f"{feature_prefix}_signal_consistency"] = (
@@ -204,14 +196,10 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
         """
         # Собираем все сигналы индикаторов
         signal_cols = [
-            col
-            for col in df.columns
-            if col.endswith("_signal") and col.startswith("ind_")
+            col for col in df.columns if col.endswith("_signal") and col.startswith("ind_")
         ]
         strength_cols = [
-            col
-            for col in df.columns
-            if col.endswith("_strength") and col.startswith("ind_")
+            col for col in df.columns if col.endswith("_strength") and col.startswith("ind_")
         ]
 
         if signal_cols:
@@ -238,7 +226,7 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
                 weighted_sum = 0
                 weight_sum = 0
 
-                for sig_col, str_col in zip(signal_cols, strength_cols):
+                for sig_col, str_col in zip(signal_cols, strength_cols, strict=False):
                     weighted_sum += df[sig_col] * df[str_col]
                     weight_sum += df[str_col]
 
@@ -246,7 +234,7 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
 
         return df
 
-    def get_indicator_feature_names(self) -> List[str]:
+    def get_indicator_feature_names(self) -> list[str]:
         """Получить список признаков созданных из индикаторов"""
         return self._indicator_features
 
@@ -286,8 +274,7 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
         if "adx" in df.columns and "sma_20" in df.columns:
             # Сильный тренд
             df["strong_trend"] = (
-                (df["adx"] > 25)
-                & (abs(df["close"] - df["sma_20"]) / df["sma_20"] > 0.02)
+                (df["adx"] > 25) & (abs(df["close"] - df["sma_20"]) / df["sma_20"] > 0.02)
             ).astype(int)
 
         # Моментум и волатильность
@@ -306,8 +293,8 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
 
 
 def create_feature_config_from_indicators(
-    indicator_configs: List[Dict[str, Any]],
-) -> Dict[str, Any]:
+    indicator_configs: list[dict[str, Any]],
+) -> dict[str, Any]:
     """
     Создание конфигурации признаков на основе конфигураций индикаторов
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Главный скрипт для запуска комплексного тестирования торговой системы
 
@@ -88,9 +87,7 @@ class MasterTestRunner:
             self.test_results["system_monitoring"]["errors"].append(str(e))
 
         finally:
-            self.test_results["system_monitoring"]["duration"] = (
-                time.time() - start_time
-            )
+            self.test_results["system_monitoring"]["duration"] = time.time() - start_time
 
     async def _run_comprehensive_diagnostics(self):
         """Запуск комплексной диагностики"""
@@ -112,12 +109,10 @@ class MasterTestRunner:
                 self.test_results["comprehensive_diagnostics"]["status"] = "completed"
                 self.logger.info("✅ Комплексная диагностика завершена успешно")
             else:
-                self.test_results["comprehensive_diagnostics"]["status"] = (
-                    "completed_with_errors"
-                )
-                self.test_results["comprehensive_diagnostics"]["errors"] = (
-                    diagnostics.test_stats["errors"]
-                )
+                self.test_results["comprehensive_diagnostics"]["status"] = "completed_with_errors"
+                self.test_results["comprehensive_diagnostics"]["errors"] = diagnostics.test_stats[
+                    "errors"
+                ]
                 self.logger.warning(
                     f"⚠️  Диагностика завершена с {len(diagnostics.test_stats['errors'])} ошибками"
                 )
@@ -128,9 +123,7 @@ class MasterTestRunner:
             self.test_results["comprehensive_diagnostics"]["errors"].append(str(e))
 
         finally:
-            self.test_results["comprehensive_diagnostics"]["duration"] = (
-                time.time() - start_time
-            )
+            self.test_results["comprehensive_diagnostics"]["duration"] = time.time() - start_time
 
     async def _run_forced_signal_tests(self):
         """Запуск форсированных тестов с балансом"""
@@ -154,9 +147,7 @@ class MasterTestRunner:
             self.test_results["forced_signal_tests"]["errors"].append(str(e))
 
         finally:
-            self.test_results["forced_signal_tests"]["duration"] = (
-                time.time() - start_time
-            )
+            self.test_results["forced_signal_tests"]["duration"] = time.time() - start_time
 
     async def _generate_master_report(self):
         """Генерация сводного отчета"""
@@ -175,12 +166,8 @@ class MasterTestRunner:
             1 for result in self.test_results.values() if result["status"] == "failed"
         )
 
-        total_duration = sum(
-            result["duration"] for result in self.test_results.values()
-        )
-        total_errors = sum(
-            len(result["errors"]) for result in self.test_results.values()
-        )
+        total_duration = sum(result["duration"] for result in self.test_results.values())
+        total_errors = sum(len(result["errors"]) for result in self.test_results.values())
 
         self.logger.info("📈 ОБЩАЯ СТАТИСТИКА:")
         self.logger.info(f"   🔸 Всего тестов: {total_tests}")
@@ -215,14 +202,10 @@ class MasterTestRunner:
         self.logger.info("\n💡 РЕКОМЕНДАЦИИ:")
 
         if failed_tests > 0:
-            self.logger.info(
-                "   🔸 КРИТИЧНО: Есть неудачные тесты - система требует вмешательства"
-            )
+            self.logger.info("   🔸 КРИТИЧНО: Есть неудачные тесты - система требует вмешательства")
 
         if total_errors > 10:
-            self.logger.info(
-                "   🔸 ВНИМАНИЕ: Много ошибок - проверьте конфигурацию системы"
-            )
+            self.logger.info("   🔸 ВНИМАНИЕ: Много ошибок - проверьте конфигурацию системы")
 
         if completed_tests == total_tests and total_errors == 0:
             self.logger.info("   🔸 ОТЛИЧНО: Все тесты пройдены без ошибок!")
@@ -230,9 +213,7 @@ class MasterTestRunner:
         self.logger.info(
             "   🔸 Для live мониторинга: python3 tests/trading_system_monitor.py --live"
         )
-        self.logger.info(
-            "   🔸 Для повторной диагностики: python3 run_comprehensive_tests.py"
-        )
+        self.logger.info("   🔸 Для повторной диагностики: python3 run_comprehensive_tests.py")
 
         self.logger.info(f"\n⏰ Отчет сгенерирован: {datetime.now()}")
         self.logger.info("=" * 80)
@@ -269,9 +250,7 @@ class MasterTestRunner:
 
                 if all_signals_count > 0:
                     conversion_rate = (all_orders_count / all_signals_count) * 100
-                    self.logger.info(
-                        f"   🔸 Конверсия сигнал→ордер: {conversion_rate:.2f}%"
-                    )
+                    self.logger.info(f"   🔸 Конверсия сигнал→ордер: {conversion_rate:.2f}%")
 
                     if conversion_rate < 10:
                         self.logger.error(
@@ -279,21 +258,15 @@ class MasterTestRunner:
                         )
                         self.logger.error("      Возможные причины:")
                         self.logger.error("      - TradingEngine не запущен")
-                        self.logger.error(
-                            "      - SignalProcessor не обрабатывает сигналы"
-                        )
+                        self.logger.error("      - SignalProcessor не обрабатывает сигналы")
                         self.logger.error("      - OrderManager не создает ордера")
-                        self.logger.error(
-                            "      - Ошибки валидации или риск-менеджмента"
-                        )
+                        self.logger.error("      - Ошибки валидации или риск-менеджмента")
                     elif conversion_rate < 50:
                         self.logger.warning(
                             f"   ⚠️  Низкая конверсия ({conversion_rate:.1f}%) - возможны проблемы"
                         )
                     else:
-                        self.logger.info(
-                            f"   ✅ Хорошая конверсия ({conversion_rate:.1f}%)"
-                        )
+                        self.logger.info(f"   ✅ Хорошая конверсия ({conversion_rate:.1f}%)")
 
         except Exception as e:
             self.logger.error(f"❌ Ошибка финального анализа БД: {e}")

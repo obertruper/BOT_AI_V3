@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Unit tests for Trading Engine with SL/TP integration
 """
@@ -76,9 +75,7 @@ class TestTradingEngineWithSLTP:
             ExchangeManager=Mock(return_value=Mock(initialize=AsyncMock())),
             RiskManager=Mock(),
             StrategyManager=Mock(
-                return_value=Mock(
-                    initialize=AsyncMock(), get_strategies=Mock(return_value=[])
-                )
+                return_value=Mock(initialize=AsyncMock(), get_strategies=Mock(return_value=[]))
             ),
             PositionManager=Mock(),
             OrderManager=Mock(),
@@ -94,9 +91,7 @@ class TestTradingEngineWithSLTP:
             assert trading_engine.state == TradingState.RUNNING
 
     @pytest.mark.asyncio
-    async def test_enhanced_sltp_manager_creation_order(
-        self, mock_orchestrator, mock_config
-    ):
+    async def test_enhanced_sltp_manager_creation_order(self, mock_orchestrator, mock_config):
         """Тест правильного порядка создания компонентов"""
         # Arrange
         order_manager_mock = Mock()
@@ -117,9 +112,7 @@ class TestTradingEngineWithSLTP:
             ExchangeManager=Mock(return_value=Mock(initialize=AsyncMock())),
             RiskManager=Mock(),
             StrategyManager=Mock(
-                return_value=Mock(
-                    initialize=AsyncMock(), get_strategies=Mock(return_value=[])
-                )
+                return_value=Mock(initialize=AsyncMock(), get_strategies=Mock(return_value=[]))
             ),
             PositionManager=Mock(),
             OrderManager=order_manager_init,
@@ -149,25 +142,15 @@ class TestTradingEngineWithSLTP:
         mock_exchange_client.get_ticker = AsyncMock(return_value={"last": 51000})
 
         trading_engine.position_manager = Mock()
-        trading_engine.position_manager.get_open_positions = AsyncMock(
-            return_value=[mock_position]
-        )
+        trading_engine.position_manager.get_open_positions = AsyncMock(return_value=[mock_position])
 
         trading_engine.exchange_registry = Mock()
-        trading_engine.exchange_registry.get_exchange = AsyncMock(
-            return_value=mock_exchange_client
-        )
+        trading_engine.exchange_registry.get_exchange = AsyncMock(return_value=mock_exchange_client)
 
         trading_engine.enhanced_sltp_manager = Mock()
-        trading_engine.enhanced_sltp_manager.check_partial_tp = AsyncMock(
-            return_value=True
-        )
-        trading_engine.enhanced_sltp_manager.update_profit_protection = AsyncMock(
-            return_value=True
-        )
-        trading_engine.enhanced_sltp_manager.update_trailing_stop = AsyncMock(
-            return_value=True
-        )
+        trading_engine.enhanced_sltp_manager.check_partial_tp = AsyncMock(return_value=True)
+        trading_engine.enhanced_sltp_manager.update_profit_protection = AsyncMock(return_value=True)
+        trading_engine.enhanced_sltp_manager.update_trailing_stop = AsyncMock(return_value=True)
 
         trading_engine._running = True
         trading_engine.state = TradingState.RUNNING
@@ -180,9 +163,7 @@ class TestTradingEngineWithSLTP:
                 pass
 
         # Assert
-        trading_engine.enhanced_sltp_manager.check_partial_tp.assert_called_once_with(
-            mock_position
-        )
+        trading_engine.enhanced_sltp_manager.check_partial_tp.assert_called_once_with(mock_position)
         trading_engine.enhanced_sltp_manager.update_profit_protection.assert_called_once_with(
             mock_position, 51000
         )
@@ -211,9 +192,7 @@ class TestTradingEngineWithSLTP:
         mock_order = Mock(order_id="order_123")
 
         trading_engine.signal_processor = Mock()
-        trading_engine.signal_processor.process_signal = AsyncMock(
-            return_value=[mock_order]
-        )
+        trading_engine.signal_processor.process_signal = AsyncMock(return_value=[mock_order])
 
         trading_engine.order_manager = Mock()
         trading_engine.order_manager.submit_order = AsyncMock(return_value=True)
@@ -222,9 +201,7 @@ class TestTradingEngineWithSLTP:
         await trading_engine._handle_signal(mock_signal)
 
         # Assert
-        trading_engine.signal_processor.process_signal.assert_called_once_with(
-            mock_signal
-        )
+        trading_engine.signal_processor.process_signal.assert_called_once_with(mock_signal)
         trading_engine.order_manager.submit_order.assert_called_once_with(mock_order)
 
     @pytest.mark.asyncio
@@ -300,9 +277,7 @@ class TestTradingEngineWithSLTP:
         mock_position = Mock(id="pos_123", symbol="BTCUSDT", exchange="bybit")
 
         trading_engine.position_manager = Mock()
-        trading_engine.position_manager.get_open_positions = AsyncMock(
-            return_value=[mock_position]
-        )
+        trading_engine.position_manager.get_open_positions = AsyncMock(return_value=[mock_position])
 
         trading_engine.exchange_registry = Mock()
         trading_engine.exchange_registry.get_exchange = AsyncMock(
@@ -320,28 +295,18 @@ class TestTradingEngineWithSLTP:
                 pass
 
         # Assert - ошибка должна быть обработана без краша
-        assert (
-            trading_engine.metrics.errors_count == 0
-        )  # Ошибки не считаются в этом месте
+        assert trading_engine.metrics.errors_count == 0  # Ошибки не считаются в этом месте
 
     @pytest.mark.asyncio
     async def test_health_check_includes_sltp(self, trading_engine):
         """Тест health check включая SL/TP компоненты"""
         # Arrange
         trading_engine.enhanced_sltp_manager = Mock()
-        trading_engine.signal_processor = Mock(
-            health_check=AsyncMock(return_value=True)
-        )
+        trading_engine.signal_processor = Mock(health_check=AsyncMock(return_value=True))
         trading_engine.order_manager = Mock(health_check=AsyncMock(return_value=True))
-        trading_engine.position_manager = Mock(
-            health_check=AsyncMock(return_value=True)
-        )
-        trading_engine.execution_engine = Mock(
-            health_check=AsyncMock(return_value=True)
-        )
-        trading_engine.exchange_registry = Mock(
-            health_check=AsyncMock(return_value=True)
-        )
+        trading_engine.position_manager = Mock(health_check=AsyncMock(return_value=True))
+        trading_engine.execution_engine = Mock(health_check=AsyncMock(return_value=True))
+        trading_engine.exchange_registry = Mock(health_check=AsyncMock(return_value=True))
         trading_engine.risk_manager = Mock(health_check=AsyncMock(return_value=True))
 
         # Act

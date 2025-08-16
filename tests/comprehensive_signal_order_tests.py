@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Комплексные тесты для диагностики цепочки сигнал → ордер
 
@@ -16,7 +15,6 @@ import logging
 import sys
 import uuid
 from datetime import datetime, timedelta
-from typing import List
 
 from sqlalchemy import text
 
@@ -128,9 +126,7 @@ class ComprehensiveTradingDiagnostics:
         try:
             async with get_async_db() as db:
                 # Сигналы
-                result = await db.execute(
-                    "SELECT COUNT(*), MAX(created_at) FROM signals"
-                )
+                result = await db.execute("SELECT COUNT(*), MAX(created_at) FROM signals")
                 signals_count, last_signal = result.fetchone()
 
                 # Ордера
@@ -146,26 +142,18 @@ class ComprehensiveTradingDiagnostics:
                 trades_count, total_volume = result.fetchone()
 
                 self.logger.info("📊 Статистика данных:")
-                self.logger.info(
-                    f"   🔸 Сигналы: {signals_count} (последний: {last_signal})"
-                )
-                self.logger.info(
-                    f"   🔸 Ордера: {orders_count} (исполнено: {filled_orders})"
-                )
-                self.logger.info(
-                    f"   🔸 Сделки: {trades_count} (объем: ${total_volume:.2f})"
-                )
+                self.logger.info(f"   🔸 Сигналы: {signals_count} (последний: {last_signal})")
+                self.logger.info(f"   🔸 Ордера: {orders_count} (исполнено: {filled_orders})")
+                self.logger.info(f"   🔸 Сделки: {trades_count} (объем: ${total_volume:.2f})")
 
                 if signals_count > 0 and orders_count == 0:
                     self.logger.warning("⚠️  ПРОБЛЕМА: Есть сигналы, но нет ордеров!")
-                    self.test_stats["warnings"].append(
-                        "Signals exist but no orders created"
-                    )
+                    self.test_stats["warnings"].append("Signals exist but no orders created")
 
         except Exception as e:
             self.logger.error(f"❌ Ошибка анализа данных: {e}")
 
-    async def _create_test_signals(self) -> List[Signal]:
+    async def _create_test_signals(self) -> list[Signal]:
         """Создание тестовых сигналов LONG и SHORT"""
         self.logger.info("📝 Создаем тестовые сигналы...")
 
@@ -260,16 +248,14 @@ class ComprehensiveTradingDiagnostics:
 
         return test_signals
 
-    async def _verify_signals_in_db(self, test_signals: List[Signal]):
+    async def _verify_signals_in_db(self, test_signals: list[Signal]):
         """Проверка корректного сохранения сигналов в БД"""
         self.logger.info("🔍 Проверяем сохранение сигналов в БД...")
 
         try:
             async with get_async_db() as db:
                 for signal in test_signals:
-                    result = await db.execute(
-                        "SELECT * FROM signals WHERE id = %s", (signal.id,)
-                    )
+                    result = await db.execute("SELECT * FROM signals WHERE id = %s", (signal.id,))
                     db_signal = result.fetchone()
 
                     if db_signal:
@@ -284,30 +270,23 @@ class ComprehensiveTradingDiagnostics:
                             )
 
                         if db_signal.signal_type == signal.signal_type:
-                            self.logger.info(
-                                f"   🔸 Type: {db_signal.signal_type.value} ✓"
-                            )
+                            self.logger.info(f"   🔸 Type: {db_signal.signal_type.value} ✓")
                         else:
                             self.logger.error("   ❌ Type mismatch")
 
-                        if (
-                            abs(float(db_signal.strength) - float(signal.strength))
-                            < 0.01
-                        ):
+                        if abs(float(db_signal.strength) - float(signal.strength)) < 0.01:
                             self.logger.info(f"   🔸 Strength: {db_signal.strength} ✓")
                         else:
                             self.logger.error("   ❌ Strength mismatch")
 
                     else:
                         self.logger.error(f"❌ Сигнал {signal.id} не найден в БД!")
-                        self.test_stats["errors"].append(
-                            f"Signal {signal.id} not found in DB"
-                        )
+                        self.test_stats["errors"].append(f"Signal {signal.id} not found in DB")
 
         except Exception as e:
             self.logger.error(f"❌ Ошибка проверки сигналов: {e}")
 
-    async def _test_signal_processing(self, test_signals: List[Signal]):
+    async def _test_signal_processing(self, test_signals: list[Signal]):
         """Тестирование обработки сигналов через SignalProcessor"""
         self.logger.info("⚙️  Тестируем SignalProcessor...")
 
@@ -315,18 +294,14 @@ class ComprehensiveTradingDiagnostics:
             processor = SignalProcessor()
 
             for signal in test_signals:
-                self.logger.info(
-                    f"🔄 Обрабатываем сигнал {signal.id} ({signal.signal_type.value})"
-                )
+                self.logger.info(f"🔄 Обрабатываем сигнал {signal.id} ({signal.signal_type.value})")
 
                 # Тестируем валидацию
                 if processor._validate_signal(signal):
                     self.logger.info("   ✅ Валидация пройдена")
                 else:
                     self.logger.error("   ❌ Валидация не пройдена!")
-                    self.test_stats["errors"].append(
-                        f"Signal {signal.id} validation failed"
-                    )
+                    self.test_stats["errors"].append(f"Signal {signal.id} validation failed")
                     continue
 
                 # Тестируем обработку
@@ -336,23 +311,19 @@ class ComprehensiveTradingDiagnostics:
                         self.logger.info("   ✅ Обработка успешна")
                         self.test_stats["signals_processed"] += 1
                     else:
-                        self.logger.warning(
-                            "   ⚠️  Обработка отклонена (возможно дубликат)"
-                        )
+                        self.logger.warning("   ⚠️  Обработка отклонена (возможно дубликат)")
                         self.test_stats["warnings"].append(
                             f"Signal {signal.id} processing rejected"
                         )
 
                 except Exception as e:
                     self.logger.error(f"   ❌ Ошибка обработки: {e}")
-                    self.test_stats["errors"].append(
-                        f"Signal {signal.id} processing error: {e}"
-                    )
+                    self.test_stats["errors"].append(f"Signal {signal.id} processing error: {e}")
 
         except Exception as e:
             self.logger.error(f"❌ Ошибка создания SignalProcessor: {e}")
 
-    async def _test_order_creation_from_signals(self, test_signals: List[Signal]):
+    async def _test_order_creation_from_signals(self, test_signals: list[Signal]):
         """Тестирование создания ордеров из сигналов"""
         self.logger.info("📋 Тестируем создание ордеров из сигналов...")
 
@@ -382,9 +353,7 @@ class ComprehensiveTradingDiagnostics:
                 self.logger.info(f"🔄 Создаем ордер из сигнала {signal.id}")
 
                 try:
-                    order = await order_manager.create_order_from_signal(
-                        signal, "test_trader"
-                    )
+                    order = await order_manager.create_order_from_signal(signal, "test_trader")
 
                     if order:
                         self.logger.info(f"   ✅ Ордер создан: {order.order_id}")
@@ -427,15 +396,11 @@ class ComprehensiveTradingDiagnostics:
                 self.test_stats["orders_submitted"] += 1
             else:
                 self.logger.warning("   ⚠️  Ордер не отправлен")
-                self.test_stats["warnings"].append(
-                    f"Order {order.order_id} submission failed"
-                )
+                self.test_stats["warnings"].append(f"Order {order.order_id} submission failed")
 
         except Exception as e:
             self.logger.error(f"   ❌ Ошибка отправки ордера: {e}")
-            self.test_stats["errors"].append(
-                f"Order {order.order_id} submission error: {e}"
-            )
+            self.test_stats["errors"].append(f"Order {order.order_id} submission error: {e}")
 
     async def _test_order_validation(self):
         """Тестирование валидации ордеров"""
@@ -507,13 +472,9 @@ class ComprehensiveTradingDiagnostics:
             expected_valid = order.order_id == "valid_order"
 
             if is_valid == expected_valid:
-                self.logger.info(
-                    f"   ✅ {order.order_id}: валидация корректна ({is_valid})"
-                )
+                self.logger.info(f"   ✅ {order.order_id}: валидация корректна ({is_valid})")
             else:
-                self.logger.error(
-                    f"   ❌ {order.order_id}: неожиданный результат валидации"
-                )
+                self.logger.error(f"   ❌ {order.order_id}: неожиданный результат валидации")
 
     async def _test_system_components(self):
         """Проверка состояния компонентов системы"""
@@ -613,9 +574,7 @@ class ComprehensiveTradingDiagnostics:
                     return MockExchange()
 
             order_manager = OrderManager(MockExchangeRegistry())
-            order = await order_manager.create_order_from_signal(
-                test_signal, "chain_test_trader"
-            )
+            order = await order_manager.create_order_from_signal(test_signal, "chain_test_trader")
 
             if order:
                 self.logger.info(f"   🔸 Шаг 3: Ордер создан {order.order_id} ✅")
@@ -644,16 +603,10 @@ class ComprehensiveTradingDiagnostics:
         self.logger.info("=" * 60)
 
         self.logger.info("📈 СТАТИСТИКА:")
-        self.logger.info(
-            f"   🔸 Создано тестовых сигналов: {self.test_stats['signals_created']}"
-        )
-        self.logger.info(
-            f"   🔸 Обработано сигналов: {self.test_stats['signals_processed']}"
-        )
+        self.logger.info(f"   🔸 Создано тестовых сигналов: {self.test_stats['signals_created']}")
+        self.logger.info(f"   🔸 Обработано сигналов: {self.test_stats['signals_processed']}")
         self.logger.info(f"   🔸 Создано ордеров: {self.test_stats['orders_created']}")
-        self.logger.info(
-            f"   🔸 Отправлено ордеров: {self.test_stats['orders_submitted']}"
-        )
+        self.logger.info(f"   🔸 Отправлено ордеров: {self.test_stats['orders_submitted']}")
 
         if self.test_stats["errors"]:
             self.logger.error(f"\n❌ ОШИБКИ ({len(self.test_stats['errors'])}):")
@@ -661,28 +614,17 @@ class ComprehensiveTradingDiagnostics:
                 self.logger.error(f"   {i}. {error}")
 
         if self.test_stats["warnings"]:
-            self.logger.warning(
-                f"\n⚠️  ПРЕДУПРЕЖДЕНИЯ ({len(self.test_stats['warnings'])}):"
-            )
+            self.logger.warning(f"\n⚠️  ПРЕДУПРЕЖДЕНИЯ ({len(self.test_stats['warnings'])}):")
             for i, warning in enumerate(self.test_stats["warnings"], 1):
                 self.logger.warning(f"   {i}. {warning}")
 
         # Рекомендации
         self.logger.info("\n💡 РЕКОМЕНДАЦИИ:")
 
-        if (
-            self.test_stats["signals_created"] > 0
-            and self.test_stats["orders_created"] == 0
-        ):
-            self.logger.info(
-                "   🔸 КРИТИЧНО: Сигналы создаются, но ордера не создаются!"
-            )
-            self.logger.info(
-                "      - Проверьте инициализацию OrderManager в TradingEngine"
-            )
-            self.logger.info(
-                "      - Убедитесь что SignalProcessor вызывает создание ордеров"
-            )
+        if self.test_stats["signals_created"] > 0 and self.test_stats["orders_created"] == 0:
+            self.logger.info("   🔸 КРИТИЧНО: Сигналы создаются, но ордера не создаются!")
+            self.logger.info("      - Проверьте инициализацию OrderManager в TradingEngine")
+            self.logger.info("      - Убедитесь что SignalProcessor вызывает создание ордеров")
             self.logger.info("      - Проверьте логику обработки в _process_signal()")
 
         if len(self.test_stats["errors"]) == 0:

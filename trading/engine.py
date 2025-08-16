@@ -8,9 +8,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 from core.signals.unified_signal_processor import UnifiedSignalProcessor as SignalProcessor
+from core.system.balance_manager import balance_manager
+from core.system.process_monitor import process_monitor
+from core.system.rate_limiter import rate_limiter
+from core.system.signal_deduplicator import signal_deduplicator
+from core.system.worker_coordinator import worker_coordinator
 
 # from database.repositories.signal_repository import SignalRepository  # Старый репозиторий с дублированием
 from database.repositories.signal_repository_fixed import (
@@ -51,7 +56,11 @@ class TradingMetrics:
     processing_time_avg: float = 0.0
     errors_count: int = 0
     uptime: timedelta = field(default_factory=lambda: timedelta(0))
-    start_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    # Добавляем недостающие атрибуты
+    total_signals: int = 0
+    total_orders: int = 0
+    total_trades: int = 0
 
 
 class TradingEngine:
@@ -66,7 +75,7 @@ class TradingEngine:
     - Мониторинг производительности
     """
 
-    def __init__(self, orchestrator: Any, config: Dict[str, Any]):
+    def __init__(self, orchestrator: Any, config: dict[str, Any]):
         self.orchestrator = orchestrator
         self.config = config
         # Используем системный логгер
@@ -78,37 +87,40 @@ class TradingEngine:
         self.state = TradingState.STOPPED
         self.metrics = TradingMetrics()
         self._running = False
-        self._tasks: Set[asyncio.Task] = set()
+        self._tasks: set[asyncio.Task] = set()
 
         # Основные компоненты
-        self.signal_processor: Optional[SignalProcessor] = None
-        self.position_manager: Optional[PositionManager] = None
-        self.order_manager: Optional[OrderManager] = None
-        self.execution_engine: Optional[ExecutionEngine] = None
-        self.risk_manager: Optional[RiskManager] = None
-        self.strategy_manager: Optional[StrategyManager] = None
-        self.exchange_registry: Optional[ExchangeManager] = None
+        self.signal_processor: SignalProcessor | None = None
+        self.position_manager: PositionManager | None = None
+        self.order_manager: OrderManager | None = None
+        self.execution_engine: ExecutionEngine | None = None
+        self.risk_manager: RiskManager | None = None
+        self.strategy_manager: StrategyManager | None = None
+        self.exchange_registry: ExchangeManager | None = None
         self.enhanced_sltp_manager = None  # Будет инициализирован в initialize()
 
         # Репозитории
-        self.trade_repository: Optional[TradeRepository] = None
-        self.signal_repository: Optional[SignalRepository] = None
+        self.trade_repository: TradeRepository | None = None
+        self.signal_repository: SignalRepository | None = None
 
         # Очереди для обработки
         self.signal_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
         self.order_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
 
         # Кеш и состояние
-        self._price_cache: Dict[str, Decimal] = {}
-        self._instrument_cache: Dict[str, Any] = {}  # Кеш информации об инструментах
-        self._last_sync: Optional[datetime] = None
-        self._db_session_factory: Optional[Any] = None
+        self._price_cache: dict[str, Decimal] = {}
+        self._instrument_cache: dict[str, Any] = {}  # Кеш информации об инструментах
+        self._last_sync: datetime | None = None
+        self._db_session_factory: Any | None = None
 
     async def initialize(self) -> bool:
         """Инициализация торгового движка"""
         try:
             self.logger.info("Инициализация торгового движка...")
             self.state = TradingState.STARTING
+
+            # Инициализация системных компонентов
+            await self._initialize_system_components()
 
             # Инициализация компонентов
             await self._initialize_components()
@@ -122,17 +134,61 @@ class TradingEngine:
             # Проверка системы
             await self._health_check()
 
-            self.logger.info("Торговый движок успешно инициализирован")
+            # Регистрируемся в координаторе воркеров
+            self.worker_id = await worker_coordinator.register_worker(
+                worker_type="trading_engine",
+                metadata={
+                    "state": self.state.value,
+                    "active_exchanges": (
+                        len(getattr(self.exchange_registry, "exchanges", {}))
+                        if self.exchange_registry
+                        else 0
+                    ),
+                    "signal_queue_size": self.signal_queue.qsize(),
+                    "order_queue_size": self.order_queue.qsize(),
+                },
+            )
+
+            if not self.worker_id:
+                self.logger.error("❌ Другой Trading Engine уже активен")
+                raise RuntimeError("Duplicate Trading Engine detected")
+
+            # Регистрируем в мониторе процессов
+            await process_monitor.register_component("trading_engine")
+
+            self.logger.info("✅ Торговый движок успешно инициализирован")
             return True
 
         except Exception as e:
             self.logger.error(f"Ошибка инициализации торгового движка: {e}")
             self.state = TradingState.ERROR
             # Не прерываем инициализацию системы
-            self.logger.warning(
-                "Trading Engine инициализирован с ошибками, но продолжаем работу"
-            )
+            self.logger.warning("Trading Engine инициализирован с ошибками, но продолжаем работу")
             return True
+
+    async def _initialize_system_components(self):
+        """Инициализация системных компонентов мониторинга и контроля"""
+        try:
+            # Запускаем системные компоненты
+            await worker_coordinator.start()
+            await process_monitor.start()
+
+            # Инициализируем и сохраняем balance_manager как атрибут класса
+            from core.system.balance_manager import balance_manager
+
+            self.balance_manager = balance_manager
+            await self.balance_manager.start()
+
+            # Также сохраняем другие компоненты для удобства
+            self.worker_coordinator = worker_coordinator
+            self.process_monitor = process_monitor
+            self.signal_deduplicator = signal_deduplicator
+            self.rate_limiter = rate_limiter
+
+            self.logger.info("✅ Системные компоненты инициализированы")
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка инициализации системных компонентов: {e}")
+            raise
 
     async def _initialize_components(self):
         """Инициализация основных компонентов"""
@@ -143,21 +199,14 @@ class TradingEngine:
             from trading.sltp.enhanced_manager import EnhancedSLTPManager
 
             config_manager = ConfigManager()
-            self.enhanced_sltp_manager = EnhancedSLTPManager(
-                config_manager=config_manager
-            )
+            self.enhanced_sltp_manager = EnhancedSLTPManager(config_manager=config_manager)
             self.logger.info("Enhanced SL/TP Manager инициализирован")
         except Exception as e:
-            self.logger.warning(
-                f"Не удалось инициализировать Enhanced SL/TP Manager: {e}"
-            )
+            self.logger.warning(f"Не удалось инициализировать Enhanced SL/TP Manager: {e}")
             self.enhanced_sltp_manager = None
 
         # Exchange Registry берем из orchestrator если доступен
-        if (
-            hasattr(self.orchestrator, "exchange_registry")
-            and self.orchestrator.exchange_registry
-        ):
+        if hasattr(self.orchestrator, "exchange_registry") and self.orchestrator.exchange_registry:
             self.exchange_registry = self.orchestrator.exchange_registry
         else:
             # Создаем свой если недоступен
@@ -228,13 +277,9 @@ class TradingEngine:
                 try:
                     await self._get_instrument_info(symbol, exchange_name)
                 except Exception as e:
-                    self.logger.warning(
-                        f"Не удалось загрузить {symbol} с {exchange_name}: {e}"
-                    )
+                    self.logger.warning(f"Не удалось загрузить {symbol} с {exchange_name}: {e}")
 
-            self.logger.info(
-                f"Загружено информации об инструментах: {len(self._instrument_cache)}"
-            )
+            self.logger.info(f"Загружено информации об инструментах: {len(self._instrument_cache)}")
 
         except Exception as e:
             self.logger.error(f"Ошибка загрузки информации об инструментах: {e}")
@@ -323,6 +368,8 @@ class TradingEngine:
             self._tasks.add(asyncio.create_task(self._position_sync_loop()))
             self._tasks.add(asyncio.create_task(self._metrics_update_loop()))
             self._tasks.add(asyncio.create_task(self._risk_monitoring_loop()))
+            self._tasks.add(asyncio.create_task(self._heartbeat_loop()))
+            self._tasks.add(asyncio.create_task(self._balance_update_loop()))
 
             self.logger.info("Торговый движок успешно запущен")
             return True
@@ -375,7 +422,7 @@ class TradingEngine:
             self.logger.info("Торговый движок остановлен")
             return True
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.logger.error("Таймаут при остановке торгового движка")
             return False
         except Exception as e:
@@ -420,10 +467,8 @@ class TradingEngine:
 
                 # Получение сигнала из очереди
                 try:
-                    signal = await asyncio.wait_for(
-                        self.signal_queue.get(), timeout=1.0
-                    )
-                except asyncio.TimeoutError:
+                    signal = await asyncio.wait_for(self.signal_queue.get(), timeout=1.0)
+                except TimeoutError:
                     continue
 
                 # Обработка сигнала
@@ -479,9 +524,7 @@ class TradingEngine:
             orders = await self._create_orders_from_signal(signal)
 
             if orders:
-                self.logger.info(
-                    f"✅ Создано {len(orders)} ордеров для {signal.symbol}"
-                )
+                self.logger.info(f"✅ Создано {len(orders)} ордеров для {signal.symbol}")
                 # Отправка ордеров на исполнение
                 for order in orders:
                     self.logger.info(
@@ -489,9 +532,7 @@ class TradingEngine:
                     )
                     await self.order_queue.put(order)
             else:
-                self.logger.warning(
-                    f"⚠️ Не создано ни одного ордера для сигнала {signal.symbol}"
-                )
+                self.logger.warning(f"⚠️ Не создано ни одного ордера для сигнала {signal.symbol}")
 
             # Сохранение в БД
             if self._db_session_factory:
@@ -509,9 +550,7 @@ class TradingEngine:
                         "strength": signal.strength,
                         "confidence": signal.confidence,
                         "suggested_price": signal.suggested_price,
-                        "suggested_quantity": getattr(
-                            signal, "suggested_position_size", None
-                        ),
+                        "suggested_quantity": getattr(signal, "suggested_position_size", None),
                         "suggested_stop_loss": signal.suggested_stop_loss,
                         "suggested_take_profit": signal.suggested_take_profit,
                         "strategy_name": signal.strategy_name,
@@ -539,7 +578,7 @@ class TradingEngine:
                 # Получение ордера из очереди
                 try:
                     order = await asyncio.wait_for(self.order_queue.get(), timeout=1.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
 
                 # Исполнение ордера
@@ -581,9 +620,7 @@ class TradingEngine:
 
                 # Обновление метрик позиций
                 positions = await self.position_manager.get_all_positions()
-                self.metrics.active_positions = len(
-                    [p for p in positions if p.size != 0]
-                )
+                self.metrics.active_positions = len([p for p in positions if p.size != 0])
 
                 # Проверка enhanced SL/TP для активных позиций
                 if self.enhanced_sltp_manager:
@@ -592,31 +629,26 @@ class TradingEngine:
                             try:
                                 # Получаем текущую цену для позиции
                                 current_price = 0.0
-                                exchange_client = self.exchange_manager.exchanges.get(
-                                    position.exchange
-                                )
+                                # Получаем клиент биржи для данной позиции
+                                exchange_name = getattr(position, "exchange", "bybit")
+                                exchange_client = self.exchange_manager.exchanges.get(exchange_name)
                                 if exchange_client:
-                                    ticker = await exchange_client.get_ticker(
-                                        position.symbol
-                                    )
+                                    ticker = await exchange_client.get_ticker(position.symbol)
                                     current_price = ticker.last_price
                                 else:
                                     self.logger.warning(
-                                        f"Не найден клиент биржи {position.exchange} для {position.symbol}"
+                                        f"Не найден клиент биржи {exchange_name} для {position.symbol}"
                                     )
                                     continue
 
-                                # Временно назначаем exchange клиент для enhanced manager
-                                self.enhanced_sltp_manager.exchange_client = (
-                                    exchange_client
-                                )
+                                # Назначаем exchange клиент для enhanced manager
+                                # Используем тот же клиент для всех операций
+                                self.enhanced_sltp_manager.exchange_client = exchange_client
 
                                 # Применяем enhanced SL/TP функции
                                 # Сначала проверяем частичное закрытие
                                 partial_tp_executed = (
-                                    await self.enhanced_sltp_manager.check_partial_tp(
-                                        position
-                                    )
+                                    await self.enhanced_sltp_manager.check_partial_tp(position)
                                 )
                                 if partial_tp_executed:
                                     self.logger.info(
@@ -624,8 +656,10 @@ class TradingEngine:
                                     )
 
                                 # Затем обновляем защиту прибыли (может переопределить SL после partial TP)
-                                profit_protection_updated = await self.enhanced_sltp_manager.update_profit_protection(
-                                    position, current_price
+                                profit_protection_updated = (
+                                    await self.enhanced_sltp_manager.update_profit_protection(
+                                        position, current_price
+                                    )
                                 )
                                 if profit_protection_updated:
                                     self.logger.info(
@@ -633,8 +667,10 @@ class TradingEngine:
                                     )
 
                                 # Применяем трейлинг стоп
-                                trailing_updated = await self.enhanced_sltp_manager.update_trailing_stop(
-                                    position, current_price
+                                trailing_updated = (
+                                    await self.enhanced_sltp_manager.update_trailing_stop(
+                                        position, current_price
+                                    )
                                 )
                                 if trailing_updated:
                                     self.logger.info(
@@ -704,9 +740,7 @@ class TradingEngine:
                     trades_stats = await trade_repo.get_trading_stats()
                     self.metrics.trades_completed = trades_stats.get("total_trades", 0)
                     self.metrics.win_rate = trades_stats.get("win_rate", 0.0)
-                    self.metrics.total_volume = trades_stats.get(
-                        "total_volume", Decimal("0")
-                    )
+                    self.metrics.total_volume = trades_stats.get("total_volume", Decimal("0"))
 
             # Обновление времени работы
             if self.metrics.start_time:
@@ -753,7 +787,7 @@ class TradingEngine:
         except Exception as e:
             self.logger.error(f"Ошибка сокращения позиций: {e}")
 
-    async def add_signal(self, signal: Dict[str, Any]) -> bool:
+    async def add_signal(self, signal: dict[str, Any]) -> bool:
         """Добавление сигнала в очередь обработки"""
         try:
             if not self._running or self.state != TradingState.RUNNING:
@@ -770,7 +804,7 @@ class TradingEngine:
             self.logger.error(f"Ошибка добавления сигнала: {e}")
             return False
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Получение статуса торгового движка"""
         return {
             "state": self.state.value,
@@ -799,25 +833,17 @@ class TradingEngine:
                 #     else False
                 # ),
                 "position_manager": (
-                    self.position_manager.is_running()
-                    if self.position_manager
-                    else False
+                    self.position_manager.is_running() if self.position_manager else False
                 ),
-                "order_manager": self.order_manager.is_running()
-                if self.order_manager
-                else False,
+                "order_manager": self.order_manager.is_running() if self.order_manager else False,
                 "execution_engine": (
-                    self.execution_engine.is_running()
-                    if self.execution_engine
-                    else False
+                    self.execution_engine.is_running() if self.execution_engine else False
                 ),
                 "risk_manager": (
                     self.risk_manager.is_running() if self.risk_manager else None
                 ),  # TODO: включить после реализации
                 "strategy_manager": (
-                    self.strategy_manager.is_running()
-                    if self.strategy_manager
-                    else False
+                    self.strategy_manager.is_running() if self.strategy_manager else False
                 ),
             },
         }
@@ -904,9 +930,7 @@ class TradingEngine:
             entry_price = trading_signal.suggested_price
             self.logger.debug(f"🔄 Используем suggested_price: {entry_price}")
         else:
-            self.logger.error(
-                "❌ У TradingSignal отсутствует entry_price и suggested_price!"
-            )
+            self.logger.error("❌ У TradingSignal отсутствует entry_price и suggested_price!")
             self.logger.error(f"   Доступные атрибуты: {vars(trading_signal)}")
             entry_price = 0.0
 
@@ -931,23 +955,26 @@ class TradingEngine:
         if confidence > 1.0:
             confidence = confidence / 100.0
 
-        # Получаем stop_loss и take_profit с учетом типа сигнала
+        # Получаем stop_loss и take_profit - они уже правильно рассчитаны в ml_signal_processor
         signal_type = getattr(trading_signal, "signal_type", None)
 
-        # Дефолтные значения зависят от типа сигнала
-        if signal_type == DBSignalType.SHORT:
-            default_stop_loss = entry_price * 1.02  # Для SHORT: SL выше цены
-            default_take_profit = entry_price * 0.98  # Для SHORT: TP ниже цены
-        else:  # LONG или неопределенный
-            default_stop_loss = entry_price * 0.98  # Для LONG: SL ниже цены
-            default_take_profit = entry_price * 1.02  # Для LONG: TP выше цены
-
+        # Используем уже рассчитанные значения SL/TP без пересчета
+        # ml_signal_processor уже правильно применил проценты к текущей цене
         stop_loss = getattr(trading_signal, "stop_loss", None) or getattr(
-            trading_signal, "suggested_stop_loss", default_stop_loss
+            trading_signal, "suggested_stop_loss", None
         )
         take_profit = getattr(trading_signal, "take_profit", None) or getattr(
-            trading_signal, "suggested_take_profit", default_take_profit
+            trading_signal, "suggested_take_profit", None
         )
+
+        # Если SL/TP не заданы, рассчитываем с правильной логикой для каждого типа
+        if stop_loss is None or take_profit is None:
+            if signal_type == DBSignalType.SHORT:
+                stop_loss = stop_loss or entry_price * 1.02  # Для SHORT: SL выше цены
+                take_profit = take_profit or entry_price * 0.98  # Для SHORT: TP ниже цены
+            else:  # LONG или неопределенный
+                stop_loss = stop_loss or entry_price * 0.98  # Для LONG: SL ниже цены
+                take_profit = take_profit or entry_price * 1.02  # Для LONG: TP выше цены
 
         # Создаем Signal объект
         signal = Signal(
@@ -1106,9 +1133,7 @@ class TradingEngine:
             return instrument
 
         except Exception as e:
-            self.logger.error(
-                f"Ошибка получения информации об инструменте {symbol}: {e}"
-            )
+            self.logger.error(f"Ошибка получения информации об инструменте {symbol}: {e}")
             return None
 
     def _round_to_step(self, value: Decimal, step: Decimal) -> Decimal:
@@ -1197,23 +1222,25 @@ class TradingEngine:
 
             # Для NEUTRAL сигналов не создаем ордера
             if signal_type_lower in ["neutral", "flat"]:
-                self.logger.info(
-                    f"🔸 NEUTRAL сигнал для {signal.symbol} - не создаем ордера"
-                )
+                self.logger.info(f"🔸 NEUTRAL сигнал для {signal.symbol} - не создаем ордера")
                 return []
 
-            side = (
-                OrderSide.BUY
-                if signal_type_lower in ["long", "buy"]
-                else OrderSide.SELL
-            )
+            side = OrderSide.BUY if signal_type_lower in ["long", "buy"] else OrderSide.SELL
+
+            # Применяем rate limiting перед любыми API вызовами
+            try:
+                wait_time = await rate_limiter.acquire(signal.exchange, "get_positions")
+                if wait_time > 0:
+                    self.logger.debug(
+                        f"⏱️ Rate limit задержка: {wait_time:.2f}с для {signal.exchange}"
+                    )
+            except Exception as rate_error:
+                self.logger.warning(f"⚠️ Ошибка rate limiting: {rate_error}")
 
             # Получаем информацию об инструменте
             instrument = await self._get_instrument_info(signal.symbol, signal.exchange)
             if not instrument:
-                self.logger.error(
-                    f"Не удалось получить информацию об инструменте {signal.symbol}"
-                )
+                self.logger.error(f"Не удалось получить информацию об инструменте {signal.symbol}")
                 return []
 
             # Получаем минимальный объем ордера в USDT из конфигурации
@@ -1222,22 +1249,16 @@ class TradingEngine:
             )
 
             # Получаем дефолтный размер позиции из конфигурации или используем suggested_quantity
-            default_sizes = self.config.get("trading", {}).get(
-                "default_position_sizes", {}
-            )
+            default_sizes = self.config.get("trading", {}).get("default_position_sizes", {})
 
             if signal.symbol in default_sizes:
                 # Используем размер из конфигурации
                 quantity = Decimal(str(default_sizes[signal.symbol]))
-                self.logger.info(
-                    f"Используем размер из конфигурации: {quantity} {signal.symbol}"
-                )
+                self.logger.info(f"Используем размер из конфигурации: {quantity} {signal.symbol}")
             elif hasattr(signal, "suggested_quantity") and signal.suggested_quantity:
                 # Используем размер из сигнала
                 quantity = Decimal(str(signal.suggested_quantity))
-                self.logger.info(
-                    f"Используем размер из сигнала: {quantity} {signal.symbol}"
-                )
+                self.logger.info(f"Используем размер из сигнала: {quantity} {signal.symbol}")
             else:
                 # Рассчитываем минимальный размер для $5
                 quantity = min_order_value_usdt / Decimal(str(signal.suggested_price))
@@ -1273,6 +1294,53 @@ class TradingEngine:
             # Финальная проверка минимального размера после округления
             if quantity < min_qty:
                 quantity = min_qty
+
+            # Проверяем баланс перед созданием ордера
+            try:
+                # Определяем валюту для проверки баланса
+                required_currency = "USDT"  # Базовая валюта для большинства пар
+                required_amount = order_value_usdt
+
+                if side == OrderSide.SELL:
+                    # Для продажи нужна базовая валюта (например, BTC для BTCUSDT)
+                    base_currency = signal.symbol.replace("USDT", "").replace("BUSD", "")
+                    required_currency = base_currency
+                    required_amount = quantity
+
+                # Проверяем доступность баланса
+                balance_available, balance_error = await balance_manager.check_balance_availability(
+                    exchange=signal.exchange, symbol=required_currency, amount=required_amount
+                )
+
+                if not balance_available:
+                    self.logger.warning(f"⚠️ Недостаточно баланса для ордера: {balance_error}")
+                    return []
+
+                # Резервируем баланс на время создания ордера
+                reservation_id = await balance_manager.reserve_balance(
+                    exchange=signal.exchange,
+                    symbol=required_currency,
+                    amount=required_amount,
+                    purpose="order",
+                    metadata={
+                        "signal_id": getattr(signal, "id", None),
+                        "symbol": signal.symbol,
+                        "side": side.value,
+                        "quantity": float(quantity),
+                    },
+                )
+
+                if not reservation_id:
+                    self.logger.warning("⚠️ Не удалось зарезервировать баланс для ордера")
+                    return []
+
+                self.logger.info(
+                    f"✅ Баланс зарезервирован: {required_amount} {required_currency} (ID: {reservation_id})"
+                )
+
+            except Exception as balance_error:
+                self.logger.error(f"❌ Ошибка проверки баланса: {balance_error}")
+                return []
 
             self.logger.info(
                 f"Финальный размер ордера: {quantity} {signal.symbol} (шаг: {qty_step})"
@@ -1314,3 +1382,74 @@ class TradingEngine:
 
             self.logger.error(traceback.format_exc())
             return []
+
+    async def _balance_update_loop(self):
+        """Цикл обновления балансов"""
+        while self._running:
+            try:
+                # Обновляем балансы через BalanceManager
+                if self.balance_manager:
+                    for exchange_name in self.exchange_registry.exchanges.keys():
+                        try:
+                            exchange = self.exchange_registry.get_exchange(exchange_name)
+                            balances = await exchange.get_balances()
+
+                            for balance in balances:
+                                await self.balance_manager.update_balance(
+                                    exchange=exchange_name,
+                                    symbol=balance.currency,
+                                    total=balance.total,
+                                    available=balance.available,
+                                    locked=balance.frozen,
+                                )
+
+                            self.logger.debug(
+                                f"Обновлены балансы для {exchange_name}: {len(balances)} валют"
+                            )
+
+                        except Exception as e:
+                            self.logger.warning(f"Ошибка обновления балансов {exchange_name}: {e}")
+
+                await asyncio.sleep(30)  # Обновляем каждые 30 секунд
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Ошибка в цикле обновления балансов: {e}")
+                await asyncio.sleep(30)
+
+    async def _heartbeat_loop(self):
+        """Цикл отправки heartbeat и мониторинга"""
+        while self._running:
+            try:
+                if hasattr(self, "worker_id") and self.worker_id:
+                    # Отправляем heartbeat с текущими метриками
+                    active_tasks = len([task for task in self._tasks if not task.done()])
+                    await worker_coordinator.heartbeat(
+                        self.worker_id,
+                        status="running" if self.state == TradingState.RUNNING else "warning",
+                        active_tasks=active_tasks,
+                        tasks={f"task_{i}" for i in range(active_tasks)},
+                    )
+
+                    # Отправляем heartbeat в process monitor
+                    await process_monitor.heartbeat(
+                        "trading_engine",
+                        status="healthy" if self.state == TradingState.RUNNING else "warning",
+                        active_tasks=active_tasks,
+                        metadata={
+                            "signal_queue_size": self.signal_queue.qsize(),
+                            "order_queue_size": self.order_queue.qsize(),
+                            "total_signals_processed": self.metrics.total_signals,
+                            "total_orders_created": self.metrics.total_orders,
+                            "total_trades_executed": self.metrics.total_trades,
+                        },
+                    )
+
+                await asyncio.sleep(30)  # Heartbeat каждые 30 секунд
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Ошибка в heartbeat loop: {e}")
+                await asyncio.sleep(30)

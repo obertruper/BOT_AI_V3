@@ -85,7 +85,7 @@ async def real_browser_ai_collaboration():
         # Проверяем созданные файлы
         if Path("strategy_components.md").exists():
             print("\n📋 Содержимое стратегии:")
-            with open("strategy_components.md", "r") as f:
+            with open("strategy_components.md") as f:
                 print(f.read()[:500] + "...")
 
     except Exception as e:
@@ -118,9 +118,7 @@ async def automated_cross_verification():
     Сохрани в momentum_strategy.py с полной имплементацией.
     """
 
-    strategy_options = ClaudeCodeOptions(
-        model="sonnet", allowed_tools=["Write"], max_turns=3
-    )
+    strategy_options = ClaudeCodeOptions(model="sonnet", allowed_tools=["Write"], max_turns=3)
 
     await sdk.query(strategy_task, strategy_options)
     print("✅ Базовая стратегия создана")
@@ -295,7 +293,7 @@ async def main():
     try:
         if choice == "5":
             for name, func in demos.values():
-                print(f"\n\n{'='*60}")
+                print(f"\n\n{'=' * 60}")
                 print(f"Запуск: {name}")
                 print("=" * 60)
                 await func()

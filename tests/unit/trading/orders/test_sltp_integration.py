@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Unit tests for SL/TP Integration
 """
@@ -89,9 +88,7 @@ class TestSLTPIntegration:
         ]
 
         # Act
-        result = await sltp_integration.handle_filled_order(
-            test_order, mock_exchange_client
-        )
+        result = await sltp_integration.handle_filled_order(test_order, mock_exchange_client)
 
         # Assert
         assert result is True
@@ -120,9 +117,7 @@ class TestSLTPIntegration:
         assert "position_id" in test_order.metadata
 
     @pytest.mark.asyncio
-    async def test_handle_filled_order_no_manager(
-        self, test_order, mock_exchange_client
-    ):
+    async def test_handle_filled_order_no_manager(self, test_order, mock_exchange_client):
         """Тест обработки ордера без SL/TP Manager"""
         # Arrange
         integration = SLTPIntegration(sltp_manager=None)
@@ -157,9 +152,7 @@ class TestSLTPIntegration:
         mock_sltp_manager.create_sltp_orders.return_value = []
 
         # Act
-        result = await sltp_integration.handle_filled_order(
-            short_order, mock_exchange_client
-        )
+        result = await sltp_integration.handle_filled_order(short_order, mock_exchange_client)
 
         # Assert
         assert result is False  # Нет созданных ордеров
@@ -183,9 +176,7 @@ class TestSLTPIntegration:
         mock_sltp_manager.create_sltp_orders.side_effect = Exception("API Error")
 
         # Act
-        result = await sltp_integration.handle_filled_order(
-            test_order, mock_exchange_client
-        )
+        result = await sltp_integration.handle_filled_order(test_order, mock_exchange_client)
 
         # Assert
         assert result is False
@@ -202,9 +193,7 @@ class TestSLTPIntegration:
 
         # Assert
         assert result is True
-        mock_sltp_manager.update_trailing_stop.assert_called_once_with(
-            position_id, current_price
-        )
+        mock_sltp_manager.update_trailing_stop.assert_called_once_with(position_id, current_price)
         mock_sltp_manager.update_profit_protection.assert_called_once_with(
             position_id, current_price
         )
@@ -222,9 +211,7 @@ class TestSLTPIntegration:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_update_position_sltp_no_updates(
-        self, sltp_integration, mock_sltp_manager
-    ):
+    async def test_update_position_sltp_no_updates(self, sltp_integration, mock_sltp_manager):
         """Тест когда обновления не требуются"""
         # Arrange
         mock_sltp_manager.update_trailing_stop.return_value = False
@@ -253,14 +240,10 @@ class TestSLTPIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_check_partial_tp_exception(
-        self, sltp_integration, mock_sltp_manager
-    ):
+    async def test_check_partial_tp_exception(self, sltp_integration, mock_sltp_manager):
         """Тест обработки исключения при проверке частичного TP"""
         # Arrange
-        mock_sltp_manager.check_and_execute_partial_tp.side_effect = Exception(
-            "Network error"
-        )
+        mock_sltp_manager.check_and_execute_partial_tp.side_effect = Exception("Network error")
 
         # Act
         result = await sltp_integration.check_partial_tp("test_id", 50000)
@@ -276,9 +259,7 @@ class TestSLTPIntegration:
         tp_percentage = 0.04
 
         # Act
-        order = Mock(
-            metadata={"stop_loss_pct": sl_percentage, "take_profit_pct": tp_percentage}
-        )
+        order = Mock(metadata={"stop_loss_pct": sl_percentage, "take_profit_pct": tp_percentage})
         position = Mock(entry_price=entry_price, side="Buy")
 
         # Вычисляем как в коде

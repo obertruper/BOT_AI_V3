@@ -48,9 +48,7 @@ async def quick_verify(description: str, task_content: str):
         print(f"🔢 Итераций: {status['iteration_count']}")
 
         successful_ai = sum(
-            1
-            for session in status["chat_sessions"].values()
-            if session["status"] == "responded"
+            1 for session in status["chat_sessions"].values() if session["status"] == "responded"
         )
         total_ai = len(status["chat_sessions"])
         print(f"🤖 Успешных AI: {successful_ai}/{total_ai}")
@@ -80,9 +78,7 @@ def main():
     if len(sys.argv) != 3:
         print("❌ Неправильное использование!")
         print("\nИспользование:")
-        print(
-            '   python ai_agents/quick_cross_verify.py "Описание задачи" "Содержание задачи"'
-        )
+        print('   python ai_agents/quick_cross_verify.py "Описание задачи" "Содержание задачи"')
         print("\nПримеры:")
         print(
             '   python ai_agents/quick_cross_verify.py "Стратегия скальпинга" "Разработай стратегию скальпинга для BTC"'

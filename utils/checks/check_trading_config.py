@@ -20,16 +20,14 @@ os.environ["PGDATABASE"] = "bot_trading_v3"
 
 async def check_trading_config():
     """Проверка конфигурации торговли"""
-    print(
-        f"\n🔍 ПРОВЕРКА КОНФИГУРАЦИИ ТОРГОВЛИ - {datetime.now().strftime('%H:%M:%S')}"
-    )
+    print(f"\n🔍 ПРОВЕРКА КОНФИГУРАЦИИ ТОРГОВЛИ - {datetime.now().strftime('%H:%M:%S')}")
     print("=" * 60)
 
     # 1. Проверка system.yaml
     print("\n⚙️ КОНФИГУРАЦИЯ SYSTEM.YAML:")
 
     try:
-        with open("config/system.yaml", "r") as f:
+        with open("config/system.yaml") as f:
             system_config = yaml.safe_load(f)
 
         trading_config = system_config.get("trading", {})
@@ -64,7 +62,7 @@ async def check_trading_config():
     print("\n\n⚙️ КОНФИГУРАЦИЯ TRADERS.YAML:")
 
     try:
-        with open("config/traders.yaml", "r") as f:
+        with open("config/traders.yaml") as f:
             traders_config = yaml.safe_load(f)
 
         for trader in traders_config.get("traders", []):
@@ -76,9 +74,7 @@ async def check_trading_config():
 
                 strategy_config = trader.get("strategy_config", {})
                 if "order_type" in strategy_config:
-                    print(
-                        f"      - Тип ордеров стратегии: {strategy_config['order_type']}"
-                    )
+                    print(f"      - Тип ордеров стратегии: {strategy_config['order_type']}")
 
     except Exception as e:
         print(f"   ❌ Ошибка чтения traders.yaml: {e}")
@@ -120,9 +116,7 @@ async def check_trading_config():
                 if order["order_type"] == "LIMIT":
                     print(f"      Цена лимитного ордера: ${order['price']}")
                 print(f"      Статус: {order['status']}")
-                print(
-                    f"      Время: {order['created_at'].strftime('%Y-%m-%d %H:%M:%S')}"
-                )
+                print(f"      Время: {order['created_at'].strftime('%Y-%m-%d %H:%M:%S')}")
         else:
             print("   ❌ Нет ордеров за последние 24 часа")
 

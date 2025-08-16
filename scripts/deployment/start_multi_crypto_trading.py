@@ -9,7 +9,6 @@ import logging
 import os
 import signal
 from datetime import datetime
-from typing import Dict, Optional
 
 from dotenv import load_dotenv
 
@@ -56,13 +55,13 @@ class MultiCryptoTradingSystem:
     """Система торговли по нескольким криптовалютам"""
 
     def __init__(self):
-        self.orchestrator: Optional[SystemOrchestrator] = None
-        self.config_manager: Optional[ConfigManager] = None
-        self.trading_engine: Optional[TradingEngine] = None
-        self.strategy_manager: Optional[StrategyManager] = None
+        self.orchestrator: SystemOrchestrator | None = None
+        self.config_manager: ConfigManager | None = None
+        self.trading_engine: TradingEngine | None = None
+        self.strategy_manager: StrategyManager | None = None
         self.exchange = None
-        self.risk_manager: Optional[RiskManager] = None
-        self.shared_context: Optional[SharedContext] = None
+        self.risk_manager: RiskManager | None = None
+        self.shared_context: SharedContext | None = None
         self.running = False
         self.signal_generation_task = None
 
@@ -112,9 +111,7 @@ class MultiCryptoTradingSystem:
 
             # Регистрация компонентов
             self.orchestrator.register_component("trading_engine", self.trading_engine)
-            self.orchestrator.register_component(
-                "strategy_manager", self.strategy_manager
-            )
+            self.orchestrator.register_component("strategy_manager", self.strategy_manager)
             self.orchestrator.register_component("risk_manager", self.risk_manager)
             self.orchestrator.register_component("exchange", self.exchange)
 
@@ -137,7 +134,7 @@ class MultiCryptoTradingSystem:
             return True
 
         except Exception as e:
-            logger.error(f"❌ Ошибка инициализации: {str(e)}")
+            logger.error(f"❌ Ошибка инициализации: {e!s}")
             return False
 
     async def generate_signals(self):
@@ -145,9 +142,7 @@ class MultiCryptoTradingSystem:
         while self.running:
             try:
                 logger.info("\n" + "=" * 50)
-                logger.info(
-                    f"🔄 Генерация сигналов - {datetime.now().strftime('%H:%M:%S')}"
-                )
+                logger.info(f"🔄 Генерация сигналов - {datetime.now().strftime('%H:%M:%S')}")
 
                 # Получаем текущие цены для всех символов
                 for symbol in CRYPTO_SYMBOLS:
@@ -180,17 +175,17 @@ class MultiCryptoTradingSystem:
                                 logger.warning("   ⚠️ Риск-менеджмент блокирует сделку")
 
                     except Exception as e:
-                        logger.error(f"   ❌ Ошибка обработки {symbol}: {str(e)}")
+                        logger.error(f"   ❌ Ошибка обработки {symbol}: {e!s}")
 
                 # Ждем 60 секунд до следующей генерации
                 logger.info("\n⏳ Ожидание 60 секунд до следующего цикла...")
                 await asyncio.sleep(60)
 
             except Exception as e:
-                logger.error(f"❌ Ошибка в цикле генерации сигналов: {str(e)}")
+                logger.error(f"❌ Ошибка в цикле генерации сигналов: {e!s}")
                 await asyncio.sleep(60)
 
-    async def _analyze_market(self, symbol: str, ticker: Dict) -> Optional[Dict]:
+    async def _analyze_market(self, symbol: str, ticker: dict) -> dict | None:
         """Простой анализ рынка для генерации сигналов"""
         # Это базовый пример - замените на вашу стратегию
         # Можно использовать индикаторы RSI, EMA, MACD и т.д.
@@ -223,7 +218,7 @@ class MultiCryptoTradingSystem:
             return None
 
         except Exception as e:
-            logger.error(f"Ошибка анализа {symbol}: {str(e)}")
+            logger.error(f"Ошибка анализа {symbol}: {e!s}")
             return None
 
     async def start(self):
@@ -249,7 +244,7 @@ class MultiCryptoTradingSystem:
         except KeyboardInterrupt:
             logger.info("\n⚠️ Получен сигнал остановки...")
         except Exception as e:
-            logger.error(f"❌ Критическая ошибка: {str(e)}")
+            logger.error(f"❌ Критическая ошибка: {e!s}")
         finally:
             await self.stop()
 

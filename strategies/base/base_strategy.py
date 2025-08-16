@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Базовый класс для всех торговых стратегий
 """
@@ -8,7 +7,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from database.models import Signal
 from indicators.calculator.indicator_calculator import IndicatorCalculator
@@ -31,8 +30,8 @@ class BaseStrategy(ABC):
         symbol: str,
         exchange: str,
         timeframe: str = "5m",
-        parameters: Optional[Dict[str, Any]] = None,
-        logger: Optional[logging.Logger] = None,
+        parameters: dict[str, Any] | None = None,
+        logger: logging.Logger | None = None,
     ):
         """
         Инициализация базовой стратегии
@@ -77,7 +76,7 @@ class BaseStrategy(ABC):
         }
 
     @abstractmethod
-    async def analyze(self, market_data: Dict[str, Any]) -> Optional[Signal]:
+    async def analyze(self, market_data: dict[str, Any]) -> Signal | None:
         """
         Анализ рыночных данных и генерация торгового сигнала
 
@@ -90,9 +89,7 @@ class BaseStrategy(ABC):
         pass
 
     @abstractmethod
-    async def calculate_position_size(
-        self, signal: Signal, account_balance: Decimal
-    ) -> Decimal:
+    async def calculate_position_size(self, signal: Signal, account_balance: Decimal) -> Decimal:
         """
         Расчет размера позиции на основе сигнала и баланса
 
@@ -106,7 +103,7 @@ class BaseStrategy(ABC):
         pass
 
     @abstractmethod
-    def get_required_indicators(self) -> List[str]:
+    def get_required_indicators(self) -> list[str]:
         """
         Получить список необходимых индикаторов
 
@@ -118,9 +115,7 @@ class BaseStrategy(ABC):
     async def start(self):
         """Запуск стратегии"""
         self._is_active = True
-        self.logger.info(
-            f"Стратегия {self.name} запущена для {self.symbol} на {self.exchange}"
-        )
+        self.logger.info(f"Стратегия {self.name} запущена для {self.symbol} на {self.exchange}")
         await self.on_start()
 
     async def stop(self):
@@ -129,7 +124,7 @@ class BaseStrategy(ABC):
         await self.on_stop()
         self.logger.info(f"Стратегия {self.name} остановлена")
 
-    async def update(self, market_data: Dict[str, Any]) -> Optional[Signal]:
+    async def update(self, market_data: dict[str, Any]) -> Signal | None:
         """
         Обновление стратегии с новыми рыночными данными
 
@@ -189,9 +184,7 @@ class BaseStrategy(ABC):
 
         # Проверяем не слишком ли частые сигналы
         if self._last_signal:
-            time_diff = (
-                datetime.utcnow() - self._last_signal.created_at
-            ).total_seconds()
+            time_diff = (datetime.utcnow() - self._last_signal.created_at).total_seconds()
             min_signal_interval = self.parameters.get("min_signal_interval", 60)
 
             if time_diff < min_signal_interval:
@@ -199,7 +192,7 @@ class BaseStrategy(ABC):
 
         return True
 
-    def _update_price_history(self, market_data: Dict[str, Any]):
+    def _update_price_history(self, market_data: dict[str, Any]):
         """Обновление истории цен"""
         if "candles" in market_data:
             # Добавляем последнюю свечу
@@ -221,7 +214,7 @@ class BaseStrategy(ABC):
                 if len(self._price_history) > max_history:
                     self._price_history = self._price_history[-max_history:]
 
-    def calculate_indicators(self, price_data: List[Dict]) -> Dict[str, Any]:
+    def calculate_indicators(self, price_data: list[dict]) -> dict[str, Any]:
         """
         Расчет технических индикаторов
 
@@ -263,8 +256,8 @@ class BaseStrategy(ABC):
                 )
             elif indicator_name == "EMA":
                 for period in self.parameters.get("ema_periods", [9, 21, 50]):
-                    indicators[f"EMA_{period}"] = (
-                        self.indicator_calculator.calculate_ema(closes, period)
+                    indicators[f"EMA_{period}"] = self.indicator_calculator.calculate_ema(
+                        closes, period
                     )
             elif indicator_name == "ATR":
                 indicators["ATR"] = self.indicator_calculator.calculate_atr(
@@ -300,9 +293,7 @@ class BaseStrategy(ABC):
         else:
             return entry_price + (atr * atr_multiplier)
 
-    def calculate_take_profit(
-        self, entry_price: float, side: str, stop_loss: float
-    ) -> float:
+    def calculate_take_profit(self, entry_price: float, side: str, stop_loss: float) -> float:
         """
         Расчет уровня take-profit
 
@@ -322,16 +313,16 @@ class BaseStrategy(ABC):
         else:
             return entry_price - (risk * risk_reward_ratio)
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Получить текущие параметры стратегии"""
         return self.parameters.copy()
 
-    def update_parameters(self, new_parameters: Dict[str, Any]):
+    def update_parameters(self, new_parameters: dict[str, Any]):
         """Обновить параметры стратегии"""
         self.parameters.update(new_parameters)
         self.logger.info(f"Параметры стратегии {self.name} обновлены")
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Получить метрики производительности"""
         # Рассчитываем win rate
         if self._metrics["total_signals"] > 0:

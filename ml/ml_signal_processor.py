@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ML Signal Processor для интеграции ML предсказаний с торговыми сигналами
 """
 
 import asyncio
 import heapq
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Union
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -35,8 +34,8 @@ class MLSignalProcessor:
     def __init__(
         self,
         ml_manager: MLManager,
-        config: Dict[str, Any],
-        config_manager: Optional[ConfigManager] = None,
+        config: dict[str, Any],
+        config_manager: ConfigManager | None = None,
     ):
         """
         Инициализация ML Signal Processor.
@@ -52,21 +51,15 @@ class MLSignalProcessor:
 
         # Пороги для принятия решений (еще больше снижены для тестирования)
         ml_config = config.get("ml", {})
-        self.min_confidence = ml_config.get(
-            "min_confidence", 0.1
-        )  # было 0.45 - снижено для тестов
+        self.min_confidence = ml_config.get("min_confidence", 0.1)  # было 0.45 - снижено для тестов
         self.min_signal_strength = ml_config.get(
             "min_signal_strength", 0.01
         )  # было 0.2 - минимальный порог
-        self.risk_tolerance = ml_config.get(
-            "risk_tolerance", "HIGH"
-        )  # Допускаем высокий риск
+        self.risk_tolerance = ml_config.get("risk_tolerance", "HIGH")  # Допускаем высокий риск
 
         # Кэш для предсказаний (уменьшаем TTL для более частых обновлений)
         self.prediction_cache = {}
-        self.cache_ttl = (
-            60  # 1 минута - для уникальных предсказаний каждый символ/минуту
-        )
+        self.cache_ttl = 60  # 1 минута - для уникальных предсказаний каждый символ/минуту
 
         # Инициализируем калькулятор индикаторов с увеличенным TTL
         self.indicator_calculator = RealTimeIndicatorCalculator(
@@ -94,8 +87,8 @@ class MLSignalProcessor:
         symbol: str,
         exchange: str,
         ohlcv_data: pd.DataFrame,
-        additional_data: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Signal]:
+        additional_data: dict[str, Any] | None = None,
+    ) -> Signal | None:
         """
         Обрабатывает рыночные данные и генерирует торговый сигнал.
 
@@ -148,11 +141,11 @@ class MLSignalProcessor:
 
     def _create_signal_from_prediction(
         self,
-        prediction: Dict[str, Any],
+        prediction: dict[str, Any],
         symbol: str,
         exchange: str,
-        additional_data: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Signal]:
+        additional_data: dict[str, Any] | None = None,
+    ) -> Signal | None:
         """
         Создает торговый сигнал на основе ML предсказания.
 
@@ -201,13 +194,9 @@ class MLSignalProcessor:
         if ml_signal_type == "NEUTRAL":
             # Для NEUTRAL сигналов требуем высокую уверенность (>70%)
             if confidence < 0.70:
-                logger.info(
-                    f"🎯 NEUTRAL сигнал с низкой уверенностью {confidence:.1%}, пропускаем"
-                )
+                logger.info(f"🎯 NEUTRAL сигнал с низкой уверенностью {confidence:.1%}, пропускаем")
                 return None
-            logger.info(
-                f"🎯 NEUTRAL сигнал с высокой уверенностью {confidence:.1%}, обрабатываем"
-            )
+            logger.info(f"🎯 NEUTRAL сигнал с высокой уверенностью {confidence:.1%}, обрабатываем")
 
         # Мапим ML сигнал на торговый SignalType
         # ИСПРАВЛЕНО: Модель возвращает "LONG"/"SHORT"/"NEUTRAL"
@@ -229,6 +218,23 @@ class MLSignalProcessor:
         if additional_data and "current_price" in additional_data:
             current_price = additional_data["current_price"]
 
+        # ВАЖНО: Рассчитываем правильный размер позиции в единицах актива
+        # Используем конфигурацию: fixed_balance * risk_per_trade * leverage
+        fixed_balance = 100.0  # Из config/trading.yaml
+        risk_per_trade = 0.02  # 2% риска
+        leverage = 5.0  # 5x плечо
+
+        # Расчет размера позиции в USD
+        position_size_usd = fixed_balance * risk_per_trade * leverage  # $100 * 0.02 * 5 = $10
+
+        # Конвертация в единицы актива
+        suggested_quantity = position_size_usd / current_price if current_price > 0 else 0.01
+
+        logger.info(
+            f"💰 Размер позиции: ${position_size_usd:.2f} USD = {suggested_quantity:.6f} {symbol} "
+            f"(цена: ${current_price:.2f})"
+        )
+
         # Создаем сигнал
         signal = Signal(
             symbol=symbol,
@@ -240,13 +246,13 @@ class MLSignalProcessor:
             suggested_price=current_price,
             suggested_stop_loss=prediction.get("stop_loss"),
             suggested_take_profit=prediction.get("take_profit"),
+            suggested_quantity=suggested_quantity,  # ДОБАВЛЕНО: правильный размер в единицах
+            suggested_position_size=position_size_usd,  # ДОБАВЛЕНО: размер в USD для signal_processor
             indicators={
                 "ml_predictions": prediction.get("predictions", {}),
                 "risk_level": risk_level,
                 "signal_strength": signal_strength_value,
-                "success_probability": prediction.get(
-                    "success_probability", 0.5
-                ),  # Добавлено!
+                "success_probability": prediction.get("success_probability", 0.5),  # Добавлено!
             },
             extra_data={
                 "ml_model": "UnifiedPatchTST",
@@ -282,9 +288,7 @@ class MLSignalProcessor:
         elif signal_type == SignalType.SHORT:
             self.signal_stats["short_signals"] += 1
         elif signal_type == SignalType.NEUTRAL:
-            self.signal_stats["neutral_signals"] = (
-                self.signal_stats.get("neutral_signals", 0) + 1
-            )
+            self.signal_stats["neutral_signals"] = self.signal_stats.get("neutral_signals", 0) + 1
 
         # Проверяем разнообразие каждые 10 сигналов
         if self.signal_stats["total_signals"] % 10 == 0:
@@ -338,7 +342,7 @@ class MLSignalProcessor:
 
         return prediction_risk <= tolerance_risk
 
-    def _get_cached_prediction(self, cache_key: str) -> Optional[Dict[str, Any]]:
+    def _get_cached_prediction(self, cache_key: str) -> dict[str, Any] | None:
         """Получает закэшированное предсказание"""
         if cache_key not in self.prediction_cache:
             return None
@@ -347,13 +351,13 @@ class MLSignalProcessor:
         cached_time = datetime.fromisoformat(cached_data["timestamp"])
 
         # Проверяем TTL
-        if datetime.now(timezone.utc) - cached_time > timedelta(seconds=self.cache_ttl):
+        if datetime.now(UTC) - cached_time > timedelta(seconds=self.cache_ttl):
             del self.prediction_cache[cache_key]
             return None
 
         return cached_data
 
-    def _cache_prediction(self, cache_key: str, prediction: Dict[str, Any]):
+    def _cache_prediction(self, cache_key: str, prediction: dict[str, Any]):
         """Кэширует предсказание"""
         self.prediction_cache[cache_key] = prediction
 
@@ -362,7 +366,7 @@ class MLSignalProcessor:
 
     def _cleanup_cache(self):
         """Очищает устаревшие записи из кэша"""
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         keys_to_remove = []
 
         for key, data in self.prediction_cache.items():
@@ -397,13 +401,11 @@ class MLSignalProcessor:
 
         return True
 
-    def update_config(self, config: Dict[str, Any]):
+    def update_config(self, config: dict[str, Any]):
         """Обновляет конфигурацию процессора"""
         ml_config = config.get("ml", {})
         self.min_confidence = ml_config.get("min_confidence", self.min_confidence)
-        self.min_signal_strength = ml_config.get(
-            "min_signal_strength", self.min_signal_strength
-        )
+        self.min_signal_strength = ml_config.get("min_signal_strength", self.min_signal_strength)
         self.risk_tolerance = ml_config.get("risk_tolerance", self.risk_tolerance)
 
         logger.info(
@@ -443,7 +445,7 @@ class MLSignalProcessor:
 
     async def process_signal(
         self, symbol: str, features: np.ndarray, current_price: float
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """
         Обрабатывает один сигнал.
 
@@ -477,7 +479,7 @@ class MLSignalProcessor:
         finally:
             self._stats["total_signals_processed"] += 1
 
-    async def process_batch(self, batch_data: List[Dict[str, Any]]) -> List[Signal]:
+    async def process_batch(self, batch_data: list[dict[str, Any]]) -> list[Signal]:
         """
         Обрабатывает пакет сигналов.
 
@@ -503,9 +505,9 @@ class MLSignalProcessor:
     async def _convert_predictions_to_signal(
         self,
         symbol: str,
-        predictions: Union[np.ndarray, Dict[str, Any]],
+        predictions: np.ndarray | dict[str, Any],
         current_price: float,
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """
         Конвертирует предсказания модели в сигнал.
 
@@ -560,9 +562,15 @@ class MLSignalProcessor:
                 if signal_type == SignalType.LONG:
                     stop_loss = current_price * (1 - stop_loss_pct)
                     take_profit = current_price * (1 + take_profit_pct)
+                    logger.info(
+                        f"📈 LONG {symbol}: price={current_price:.6f}, SL={stop_loss:.6f} (ниже), TP={take_profit:.6f} (выше)"
+                    )
                 else:  # SHORT
                     stop_loss = current_price * (1 + stop_loss_pct)
                     take_profit = current_price * (1 - take_profit_pct)
+                    logger.info(
+                        f"📉 SHORT {symbol}: price={current_price:.6f}, SL={stop_loss:.6f} (выше), TP={take_profit:.6f} (ниже)"
+                    )
             else:
                 # Если проценты не определены, используем дефолтные значения
                 stop_loss_pct = 0.02  # 2%
@@ -589,12 +597,8 @@ class MLSignalProcessor:
                 return None
 
             # Вычисляем уверенность и силу сигнала
-            long_probs = pred_dict.get("profit_probabilities", {}).get(
-                "long", [0.5] * 4
-            )
-            short_probs = pred_dict.get("profit_probabilities", {}).get(
-                "short", [0.5] * 4
-            )
+            long_probs = pred_dict.get("profit_probabilities", {}).get("long", [0.5] * 4)
+            short_probs = pred_dict.get("profit_probabilities", {}).get("short", [0.5] * 4)
 
             if signal_type == SignalType.LONG:
                 confidence = np.mean(long_probs)
@@ -623,9 +627,7 @@ class MLSignalProcessor:
                 signal_type=signal_type,
                 current_price=current_price,
                 risk_metrics=risk_metrics,
-                profit_probabilities=long_probs
-                if signal_type == SignalType.LONG
-                else short_probs,
+                profit_probabilities=long_probs if signal_type == SignalType.LONG else short_probs,
             )
 
             # Конвертируем числовой риск в текстовый
@@ -635,6 +637,10 @@ class MLSignalProcessor:
                 risk_level = "MEDIUM"
             else:
                 risk_level = "HIGH"
+
+        # ВАЖНО: Рассчитываем правильный размер позиции в единицах актива
+        position_size_usd = 10.0  # $10 на позицию (2% от $500 с плечом 5x)
+        suggested_quantity = position_size_usd / current_price if current_price > 0 else 0.01
 
         # Создаем сигнал
         signal = Signal(
@@ -646,6 +652,7 @@ class MLSignalProcessor:
             suggested_stop_loss=stop_loss,
             suggested_take_profit=take_profit,
             suggested_price=current_price,
+            suggested_quantity=suggested_quantity,  # ДОБАВЛЕНО: правильный размер в единицах
             strategy_name="PatchTST_ML",
             indicators={
                 "ml_predictions": pred_dict.get("predictions", pred_dict),
@@ -695,9 +702,7 @@ class MLSignalProcessor:
 
         return min(max(strength, 0.0), 1.0)
 
-    async def _determine_signal_type(
-        self, directions: np.ndarray
-    ) -> Optional[SignalType]:
+    async def _determine_signal_type(self, directions: np.ndarray) -> SignalType | None:
         """
         Определяет тип сигнала на основе направлений.
 
@@ -729,7 +734,7 @@ class MLSignalProcessor:
         signal_type: SignalType,
         current_price: float,
         risk_metrics: np.ndarray,
-        profit_probabilities: Union[List[float], np.ndarray],
+        profit_probabilities: list[float] | np.ndarray,
     ) -> tuple:
         """
         Вычисляет уровни stop loss и take profit.
@@ -745,9 +750,7 @@ class MLSignalProcessor:
         """
         # Базовый риск из конфигурации
         base_risk = self.config.get("trading", {}).get("default_stop_loss_pct", 0.02)
-        base_profit = self.config.get("trading", {}).get(
-            "default_take_profit_pct", 0.04
-        )
+        base_profit = self.config.get("trading", {}).get("default_take_profit_pct", 0.04)
         risk_reward_ratio = self.config.get("trading", {}).get("risk_reward_ratio", 2.0)
 
         # Адаптивный риск на основе предсказаний
@@ -760,9 +763,7 @@ class MLSignalProcessor:
 
         # Вычисляем уровни
         stop_loss_pct = base_risk * risk_multiplier
-        take_profit_pct = max(
-            stop_loss_pct * risk_reward_ratio, base_profit * profit_multiplier
-        )
+        take_profit_pct = max(stop_loss_pct * risk_reward_ratio, base_profit * profit_multiplier)
 
         if signal_type == SignalType.LONG:
             stop_loss = current_price * (1 - stop_loss_pct)
@@ -822,7 +823,7 @@ class MLSignalProcessor:
             logger.error(f"Error saving signal: {e}")
             return False
 
-    async def filter_signals(self, signals: List[Signal]) -> List[Signal]:
+    async def filter_signals(self, signals: list[Signal]) -> list[Signal]:
         """
         Фильтрует слабые сигналы.
 
@@ -838,9 +839,7 @@ class MLSignalProcessor:
                 filtered.append(signal)
         return filtered
 
-    async def aggregate_signals(
-        self, signals: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
+    async def aggregate_signals(self, signals: list[dict[str, Any]]) -> dict[str, Any] | None:
         """
         Агрегирует множественные сигналы.
 
@@ -870,7 +869,7 @@ class MLSignalProcessor:
 
         return aggregated
 
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """
         Возвращает метрики производительности.
 
@@ -893,7 +892,7 @@ class MLSignalProcessor:
             "error_rate": self._stats["processing_errors"] / total,
         }
 
-    async def queue_signal(self, signal_data: Dict[str, Any]):
+    async def queue_signal(self, signal_data: dict[str, Any]):
         """
         Добавляет сигнал в приоритетную очередь.
 
@@ -910,7 +909,7 @@ class MLSignalProcessor:
         # Добавляем в кучу (приоритет, уверенность, данные)
         heapq.heappush(self._signal_queue, (priority, confidence, signal_data))
 
-    async def process_queue(self) -> List[Dict[str, Any]]:
+    async def process_queue(self) -> list[dict[str, Any]]:
         """
         Обрабатывает очередь сигналов.
 
@@ -925,9 +924,7 @@ class MLSignalProcessor:
 
         return processed
 
-    async def get_or_generate_signal(
-        self, symbol: str, data: Dict[str, Any]
-    ) -> Optional[Signal]:
+    async def get_or_generate_signal(self, symbol: str, data: dict[str, Any]) -> Signal | None:
         """
         Получает сигнал из кеша или генерирует новый.
 
@@ -945,9 +942,7 @@ class MLSignalProcessor:
             cached = self.prediction_cache[cache_key]
             if isinstance(cached, Signal):
                 # Проверяем TTL
-                if (
-                    datetime.utcnow() - cached.created_at
-                ).total_seconds() < self._cache_ttl:
+                if (datetime.utcnow() - cached.created_at).total_seconds() < self._cache_ttl:
                     return cached
 
         # Генерируем новый сигнал
@@ -959,9 +954,7 @@ class MLSignalProcessor:
 
         return signal
 
-    async def _generate_signal(
-        self, symbol: str, data: Dict[str, Any]
-    ) -> Optional[Signal]:
+    async def _generate_signal(self, symbol: str, data: dict[str, Any]) -> Signal | None:
         """
         Генерирует новый сигнал.
 
@@ -980,7 +973,7 @@ class MLSignalProcessor:
         symbol: str,
         exchange: str = "bybit",
         lookback_minutes: int = 7200,  # 480 свечей * 15 минут (5 дней)
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """
         Генерирует сигнал в реальном времени с расчетом индикаторов on-demand
 
@@ -996,9 +989,7 @@ class MLSignalProcessor:
             logger.info(f"🔄 Real-time обработка сигнала для {symbol}")
 
             # 1. Получаем последние OHLCV данные из БД
-            ohlcv_df = await self._fetch_latest_ohlcv(
-                symbol, exchange, lookback_minutes
-            )
+            ohlcv_df = await self._fetch_latest_ohlcv(symbol, exchange, lookback_minutes)
 
             if ohlcv_df is None or len(ohlcv_df) < 96:
                 logger.warning(
@@ -1007,22 +998,27 @@ class MLSignalProcessor:
                 )
                 return None
 
-            # 2. Рассчитываем индикаторы в реальном времени
+            # 2. Сначала рассчитываем и сохраняем индикаторы в БД
+            indicators = await self.indicator_calculator.calculate_indicators(
+                symbol=symbol,
+                ohlcv_df=ohlcv_df,
+                save_to_db=True,  # ВКЛЮЧАЕМ сохранение в processed_market_data
+            )
+
+            # 3. Затем готовим ML input
             features_array, metadata = await self.indicator_calculator.prepare_ml_input(
                 symbol=symbol,
                 ohlcv_df=ohlcv_df,
                 lookback=96,  # Стандартный lookback для модели
             )
 
-            logger.info(
-                f"📊 Рассчитано {metadata['features_count']} признаков для {symbol}"
-            )
+            logger.info(f"📊 Рассчитано {metadata['features_count']} признаков для {symbol}")
 
             # 3. Получаем предсказание от модели
-            logger.info(
-                f"📊 Отправляем на предсказание массив формы: {features_array.shape}"
-            )
-            prediction = await self.ml_manager.predict(features_array)
+            logger.info(f"📊 Отправляем на предсказание массив формы: {features_array.shape}")
+            prediction = await self.ml_manager.predict(
+                features_array, symbol=symbol
+            )  # Передаем symbol
             logger.info(f"📊 Получили предсказание: {type(prediction)}")
 
             # 4. Конвертируем предсказание в сигнал
@@ -1067,7 +1063,7 @@ class MLSignalProcessor:
 
     async def _fetch_latest_ohlcv(
         self, symbol: str, exchange: str, lookback_minutes: int
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         Получает последние OHLCV данные из БД
 
@@ -1103,9 +1099,7 @@ class MLSignalProcessor:
 
                 if not data or len(data) < 240:
                     # Если данных мало - обновляем через data loader
-                    logger.info(
-                        f"Обновление данных для {symbol}: в БД только {len(data)} записей"
-                    )
+                    logger.info(f"Обновление данных для {symbol}: в БД только {len(data)} записей")
 
                     # Обновляем данные
                     await self.data_loader.update_latest_data(
@@ -1138,9 +1132,7 @@ class MLSignalProcessor:
                     df.set_index("datetime", inplace=True)
                     df = df.sort_index()
 
-                    logger.info(
-                        f"Загружено {len(df)} свечей для {symbol} с колонкой symbol"
-                    )
+                    logger.info(f"Загружено {len(df)} свечей для {symbol} с колонкой symbol")
                     return df
 
                 return None
@@ -1150,8 +1142,8 @@ class MLSignalProcessor:
             return None
 
     async def generate_signals_for_symbols(
-        self, symbols: List[str], exchange: str = "bybit"
-    ) -> List[Signal]:
+        self, symbols: list[str], exchange: str = "bybit"
+    ) -> list[Signal]:
         """
         Генерирует сигналы для списка символов
 
@@ -1179,9 +1171,7 @@ class MLSignalProcessor:
             elif result is not None:
                 signals.append(result)
 
-        logger.info(
-            f"📈 Сгенерировано {len(signals)} сигналов из {len(symbols)} символов"
-        )
+        logger.info(f"📈 Сгенерировано {len(signals)} сигналов из {len(symbols)} символов")
 
         return signals
 

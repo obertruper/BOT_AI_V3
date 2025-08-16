@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Система кеширования для критических операций
 Обеспечивает высокую производительность через intelligent caching
@@ -8,7 +7,7 @@
 import asyncio
 import time
 from collections import defaultdict, deque
-from typing import Any, Dict, List, Optional
+from typing import Any
 from weakref import WeakValueDictionary
 
 from core.logger import setup_logger
@@ -30,16 +29,16 @@ class PerformanceCache:
         self.default_ttl = default_ttl
 
         # Основное хранилище
-        self._cache: Dict[str, Dict[str, Any]] = {}
-        self._access_times: Dict[str, float] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
+        self._access_times: dict[str, float] = {}
         self._access_order = deque()
         self._access_count = defaultdict(int)
 
         # TTL tracking
-        self._expiry_times: Dict[str, float] = {}
+        self._expiry_times: dict[str, float] = {}
 
         # Batch операции
-        self._batch_queue: List[Dict[str, Any]] = []
+        self._batch_queue: list[dict[str, Any]] = []
         self._batch_lock = asyncio.Lock()
 
         # Метрики производительности
@@ -73,9 +72,7 @@ class PerformanceCache:
     async def _cleanup_expired(self):
         """Удаление устаревших записей"""
         current_time = time.time()
-        expired_keys = [
-            key for key, expiry in self._expiry_times.items() if expiry < current_time
-        ]
+        expired_keys = [key for key, expiry in self._expiry_times.items() if expiry < current_time]
 
         for key in expired_keys:
             await self._remove_key(key)
@@ -114,7 +111,7 @@ class PerformanceCache:
         except ValueError:
             pass
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Получение значения из кеша"""
         current_time = time.time()
 
@@ -140,7 +137,7 @@ class PerformanceCache:
         self.misses += 1
         return None
 
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         """Сохранение значения в кеш"""
         current_time = time.time()
         ttl = ttl or self.default_ttl
@@ -181,7 +178,7 @@ class PerformanceCache:
         self._access_count.clear()
 
     # Batch операции для высокой производительности
-    async def get_many(self, keys: List[str]) -> Dict[str, Any]:
+    async def get_many(self, keys: list[str]) -> dict[str, Any]:
         """Получение множественных значений"""
         result = {}
         for key in keys:
@@ -190,13 +187,13 @@ class PerformanceCache:
                 result[key] = value
         return result
 
-    async def set_many(self, items: Dict[str, Any], ttl: Optional[int] = None) -> None:
+    async def set_many(self, items: dict[str, Any], ttl: int | None = None) -> None:
         """Сохранение множественных значений"""
         async with self._batch_lock:
             for key, value in items.items():
                 await self.set(key, value, ttl)
 
-    async def batch_update(self, operations: List[Dict[str, Any]]) -> List[Any]:
+    async def batch_update(self, operations: list[dict[str, Any]]) -> list[Any]:
         """Выполнение batch операций"""
         results = []
         async with self._batch_lock:
@@ -214,14 +211,12 @@ class PerformanceCache:
         return results
 
     # Специальные методы для торговых данных
-    async def cache_market_data(
-        self, symbol: str, timeframe: str, data: Any, ttl: int = 60
-    ):
+    async def cache_market_data(self, symbol: str, timeframe: str, data: Any, ttl: int = 60):
         """Кеширование рыночных данных"""
         key = f"market_data:{symbol}:{timeframe}"
         await self.set(key, data, ttl)
 
-    async def get_market_data(self, symbol: str, timeframe: str) -> Optional[Any]:
+    async def get_market_data(self, symbol: str, timeframe: str) -> Any | None:
         """Получение рыночных данных"""
         key = f"market_data:{symbol}:{timeframe}"
         return await self.get(key)
@@ -233,15 +228,13 @@ class PerformanceCache:
         key = f"indicator:{symbol}:{indicator}:{period}"
         await self.set(key, data, ttl)
 
-    async def get_indicator(
-        self, symbol: str, indicator: str, period: int
-    ) -> Optional[Any]:
+    async def get_indicator(self, symbol: str, indicator: str, period: int) -> Any | None:
         """Получение технических индикаторов"""
         key = f"indicator:{symbol}:{indicator}:{period}"
         return await self.get(key)
 
     # Методы для мониторинга производительности
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Получение статистики кеша"""
         total_requests = self.hits + self.misses
         hit_ratio = (self.hits / total_requests * 100) if total_requests > 0 else 0
@@ -319,12 +312,10 @@ async def warm_up_cache():
             cache_key = f"warmup:{symbol}:{indicator}"
             await performance_cache.set(cache_key, {"warmed": True}, 60)
 
-    logger.info(
-        f"✅ Кеш прогрет: {len(common_symbols) * len(common_indicators)} записей"
-    )
+    logger.info(f"✅ Кеш прогрет: {len(common_symbols) * len(common_indicators)} записей")
 
 
-async def get_cache_health() -> Dict[str, Any]:
+async def get_cache_health() -> dict[str, Any]:
     """Проверка здоровья кеша"""
     stats = performance_cache.get_stats()
 
@@ -341,7 +332,7 @@ async def get_cache_health() -> Dict[str, Any]:
     }
 
 
-def _get_cache_recommendations(stats: Dict[str, Any]) -> List[str]:
+def _get_cache_recommendations(stats: dict[str, Any]) -> list[str]:
     """Получение рекомендаций по оптимизации кеша"""
     recommendations = []
 

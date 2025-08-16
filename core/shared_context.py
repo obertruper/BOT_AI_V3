@@ -3,7 +3,7 @@ Shared context для связи между main.py и web API
 """
 
 import threading
-from typing import Any, Optional
+from typing import Any
 
 
 class SharedContext:
@@ -36,7 +36,7 @@ class SharedContext:
             self.exchange_factory = getattr(orchestrator, "exchange_factory", None)
             self.config_manager = getattr(orchestrator, "config_manager", None)
 
-    def get_orchestrator(self) -> Optional[Any]:
+    def get_orchestrator(self) -> Any | None:
         """Получить orchestrator"""
         return self.orchestrator
 

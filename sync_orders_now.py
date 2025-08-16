@@ -86,9 +86,7 @@ async def sync_orders():
                             ),
                             {
                                 "status": new_status,
-                                "filled_qty": float(
-                                    exchange_order.get("cumExecQty", 0)
-                                ),
+                                "filled_qty": float(exchange_order.get("cumExecQty", 0)),
                                 "avg_price": float(exchange_order.get("avgPrice", 0)),
                                 "id": order.id,
                             },

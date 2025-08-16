@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Мониторинг состояния компонентов торговой системы
 
@@ -98,9 +97,7 @@ class TradingSystemMonitor:
                 # Статистика данных
                 stats = {}
                 for table in tables:
-                    count_result = await db.execute(
-                        f"SELECT COUNT(*) FROM {table.table_name}"
-                    )
+                    count_result = await db.execute(f"SELECT COUNT(*) FROM {table.table_name}")
                     stats[table.table_name] = count_result.scalar()
 
                 self.logger.info(f"✅ БД подключена: {current_time}")
@@ -111,9 +108,7 @@ class TradingSystemMonitor:
 
                 # Критическая проверка: сигналы vs ордера
                 if stats.get("signals", 0) > 100 and stats.get("orders", 0) < 10:
-                    self.logger.error(
-                        "❌ КРИТИЧЕСКАЯ ПРОБЛЕМА: Много сигналов, мало ордеров!"
-                    )
+                    self.logger.error("❌ КРИТИЧЕСКАЯ ПРОБЛЕМА: Много сигналов, мало ордеров!")
 
         except Exception as e:
             self.logger.error(f"❌ Ошибка БД: {e}")
@@ -165,9 +160,7 @@ class TradingSystemMonitor:
                 if os.path.exists(config_file):
                     size = os.path.getsize(config_file)
                     modified = datetime.fromtimestamp(os.path.getmtime(config_file))
-                    self.logger.info(
-                        f"   ✅ {config_file}: {size} байт (изменен: {modified})"
-                    )
+                    self.logger.info(f"   ✅ {config_file}: {size} байт (изменен: {modified})")
                 else:
                     self.logger.warning(f"   ⚠️  {config_file}: файл не найден")
             except Exception as e:
@@ -201,9 +194,7 @@ class TradingSystemMonitor:
             ]
 
             for name, port in port_checks:
-                port_result = subprocess.run(
-                    ["lsof", f"-i:{port}"], capture_output=True, text=True
-                )
+                port_result = subprocess.run(["lsof", f"-i:{port}"], capture_output=True, text=True)
 
                 if port_result.returncode == 0:
                     self.logger.info(f"   ✅ {name} порт {port} активен")
@@ -284,9 +275,7 @@ class TradingSystemMonitor:
                 if recent_signals:
                     self.logger.info("   📊 Сигналы за последние часы:")
                     for row in recent_signals:
-                        self.logger.info(
-                            f"      {row.hour}: {row.count} {row.signal_type}"
-                        )
+                        self.logger.info(f"      {row.hour}: {row.count} {row.signal_type}")
                 else:
                     self.logger.warning("   ⚠️  Нет недавних сигналов")
 
@@ -328,15 +317,11 @@ class TradingSystemMonitor:
                 orphaned_count = orphaned_count_result.scalar()
 
                 if orphaned_count > 10:
-                    self.logger.error(
-                        f"   ❌ ПРОБЛЕМА: {orphaned_count} сигналов без ордеров!"
-                    )
+                    self.logger.error(f"   ❌ ПРОБЛЕМА: {orphaned_count} сигналов без ордеров!")
                 elif orphaned_count > 0:
                     self.logger.warning(f"   ⚠️  {orphaned_count} сигналов без ордеров")
                 else:
-                    self.logger.info(
-                        "   ✅ Все недавние сигналы имеют связанные ордера"
-                    )
+                    self.logger.info("   ✅ Все недавние сигналы имеют связанные ордера")
 
         except Exception as e:
             self.logger.error(f"   ❌ Ошибка анализа сигналов: {e}")
@@ -367,10 +352,8 @@ class TradingSystemMonitor:
                                 data = await response.json()
                                 self.logger.info(f"   ✅ {name}: OK")
                             else:
-                                self.logger.warning(
-                                    f"   ⚠️  {name}: HTTP {response.status}"
-                                )
-                    except asyncio.TimeoutError:
+                                self.logger.warning(f"   ⚠️  {name}: HTTP {response.status}")
+                    except TimeoutError:
                         self.logger.warning(f"   ⚠️  {name}: Timeout")
                     except aiohttp.ClientConnectorError:
                         self.logger.warning(f"   ⚠️  {name}: Connection refused")
@@ -418,9 +401,7 @@ class TradingSystemMonitor:
         if health_percentage < 70:
             self.logger.info("   🔸 ВНИМАНИЕ: Система требует вмешательства")
         elif health_percentage < 90:
-            self.logger.info(
-                "   🔸 Система в основном работает, есть минорные проблемы"
-            )
+            self.logger.info("   🔸 Система в основном работает, есть минорные проблемы")
         else:
             self.logger.info("   🔸 Система работает нормально")
 
@@ -484,13 +465,9 @@ async def main():
     """Главная функция"""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Мониторинг торговой системы BOT_AI_V3"
-    )
+    parser = argparse.ArgumentParser(description="Мониторинг торговой системы BOT_AI_V3")
     parser.add_argument("--live", action="store_true", help="Live мониторинг")
-    parser.add_argument(
-        "--interval", type=int, default=30, help="Интервал для live мониторинга"
-    )
+    parser.add_argument("--interval", type=int, default=30, help="Интервал для live мониторинга")
 
     args = parser.parse_args()
 

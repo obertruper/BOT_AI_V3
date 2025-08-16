@@ -9,7 +9,7 @@ REST API для мониторинга системы:
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import psutil
 from fastapi import APIRouter, HTTPException, Query
@@ -29,7 +29,7 @@ class SystemHealth(BaseModel):
     """Состояние здоровья системы"""
 
     status: str  # healthy, warning, critical
-    components: Dict[str, str]
+    components: dict[str, str]
     last_check: datetime
     uptime_seconds: int
 
@@ -74,8 +74,8 @@ class ExchangeStatus(BaseModel):
 
     exchange: str
     status: str  # connected, disconnected, error
-    latency_ms: Optional[float] = None
-    last_heartbeat: Optional[datetime] = None
+    latency_ms: float | None = None
+    last_heartbeat: datetime | None = None
     api_calls_count: int = 0
     error_rate: float = 0.0
 
@@ -115,9 +115,7 @@ async def get_system_health():
 
     except Exception as e:
         logger.error(f"Ошибка проверки здоровья системы: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка проверки здоровья: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка проверки здоровья: {e!s}")
 
 
 @router.get("/metrics", response_model=SystemMetrics)
@@ -160,9 +158,7 @@ async def get_system_metrics():
 
     except Exception as e:
         logger.error(f"Ошибка получения системных метрик: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения метрик: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения метрик: {e!s}")
 
 
 @router.get("/trading-stats", response_model=TradingStats)
@@ -182,9 +178,7 @@ async def get_trading_statistics(
         elif period == "30d":
             start_time = now - timedelta(days=30)
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Неподдерживаемый период: {period}"
-            )
+            raise HTTPException(status_code=400, detail=f"Неподдерживаемый период: {period}")
 
         # Получаем статистику из базы данных
         stats_service = get_stats_service()
@@ -215,14 +209,12 @@ async def get_trading_statistics(
         raise
     except Exception as e:
         logger.error(f"Ошибка получения статистики торговли: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения статистики: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статистики: {e!s}")
 
 
-@router.get("/alerts", response_model=List[Alert])
+@router.get("/alerts", response_model=list[Alert])
 async def get_alerts(
-    level: Optional[str] = Query(None, description="Фильтр по уровню"),
+    level: str | None = Query(None, description="Фильтр по уровню"),
     unresolved_only: bool = Query(True, description="Только нерешенные алерты"),
     limit: int = Query(50, description="Количество алертов"),
 ):
@@ -259,9 +251,7 @@ async def get_alerts(
 
     except Exception as e:
         logger.error(f"Ошибка получения алертов: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения алертов: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения алертов: {e!s}")
 
 
 @router.post("/alerts/{alert_id}/resolve")
@@ -282,10 +272,10 @@ async def resolve_alert(alert_id: str):
         raise
     except Exception as e:
         logger.error(f"Ошибка решения алерта {alert_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка решения алерта: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка решения алерта: {e!s}")
 
 
-@router.get("/exchanges", response_model=List[ExchangeStatus])
+@router.get("/exchanges", response_model=list[ExchangeStatus])
 async def get_exchanges_status():
     """Получить статус всех подключенных бирж"""
     try:
@@ -310,12 +300,10 @@ async def get_exchanges_status():
 
     except Exception as e:
         logger.error(f"Ошибка получения статуса бирж: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения статуса бирж: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения статуса бирж: {e!s}")
 
 
-@router.get("/performance", response_model=Dict[str, Any])
+@router.get("/performance", response_model=dict[str, Any])
 async def get_performance_overview(
     period: str = Query("24h", description="Период анализа"),
 ):
@@ -357,17 +345,15 @@ async def get_performance_overview(
 
     except Exception as e:
         logger.error(f"Ошибка получения обзора производительности: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения обзора: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения обзора: {e!s}")
 
 
-@router.get("/logs", response_model=List[Dict[str, Any]])
+@router.get("/logs", response_model=list[dict[str, Any]])
 async def get_system_logs(
-    component: Optional[str] = Query(None, description="Фильтр по компоненту"),
-    level: Optional[str] = Query(None, description="Уровень логирования"),
+    component: str | None = Query(None, description="Фильтр по компоненту"),
+    level: str | None = Query(None, description="Уровень логирования"),
     limit: int = Query(100, description="Количество записей"),
-    search: Optional[str] = Query(None, description="Поиск по тексту"),
+    search: str | None = Query(None, description="Поиск по тексту"),
 ):
     """Получить системные логи"""
     try:
@@ -392,7 +378,7 @@ async def get_system_logs(
 
     except Exception as e:
         logger.error(f"Ошибка получения логов: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения логов: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения логов: {e!s}")
 
 
 # =================== HELPER FUNCTIONS ===================

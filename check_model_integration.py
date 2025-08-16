@@ -45,9 +45,7 @@ def check_model():
             model_config = config["model"]
             print(f"  - input_size: {model_config.get('input_size', 'не указан')}")
             print(f"  - output_size: {model_config.get('output_size', 'не указан')}")
-            print(
-                f"  - context_window: {model_config.get('context_window', 'не указан')}"
-            )
+            print(f"  - context_window: {model_config.get('context_window', 'не указан')}")
             print(f"  - d_model: {model_config.get('d_model', 'не указан')}")
             print(f"  - n_heads: {model_config.get('n_heads', 'не указан')}")
             print(f"  - e_layers: {model_config.get('e_layers', 'не указан')}")

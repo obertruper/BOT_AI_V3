@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Order Logger Extension для детального логирования ордеров
 """
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from core.logging.trade_logger import get_trade_logger
 
@@ -16,7 +15,7 @@ class OrderLogger:
     def __init__(self):
         self.trade_logger = get_trade_logger()
 
-    def log_order_lifecycle(self, order_id: str, stage: str, details: Dict[str, Any]):
+    def log_order_lifecycle(self, order_id: str, stage: str, details: dict[str, Any]):
         """
         Логирование полного жизненного цикла ордера
 
@@ -56,7 +55,7 @@ class OrderLogger:
         self.trade_logger.logger.info(f"{emoji} ORDER {stage}: {order_id}", **log_data)
         self.trade_logger._log_to_file("info", f"ORDER_{stage}", log_data)
 
-    def log_order_validation(self, order: Dict, validation_results: Dict):
+    def log_order_validation(self, order: dict, validation_results: dict):
         """Логирование валидации ордера"""
         log_data = {
             "symbol": order.get("symbol"),
@@ -79,7 +78,7 @@ class OrderLogger:
 
         self.trade_logger._log_to_file("debug", "ORDER_VALIDATION", log_data)
 
-    def log_order_risk_check(self, order: Dict, risk_results: Dict):
+    def log_order_risk_check(self, order: dict, risk_results: dict):
         """Логирование проверки риска для ордера"""
         log_data = {
             "symbol": order.get("symbol"),
@@ -104,7 +103,7 @@ class OrderLogger:
 
         self.trade_logger._log_to_file("info", "ORDER_RISK_CHECK", log_data)
 
-    def log_order_execution_details(self, order_id: str, execution: Dict):
+    def log_order_execution_details(self, order_id: str, execution: dict):
         """Детальное логирование исполнения ордера"""
         log_data = {
             "order_id": order_id,
@@ -135,7 +134,5 @@ class OrderLogger:
             "timestamp": datetime.now().isoformat(),
         }
 
-        self.trade_logger.logger.warning(
-            f"🔄 ПОВТОРНАЯ ПОПЫТКА #{attempt}: {reason}", **log_data
-        )
+        self.trade_logger.logger.warning(f"🔄 ПОВТОРНАЯ ПОПЫТКА #{attempt}: {reason}", **log_data)
         self.trade_logger._log_to_file("warning", "ORDER_RETRY", log_data)

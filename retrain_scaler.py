@@ -69,9 +69,7 @@ async def retrain_scaler():
                 features = feature_engineer.create_features(df)
 
                 if features is not None and len(features) > 0:
-                    logger.info(
-                        f"✅ Сгенерировано {features.shape} признаков для {symbol}"
-                    )
+                    logger.info(f"✅ Сгенерировано {features.shape} признаков для {symbol}")
                     all_features.append(features)
                 else:
                     logger.warning(f"Не удалось сгенерировать признаки для {symbol}")
@@ -112,9 +110,7 @@ async def retrain_scaler():
         logger.info(f"✅ Новый scaler сохранен: {scaler_path}")
 
         # Проверяем качество нормализации
-        normalized = scaler.transform(
-            clean_features[:100]
-        )  # Тестируем на первых 100 строках
+        normalized = scaler.transform(clean_features[:100])  # Тестируем на первых 100 строках
         logger.info("📈 Статистика нормализованных данных:")
         logger.info(f"  Среднее: {np.mean(normalized):.6f}")
         logger.info(f"  Стандартное отклонение: {np.std(normalized):.6f}")
@@ -127,9 +123,7 @@ async def retrain_scaler():
         logger.info("🎯 Анализ признаков:")
         logger.info(f"  Всего признаков: {clean_features.shape[1]}")
         logger.info(f"  Константных признаков: {const_features}")
-        logger.info(
-            f"  Переменных признаков: {clean_features.shape[1] - const_features}"
-        )
+        logger.info(f"  Переменных признаков: {clean_features.shape[1] - const_features}")
 
         if const_features > clean_features.shape[1] * 0.5:
             logger.warning(

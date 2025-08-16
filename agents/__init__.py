@@ -13,6 +13,6 @@ Agents Package - Система автоматических агентов BOT_
 
 from .testing_agent import ErrorPattern, TestingAgent
 
-__all__ = ["TestingAgent", "ErrorPattern"]
+__all__ = ["ErrorPattern", "TestingAgent"]
 
 __version__ = "1.0.0"

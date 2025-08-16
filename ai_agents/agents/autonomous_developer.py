@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..claude_code_sdk import (
     ClaudeCodeOptions,
@@ -38,8 +38,8 @@ class DevelopmentTask:
 
     id: str
     description: str
-    requirements: List[str]
-    constraints: List[str] = field(default_factory=list)
+    requirements: list[str]
+    constraints: list[str] = field(default_factory=list)
     priority: str = "medium"
     estimated_complexity: int = 5  # 1-10
 
@@ -49,12 +49,12 @@ class DevelopmentPlan:
     """План разработки"""
 
     task: DevelopmentTask
-    steps: List[Dict[str, Any]]
-    files_to_create: List[str]
-    files_to_modify: List[str]
-    tests_required: List[str]
+    steps: list[dict[str, Any]]
+    files_to_create: list[str]
+    files_to_modify: list[str]
+    tests_required: list[str]
     estimated_time: int  # минуты
-    dependencies: List[str]
+    dependencies: list[str]
 
 
 @dataclass
@@ -64,26 +64,26 @@ class DevelopmentResult:
     task_id: str
     success: bool
     phase_completed: DevelopmentPhase
-    files_created: List[str]
-    files_modified: List[str]
-    tests_created: List[str]
+    files_created: list[str]
+    files_modified: list[str]
+    tests_created: list[str]
     tests_passed: bool
     execution_time: int  # секунды
     token_usage: int
-    errors: List[str]
-    log: List[Dict[str, Any]]
+    errors: list[str]
+    log: list[dict[str, Any]]
 
 
 class AutonomousDeveloper:
     """Автономный разработчик с полным циклом разработки"""
 
-    def __init__(self, working_dir: Optional[Path] = None):
+    def __init__(self, working_dir: Path | None = None):
         self.working_dir = working_dir or Path.cwd()
         self.sdk = ClaudeCodeSDK()
         self.mcp_manager = get_mcp_manager()
         self.current_phase = DevelopmentPhase.EXPLORE
-        self.session: Optional[ClaudeSession] = None
-        self.development_log: List[Dict[str, Any]] = []
+        self.session: ClaudeSession | None = None
+        self.development_log: list[dict[str, Any]] = []
 
     async def develop_feature(self, task: DevelopmentTask) -> DevelopmentResult:
         """Полный цикл автономной разработки функции"""
@@ -133,9 +133,7 @@ class AutonomousDeveloper:
 
             # Фаза 5: REFINE - Доработка на основе тестов
             if not test_results["all_passed"]:
-                self._log(
-                    "Starting REFINE phase", {"test_failures": test_results["failures"]}
-                )
+                self._log("Starting REFINE phase", {"test_failures": test_results["failures"]})
                 refinement = await self._refine_phase(plan, test_results)
                 result.phase_completed = DevelopmentPhase.REFINE
 
@@ -159,7 +157,7 @@ class AutonomousDeveloper:
 
         return result
 
-    async def _explore_phase(self, task: DevelopmentTask) -> Dict[str, Any]:
+    async def _explore_phase(self, task: DevelopmentTask) -> dict[str, Any]:
         """Фаза исследования: анализ кодовой базы"""
         self.current_phase = DevelopmentPhase.EXPLORE
 
@@ -189,9 +187,7 @@ class AutonomousDeveloper:
         # Парсим результат в структурированный формат
         return self._parse_explore_result(result)
 
-    async def _plan_phase(
-        self, task: DevelopmentTask, context: Dict[str, Any]
-    ) -> DevelopmentPlan:
+    async def _plan_phase(self, task: DevelopmentTask, context: dict[str, Any]) -> DevelopmentPlan:
         """Фаза планирования: создание детального плана"""
         self.current_phase = DevelopmentPhase.PLAN
 
@@ -215,7 +211,7 @@ class AutonomousDeveloper:
 
         return self._parse_plan_result(result, task)
 
-    async def _implement_phase(self, plan: DevelopmentPlan) -> Dict[str, Any]:
+    async def _implement_phase(self, plan: DevelopmentPlan) -> dict[str, Any]:
         """Фаза реализации: написание кода"""
         self.current_phase = DevelopmentPhase.IMPLEMENT
 
@@ -247,14 +243,14 @@ class AutonomousDeveloper:
         }
 
     async def _test_phase(
-        self, plan: DevelopmentPlan, implementation: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, plan: DevelopmentPlan, implementation: dict[str, Any]
+    ) -> dict[str, Any]:
         """Фаза тестирования: создание и запуск тестов"""
         self.current_phase = DevelopmentPhase.TEST
 
         prompt = f"""TEST PHASE: Создайте и запустите тесты.
 
-Реализованные файлы: {implementation['files_created'] + implementation['files_modified']}
+Реализованные файлы: {implementation["files_created"] + implementation["files_modified"]}
 Требуемые тесты: {plan.tests_required}
 
 Выполните:
@@ -280,14 +276,14 @@ class AutonomousDeveloper:
         }
 
     async def _refine_phase(
-        self, plan: DevelopmentPlan, test_results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, plan: DevelopmentPlan, test_results: dict[str, Any]
+    ) -> dict[str, Any]:
         """Фаза доработки: исправление на основе результатов тестов"""
         self.current_phase = DevelopmentPhase.REFINE
 
         prompt = f"""REFINE PHASE: Исправьте проблемы на основе результатов тестов.
 
-Неудачные тесты: {json.dumps(test_results['failures'], indent=2)}
+Неудачные тесты: {json.dumps(test_results["failures"], indent=2)}
 
 Выполните:
 1. Проанализируйте причины сбоев
@@ -355,7 +351,7 @@ class AutonomousDeveloper:
             permission_mode=config.get("permission_mode", PermissionMode.DEFAULT),
         )
 
-    async def _run_tests(self) -> Dict[str, Any]:
+    async def _run_tests(self) -> dict[str, Any]:
         """Запустить тесты и вернуть результаты"""
         try:
             # Запускаем pytest
@@ -390,7 +386,7 @@ class AutonomousDeveloper:
             pass
         return 0.0
 
-    def _parse_explore_result(self, result: str) -> Dict[str, Any]:
+    def _parse_explore_result(self, result: str) -> dict[str, Any]:
         """Парсить результат фазы исследования"""
         # Упрощенный парсинг - в реальности нужен более сложный анализ
         return {
@@ -413,22 +409,20 @@ class AutonomousDeveloper:
             dependencies=[],
         )
 
-    def _extract_created_files(self, result: str) -> List[str]:
+    def _extract_created_files(self, result: str) -> list[str]:
         """Извлечь список созданных файлов"""
         # Парсим результат для поиска созданных файлов
         return []
 
-    def _extract_modified_files(self, result: str) -> List[str]:
+    def _extract_modified_files(self, result: str) -> list[str]:
         """Извлечь список измененных файлов"""
         return []
 
-    def _extract_test_files(self, result: str) -> List[str]:
+    def _extract_test_files(self, result: str) -> list[str]:
         """Извлечь список файлов с тестами"""
         return []
 
-    def _log(
-        self, message: str, data: Optional[Dict[str, Any]] = None, level: str = "info"
-    ):
+    def _log(self, message: str, data: dict[str, Any] | None = None, level: str = "info"):
         """Добавить запись в лог разработки"""
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -443,8 +437,8 @@ class AutonomousDeveloper:
 # Функции для быстрого доступа
 async def develop_feature_autonomously(
     description: str,
-    requirements: Optional[List[str]] = None,
-    constraints: Optional[List[str]] = None,
+    requirements: list[str] | None = None,
+    constraints: list[str] | None = None,
 ) -> DevelopmentResult:
     """Быстрая автономная разработка функции"""
     task = DevelopmentTask(
@@ -458,7 +452,7 @@ async def develop_feature_autonomously(
     return await developer.develop_feature(task)
 
 
-async def batch_development(tasks: List[DevelopmentTask]) -> List[DevelopmentResult]:
+async def batch_development(tasks: list[DevelopmentTask]) -> list[DevelopmentResult]:
     """Пакетная разработка нескольких функций"""
     developer = AutonomousDeveloper()
     results = []

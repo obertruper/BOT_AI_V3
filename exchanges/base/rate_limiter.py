@@ -15,7 +15,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from core.logger import setup_logger
 
@@ -66,7 +66,7 @@ class RequestRecord:
     priority: RequestPriority
     success: bool
     response_time: float = 0.0
-    retry_after: Optional[int] = None
+    retry_after: int | None = None
 
 
 @dataclass
@@ -93,9 +93,7 @@ class RateLimitState:
     rate_limited_requests: int = 0
 
     # Очередь ожидающих запросов
-    pending_queue: List[Tuple[RequestPriority, asyncio.Event, str]] = field(
-        default_factory=list
-    )
+    pending_queue: list[tuple[RequestPriority, asyncio.Event, str]] = field(default_factory=list)
 
 
 class UniversalRateLimiter:
@@ -114,16 +112,16 @@ class UniversalRateLimiter:
         self.logger = setup_logger("rate_limiter")
 
         # Конфигурации для разных бирж
-        self.exchange_configs: Dict[str, ExchangeRateLimit] = {}
+        self.exchange_configs: dict[str, ExchangeRateLimit] = {}
 
         # Состояния для каждой биржи
-        self.exchange_states: Dict[str, RateLimitState] = defaultdict(RateLimitState)
+        self.exchange_states: dict[str, RateLimitState] = defaultdict(RateLimitState)
 
         # Блокировки для thread safety
-        self.locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self.locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
         # Таймер для очистки старых записей
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
 
         # Инициализация стандартных конфигураций
         self._init_exchange_configs()
@@ -276,9 +274,7 @@ class UniversalRateLimiter:
         async with self.locks[exchange_name]:
             config = self.exchange_configs.get(exchange_name.lower())
             if not config:
-                self.logger.warning(
-                    f"No rate limit config for {exchange_name}, using default"
-                )
+                self.logger.warning(f"No rate limit config for {exchange_name}, using default")
                 config = ExchangeRateLimit()
 
             state = self.exchange_states[exchange_name]
@@ -299,9 +295,7 @@ class UniversalRateLimiter:
                 if state.backoff_delay > timeout:
                     return False
 
-                self.logger.info(
-                    f"Applying backoff {state.backoff_delay:.1f}s for {exchange_name}"
-                )
+                self.logger.info(f"Applying backoff {state.backoff_delay:.1f}s for {exchange_name}")
                 await asyncio.sleep(state.backoff_delay)
                 state.backoff_delay = 0
 
@@ -326,9 +320,7 @@ class UniversalRateLimiter:
                 limit = config.public_limit
 
             # Считаем текущие запросы в окне
-            current_requests = sum(
-                1 for req in requests_queue if req.timestamp >= window_start
-            )
+            current_requests = sum(1 for req in requests_queue if req.timestamp >= window_start)
 
             # Проверяем, можем ли сделать запрос
             effective_limit = int(limit * state.penalty_multiplier)
@@ -338,9 +330,7 @@ class UniversalRateLimiter:
                 if priority.value >= RequestPriority.HIGH.value:
                     burst_window_start = current_time - config.burst_window_seconds
                     recent_requests = sum(
-                        1
-                        for req in requests_queue
-                        if req.timestamp >= burst_window_start
+                        1 for req in requests_queue if req.timestamp >= burst_window_start
                     )
 
                     if recent_requests < config.burst_allowance:
@@ -404,9 +394,7 @@ class UniversalRateLimiter:
             self.logger.warning(f"Rate limit timeout for {exchange_name}")
             return False
 
-        self.logger.info(
-            f"Rate limit hit for {exchange_name}, waiting {wait_time:.1f}s"
-        )
+        self.logger.info(f"Rate limit hit for {exchange_name}, waiting {wait_time:.1f}s")
         await asyncio.sleep(wait_time)
 
         return True
@@ -424,8 +412,8 @@ class UniversalRateLimiter:
         self,
         exchange_name: str,
         endpoint: str,
-        error_code: Optional[str] = None,
-        retry_after: Optional[int] = None,
+        error_code: str | None = None,
+        retry_after: int | None = None,
     ):
         """Запись ошибки запроса"""
         config = self.exchange_configs.get(exchange_name.lower(), ExchangeRateLimit())
@@ -439,16 +427,12 @@ class UniversalRateLimiter:
             state.rate_limited_requests += 1
 
             # Устанавливаем penalty
-            penalty_duration = (
-                config.penalty_duration_seconds * config.penalty_multiplier
-            )
+            penalty_duration = config.penalty_duration_seconds * config.penalty_multiplier
             state.penalty_until = time.time() + penalty_duration
             state.penalty_multiplier = min(state.penalty_multiplier * 1.2, 3.0)
 
             if retry_after:
-                state.penalty_until = max(
-                    state.penalty_until, time.time() + retry_after
-                )
+                state.penalty_until = max(state.penalty_until, time.time() + retry_after)
 
             self.logger.warning(
                 f"Rate limit hit for {exchange_name}, penalty until {datetime.fromtimestamp(state.penalty_until)}"
@@ -483,7 +467,7 @@ class UniversalRateLimiter:
 
         return error_code in rate_limit_codes.get(exchange_name.lower(), [])
 
-    def get_stats(self, exchange_name: str) -> Dict[str, Any]:
+    def get_stats(self, exchange_name: str) -> dict[str, Any]:
         """Получение статистики по бирже"""
         config = self.exchange_configs.get(exchange_name.lower(), ExchangeRateLimit())
         state = self.exchange_states[exchange_name]
@@ -492,15 +476,9 @@ class UniversalRateLimiter:
         window_start = current_time - 60
 
         # Подсчет текущих запросов
-        public_count = sum(
-            1 for req in state.public_requests if req.timestamp >= window_start
-        )
-        private_count = sum(
-            1 for req in state.private_requests if req.timestamp >= window_start
-        )
-        order_count = sum(
-            1 for req in state.order_requests if req.timestamp >= window_start
-        )
+        public_count = sum(1 for req in state.public_requests if req.timestamp >= window_start)
+        private_count = sum(1 for req in state.private_requests if req.timestamp >= window_start)
+        order_count = sum(1 for req in state.order_requests if req.timestamp >= window_start)
 
         return {
             "exchange": exchange_name,
@@ -543,7 +521,7 @@ class UniversalRateLimiter:
 
 
 # Глобальный экземпляр rate limiter
-_global_rate_limiter: Optional[UniversalRateLimiter] = None
+_global_rate_limiter: UniversalRateLimiter | None = None
 
 
 def get_rate_limiter() -> UniversalRateLimiter:
@@ -597,8 +575,6 @@ async def with_rate_limit(
                     error_code = exc_val.context.get("api_error_code")
                     retry_after = exc_val.context.get("retry_after")
 
-                self.rate_limiter.record_error(
-                    exchange_name, endpoint, error_code, retry_after
-                )
+                self.rate_limiter.record_error(exchange_name, endpoint, error_code, retry_after)
 
     return RateLimitContext()

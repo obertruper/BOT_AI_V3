@@ -7,11 +7,12 @@ import asyncio
 import json
 import os
 import subprocess
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
 
 from .utils.token_manager import get_token_manager
 
@@ -40,18 +41,18 @@ class ClaudeCodeOptions:
     """Опции для Claude Code SDK"""
 
     model: str = "sonnet"  # Можно использовать "opus", "sonnet" или "haiku"
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
     max_turns: int = 5
-    allowed_tools: List[str] = field(
+    allowed_tools: list[str] = field(
         default_factory=lambda: ["Read", "Write", "Edit", "Bash", "Task"]
     )
     permission_mode: PermissionMode = PermissionMode.DEFAULT
     thinking_mode: ThinkingMode = ThinkingMode.NORMAL
     timeout: int = 300000  # 5 минут по умолчанию
-    working_dir: Optional[Path] = None
-    env_vars: Dict[str, str] = field(default_factory=dict)
+    working_dir: Path | None = None
+    env_vars: dict[str, str] = field(default_factory=dict)
 
-    def to_cli_args(self) -> List[str]:
+    def to_cli_args(self) -> list[str]:
         """Преобразовать опции в аргументы CLI"""
         args = [
             "--model",
@@ -100,7 +101,7 @@ class ClaudeCodeSDK:
             # Проверяем что Claude CLI авторизован
             self._verify_claude_auth()
 
-        self._sessions: Dict[str, Any] = {}
+        self._sessions: dict[str, Any] = {}
         self.token_manager = get_token_manager()
 
     def _find_claude_cli(self) -> str:
@@ -138,9 +139,7 @@ class ClaudeCodeSDK:
             # Проверяем что конфигурация существует
             config = json.loads(process.stdout)
             if not config:
-                raise ValueError(
-                    "Claude CLI not configured. Run 'claude' first to authenticate."
-                )
+                raise ValueError("Claude CLI not configured. Run 'claude' first to authenticate.")
 
         except subprocess.CalledProcessError:
             raise ValueError(
@@ -152,7 +151,7 @@ class ClaudeCodeSDK:
     async def query(
         self,
         prompt: str,
-        options: Optional[ClaudeCodeOptions] = None,
+        options: ClaudeCodeOptions | None = None,
         agent_name: str = "unknown",
     ) -> str:
         """Выполнить одиночный запрос к Claude Code"""
@@ -163,9 +162,7 @@ class ClaudeCodeSDK:
         if cached_result:
             # Записываем использование кешированного результата
             prompt_tokens = self.token_manager.count_tokens(prompt, options.model)
-            completion_tokens = self.token_manager.count_tokens(
-                cached_result, options.model
-            )
+            completion_tokens = self.token_manager.count_tokens(cached_result, options.model)
 
             self.token_manager.record_usage(
                 model=options.model,
@@ -229,7 +226,7 @@ class ClaudeCodeSDK:
         return result
 
     async def stream(
-        self, prompt: str, options: Optional[ClaudeCodeOptions] = None
+        self, prompt: str, options: ClaudeCodeOptions | None = None
     ) -> AsyncIterator[str]:
         """Потоковое выполнение запроса с получением результатов в реальном времени"""
         options = options or ClaudeCodeOptions()
@@ -253,9 +250,7 @@ class ClaudeCodeSDK:
             if decoded.startswith("data: "):
                 yield decoded[6:]
 
-    async def batch(
-        self, tasks: List[Dict[str, Any]], parallel: bool = True
-    ) -> List[str]:
+    async def batch(self, tasks: list[dict[str, Any]], parallel: bool = True) -> list[str]:
         """Выполнить несколько задач пакетно"""
         if parallel:
             results = await asyncio.gather(
@@ -269,15 +264,13 @@ class ClaudeCodeSDK:
 
         return results
 
-    def create_session(
-        self, session_id: str, options: ClaudeCodeOptions
-    ) -> "ClaudeSession":
+    def create_session(self, session_id: str, options: ClaudeCodeOptions) -> "ClaudeSession":
         """Создать сессию для последовательных запросов с сохранением контекста"""
         session = ClaudeSession(self, session_id, options)
         self._sessions[session_id] = session
         return session
 
-    def get_token_usage(self, period: str = "daily") -> Dict[str, Any]:
+    def get_token_usage(self, period: str = "daily") -> dict[str, Any]:
         """Получить отчет об использовании токенов"""
         return self.token_manager.get_usage_report(period)
 
@@ -289,8 +282,8 @@ class ClaudeSession:
         self.sdk = sdk
         self.session_id = session_id
         self.options = options
-        self.history: List[Dict[str, str]] = []
-        self.context: Dict[str, Any] = {}
+        self.history: list[dict[str, str]] = []
+        self.context: dict[str, Any] = {}
 
     async def query(self, prompt: str) -> str:
         """Выполнить запрос в рамках сессии"""
@@ -397,7 +390,7 @@ class ClaudeAgentBuilder:
 
 
 # Вспомогательные функции для быстрого доступа
-async def quick_review(file_path: str, api_key: Optional[str] = None) -> str:
+async def quick_review(file_path: str, api_key: str | None = None) -> str:
     """Быстрая проверка кода файла"""
     sdk = ClaudeCodeSDK(api_key)
     builder = ClaudeAgentBuilder(sdk)
@@ -407,7 +400,7 @@ async def quick_review(file_path: str, api_key: Optional[str] = None) -> str:
     return await sdk.query(prompt, options)
 
 
-async def generate_tests(file_path: str, api_key: Optional[str] = None) -> str:
+async def generate_tests(file_path: str, api_key: str | None = None) -> str:
     """Генерация тестов для файла"""
     sdk = ClaudeCodeSDK(api_key)
     builder = ClaudeAgentBuilder(sdk)
@@ -417,7 +410,7 @@ async def generate_tests(file_path: str, api_key: Optional[str] = None) -> str:
     return await sdk.query(prompt, options)
 
 
-async def implement_feature(description: str, api_key: Optional[str] = None) -> str:
+async def implement_feature(description: str, api_key: str | None = None) -> str:
     """Автономная реализация функции"""
     sdk = ClaudeCodeSDK(api_key)
     builder = ClaudeAgentBuilder(sdk)

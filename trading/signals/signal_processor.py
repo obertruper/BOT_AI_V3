@@ -7,7 +7,7 @@
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List
+from typing import Any
 
 from database.models.base_models import Order, OrderSide, OrderType, SignalType
 from database.models.signal import Signal
@@ -23,9 +23,7 @@ class SignalProcessor:
     - Управление риском на уровне ордеров
     """
 
-    def __init__(
-        self, config: Dict[str, Any], exchange_registry: Any, order_manager: Any = None
-    ):
+    def __init__(self, config: dict[str, Any], exchange_registry: Any, order_manager: Any = None):
         self.config = config
         self.exchange_registry = exchange_registry
         self.order_manager = order_manager
@@ -36,13 +34,11 @@ class SignalProcessor:
         self._processed_signals = set()
 
         # Параметры риск-менеджмента
-        self.default_position_size = Decimal(
-            str(config.get("default_position_size", 100))
-        )
+        self.default_position_size = Decimal(str(config.get("default_position_size", 100)))
         self.max_position_size = Decimal(str(config.get("max_position_size", 1000)))
         self.default_leverage = config.get("default_leverage", 1)
 
-    async def process_signal(self, signal: Signal) -> List[Order]:
+    async def process_signal(self, signal: Signal) -> list[Order]:
         """
         Обработка торгового сигнала и создание ордеров
 
@@ -64,9 +60,7 @@ class SignalProcessor:
                 return []
 
             # Проверка дубликатов
-            signal_key = (
-                f"{signal.symbol}_{signal.signal_type.value}_{signal.created_at}"
-            )
+            signal_key = f"{signal.symbol}_{signal.signal_type.value}_{signal.created_at}"
             if signal_key in self._processed_signals:
                 self.logger.debug(f"Дубликат сигнала пропущен: {signal_key}")
                 return []
@@ -82,13 +76,9 @@ class SignalProcessor:
 
             if orders:
                 self._processed_signals.add(signal_key)
-                self.logger.info(
-                    f"✅ Создано {len(orders)} ордеров для сигнала {signal.symbol}"
-                )
+                self.logger.info(f"✅ Создано {len(orders)} ордеров для сигнала {signal.symbol}")
             else:
-                self.logger.warning(
-                    f"⚠️ Не удалось создать ордера для сигнала {signal.symbol}"
-                )
+                self.logger.warning(f"⚠️ Не удалось создать ордера для сигнала {signal.symbol}")
 
             return orders
 
@@ -112,9 +102,7 @@ class SignalProcessor:
 
             if signal.confidence is not None:
                 if not 0 <= signal.confidence <= 1:
-                    self.logger.warning(
-                        f"Некорректная уверенность: {signal.confidence}"
-                    )
+                    self.logger.warning(f"Некорректная уверенность: {signal.confidence}")
                     return False
 
             # Проверка доступности символа на бирже
@@ -128,7 +116,7 @@ class SignalProcessor:
             self.logger.error(f"Ошибка валидации сигнала: {e}")
             return False
 
-    async def _create_orders_from_signal(self, signal: Signal) -> List[Order]:
+    async def _create_orders_from_signal(self, signal: Signal) -> list[Order]:
         """Создание ордеров из сигнала"""
         orders = []
 
@@ -216,9 +204,7 @@ class SignalProcessor:
                     "signal_type": signal.signal_type.value,
                     "signal_strength": signal.strength,
                     "signal_confidence": signal.confidence,
-                    "position_size_usd": str(
-                        position_size
-                    ),  # Сохраняем размер в долларах
+                    "position_size_usd": str(position_size),  # Сохраняем размер в долларах
                     "leverage": self.default_leverage,
                 },
             )
@@ -283,9 +269,7 @@ class SignalProcessor:
                 if signal.strength and signal.strength > 0:
                     strength_factor = Decimal(str(signal.strength))
                     # Ограничиваем коэффициент силы от 0.5 до 1.5
-                    strength_factor = max(
-                        Decimal("0.5"), min(Decimal("1.5"), strength_factor)
-                    )
+                    strength_factor = max(Decimal("0.5"), min(Decimal("1.5"), strength_factor))
                     size = position_value_usd * strength_factor
                 else:
                     size = position_value_usd

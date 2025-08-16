@@ -7,8 +7,9 @@ Create Date: 2025-08-08 17:35:47.203110
 """
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "92146be3b870"
@@ -31,9 +32,7 @@ def upgrade() -> None:
         sa.Column("close_qty", sa.DECIMAL(precision=20, scale=8), nullable=False),
         sa.Column("price", sa.DECIMAL(precision=20, scale=8), nullable=False),
         sa.Column("order_id", sa.VARCHAR(length=255), nullable=True),
-        sa.Column(
-            "status", sa.VARCHAR(length=50), server_default="pending", nullable=True
-        ),
+        sa.Column("status", sa.VARCHAR(length=50), server_default="pending", nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column(
             "created_at",
@@ -63,9 +62,7 @@ def upgrade() -> None:
     )
 
     # Original auto-generated commands
-    op.alter_column(
-        "signals", "strategy_name", existing_type=sa.VARCHAR(length=100), nullable=True
-    )
+    op.alter_column("signals", "strategy_name", existing_type=sa.VARCHAR(length=100), nullable=True)
     op.alter_column(
         "signals",
         "created_at",
@@ -80,9 +77,7 @@ def upgrade() -> None:
         nullable=False,
         existing_server_default=sa.text("CURRENT_TIMESTAMP"),
     )
-    op.create_index(
-        op.f("ix_signals_signal_type"), "signals", ["signal_type"], unique=False
-    )
+    op.create_index(op.f("ix_signals_signal_type"), "signals", ["signal_type"], unique=False)
     op.create_index(op.f("ix_signals_symbol"), "signals", ["symbol"], unique=False)
     # ### end Alembic commands ###
 
@@ -92,9 +87,7 @@ def downgrade() -> None:
 
     # Drop partial_tp_history table
     op.drop_index(op.f("ix_partial_tp_history_status"), table_name="partial_tp_history")
-    op.drop_index(
-        op.f("ix_partial_tp_history_trade_id"), table_name="partial_tp_history"
-    )
+    op.drop_index(op.f("ix_partial_tp_history_trade_id"), table_name="partial_tp_history")
     op.drop_table("partial_tp_history")
 
     # Original auto-generated commands

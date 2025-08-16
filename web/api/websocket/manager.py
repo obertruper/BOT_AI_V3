@@ -15,8 +15,9 @@ WebSocket Manager для BOT_Trading v3.0
 import asyncio
 import json
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -29,27 +30,23 @@ logger = logger_factory.get_logger("websocket_manager")
 class WebSocketConnection:
     """Класс для управления отдельным WebSocket соединением"""
 
-    def __init__(
-        self, websocket: WebSocket, connection_id: str, user_id: Optional[str] = None
-    ):
+    def __init__(self, websocket: WebSocket, connection_id: str, user_id: str | None = None):
         self.websocket = websocket
         self.connection_id = connection_id
         self.user_id = user_id
         self.connected_at = datetime.now()
         self.last_ping = datetime.now()
-        self.subscriptions: Set[str] = set()
+        self.subscriptions: set[str] = set()
         self.is_authenticated = user_id is not None
-        self.metadata: Dict[str, Any] = {}
+        self.metadata: dict[str, Any] = {}
 
-    async def send_message(self, message: Dict[str, Any]):
+    async def send_message(self, message: dict[str, Any]):
         """Отправка сообщения через WebSocket"""
         try:
             await self.websocket.send_text(json.dumps(message, ensure_ascii=False))
             self.last_ping = datetime.now()
         except Exception as e:
-            logger.error(
-                f"Ошибка отправки сообщения через WebSocket {self.connection_id}: {e}"
-            )
+            logger.error(f"Ошибка отправки сообщения через WebSocket {self.connection_id}: {e}")
             raise
 
     async def send_text(self, text: str):
@@ -58,9 +55,7 @@ class WebSocketConnection:
             await self.websocket.send_text(text)
             self.last_ping = datetime.now()
         except Exception as e:
-            logger.error(
-                f"Ошибка отправки текста через WebSocket {self.connection_id}: {e}"
-            )
+            logger.error(f"Ошибка отправки текста через WebSocket {self.connection_id}: {e}")
             raise
 
     async def close(self, code: int = 1000, reason: str = ""):
@@ -84,7 +79,7 @@ class WebSocketConnection:
         """Проверить подписку на поток"""
         return stream in self.subscriptions
 
-    def get_connection_info(self) -> Dict[str, Any]:
+    def get_connection_info(self) -> dict[str, Any]:
         """Получить информацию о соединении"""
         return {
             "connection_id": self.connection_id,
@@ -110,13 +105,9 @@ class WebSocketManager:
     """
 
     def __init__(self):
-        self.connections: Dict[str, WebSocketConnection] = {}
-        self.user_connections: Dict[
-            str, Set[str]
-        ] = {}  # user_id -> set of connection_ids
-        self.stream_subscribers: Dict[
-            str, Set[str]
-        ] = {}  # stream -> set of connection_ids
+        self.connections: dict[str, WebSocketConnection] = {}
+        self.user_connections: dict[str, set[str]] = {}  # user_id -> set of connection_ids
+        self.stream_subscribers: dict[str, set[str]] = {}  # stream -> set of connection_ids
 
         # Настройки
         self.heartbeat_interval = 30  # секунд
@@ -125,10 +116,10 @@ class WebSocketManager:
 
         # Состояние
         self._running = False
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._heartbeat_task: asyncio.Task | None = None
 
         # Обработчики событий
-        self.event_handlers: Dict[str, List[Callable]] = {}
+        self.event_handlers: dict[str, list[Callable]] = {}
 
         logger.info("WebSocketManager инициализирован")
 
@@ -165,7 +156,7 @@ class WebSocketManager:
 
         logger.info("WebSocketManager остановлен")
 
-    async def connect(self, websocket: WebSocket, user_id: Optional[str] = None) -> str:
+    async def connect(self, websocket: WebSocket, user_id: str | None = None) -> str:
         """
         Подключение нового WebSocket
 
@@ -208,9 +199,7 @@ class WebSocketManager:
                 }
             )
 
-            logger.info(
-                f"Новое WebSocket соединение: {connection_id} (пользователь: {user_id})"
-            )
+            logger.info(f"Новое WebSocket соединение: {connection_id} (пользователь: {user_id})")
 
             # Вызываем обработчики события подключения
             await self._trigger_event(
@@ -276,9 +265,7 @@ class WebSocketManager:
             },
         )
 
-    async def handle_websocket(
-        self, websocket: WebSocket, user_id: Optional[str] = None
-    ):
+    async def handle_websocket(self, websocket: WebSocket, user_id: str | None = None):
         """
         Обработка WebSocket соединения
 
@@ -300,9 +287,7 @@ class WebSocketManager:
                 except WebSocketDisconnect:
                     break
                 except Exception as e:
-                    logger.error(
-                        f"Ошибка обработки сообщения WebSocket {connection_id}: {e}"
-                    )
+                    logger.error(f"Ошибка обработки сообщения WebSocket {connection_id}: {e}")
                     break
 
         except Exception as e:
@@ -335,7 +320,7 @@ class WebSocketManager:
         except Exception as e:
             logger.error(f"Ошибка обработки сообщения: {e}")
 
-    async def _handle_subscribe(self, connection_id: str, data: Dict[str, Any]):
+    async def _handle_subscribe(self, connection_id: str, data: dict[str, Any]):
         """Обработка подписки на поток"""
         stream = data.get("stream")
         if not stream:
@@ -354,7 +339,7 @@ class WebSocketManager:
                 }
             )
 
-    async def _handle_unsubscribe(self, connection_id: str, data: Dict[str, Any]):
+    async def _handle_unsubscribe(self, connection_id: str, data: dict[str, Any]):
         """Обработка отписки от потока"""
         stream = data.get("stream")
         if not stream:
@@ -379,11 +364,9 @@ class WebSocketManager:
             connection = self.connections[connection_id]
             connection.last_ping = datetime.now()
 
-            await connection.send_message(
-                {"type": "pong", "timestamp": datetime.now().isoformat()}
-            )
+            await connection.send_message({"type": "pong", "timestamp": datetime.now().isoformat()})
 
-    async def _handle_auth(self, connection_id: str, data: Dict[str, Any]):
+    async def _handle_auth(self, connection_id: str, data: dict[str, Any]):
         """Обработка аутентификации"""
         # TODO: Реализовать аутентификацию по токену
         token = data.get("token")
@@ -414,7 +397,7 @@ class WebSocketManager:
 
     # =================== BROADCAST METHODS ===================
 
-    async def broadcast_to_stream(self, stream: str, message: Dict[str, Any]):
+    async def broadcast_to_stream(self, stream: str, message: dict[str, Any]):
         """Отправка сообщения всем подписчикам потока"""
         if stream not in self.stream_subscribers:
             return
@@ -433,7 +416,7 @@ class WebSocketManager:
                     # Удаляем неработающее соединение
                     await self.disconnect(connection_id, code=1011, reason="Send error")
 
-    async def broadcast_to_user(self, user_id: str, message: Dict[str, Any]):
+    async def broadcast_to_user(self, user_id: str, message: dict[str, Any]):
         """Отправка сообщения всем соединениям пользователя"""
         if user_id not in self.user_connections:
             return
@@ -452,7 +435,7 @@ class WebSocketManager:
                     # Удаляем неработающее соединение
                     await self.disconnect(connection_id, code=1011, reason="Send error")
 
-    async def broadcast_to_all(self, message: Dict[str, Any]):
+    async def broadcast_to_all(self, message: dict[str, Any]):
         """Отправка сообщения всем подключенным клиентам"""
         # Создаем копию для безопасной итерации
         connection_ids = list(self.connections.keys())
@@ -530,7 +513,7 @@ class WebSocketManager:
             self.event_handlers[event_type] = []
         self.event_handlers[event_type].append(handler)
 
-    async def _trigger_event(self, event_type: str, data: Dict[str, Any]):
+    async def _trigger_event(self, event_type: str, data: dict[str, Any]):
         """Вызвать обработчики события"""
         if event_type in self.event_handlers:
             for handler in self.event_handlers[event_type]:
@@ -544,7 +527,7 @@ class WebSocketManager:
 
     # =================== STATUS METHODS ===================
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Получить статус менеджера"""
         return {
             "running": self._running,
@@ -559,11 +542,11 @@ class WebSocketManager:
             "max_connections_per_user": self.max_connections_per_user,
         }
 
-    def get_connections_info(self) -> List[Dict[str, Any]]:
+    def get_connections_info(self) -> list[dict[str, Any]]:
         """Получить информацию о всех соединениях"""
         return [conn.get_connection_info() for conn in self.connections.values()]
 
-    def get_stream_info(self) -> Dict[str, Dict[str, Any]]:
+    def get_stream_info(self) -> dict[str, dict[str, Any]]:
         """Получить информацию о потоках"""
         return {
             stream: {

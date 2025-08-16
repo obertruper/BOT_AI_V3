@@ -5,8 +5,8 @@
 
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import and_, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -28,7 +28,7 @@ class SignalRepositoryFixed:
         # Время жизни хеша сигнала (для предотвращения дублирования)
         self.signal_hash_ttl = timedelta(minutes=5)
 
-    async def get_active_signals(self, exchange: Optional[str] = None) -> List[Signal]:
+    async def get_active_signals(self, exchange: str | None = None) -> list[Signal]:
         """Получает активные сигналы"""
         try:
             query = select(Signal).where(Signal.status == "active")
@@ -40,7 +40,7 @@ class SignalRepositoryFixed:
         except Exception as e:
             raise DatabaseError(f"Failed to get active signals: {e}")
 
-    def _generate_signal_hash(self, signal_data: Dict[str, Any]) -> str:
+    def _generate_signal_hash(self, signal_data: dict[str, Any]) -> str:
         """
         Генерирует уникальный хеш для сигнала
         Основан на symbol, signal_type, timeframe и временном окне
@@ -52,14 +52,14 @@ class SignalRepositoryFixed:
             "strategy_name": signal_data.get("strategy_name"),
             "timeframe": signal_data.get("timeframe", "15m"),
             # Округляем время до 5-минутного интервала для группировки
-            "time_window": int(datetime.now(timezone.utc).timestamp() // 300),
+            "time_window": int(datetime.now(UTC).timestamp() // 300),
         }
 
         # Создаем хеш
         hash_string = json.dumps(hash_data, sort_keys=True)
         return hashlib.md5(hash_string.encode()).hexdigest()
 
-    async def create_signal(self, signal_data: Dict[str, Any]) -> Optional[Signal]:
+    async def create_signal(self, signal_data: dict[str, Any]) -> Signal | None:
         """
         Создает новый сигнал с проверкой на дублирование
         """
@@ -68,9 +68,7 @@ class SignalRepositoryFixed:
             signal_hash = self._generate_signal_hash(signal_data)
 
             # Проверяем, существует ли уже такой сигнал
-            existing = await self._check_existing_signal(
-                signal_data.get("symbol"), signal_hash
-            )
+            existing = await self._check_existing_signal(signal_data.get("symbol"), signal_hash)
 
             if existing:
                 logger.debug(
@@ -79,22 +77,16 @@ class SignalRepositoryFixed:
                 return None
 
             # Конвертируем indicators и extra_data в JSON строки
-            if "indicators" in signal_data and isinstance(
-                signal_data["indicators"], dict
-            ):
+            if "indicators" in signal_data and isinstance(signal_data["indicators"], dict):
                 signal_data["indicators"] = json.dumps(signal_data["indicators"])
-            if "extra_data" in signal_data and isinstance(
-                signal_data["extra_data"], dict
-            ):
+            if "extra_data" in signal_data and isinstance(signal_data["extra_data"], dict):
                 signal_data["extra_data"] = json.dumps(signal_data["extra_data"])
 
             # Добавляем хеш в метаданные
             if "signal_metadata" in signal_data:
                 if isinstance(signal_data["signal_metadata"], dict):
                     signal_data["signal_metadata"]["hash"] = signal_hash
-                    signal_data["signal_metadata"] = json.dumps(
-                        signal_data["signal_metadata"]
-                    )
+                    signal_data["signal_metadata"] = json.dumps(signal_data["signal_metadata"])
             else:
                 signal_data["signal_metadata"] = json.dumps({"hash": signal_hash})
 
@@ -113,6 +105,14 @@ class SignalRepositoryFixed:
 
         except Exception as e:
             await self.session.rollback()
+
+            # Если это ошибка уникальности - просто игнорируем (сигнал уже существует)
+            if "duplicate key value violates unique constraint" in str(e):
+                logger.debug(
+                    f"Сигнал {signal_data.get('symbol')} уже существует, пропускаем дубликат"
+                )
+                return None
+
             logger.error(f"Ошибка создания сигнала: {e}")
             # Не поднимаем исключение, возвращаем None для совместимости
             return None
@@ -123,7 +123,7 @@ class SignalRepositoryFixed:
         """
         try:
             # Время окна для проверки дублирования
-            time_window = datetime.now(timezone.utc) - self.signal_hash_ttl
+            time_window = datetime.now(UTC) - self.signal_hash_ttl
 
             # Ищем сигналы с таким же хешем за последние 5 минут
             query = select(Signal).where(
@@ -144,7 +144,7 @@ class SignalRepositoryFixed:
             logger.debug(f"Ошибка проверки существующего сигнала: {e}")
             return False
 
-    async def create_signal_safe(self, signal_data: Dict[str, Any]) -> Optional[Signal]:
+    async def create_signal_safe(self, signal_data: dict[str, Any]) -> Signal | None:
         """
         Безопасное создание сигнала с использованием upsert
         """
@@ -153,13 +153,9 @@ class SignalRepositoryFixed:
             signal_hash = self._generate_signal_hash(signal_data)
 
             # Подготавливаем данные
-            if "indicators" in signal_data and isinstance(
-                signal_data["indicators"], dict
-            ):
+            if "indicators" in signal_data and isinstance(signal_data["indicators"], dict):
                 signal_data["indicators"] = json.dumps(signal_data["indicators"])
-            if "extra_data" in signal_data and isinstance(
-                signal_data["extra_data"], dict
-            ):
+            if "extra_data" in signal_data and isinstance(signal_data["extra_data"], dict):
                 signal_data["extra_data"] = json.dumps(signal_data["extra_data"])
 
             # Добавляем хеш
@@ -198,9 +194,7 @@ class SignalRepositoryFixed:
                 return result.scalar_one_or_none()
             else:
                 # Сигнал уже существовал
-                logger.debug(
-                    f"🔄 Сигнал для {signal_data.get('symbol')} уже существует"
-                )
+                logger.debug(f"🔄 Сигнал для {signal_data.get('symbol')} уже существует")
                 return None
 
         except Exception as e:
@@ -214,7 +208,7 @@ class SignalRepositoryFixed:
             stmt = (
                 update(Signal)
                 .where(Signal.id == signal_id)
-                .values(status="processed", processed_at=datetime.now(timezone.utc))
+                .values(status="processed", processed_at=datetime.now(UTC))
             )
             await self.session.execute(stmt)
             await self.session.commit()
@@ -222,7 +216,7 @@ class SignalRepositoryFixed:
             await self.session.rollback()
             raise DatabaseError(f"Failed to mark signal as processed: {e}")
 
-    async def save_signal(self, signal) -> Optional[Signal]:
+    async def save_signal(self, signal) -> Signal | None:
         """
         Сохраняет сигнал в БД с проверкой на дублирование
         """
@@ -255,7 +249,7 @@ class SignalRepositoryFixed:
             Количество удаленных сигналов
         """
         try:
-            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+            cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
             # Удаляем старые обработанные сигналы
             query = select(Signal).where(

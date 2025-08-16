@@ -9,7 +9,7 @@ REST API для управления стратегиями:
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -33,9 +33,9 @@ class StrategyInfo(BaseModel):
     category: str  # ml, indicator, arbitrage, scalping, grid
     status: str  # active, inactive, testing
     version: str
-    parameters: Dict[str, Any]
-    performance_metrics: Optional[Dict[str, float]] = None
-    supported_exchanges: List[str]
+    parameters: dict[str, Any]
+    performance_metrics: dict[str, float] | None = None
+    supported_exchanges: list[str]
     risk_level: str  # low, medium, high
 
 
@@ -46,8 +46,8 @@ class StrategyConfig(BaseModel):
     trader_id: str
     exchange: str
     symbol: str
-    parameters: Dict[str, Any]
-    risk_settings: Optional[Dict[str, Any]] = None
+    parameters: dict[str, Any]
+    risk_settings: dict[str, Any] | None = None
     enabled: bool = True
 
 
@@ -59,8 +59,8 @@ class BacktestRequest(BaseModel):
     start_date: datetime
     end_date: datetime
     initial_balance: float = 10000.0
-    parameters: Optional[Dict[str, Any]] = None
-    exchanges: Optional[List[str]] = None
+    parameters: dict[str, Any] | None = None
+    exchanges: list[str] | None = None
 
 
 class BacktestResult(BaseModel):
@@ -79,7 +79,7 @@ class BacktestResult(BaseModel):
     profit_factor: float
     status: str  # running, completed, failed
     created_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
 
 class StrategyPerformance(BaseModel):
@@ -103,9 +103,9 @@ class StrategyPerformance(BaseModel):
 # =================== ENDPOINTS ===================
 
 
-@router.get("/", response_model=List[StrategyInfo])
+@router.get("/", response_model=list[StrategyInfo])
 async def get_strategies(
-    category: Optional[str] = Query(None, description="Фильтр по категории"),
+    category: str | None = Query(None, description="Фильтр по категории"),
     active_only: bool = Query(False, description="Только активные стратегии"),
 ):
     """Получить список всех доступных стратегий"""
@@ -129,17 +129,13 @@ async def get_strategies(
             # Получаем информацию о стратегии
             strategy_info = StrategyInfo(
                 name=strategy_name,
-                display_name=getattr(
-                    strategy_class, "display_name", strategy_name.title()
-                ),
+                display_name=getattr(strategy_class, "display_name", strategy_name.title()),
                 description=getattr(strategy_class, "description", ""),
                 category=getattr(strategy_class, "category", "unknown"),
                 status=getattr(strategy_class, "status", "inactive"),
                 version=getattr(strategy_class, "version", "1.0.0"),
                 parameters=getattr(strategy_class, "default_parameters", {}),
-                performance_metrics=await get_strategy_performance_summary(
-                    strategy_name
-                ),
+                performance_metrics=await get_strategy_performance_summary(strategy_name),
                 supported_exchanges=getattr(strategy_class, "supported_exchanges", []),
                 risk_level=getattr(strategy_class, "risk_level", "medium"),
             )
@@ -155,9 +151,7 @@ async def get_strategies(
 
     except Exception as e:
         logger.error(f"Ошибка получения списка стратегий: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения стратегий: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения стратегий: {e!s}")
 
 
 @router.get("/{strategy_name}", response_model=StrategyInfo)
@@ -168,9 +162,7 @@ async def get_strategy_info(strategy_name: str):
         strategy_class = strategy_registry.get_strategy_class(strategy_name)
 
         if not strategy_class:
-            raise HTTPException(
-                status_code=404, detail=f"Стратегия {strategy_name} не найдена"
-            )
+            raise HTTPException(status_code=404, detail=f"Стратегия {strategy_name} не найдена")
 
         # Получаем детальную производительность
         performance_metrics = await get_strategy_detailed_performance(strategy_name)
@@ -195,12 +187,10 @@ async def get_strategy_info(strategy_name: str):
         raise
     except Exception as e:
         logger.error(f"Ошибка получения информации о стратегии {strategy_name}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения информации: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения информации: {e!s}")
 
 
-@router.post("/config", response_model=Dict[str, Any])
+@router.post("/config", response_model=dict[str, Any])
 async def configure_strategy(config: StrategyConfig):
     """Настроить стратегию для трейдера"""
     try:
@@ -210,9 +200,7 @@ async def configure_strategy(config: StrategyConfig):
         # Проверяем что трейдер существует
         trader = trader_manager.get_trader(config.trader_id)
         if not trader:
-            raise HTTPException(
-                status_code=404, detail=f"Трейдер {config.trader_id} не найден"
-            )
+            raise HTTPException(status_code=404, detail=f"Трейдер {config.trader_id} не найден")
 
         # Проверяем что стратегия существует
         strategy_registry = get_strategy_registry()
@@ -231,14 +219,10 @@ async def configure_strategy(config: StrategyConfig):
             "enabled": config.enabled,
         }
 
-        success = await strategy_manager.configure_strategy(
-            config.trader_id, strategy_config
-        )
+        success = await strategy_manager.configure_strategy(config.trader_id, strategy_config)
 
         if not success:
-            raise HTTPException(
-                status_code=500, detail="Не удалось настроить стратегию"
-            )
+            raise HTTPException(status_code=500, detail="Не удалось настроить стратегию")
 
         logger.info(
             f"Настроена стратегия {config.strategy_name} для трейдера {config.trader_id}",
@@ -256,9 +240,7 @@ async def configure_strategy(config: StrategyConfig):
         raise
     except Exception as e:
         logger.error(f"Ошибка настройки стратегии {config.strategy_name}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка настройки стратегии: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка настройки стратегии: {e!s}")
 
 
 @router.post("/backtest", response_model=BacktestResult)
@@ -325,12 +307,8 @@ async def start_backtest(request: BacktestRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Ошибка запуска бэктеста для стратегии {request.strategy_name}: {e}"
-        )
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка запуска бэктеста: {str(e)}"
-        )
+        logger.error(f"Ошибка запуска бэктеста для стратегии {request.strategy_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка запуска бэктеста: {e!s}")
 
 
 @router.get("/backtest/{backtest_id}", response_model=BacktestResult)
@@ -341,9 +319,7 @@ async def get_backtest_result(backtest_id: str):
         result = await backtest_engine.get_backtest_result(backtest_id)
 
         if not result:
-            raise HTTPException(
-                status_code=404, detail=f"Бэктест {backtest_id} не найден"
-            )
+            raise HTTPException(status_code=404, detail=f"Бэктест {backtest_id} не найден")
 
         logger.info(f"Получен результат бэктеста {backtest_id}")
 
@@ -353,9 +329,7 @@ async def get_backtest_result(backtest_id: str):
         raise
     except Exception as e:
         logger.error(f"Ошибка получения результата бэктеста {backtest_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения результата: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения результата: {e!s}")
 
 
 @router.get("/{strategy_name}/performance", response_model=StrategyPerformance)
@@ -368,15 +342,11 @@ async def get_strategy_performance(
         # Проверяем что стратегия существует
         strategy_registry = get_strategy_registry()
         if not strategy_registry.get_strategy_class(strategy_name):
-            raise HTTPException(
-                status_code=404, detail=f"Стратегия {strategy_name} не найдена"
-            )
+            raise HTTPException(status_code=404, detail=f"Стратегия {strategy_name} не найдена")
 
         # Получаем производительность
         performance_service = get_performance_service()
-        performance_data = await performance_service.get_strategy_performance(
-            strategy_name, period
-        )
+        performance_data = await performance_service.get_strategy_performance(strategy_name, period)
 
         performance = StrategyPerformance(
             strategy_name=strategy_name,
@@ -394,24 +364,18 @@ async def get_strategy_performance(
             last_updated=datetime.now(),
         )
 
-        logger.info(
-            f"Получена производительность стратегии {strategy_name} за {period}"
-        )
+        logger.info(f"Получена производительность стратегии {strategy_name} за {period}")
 
         return performance
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Ошибка получения производительности стратегии {strategy_name}: {e}"
-        )
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения производительности: {str(e)}"
-        )
+        logger.error(f"Ошибка получения производительности стратегии {strategy_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения производительности: {e!s}")
 
 
-@router.get("/categories/list", response_model=List[Dict[str, str]])
+@router.get("/categories/list", response_model=list[dict[str, str]])
 async def get_strategy_categories():
     """Получить список категорий стратегий"""
     try:
@@ -459,9 +423,7 @@ async def get_strategy_categories():
 
     except Exception as e:
         logger.error(f"Ошибка получения категорий стратегий: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Ошибка получения категорий: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Ошибка получения категорий: {e!s}")
 
 
 # =================== HELPER FUNCTIONS ===================
@@ -469,7 +431,7 @@ async def get_strategy_categories():
 
 async def get_strategy_performance_summary(
     strategy_name: str,
-) -> Optional[Dict[str, float]]:
+) -> dict[str, float] | None:
     """Получить краткую сводку производительности стратегии"""
     try:
         performance_service = get_performance_service()
@@ -482,18 +444,14 @@ async def get_strategy_performance_summary(
 
 async def get_strategy_detailed_performance(
     strategy_name: str,
-) -> Optional[Dict[str, float]]:
+) -> dict[str, float] | None:
     """Получить детальную производительность стратегии"""
     try:
         performance_service = get_performance_service()
-        detailed = await performance_service.get_strategy_detailed_metrics(
-            strategy_name
-        )
+        detailed = await performance_service.get_strategy_detailed_metrics(strategy_name)
         return detailed
     except Exception as e:
-        logger.error(
-            f"Ошибка получения детальной производительности {strategy_name}: {e}"
-        )
+        logger.error(f"Ошибка получения детальной производительности {strategy_name}: {e}")
         return None
 
 

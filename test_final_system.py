@@ -113,18 +113,12 @@ async def test_system():
 
         # Проверяем критические настройки
         data_management = config.get("data_management", {})
-        print(
-            f"   ✅ Автообновление данных: {data_management.get('auto_update', False)}"
-        )
-        print(
-            f"   ✅ Интервал обновления: {data_management.get('update_interval', 60)} сек"
-        )
+        print(f"   ✅ Автообновление данных: {data_management.get('auto_update', False)}")
+        print(f"   ✅ Интервал обновления: {data_management.get('update_interval', 60)} сек")
 
         # Проверяем exchanges
         exchanges = config.get("exchanges", {})
-        enabled_exchanges = [
-            name for name, conf in exchanges.items() if conf.get("enabled")
-        ]
+        enabled_exchanges = [name for name, conf in exchanges.items() if conf.get("enabled")]
         print(f"   ✅ Активные биржи: {', '.join(enabled_exchanges)}")
 
     except Exception as e:

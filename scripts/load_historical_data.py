@@ -8,7 +8,6 @@ import asyncio
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -27,7 +26,7 @@ async def load_symbol_data(
     symbol: str,
     exchange: str = "bybit",
     days: int = 30,  # По умолчанию 30 дней данных
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Загрузка данных для одного символа"""
     try:
         logger.info(f"📥 Загрузка {symbol} за {days} дней...")
@@ -46,10 +45,7 @@ async def load_symbol_data(
         )
 
         if df is not None and not df.empty:
-            logger.info(
-                f"✅ {symbol}: загружено {len(df)} свечей "
-                f"({df.index[0]} - {df.index[-1]})"
-            )
+            logger.info(f"✅ {symbol}: загружено {len(df)} свечей ({df.index[0]} - {df.index[-1]})")
             return df
         else:
             logger.warning(f"⚠️ {symbol}: нет данных")
@@ -164,9 +160,7 @@ async def main():
         # Парсим аргументы
         import argparse
 
-        parser = argparse.ArgumentParser(
-            description="Загрузка исторических данных для ML"
-        )
+        parser = argparse.ArgumentParser(description="Загрузка исторических данных для ML")
         parser.add_argument(
             "--days",
             type=int,

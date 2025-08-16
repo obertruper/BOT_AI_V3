@@ -16,7 +16,7 @@ import json
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from urllib.parse import urlencode
 
 import aiohttp
@@ -88,9 +88,7 @@ class BybitClient(BaseExchangeInterface):
     с полной поддержкой всех возможностей Bybit API.
     """
 
-    def __init__(
-        self, api_key: str, api_secret: str, sandbox: bool = False, timeout: int = 30
-    ):
+    def __init__(self, api_key: str, api_secret: str, sandbox: bool = False, timeout: int = 30):
         super().__init__(api_key, api_secret, sandbox, timeout)
 
         # Логирование
@@ -113,7 +111,7 @@ class BybitClient(BaseExchangeInterface):
             self.base_url = "https://api.bybit.com"
 
         # Настройки HTTP
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self.retry_count = 3
         self.retry_delay = 1
 
@@ -154,7 +152,7 @@ class BybitClient(BaseExchangeInterface):
             # Пытаемся загрузить настройки из system.yaml
             config_path = "config/system.yaml"
             if os.path.exists(config_path):
-                with open(config_path, "r") as f:
+                with open(config_path) as f:
                     system_config = yaml.safe_load(f)
                 if system_config and "trading" in system_config:
                     trading_cfg = system_config["trading"]
@@ -168,8 +166,8 @@ class BybitClient(BaseExchangeInterface):
             self.logger.warning(f"Failed to load trading config, using defaults: {e}")
 
         # Кеш для инструментов
-        self._instruments_cache: Dict[str, List[Instrument]] = {}
-        self._cache_expiry: Dict[str, datetime] = {}
+        self._instruments_cache: dict[str, list[Instrument]] = {}
+        self._cache_expiry: dict[str, datetime] = {}
 
     # =================== БАЗОВЫЕ СВОЙСТВА ===================
 
@@ -250,9 +248,9 @@ class BybitClient(BaseExchangeInterface):
 
     # =================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===================
 
-    def _generate_signature(self, params: Union[str, Dict], timestamp: str) -> str:
+    def _generate_signature(self, params: str | dict, timestamp: str) -> str:
         """Генерация подписи для запроса"""
-        recv_window = "5000"
+        recv_window = "20000"  # Увеличиваем окно до 20 секунд для компенсации рассинхронизации
 
         if isinstance(params, dict):
             # POST запрос
@@ -272,11 +270,11 @@ class BybitClient(BaseExchangeInterface):
         self,
         method: str,
         endpoint: str,
-        params: Optional[Dict] = None,
+        params: dict | None = None,
         auth: bool = False,
         priority: str = "normal",  # Изменено с RequestPriority
         use_cache: bool = True,  # Добавлен параметр для кэширования
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Выполнение HTTP запроса с rate limiting, кэшированием и повторными попытками"""
 
         if not self.session:
@@ -313,9 +311,7 @@ class BybitClient(BaseExchangeInterface):
             if auth:
                 # В публичном режиме пропускаем аутентификацию
                 if self.public_only:
-                    self.logger.debug(
-                        f"Skipping authentication for public-only mode: {endpoint}"
-                    )
+                    self.logger.debug(f"Skipping authentication for public-only mode: {endpoint}")
                 else:
                     # Получаем актуальный ключ из менеджера
                     key_info = await self.key_manager.get_active_key("bybit")
@@ -324,9 +320,7 @@ class BybitClient(BaseExchangeInterface):
 
                     timestamp = str(int(time.time() * 1000))
                     sign_params = (
-                        json.dumps(params)
-                        if method == "POST" and params
-                        else query_string
+                        json.dumps(params) if method == "POST" and params else query_string
                     )
 
                     # Используем ключи из менеджера
@@ -334,7 +328,7 @@ class BybitClient(BaseExchangeInterface):
                     signature = hmac.new(
                         bytes(key_info.api_secret, "utf-8"),
                         bytes(
-                            timestamp + key_info.api_key + "5000" + (sign_params or ""),
+                            timestamp + key_info.api_key + "20000" + (sign_params or ""),
                             "utf-8",
                         ),
                         hashlib.sha256,
@@ -345,7 +339,7 @@ class BybitClient(BaseExchangeInterface):
                             "X-BAPI-API-KEY": key_info.api_key,
                             "X-BAPI-TIMESTAMP": timestamp,
                             "X-BAPI-SIGN": signature,
-                            "X-BAPI-RECV-WINDOW": "5000",
+                            "X-BAPI-RECV-WINDOW": "20000",
                         }
                     )
 
@@ -390,9 +384,7 @@ class BybitClient(BaseExchangeInterface):
                     # Проверка HTTP статуса
                     if status_code != 200:
                         if status_code == 429:  # Rate limit
-                            retry_after = extract_retry_after(
-                                response_data, response_headers
-                            )
+                            retry_after = extract_retry_after(response_data, response_headers)
                             # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
                             self.logger.warning(
                                 f"Rate limit error: {endpoint}, retry after {retry_after}"
@@ -404,10 +396,7 @@ class BybitClient(BaseExchangeInterface):
 
                             raise RateLimitError("bybit", retry_after=retry_after)
 
-                        elif (
-                            status_code in [500, 502, 503, 504]
-                            and attempt < self.retry_count
-                        ):
+                        elif status_code in [500, 502, 503, 504] and attempt < self.retry_count:
                             # Server errors - продолжаем попытки
                             # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
                             self.logger.warning(
@@ -429,9 +418,7 @@ class BybitClient(BaseExchangeInterface):
 
                         # Проверка на rate limit
                         if is_rate_limit_error(str(ret_code), "bybit"):
-                            retry_after = extract_retry_after(
-                                response_data, response_headers
-                            )
+                            retry_after = extract_retry_after(response_data, response_headers)
                             # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
                             self.logger.warning(
                                 f"Rate limit error: {endpoint}, code {ret_code}, retry after {retry_after}"
@@ -456,9 +443,7 @@ class BybitClient(BaseExchangeInterface):
                         ]
                         if ret_code in retry_codes and attempt < self.retry_count:
                             # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
-                            self.logger.warning(
-                                f"Rate limit error: {endpoint}, code {ret_code}"
-                            )
+                            self.logger.warning(f"Rate limit error: {endpoint}, code {ret_code}")
                             continue
 
                         # Создание соответствующего исключения
@@ -489,9 +474,7 @@ class BybitClient(BaseExchangeInterface):
 
                     # Кэшируем успешный GET результат (только для публичных эндпоинтов)
                     if method == "GET" and use_cache and not auth:
-                        cache_key = (
-                            f"{endpoint}:{json.dumps(params or {}, sort_keys=True)}"
-                        )
+                        cache_key = f"{endpoint}:{json.dumps(params or {}, sort_keys=True)}"
                         self.enhanced_limiter.cache_result(cache_key, response_data)
                         self.logger.debug(f"Cached result for {endpoint}")
 
@@ -523,9 +506,7 @@ class BybitClient(BaseExchangeInterface):
             self.error_count += 1
             # self.rate_limiter.record_error("bybit", endpoint, "ALL_RETRIES_FAILED")  # Заменено
             self.logger.error(f"All retries failed for {endpoint}")
-            raise APIError(
-                "bybit", f"{method} {endpoint}", api_message="All retry attempts failed"
-            )
+            raise APIError("bybit", f"{method} {endpoint}", api_message="All retry attempts failed")
 
         except Exception:
             # Записываем ошибку в rate limiter для случаев, когда блок try не был выполнен
@@ -551,7 +532,7 @@ class BybitClient(BaseExchangeInterface):
         except Exception as e:
             raise MarketDataError("bybit", "exchange_info", reason=str(e))
 
-    async def get_instruments(self, category: Optional[str] = None) -> List[Instrument]:
+    async def get_instruments(self, category: str | None = None) -> list[Instrument]:
         """Получение списка торговых инструментов"""
         try:
             category = category or "linear"
@@ -566,9 +547,7 @@ class BybitClient(BaseExchangeInterface):
                 return self._instruments_cache[cache_key]
 
             params = {"category": category}
-            response = await self._make_request(
-                "GET", "/v5/market/instruments-info", params
-            )
+            response = await self._make_request("GET", "/v5/market/instruments-info", params)
 
             instruments = []
             result = response.get("result", {})
@@ -580,27 +559,17 @@ class BybitClient(BaseExchangeInterface):
                     base_currency=item.get("baseCoin", ""),
                     quote_currency=item.get("quoteCoin", ""),
                     category=category,
-                    min_order_qty=float(
-                        item.get("lotSizeFilter", {}).get("minOrderQty", "0")
-                    ),
+                    min_order_qty=float(item.get("lotSizeFilter", {}).get("minOrderQty", "0")),
                     max_order_qty=float(
                         item.get("lotSizeFilter", {}).get("maxOrderQty", "1000000")
                     ),
-                    qty_step=float(
-                        item.get("lotSizeFilter", {}).get("qtyStep", "0.001")
-                    ),
+                    qty_step=float(item.get("lotSizeFilter", {}).get("qtyStep", "0.001")),
                     min_price=float(item.get("priceFilter", {}).get("minPrice", "0")),
-                    max_price=float(
-                        item.get("priceFilter", {}).get("maxPrice", "1000000")
-                    ),
-                    tick_size=float(
-                        item.get("priceFilter", {}).get("tickSize", "0.01")
-                    ),
+                    max_price=float(item.get("priceFilter", {}).get("maxPrice", "1000000")),
+                    tick_size=float(item.get("priceFilter", {}).get("tickSize", "0.01")),
                     status=item.get("status", "Trading"),
                     is_tradable=item.get("status") == "Trading",
-                    max_leverage=float(
-                        item.get("leverageFilter", {}).get("maxLeverage", "1")
-                    ),
+                    max_leverage=float(item.get("leverageFilter", {}).get("maxLeverage", "1")),
                     margin_trading=category in ["linear", "inverse"],
                 )
                 instruments.append(instrument)
@@ -638,9 +607,7 @@ class BybitClient(BaseExchangeInterface):
             raise ValueError(f"Instrument {symbol} not found")
 
         except Exception as e:
-            raise MarketDataError(
-                "bybit", "instrument_info", symbol=symbol, reason=str(e)
-            )
+            raise MarketDataError("bybit", "instrument_info", symbol=symbol, reason=str(e))
 
     # =================== АККАУНТ И БАЛАНСЫ ===================
 
@@ -668,9 +635,7 @@ class BybitClient(BaseExchangeInterface):
                 total_margin_balance=float(account_data.get("totalMarginBalance", "0")),
                 available_balance=float(account_data.get("totalAvailableBalance", "0")),
                 total_initial_margin=float(account_data.get("totalInitialMargin", "0")),
-                total_maintenance_margin=float(
-                    account_data.get("totalMaintenanceMargin", "0")
-                ),
+                total_maintenance_margin=float(account_data.get("totalMaintenanceMargin", "0")),
                 can_trade=True,
                 can_withdraw=True,
                 can_deposit=True,
@@ -680,7 +645,7 @@ class BybitClient(BaseExchangeInterface):
         except Exception as e:
             raise APIError("bybit", "get_account_info", api_message=str(e))
 
-    async def get_balances(self, account_type: Optional[str] = None) -> List[Balance]:
+    async def get_balances(self, account_type: str | None = None) -> list[Balance]:
         """Получение балансов аккаунта"""
         try:
             account_type = account_type or "UNIFIED"
@@ -711,9 +676,7 @@ class BybitClient(BaseExchangeInterface):
         except Exception as e:
             raise APIError("bybit", "get_balances", api_message=str(e))
 
-    async def get_balance(
-        self, currency: str, account_type: Optional[str] = None
-    ) -> Balance:
+    async def get_balance(self, currency: str, account_type: str | None = None) -> Balance:
         """Получение баланса конкретной валюты"""
         balances = await self.get_balances(account_type)
 
@@ -766,7 +729,7 @@ class BybitClient(BaseExchangeInterface):
         except Exception as e:
             raise MarketDataError("bybit", "ticker", symbol=symbol, reason=str(e))
 
-    async def get_tickers(self, category: Optional[str] = None) -> List[Ticker]:
+    async def get_tickers(self, category: str | None = None) -> list[Ticker]:
         """Получение тикеров всех инструментов"""
         try:
             category = category or "linear"
@@ -818,20 +781,14 @@ class BybitClient(BaseExchangeInterface):
             # Обработка bids
             for bid in result.get("b", []):
                 if len(bid) >= 2:
-                    bids.append(
-                        OrderBookEntry(price=float(bid[0]), quantity=float(bid[1]))
-                    )
+                    bids.append(OrderBookEntry(price=float(bid[0]), quantity=float(bid[1])))
 
             # Обработка asks
             for ask in result.get("a", []):
                 if len(ask) >= 2:
-                    asks.append(
-                        OrderBookEntry(price=float(ask[0]), quantity=float(ask[1]))
-                    )
+                    asks.append(OrderBookEntry(price=float(ask[0]), quantity=float(ask[1])))
 
-            return OrderBook(
-                symbol=symbol, bids=bids, asks=asks, timestamp=datetime.now()
-            )
+            return OrderBook(symbol=symbol, bids=bids, asks=asks, timestamp=datetime.now())
 
         except Exception as e:
             raise MarketDataError("bybit", "orderbook", symbol=symbol, reason=str(e))
@@ -840,18 +797,16 @@ class BybitClient(BaseExchangeInterface):
         self,
         symbol: str,
         interval: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 500,
-    ) -> List[Kline]:
+    ) -> list[Kline]:
         """Получение свечных данных"""
         try:
             symbol = clean_symbol(symbol)
 
             # Конвертируем интервал в формат Bybit API
-            bybit_interval = (
-                interval.replace("m", "") if interval.endswith("m") else interval
-            )
+            bybit_interval = interval.replace("m", "") if interval.endswith("m") else interval
 
             params = {
                 "category": "linear",
@@ -885,9 +840,7 @@ class BybitClient(BaseExchangeInterface):
                         low_price=float(kline_data[3]),
                         close_price=float(kline_data[4]),
                         volume=float(kline_data[5]),
-                        trades_count=int(float(kline_data[6]))
-                        if len(kline_data) > 6
-                        else 0,
+                        trades_count=int(float(kline_data[6])) if len(kline_data) > 6 else 0,
                     )
                     klines.append(kline)
 
@@ -898,7 +851,7 @@ class BybitClient(BaseExchangeInterface):
 
     # =================== УПРАВЛЕНИЕ ОРДЕРАМИ ===================
 
-    def _get_position_idx(self, side: str, hedge_mode: Optional[bool] = None) -> int:
+    def _get_position_idx(self, side: str, hedge_mode: bool | None = None) -> int:
         """Определение position index для Bybit API"""
         # ИСПРАВЛЕНО: Аккаунт на самом деле в hedge mode, а не one-way
         # Hedge mode: 1=Buy/Long, 2=Sell/Short
@@ -983,9 +936,21 @@ class BybitClient(BaseExchangeInterface):
             if order_request.client_order_id:
                 params["orderLinkId"] = order_request.client_order_id
 
-            # SL/TP параметры
+            # SL/TP параметры с корректной логикой для разных направлений
             if order_request.stop_loss is not None:
-                params["stopLoss"] = str(order_request.stop_loss)
+                sl_price = float(order_request.stop_loss)
+                # Для SELL позиций StopLoss должен быть выше текущей цены
+                # Для BUY позиций StopLoss должен быть ниже текущей цены
+                if order_request.side == OrderSide.SELL:
+                    # Если StopLoss ниже цены входа для SELL - корректируем
+                    if order_request.price and sl_price < float(order_request.price):
+                        # Устанавливаем StopLoss выше цены входа на 1%
+                        sl_price = float(order_request.price) * 1.01
+                        self.logger.warning(
+                            f"Corrected SELL StopLoss from {order_request.stop_loss} to {sl_price}"
+                        )
+                params["stopLoss"] = str(sl_price)
+
             if order_request.take_profit is not None:
                 params["takeProfit"] = str(order_request.take_profit)
 
@@ -1026,9 +991,7 @@ class BybitClient(BaseExchangeInterface):
 
         except Exception as e:
             self.logger.error(f"Failed to place order: {e}")
-            raise OrderError(
-                "bybit", "placement", symbol=order_request.symbol, reason=str(e)
-            )
+            raise OrderError("bybit", "placement", symbol=order_request.symbol, reason=str(e))
 
     async def cancel_order(self, symbol: str, order_id: str) -> OrderResponse:
         """Отмена ордера"""
@@ -1065,9 +1028,7 @@ class BybitClient(BaseExchangeInterface):
                 "bybit", "cancellation", order_id=order_id, symbol=symbol, reason=str(e)
             )
 
-    async def cancel_all_orders(
-        self, symbol: Optional[str] = None
-    ) -> List[OrderResponse]:
+    async def cancel_all_orders(self, symbol: str | None = None) -> list[OrderResponse]:
         """Отмена всех ордеров"""
         try:
             params = {"category": "linear"}
@@ -1075,9 +1036,7 @@ class BybitClient(BaseExchangeInterface):
             if symbol:
                 params["symbol"] = clean_symbol(symbol)
 
-            self.logger.info(
-                "Cancelling all orders" + (f" for {symbol}" if symbol else "")
-            )
+            self.logger.info("Cancelling all orders" + (f" for {symbol}" if symbol else ""))
 
             response = await self._make_request(
                 "POST",
@@ -1115,8 +1074,8 @@ class BybitClient(BaseExchangeInterface):
         self,
         symbol: str,
         order_id: str,
-        quantity: Optional[float] = None,
-        price: Optional[float] = None,
+        quantity: float | None = None,
+        price: float | None = None,
     ) -> OrderResponse:
         """Модификация ордера"""
         try:
@@ -1133,13 +1092,9 @@ class BybitClient(BaseExchangeInterface):
                     "Either quantity or price must be specified for order modification"
                 )
 
-            self.logger.info(
-                f"Modifying order {order_id}: qty={quantity}, price={price}"
-            )
+            self.logger.info(f"Modifying order {order_id}: qty={quantity}, price={price}")
 
-            response = await self._make_request(
-                "POST", "/v5/order/amend", params, auth=True
-            )
+            response = await self._make_request("POST", "/v5/order/amend", params, auth=True)
             result = response.get("result", {})
 
             modified_order_id = result.get("orderId", order_id)
@@ -1166,9 +1121,7 @@ class BybitClient(BaseExchangeInterface):
             symbol = clean_symbol(symbol)
             params = {"category": "linear", "orderId": order_id}
 
-            response = await self._make_request(
-                "GET", "/v5/order/realtime", params, auth=True
-            )
+            response = await self._make_request("GET", "/v5/order/realtime", params, auth=True)
             result = response.get("result", {})
             order_list = result.get("list", [])
 
@@ -1200,11 +1153,9 @@ class BybitClient(BaseExchangeInterface):
 
         except Exception as e:
             self.logger.error(f"Failed to get order {order_id}: {e}")
-            raise OrderError(
-                "bybit", "lookup", order_id=order_id, symbol=symbol, reason=str(e)
-            )
+            raise OrderError("bybit", "lookup", order_id=order_id, symbol=symbol, reason=str(e))
 
-    async def get_open_orders(self, symbol: Optional[str] = None) -> List[Order]:
+    async def get_open_orders(self, symbol: str | None = None) -> list[Order]:
         """Получение активных ордеров"""
         try:
             params = {"category": "linear"}
@@ -1216,9 +1167,7 @@ class BybitClient(BaseExchangeInterface):
                 # Используем settleCoin для получения всех ордеров по USDT
                 params["settleCoin"] = "USDT"
 
-            response = await self._make_request(
-                "GET", "/v5/order/realtime", params, auth=True
-            )
+            response = await self._make_request("GET", "/v5/order/realtime", params, auth=True)
             result = response.get("result", {})
             order_list = result.get("list", [])
 
@@ -1252,11 +1201,11 @@ class BybitClient(BaseExchangeInterface):
 
     async def get_order_history(
         self,
-        symbol: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        symbol: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Order]:
+    ) -> list[Order]:
         """Получение истории ордеров"""
         try:
             params = {"category": "linear", "limit": min(limit, 50)}  # Bybit limit
@@ -1268,9 +1217,7 @@ class BybitClient(BaseExchangeInterface):
             if end_time:
                 params["endTime"] = int(end_time.timestamp() * 1000)
 
-            response = await self._make_request(
-                "GET", "/v5/order/history", params, auth=True
-            )
+            response = await self._make_request("GET", "/v5/order/history", params, auth=True)
             result = response.get("result", {})
             order_list = result.get("list", [])
 
@@ -1304,7 +1251,7 @@ class BybitClient(BaseExchangeInterface):
 
     # =================== УПРАВЛЕНИЕ ПОЗИЦИЯМИ ===================
 
-    async def get_positions(self, symbol: Optional[str] = None) -> List[Position]:
+    async def get_positions(self, symbol: str | None = None) -> list[Position]:
         """Получение открытых позиций"""
         try:
             params = {"category": "linear"}
@@ -1315,9 +1262,7 @@ class BybitClient(BaseExchangeInterface):
                 # Добавляем settleCoin для получения всех позиций
                 params["settleCoin"] = "USDT"
 
-            response = await self._make_request(
-                "GET", "/v5/position/list", params, auth=True
-            )
+            response = await self._make_request("GET", "/v5/position/list", params, auth=True)
             result = response.get("result", {})
 
             # Обработка разных форматов ответа
@@ -1377,7 +1322,7 @@ class BybitClient(BaseExchangeInterface):
             self.logger.error(f"Failed to get positions: {e}")
             raise PositionError("bybit", "list", symbol or "all", reason=str(e))
 
-    async def get_position(self, symbol: str) -> Optional[Position]:
+    async def get_position(self, symbol: str) -> Position | None:
         """Получение конкретной позиции"""
         try:
             positions = await self.get_positions(symbol)
@@ -1396,9 +1341,7 @@ class BybitClient(BaseExchangeInterface):
             self.logger.error(f"Failed to get position for {symbol}: {e}")
             raise PositionError("bybit", "lookup", symbol, reason=str(e))
 
-    async def close_position(
-        self, symbol: str, quantity: Optional[float] = None
-    ) -> OrderResponse:
+    async def close_position(self, symbol: str, quantity: float | None = None) -> OrderResponse:
         """Закрытие позиции"""
         try:
             # Получаем текущую позицию
@@ -1423,9 +1366,7 @@ class BybitClient(BaseExchangeInterface):
                 client_order_id=f"close_{symbol}_{int(time.time())}",
             )
 
-            self.logger.info(
-                f"Closing position: {symbol} {close_side} {close_quantity}"
-            )
+            self.logger.info(f"Closing position: {symbol} {close_side} {close_quantity}")
 
             return await self.place_order(order_request)
 
@@ -1494,7 +1435,7 @@ class BybitClient(BaseExchangeInterface):
             raise PositionError("bybit", "set_mode", symbol, reason=str(e))
 
     async def set_stop_loss(
-        self, symbol: str, stop_price: float, quantity: Optional[float] = None
+        self, symbol: str, stop_price: float, quantity: float | None = None
     ) -> OrderResponse:
         """
         Установка Stop Loss для позиции
@@ -1544,16 +1485,14 @@ class BybitClient(BaseExchangeInterface):
             else:
                 error_msg = response.get("retMsg", "Unknown error")
                 self.logger.error(f"Failed to set stop loss: {error_msg}")
-                return OrderResponse.error_response(
-                    f"Failed to set stop loss: {error_msg}"
-                )
+                return OrderResponse.error_response(f"Failed to set stop loss: {error_msg}")
 
         except Exception as e:
             self.logger.error(f"Error setting stop loss for {symbol}: {e}")
-            return OrderResponse.error_response(f"Error setting stop loss: {str(e)}")
+            return OrderResponse.error_response(f"Error setting stop loss: {e!s}")
 
     async def set_take_profit(
-        self, symbol: str, take_price: float, quantity: Optional[float] = None
+        self, symbol: str, take_price: float, quantity: float | None = None
     ) -> OrderResponse:
         """
         Установка Take Profit для позиции
@@ -1603,17 +1542,13 @@ class BybitClient(BaseExchangeInterface):
             else:
                 error_msg = response.get("retMsg", "Unknown error")
                 self.logger.error(f"Failed to set take profit: {error_msg}")
-                return OrderResponse.error_response(
-                    f"Failed to set take profit: {error_msg}"
-                )
+                return OrderResponse.error_response(f"Failed to set take profit: {error_msg}")
 
         except Exception as e:
             self.logger.error(f"Error setting take profit for {symbol}: {e}")
-            return OrderResponse.error_response(f"Error setting take profit: {str(e)}")
+            return OrderResponse.error_response(f"Error setting take profit: {e!s}")
 
-    async def modify_stop_loss(
-        self, symbol: str, new_stop_price: float
-    ) -> OrderResponse:
+    async def modify_stop_loss(self, symbol: str, new_stop_price: float) -> OrderResponse:
         """
         Модификация Stop Loss для позиции
 
@@ -1626,9 +1561,7 @@ class BybitClient(BaseExchangeInterface):
         """
         return await self.set_stop_loss(symbol, new_stop_price)
 
-    async def modify_take_profit(
-        self, symbol: str, new_take_price: float
-    ) -> OrderResponse:
+    async def modify_take_profit(self, symbol: str, new_take_price: float) -> OrderResponse:
         """
         Модификация Take Profit для позиции
 
@@ -1643,15 +1576,15 @@ class BybitClient(BaseExchangeInterface):
 
     async def get_trade_history(
         self,
-        symbol: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        symbol: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Получение истории сделок - будет реализовано"""
         pass
 
-    async def start_websocket(self, channels: List[str], callback: callable) -> bool:
+    async def start_websocket(self, channels: list[str], callback: callable) -> bool:
         """Запуск WebSocket - будет реализовано"""
         pass
 
@@ -1685,10 +1618,10 @@ class BybitClient(BaseExchangeInterface):
         self,
         symbol: str,
         timeframe: str = "15m",
-        since: Optional[int] = None,
-        limit: Optional[int] = None,
-        params: Dict = None,
-    ) -> List[List]:
+        since: int | None = None,
+        limit: int | None = None,
+        params: dict = None,
+    ) -> list[list]:
         """
         Метод для совместимости с ccxt интерфейсом
 
@@ -1743,7 +1676,7 @@ class BybitClient(BaseExchangeInterface):
 
     # =================== HEALTH MONITORING ===================
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health_status(self) -> dict[str, Any]:
         """Получение статуса здоровья биржи"""
         status = self.health_monitor.get_exchange_status("bybit")
 
@@ -1772,7 +1705,7 @@ class BybitClient(BaseExchangeInterface):
             "is_healthy": status.is_healthy,
         }
 
-    def get_performance_metrics(self) -> Dict[str, Any]:
+    def get_performance_metrics(self) -> dict[str, Any]:
         """Получение метрик производительности"""
         # rate_limit_stats = self.rate_limiter.get_stats("bybit")  # Заменено
         rate_limit_stats = {

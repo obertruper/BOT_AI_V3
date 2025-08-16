@@ -6,7 +6,6 @@
 import argparse
 import subprocess
 import time
-from typing import Dict, List, Tuple
 
 
 class Colors:
@@ -91,14 +90,10 @@ class TestRunner:
         print(f"{Colors.OKBLUE}🏷️  Маркеры:{Colors.ENDC} {suite['markers']}")
         print(f"{Colors.OKBLUE}⏱️  Таймаут:{Colors.ENDC} {suite['timeout']}s\n")
 
-    def run_suite(
-        self, suite_name: str, extra_args: List[str] = None
-    ) -> Tuple[bool, float, Dict]:
+    def run_suite(self, suite_name: str, extra_args: list[str] = None) -> tuple[bool, float, dict]:
         """Запуск конкретного набора тестов"""
         if suite_name not in self.test_suites:
-            print(
-                f"{Colors.FAIL}❌ Неизвестный набор тестов: {suite_name}{Colors.ENDC}"
-            )
+            print(f"{Colors.FAIL}❌ Неизвестный набор тестов: {suite_name}{Colors.ENDC}")
             return False, 0.0, {}
 
         suite = self.test_suites[suite_name]
@@ -131,9 +126,7 @@ class TestRunner:
 
         # Выводим результаты
         if success:
-            print(
-                f"\n{Colors.OKGREEN}✅ {suite_name} тесты пройдены успешно!{Colors.ENDC}"
-            )
+            print(f"\n{Colors.OKGREEN}✅ {suite_name} тесты пройдены успешно!{Colors.ENDC}")
         else:
             print(f"\n{Colors.FAIL}❌ {suite_name} тесты провалены!{Colors.ENDC}")
             if result.stderr:
@@ -141,7 +134,7 @@ class TestRunner:
 
         return success, duration, stats
 
-    def _parse_test_results(self, suite_name: str) -> Dict:
+    def _parse_test_results(self, suite_name: str) -> dict:
         """Парсинг результатов из вывода pytest"""
         # Пока возвращаем пустую статистику
         # В будущем можно парсить stdout
@@ -149,7 +142,7 @@ class TestRunner:
 
         return stats
 
-    def run_chain(self, chain: List[str], stop_on_failure: bool = True) -> Dict:
+    def run_chain(self, chain: list[str], stop_on_failure: bool = True) -> dict:
         """Запуск цепочки тестов"""
         results = {}
         total_start = time.time()
@@ -157,9 +150,7 @@ class TestRunner:
         self.print_header(f"Запуск цепочки тестов: {' → '.join(chain)}")
 
         for i, suite in enumerate(chain, 1):
-            print(
-                f"\n{Colors.BOLD}[{i}/{len(chain)}] Запуск {suite} тестов{Colors.ENDC}"
-            )
+            print(f"\n{Colors.BOLD}[{i}/{len(chain)}] Запуск {suite} тестов{Colors.ENDC}")
             print("-" * 60)
 
             self.print_suite_info(suite)
@@ -172,9 +163,7 @@ class TestRunner:
             self._print_suite_stats(suite, stats, duration)
 
             if not success and stop_on_failure:
-                print(
-                    f"\n{Colors.FAIL}⛔ Остановка цепочки из-за ошибки в {suite}{Colors.ENDC}"
-                )
+                print(f"\n{Colors.FAIL}⛔ Остановка цепочки из-за ошибки в {suite}{Colors.ENDC}")
                 break
 
         total_duration = time.time() - total_start
@@ -182,7 +171,7 @@ class TestRunner:
 
         return results
 
-    def _print_suite_stats(self, suite_name: str, stats: Dict, duration: float):
+    def _print_suite_stats(self, suite_name: str, stats: dict, duration: float):
         """Вывод статистики для набора тестов"""
         print(f"\n{Colors.BOLD}📊 Статистика {suite_name}:{Colors.ENDC}")
         print(f"  Всего тестов: {stats['total']}")
@@ -192,7 +181,7 @@ class TestRunner:
         print(f"  💥 Ошибок: {stats['errors']}")
         print(f"  ⏱️  Время: {duration:.2f}s")
 
-    def _print_final_report(self, results: Dict, total_duration: float):
+    def _print_final_report(self, results: dict, total_duration: float):
         """Финальный отчет по всем тестам"""
         self.print_header("Финальный отчет")
 
@@ -217,13 +206,9 @@ class TestRunner:
         # Итоговый вердикт
         all_passed = all(r["success"] for r in results.values())
         if all_passed:
-            print(
-                f"\n{Colors.OKGREEN}{Colors.BOLD}🎉 Все тесты пройдены успешно!{Colors.ENDC}"
-            )
+            print(f"\n{Colors.OKGREEN}{Colors.BOLD}🎉 Все тесты пройдены успешно!{Colors.ENDC}")
         else:
-            print(
-                f"\n{Colors.FAIL}{Colors.BOLD}⚠️ Некоторые тесты провалены!{Colors.ENDC}"
-            )
+            print(f"\n{Colors.FAIL}{Colors.BOLD}⚠️ Некоторые тесты провалены!{Colors.ENDC}")
 
     def list_suites(self):
         """Вывод списка доступных наборов тестов"""
@@ -249,9 +234,7 @@ class TestRunner:
         cmd = ["pytest", "--cov=.", "--cov-report=html", "--cov-report=term"]
         subprocess.run(cmd)
 
-        print(
-            f"\n{Colors.OKGREEN}✅ Отчет покрытия создан в htmlcov/index.html{Colors.ENDC}"
-        )
+        print(f"\n{Colors.OKGREEN}✅ Отчет покрытия создан в htmlcov/index.html{Colors.ENDC}")
 
 
 def main():

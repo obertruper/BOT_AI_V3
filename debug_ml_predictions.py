@@ -112,9 +112,7 @@ async def debug_predictions():
         print("\n   🎯 РЕЗУЛЬТАТ:")
         print(f"      Signal: {prediction['signal_type']}")
         print(f"      Confidence: {prediction['confidence']:.1%}")
-        print(
-            f"      Directions: {prediction['predictions']['directions_by_timeframe']}"
-        )
+        print(f"      Directions: {prediction['predictions']['directions_by_timeframe']}")
 
         # Анализ вероятностей
         probs = np.array(prediction["predictions"]["direction_probabilities"])
@@ -125,9 +123,7 @@ async def debug_predictions():
 
         # Проверяем логиты модели
         print("\n   🔬 Диагностика модели:")
-        print(
-            f"      Direction score: {prediction['predictions']['direction_score']:.3f}"
-        )
+        print(f"      Direction score: {prediction['predictions']['direction_score']:.3f}")
         print(f"      Returns 15m: {prediction['predictions']['returns_15m']:.6f}")
         print(f"      Returns 1h: {prediction['predictions']['returns_1h']:.6f}")
         print(f"      Returns 4h: {prediction['predictions']['returns_4h']:.6f}")

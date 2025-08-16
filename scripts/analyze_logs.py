@@ -15,7 +15,6 @@ import statistics
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
 
 
 class LogAnalyzer:
@@ -28,7 +27,7 @@ class LogAnalyzer:
         self.performance_metrics = defaultdict(list)
         self.system_warnings = []
 
-    def analyze_websocket_logs(self) -> Dict:
+    def analyze_websocket_logs(self) -> dict:
         """Анализ WebSocket логов"""
         log_file = self.log_dir / "websocket.log"
         if not log_file.exists():
@@ -50,7 +49,7 @@ class LogAnalyzer:
             "reconnection_attempts": defaultdict(list),
         }
 
-        with open(log_file, "r") as f:
+        with open(log_file) as f:
             for line in f:
                 for issue_type, pattern in patterns.items():
                     match = re.search(pattern, line)
@@ -68,13 +67,11 @@ class LogAnalyzer:
                         # Отслеживаем попытки переподключения
                         if issue_type == "reconnection":
                             retry_count = int(match.group(3))
-                            results["reconnection_attempts"][exchange].append(
-                                retry_count
-                            )
+                            results["reconnection_attempts"][exchange].append(retry_count)
 
         return dict(results)
 
-    def analyze_api_errors(self) -> Dict:
+    def analyze_api_errors(self) -> dict:
         """Анализ API ошибок"""
         log_file = self.log_dir / "api.log"
         if not log_file.exists():
@@ -96,7 +93,7 @@ class LogAnalyzer:
             "endpoints_affected": defaultdict(set),
         }
 
-        with open(log_file, "r") as f:
+        with open(log_file) as f:
             for line in f:
                 for error_type, pattern in patterns.items():
                     match = re.search(pattern, line)
@@ -118,7 +115,7 @@ class LogAnalyzer:
 
         return dict(results)
 
-    def analyze_performance_logs(self) -> Dict:
+    def analyze_performance_logs(self) -> dict:
         """Анализ производительности"""
         json_file = self.log_dir / "structured.json"
         if not json_file.exists():
@@ -140,7 +137,7 @@ class LogAnalyzer:
             "total_operations": 0,
         }
 
-        with open(json_file, "r") as f:
+        with open(json_file) as f:
             for line in f:
                 try:
                     data = json.loads(line.strip())
@@ -188,7 +185,7 @@ class LogAnalyzer:
 
         return dict(results)
 
-    def analyze_system_logs(self) -> Dict:
+    def analyze_system_logs(self) -> dict:
         """Анализ системных логов"""
         log_file = self.log_dir / "system.log"
         if not log_file.exists():
@@ -206,7 +203,7 @@ class LogAnalyzer:
             "resource_alerts": [],
         }
 
-        with open(log_file, "r") as f:
+        with open(log_file) as f:
             for line in f:
                 # Анализ предупреждений о ресурсах
                 for warning_type, pattern in patterns.items():
@@ -215,9 +212,7 @@ class LogAnalyzer:
                         if warning_type == "cpu_warning":
                             cpu_usage = float(match.group(1))
                             cores = int(match.group(2))
-                            results["warnings"]["cpu"].append(
-                                {"usage": cpu_usage, "cores": cores}
-                            )
+                            results["warnings"]["cpu"].append({"usage": cpu_usage, "cores": cores})
                             if cpu_usage > 90:
                                 results["resource_alerts"].append(
                                     f"Critical CPU usage: {cpu_usage}%"
@@ -274,17 +269,13 @@ class LogAnalyzer:
             report.append("\nПроблемы по биржам:")
             for exchange, count in websocket.get("by_exchange", {}).items():
                 status = (
-                    "⚠️ КРИТИЧНО"
-                    if exchange in websocket.get("critical_exchanges", set())
-                    else ""
+                    "⚠️ КРИТИЧНО" if exchange in websocket.get("critical_exchanges", set()) else ""
                 )
                 report.append(f"  - {exchange}: {count} {status}")
 
             if websocket.get("reconnection_attempts"):
                 report.append("\nПопытки переподключения:")
-                for exchange, attempts in websocket.get(
-                    "reconnection_attempts", {}
-                ).items():
+                for exchange, attempts in websocket.get("reconnection_attempts", {}).items():
                     max_attempts = max(attempts) if attempts else 0
                     report.append(f"  - {exchange}: максимум {max_attempts} попыток")
 
@@ -322,22 +313,14 @@ class LogAnalyzer:
                 report.append(f"  - Нормальных: {stats.get('normal', 0)}")
                 report.append(f"  - Высокая латентность: {stats.get('high', 0)}")
                 report.append(f"  - Критических: {stats.get('critical', 0)}")
-                report.append(
-                    f"  - Средняя латентность: {stats.get('avg_latency', 0):.2f}ms"
-                )
-                report.append(
-                    f"  - P95 латентность: {stats.get('p95_latency', 0):.2f}ms"
-                )
-                report.append(
-                    f"  - P99 латентность: {stats.get('p99_latency', 0):.2f}ms"
-                )
+                report.append(f"  - Средняя латентность: {stats.get('avg_latency', 0):.2f}ms")
+                report.append(f"  - P95 латентность: {stats.get('p95_latency', 0):.2f}ms")
+                report.append(f"  - P99 латентность: {stats.get('p99_latency', 0):.2f}ms")
 
             if performance.get("bottlenecks"):
                 report.append("\n⚠️ ОБНАРУЖЕНЫ УЗКИЕ МЕСТА:")
                 for bottleneck in performance.get("bottlenecks", [])[:5]:  # Топ 5
-                    report.append(
-                        f"  - {bottleneck['operation']}: {bottleneck['latency']:.2f}ms"
-                    )
+                    report.append(f"  - {bottleneck['operation']}: {bottleneck['latency']:.2f}ms")
 
         # Системные предупреждения
         report.append("\n\n4. СИСТЕМНЫЕ ПРЕДУПРЕЖДЕНИЯ")
@@ -355,9 +338,7 @@ class LogAnalyzer:
         # Рекомендации
         report.append("\n\n5. РЕКОМЕНДАЦИИ")
         report.append("-" * 40)
-        recommendations = self._generate_recommendations(
-            websocket, api, performance, system
-        )
+        recommendations = self._generate_recommendations(websocket, api, performance, system)
         for i, rec in enumerate(recommendations, 1):
             report.append(f"{i}. {rec}")
 
@@ -366,8 +347,8 @@ class LogAnalyzer:
         return "\n".join(report)
 
     def _generate_recommendations(
-        self, websocket: Dict, api: Dict, performance: Dict, system: Dict
-    ) -> List[str]:
+        self, websocket: dict, api: dict, performance: dict, system: dict
+    ) -> list[str]:
         """Генерация рекомендаций на основе анализа"""
         recommendations = []
 
@@ -381,18 +362,14 @@ class LogAnalyzer:
 
         # API рекомендации
         if api.get("auth_failures"):
-            failed_exchanges = [
-                ex for ex, count in api["auth_failures"].items() if count > 0
-            ]
+            failed_exchanges = [ex for ex, count in api["auth_failures"].items() if count > 0]
             if failed_exchanges:
                 recommendations.append(
                     f"Проверить и обновить API ключи для бирж: {', '.join(failed_exchanges)}. "
                     f"Реализовать автоматическую ротацию ключей."
                 )
 
-        rate_limited = [
-            ex for ex in api.get("rate_limits", {}) if api["rate_limits"][ex]
-        ]
+        rate_limited = [ex for ex in api.get("rate_limits", {}) if api["rate_limits"][ex]]
         if rate_limited:
             recommendations.append(
                 f"Оптимизировать частоту API запросов для: {', '.join(rate_limited)}. "
@@ -451,9 +428,7 @@ def main():
     print(report)
 
     # Сохраняем отчет
-    report_file = (
-        log_dir / f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    )
+    report_file = log_dir / f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(report)
 

@@ -11,7 +11,7 @@ Trader Factory для BOT_Trading v3.0
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 from core.config.config_manager import ConfigManager
 from core.config.validation import ConfigValidator, ValidationLevel
@@ -53,9 +53,9 @@ class TraderFactory:
         self.logger = logging.getLogger(__name__)
 
         # Реестры компонентов
-        self._exchange_registry: Dict[str, Type] = {}
-        self._strategy_registry: Dict[str, Type] = {}
-        self._risk_manager_registry: Dict[str, Type] = {}
+        self._exchange_registry: dict[str, type] = {}
+        self._strategy_registry: dict[str, type] = {}
+        self._risk_manager_registry: dict[str, type] = {}
 
         # Инициализация стандартных компонентов
         self._register_default_components()
@@ -242,9 +242,7 @@ class TraderFactory:
                 f"Предупреждение конфигурации {warning.field}: {warning.message}"
             )
 
-    async def _create_components(
-        self, trader_context: TraderContext
-    ) -> TraderComponents:
+    async def _create_components(self, trader_context: TraderContext) -> TraderComponents:
         """Создание компонентов трейдера"""
         components = TraderComponents()
 
@@ -255,9 +253,7 @@ class TraderFactory:
         components.strategy = await self._create_strategy(trader_context)
 
         # Создание репозитория БД
-        components.database_repository = await self._create_database_repository(
-            trader_context
-        )
+        components.database_repository = await self._create_database_repository(trader_context)
 
         # Создание ML модели (опционально)
         components.ml_model = await self._create_ml_model(trader_context)
@@ -266,9 +262,7 @@ class TraderFactory:
         components.risk_manager = await self._create_risk_manager(trader_context)
 
         # Создание движка индикаторов
-        components.indicator_engine = await self._create_indicator_engine(
-            trader_context
-        )
+        components.indicator_engine = await self._create_indicator_engine(trader_context)
 
         return components
 
@@ -365,9 +359,7 @@ class TraderFactory:
 
             # Создание предиктора ML
             ml_config = trader_context.get_trader_config("ml_config", {})
-            predictor = ModelPredictor(
-                config=ml_config, trader_id=trader_context.trader_id
-            )
+            predictor = ModelPredictor(config=ml_config, trader_id=trader_context.trader_id)
 
             await predictor.initialize()
 
@@ -392,9 +384,7 @@ class TraderFactory:
             return None
 
         # Создание экземпляра риск-менеджера
-        risk_manager = risk_manager_class(
-            config=risk_config, trader_context=trader_context
-        )
+        risk_manager = risk_manager_class(config=risk_config, trader_context=trader_context)
 
         await risk_manager.initialize()
 
@@ -442,34 +432,34 @@ class TraderFactory:
         if components.risk_manager:
             components.risk_manager.set_exchange_client(components.exchange_client)
 
-    def register_exchange(self, name: str, exchange_class: Type) -> None:
+    def register_exchange(self, name: str, exchange_class: type) -> None:
         """Регистрация пользовательского клиента биржи"""
         self._exchange_registry[name] = exchange_class
         self.logger.info(f"Зарегистрирована биржа: {name}")
 
-    def register_strategy(self, name: str, strategy_class: Type) -> None:
+    def register_strategy(self, name: str, strategy_class: type) -> None:
         """Регистрация пользовательской стратегии"""
         self._strategy_registry[name] = strategy_class
         self.logger.info(f"Зарегистрирована стратегия: {name}")
 
-    def register_risk_manager(self, name: str, risk_manager_class: Type) -> None:
+    def register_risk_manager(self, name: str, risk_manager_class: type) -> None:
         """Регистрация пользовательского риск-менеджера"""
         self._risk_manager_registry[name] = risk_manager_class
         self.logger.info(f"Зарегистрирован риск-менеджер: {name}")
 
-    def get_supported_exchanges(self) -> List[str]:
+    def get_supported_exchanges(self) -> list[str]:
         """Получение списка поддерживаемых бирж"""
         return list(self._exchange_registry.keys())
 
-    def get_supported_strategies(self) -> List[str]:
+    def get_supported_strategies(self) -> list[str]:
         """Получение списка поддерживаемых стратегий"""
         return list(self._strategy_registry.keys())
 
-    def get_supported_risk_managers(self) -> List[str]:
+    def get_supported_risk_managers(self) -> list[str]:
         """Получение списка поддерживаемых риск-менеджеров"""
         return list(self._risk_manager_registry.keys())
 
-    async def validate_trader_creation(self, trader_id: str) -> List[str]:
+    async def validate_trader_creation(self, trader_id: str) -> list[str]:
         """
         Валидация возможности создания трейдера
 
@@ -512,7 +502,7 @@ class TraderFactory:
 
 
 # Глобальная фабрика для удобства использования
-_global_trader_factory: Optional[TraderFactory] = None
+_global_trader_factory: TraderFactory | None = None
 
 
 def get_global_trader_factory() -> TraderFactory:

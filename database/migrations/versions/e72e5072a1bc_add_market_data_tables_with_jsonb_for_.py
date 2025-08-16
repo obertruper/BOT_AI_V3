@@ -7,8 +7,9 @@ Create Date: 2025-08-02 00:35:01.954779
 """
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "e72e5072a1bc"
@@ -46,12 +47,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("symbol"),
     )
-    op.create_index(
-        "idx_snapshot_symbol", "market_data_snapshots", ["symbol"], unique=False
-    )
-    op.create_index(
-        "idx_snapshot_updated", "market_data_snapshots", ["updated_at"], unique=False
-    )
+    op.create_index("idx_snapshot_symbol", "market_data_snapshots", ["symbol"], unique=False)
+    op.create_index("idx_snapshot_updated", "market_data_snapshots", ["updated_at"], unique=False)
     op.create_table(
         "raw_market_data",
         sa.Column("id", sa.BigInteger(), nullable=False),
@@ -107,9 +104,7 @@ def upgrade() -> None:
         ["datetime"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_raw_market_data_symbol"), "raw_market_data", ["symbol"], unique=False
-    )
+    op.create_index(op.f("ix_raw_market_data_symbol"), "raw_market_data", ["symbol"], unique=False)
     op.create_index(
         op.f("ix_raw_market_data_timestamp"),
         "raw_market_data",
@@ -205,9 +200,7 @@ def upgrade() -> None:
             postgresql.JSONB(astext_type=sa.Text()),
             nullable=True,
         ),
-        sa.Column(
-            "ml_features", postgresql.JSONB(astext_type=sa.Text()), nullable=True
-        ),
+        sa.Column("ml_features", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("direction_15m", sa.Integer(), nullable=True),
         sa.Column("direction_1h", sa.Integer(), nullable=True),
         sa.Column("direction_4h", sa.Integer(), nullable=True),
@@ -238,9 +231,7 @@ def upgrade() -> None:
             ["raw_market_data.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "symbol", "timestamp", name="_symbol_timestamp_processed_uc"
-        ),
+        sa.UniqueConstraint("symbol", "timestamp", name="_symbol_timestamp_processed_uc"),
     )
     op.create_index(
         "idx_processed_market_data_directions",
@@ -332,9 +323,7 @@ def downgrade() -> None:
     )
     op.add_column(
         "trades",
-        sa.Column(
-            "model_name", sa.VARCHAR(length=100), autoincrement=False, nullable=True
-        ),
+        sa.Column("model_name", sa.VARCHAR(length=100), autoincrement=False, nullable=True),
     )
     op.add_column(
         "trades",
@@ -347,9 +336,7 @@ def downgrade() -> None:
     )
     op.add_column(
         "trades",
-        sa.Column(
-            "session_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True
-        ),
+        sa.Column("session_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True),
     )
     op.add_column(
         "signals",
@@ -371,9 +358,7 @@ def downgrade() -> None:
     )
     op.add_column(
         "orders",
-        sa.Column(
-            "sl_order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True
-        ),
+        sa.Column("sl_order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True),
     )
     op.add_column(
         "orders",
@@ -395,23 +380,17 @@ def downgrade() -> None:
     )
     op.add_column(
         "orders",
-        sa.Column(
-            "tp_order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True
-        ),
+        sa.Column("tp_order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True),
     )
     op.add_column(
         "orders",
-        sa.Column(
-            "trigger_by", sa.VARCHAR(length=50), autoincrement=False, nullable=True
-        ),
+        sa.Column("trigger_by", sa.VARCHAR(length=50), autoincrement=False, nullable=True),
     )
     op.create_table(
         "bybit_closed_pnl",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
         sa.Column("symbol", sa.VARCHAR(length=50), autoincrement=False, nullable=False),
-        sa.Column(
-            "order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=False
-        ),
+        sa.Column("order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=False),
         sa.Column("side", sa.VARCHAR(length=10), autoincrement=False, nullable=False),
         sa.Column(
             "qty",
@@ -450,12 +429,8 @@ def downgrade() -> None:
             autoincrement=False,
             nullable=True,
         ),
-        sa.Column(
-            "created_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=False
-        ),
-        sa.Column(
-            "updated_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
-        ),
+        sa.Column("created_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=False),
+        sa.Column("updated_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("bybit_closed_pnl_pkey")),
     )
     op.create_table(
@@ -505,12 +480,8 @@ def downgrade() -> None:
             autoincrement=False,
             nullable=True,
         ),
-        sa.Column(
-            "position_status", sa.VARCHAR(length=50), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "adl_rank_indicator", sa.INTEGER(), autoincrement=False, nullable=True
-        ),
+        sa.Column("position_status", sa.VARCHAR(length=50), autoincrement=False, nullable=True),
+        sa.Column("adl_rank_indicator", sa.INTEGER(), autoincrement=False, nullable=True),
         sa.Column("position_idx", sa.INTEGER(), autoincrement=False, nullable=True),
         sa.Column(
             "position_mm",
@@ -554,12 +525,8 @@ def downgrade() -> None:
             autoincrement=False,
             nullable=True,
         ),
-        sa.Column(
-            "created_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "updated_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
-        ),
+        sa.Column("created_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=True),
+        sa.Column("updated_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=True),
         sa.Column(
             "snapshot_time",
             postgresql.TIMESTAMP(),
@@ -587,12 +554,8 @@ def downgrade() -> None:
             autoincrement=False,
             nullable=True,
         ),
-        sa.Column(
-            "sl_order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "tp_order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True
-        ),
+        sa.Column("sl_order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True),
+        sa.Column("tp_order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True),
         sa.Column(
             "status",
             sa.VARCHAR(length=50),
@@ -703,20 +666,12 @@ def downgrade() -> None:
     op.create_table(
         "trading_sessions",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column(
-            "session_id", sa.VARCHAR(length=100), autoincrement=False, nullable=False
-        ),
-        sa.Column(
-            "started_at", postgresql.TIMESTAMP(), autoincrement=False, nullable=False
-        ),
-        sa.Column(
-            "ended_at", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
-        ),
+        sa.Column("session_id", sa.VARCHAR(length=100), autoincrement=False, nullable=False),
+        sa.Column("started_at", postgresql.TIMESTAMP(), autoincrement=False, nullable=False),
+        sa.Column("ended_at", postgresql.TIMESTAMP(), autoincrement=False, nullable=True),
         sa.Column("status", sa.VARCHAR(length=50), autoincrement=False, nullable=True),
         sa.Column("total_trades", sa.INTEGER(), autoincrement=False, nullable=True),
-        sa.Column(
-            "profitable_trades", sa.INTEGER(), autoincrement=False, nullable=True
-        ),
+        sa.Column("profitable_trades", sa.INTEGER(), autoincrement=False, nullable=True),
         sa.Column(
             "total_pnl",
             sa.DOUBLE_PRECISION(precision=53),
@@ -760,9 +715,7 @@ def downgrade() -> None:
     op.create_table(
         "bybit_wallet_balance",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column(
-            "account_type", sa.VARCHAR(length=50), autoincrement=False, nullable=False
-        ),
+        sa.Column("account_type", sa.VARCHAR(length=50), autoincrement=False, nullable=False),
         sa.Column("coin", sa.VARCHAR(length=20), autoincrement=False, nullable=False),
         sa.Column(
             "wallet_balance",
@@ -831,12 +784,8 @@ def downgrade() -> None:
         "bybit_trade_history",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
         sa.Column("symbol", sa.VARCHAR(length=50), autoincrement=False, nullable=False),
-        sa.Column(
-            "order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=False
-        ),
-        sa.Column(
-            "order_link_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True
-        ),
+        sa.Column("order_id", sa.VARCHAR(length=100), autoincrement=False, nullable=False),
+        sa.Column("order_link_id", sa.VARCHAR(length=100), autoincrement=False, nullable=True),
         sa.Column("side", sa.VARCHAR(length=10), autoincrement=False, nullable=False),
         sa.Column(
             "price",
@@ -850,24 +799,12 @@ def downgrade() -> None:
             autoincrement=False,
             nullable=False,
         ),
-        sa.Column(
-            "fee", sa.DOUBLE_PRECISION(precision=53), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "fee_currency", sa.VARCHAR(length=20), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "order_type", sa.VARCHAR(length=50), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "stop_order_type", sa.VARCHAR(length=50), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "created_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=False
-        ),
-        sa.Column(
-            "updated_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
-        ),
+        sa.Column("fee", sa.DOUBLE_PRECISION(precision=53), autoincrement=False, nullable=True),
+        sa.Column("fee_currency", sa.VARCHAR(length=20), autoincrement=False, nullable=True),
+        sa.Column("order_type", sa.VARCHAR(length=50), autoincrement=False, nullable=True),
+        sa.Column("stop_order_type", sa.VARCHAR(length=50), autoincrement=False, nullable=True),
+        sa.Column("created_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=False),
+        sa.Column("updated_time", postgresql.TIMESTAMP(), autoincrement=False, nullable=True),
         sa.Column("is_maker", sa.BOOLEAN(), autoincrement=False, nullable=True),
         sa.Column("reduce_only", sa.BOOLEAN(), autoincrement=False, nullable=True),
         sa.Column("close_on_trigger", sa.BOOLEAN(), autoincrement=False, nullable=True),
@@ -895,9 +832,7 @@ def downgrade() -> None:
             autoincrement=False,
             nullable=True,
         ),
-        sa.Column(
-            "trigger_by", sa.VARCHAR(length=50), autoincrement=False, nullable=True
-        ),
+        sa.Column("trigger_by", sa.VARCHAR(length=50), autoincrement=False, nullable=True),
         sa.Column(
             "imported_at",
             postgresql.TIMESTAMP(),
@@ -913,36 +848,20 @@ def downgrade() -> None:
             postgresql_nulls_not_distinct=False,
         ),
     )
-    op.drop_index(
-        op.f("ix_processed_market_data_timestamp"), table_name="processed_market_data"
-    )
-    op.drop_index(
-        op.f("ix_processed_market_data_symbol"), table_name="processed_market_data"
-    )
-    op.drop_index(
-        op.f("ix_processed_market_data_datetime"), table_name="processed_market_data"
-    )
+    op.drop_index(op.f("ix_processed_market_data_timestamp"), table_name="processed_market_data")
+    op.drop_index(op.f("ix_processed_market_data_symbol"), table_name="processed_market_data")
+    op.drop_index(op.f("ix_processed_market_data_datetime"), table_name="processed_market_data")
     op.drop_index(
         "idx_processed_technical_indicators",
         table_name="processed_market_data",
         postgresql_using="gin",
     )
-    op.drop_index(
-        "idx_processed_market_data_symbol_datetime", table_name="processed_market_data"
-    )
-    op.drop_index(
-        "idx_processed_market_data_directions", table_name="processed_market_data"
-    )
+    op.drop_index("idx_processed_market_data_symbol_datetime", table_name="processed_market_data")
+    op.drop_index("idx_processed_market_data_directions", table_name="processed_market_data")
     op.drop_table("processed_market_data")
-    op.drop_index(
-        op.f("ix_technical_indicators_timestamp"), table_name="technical_indicators"
-    )
-    op.drop_index(
-        op.f("ix_technical_indicators_symbol"), table_name="technical_indicators"
-    )
-    op.drop_index(
-        "idx_technical_indicators_symbol_datetime", table_name="technical_indicators"
-    )
+    op.drop_index(op.f("ix_technical_indicators_timestamp"), table_name="technical_indicators")
+    op.drop_index(op.f("ix_technical_indicators_symbol"), table_name="technical_indicators")
+    op.drop_index("idx_technical_indicators_symbol_datetime", table_name="technical_indicators")
     op.drop_table("technical_indicators")
     op.drop_index(op.f("ix_raw_market_data_timestamp"), table_name="raw_market_data")
     op.drop_index(op.f("ix_raw_market_data_symbol"), table_name="raw_market_data")

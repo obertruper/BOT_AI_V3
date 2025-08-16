@@ -15,7 +15,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -70,19 +70,15 @@ class MLTraderCreator:
 
         logger.info("✅ ML стратегия зарегистрирована")
 
-    async def create_trader_config(self) -> Dict[str, Any]:
+    async def create_trader_config(self) -> dict[str, Any]:
         """Создание конфигурации для ML трейдера"""
         config = {
             "trader_id": self.trader_id,
             "enabled": True,
             "exchange": "bybit",
             "exchange_config": {
-                "api_key": self.config_manager.get_config(
-                    "exchanges.bybit.api_key", ""
-                ),
-                "api_secret": self.config_manager.get_config(
-                    "exchanges.bybit.api_secret", ""
-                ),
+                "api_key": self.config_manager.get_config("exchanges.bybit.api_key", ""),
+                "api_secret": self.config_manager.get_config("exchanges.bybit.api_secret", ""),
                 "testnet": True,  # Используем testnet для безопасности
                 "market_type": "spot",
             },

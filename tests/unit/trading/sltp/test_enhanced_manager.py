@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Unit tests for Enhanced SL/TP Manager
 """
@@ -91,12 +90,8 @@ class TestEnhancedSLTPManager:
     def mock_exchange_client(self):
         """Mock для exchange client"""
         client = Mock()
-        client.set_stop_loss = AsyncMock(
-            return_value=Mock(success=True, order_id="sl_123")
-        )
-        client.set_take_profit = AsyncMock(
-            return_value=Mock(success=True, order_id="tp_123")
-        )
+        client.set_stop_loss = AsyncMock(return_value=Mock(success=True, order_id="sl_123"))
+        client.set_take_profit = AsyncMock(return_value=Mock(success=True, order_id="tp_123"))
         return client
 
     @pytest.fixture
@@ -106,9 +101,7 @@ class TestEnhancedSLTPManager:
         return manager
 
     @pytest.mark.asyncio
-    async def test_create_sltp_orders_with_custom_config(
-        self, sltp_manager, mock_exchange_client
-    ):
+    async def test_create_sltp_orders_with_custom_config(self, sltp_manager, mock_exchange_client):
         """Тест создания SL/TP ордеров с пользовательской конфигурацией"""
         # Arrange
         sltp_manager.exchange_client = mock_exchange_client
@@ -146,9 +139,7 @@ class TestEnhancedSLTPManager:
         )
 
     @pytest.mark.asyncio
-    async def test_create_sltp_orders_with_percentages(
-        self, sltp_manager, mock_exchange_client
-    ):
+    async def test_create_sltp_orders_with_percentages(self, sltp_manager, mock_exchange_client):
         """Тест создания SL/TP ордеров с процентами"""
         # Arrange
         sltp_manager.exchange_client = mock_exchange_client
@@ -171,9 +162,7 @@ class TestEnhancedSLTPManager:
         assert orders[1].trigger_price == 52000  # +4%
 
     @pytest.mark.asyncio
-    async def test_create_sltp_orders_for_short_position(
-        self, sltp_manager, mock_exchange_client
-    ):
+    async def test_create_sltp_orders_for_short_position(self, sltp_manager, mock_exchange_client):
         """Тест создания SL/TP для короткой позиции"""
         # Arrange
         sltp_manager.exchange_client = mock_exchange_client
@@ -206,9 +195,7 @@ class TestEnhancedSLTPManager:
         sltp_manager.active_positions[position_id] = Mock(
             entry_price=entry_price, highest_price=entry_price
         )
-        sltp_manager.active_sl_orders[position_id] = Mock(
-            trigger_price=49000, is_trailing=True
-        )
+        sltp_manager.active_sl_orders[position_id] = Mock(trigger_price=49000, is_trailing=True)
 
         # Act - цена выросла до 51000 (+2%)
         updated = await sltp_manager.update_trailing_stop(position_id, 51000)
@@ -218,9 +205,9 @@ class TestEnhancedSLTPManager:
         assert sltp_manager.active_positions[position_id].highest_price == 51000
         # SL должен подняться до 50500 (51000 - 0.5%)
         expected_new_sl = 51000 * (1 - 0.005)
-        assert sltp_manager.active_sl_orders[
-            position_id
-        ].trigger_price == pytest.approx(expected_new_sl)
+        assert sltp_manager.active_sl_orders[position_id].trigger_price == pytest.approx(
+            expected_new_sl
+        )
 
     @pytest.mark.asyncio
     async def test_check_partial_tp(self, sltp_manager, mock_config_manager):
@@ -234,9 +221,7 @@ class TestEnhancedSLTPManager:
         position.side = "Buy"
 
         sltp_manager.active_positions[position.id] = position
-        sltp_manager.partial_tp_config = mock_config_manager.get_sltp_config()[
-            "partial_tp"
-        ]
+        sltp_manager.partial_tp_config = mock_config_manager.get_sltp_config()["partial_tp"]
         sltp_manager.partial_tp_executed = {position.id: []}
 
         # Act - цена достигла первого уровня TP (+2%)
@@ -253,12 +238,8 @@ class TestEnhancedSLTPManager:
         position_id = "BTCUSDT_Buy"
         entry_price = 50000
 
-        sltp_manager.active_positions[position_id] = Mock(
-            entry_price=entry_price, side="Buy"
-        )
-        sltp_manager.active_sl_orders[position_id] = Mock(
-            trigger_price=49000, original_price=49000
-        )
+        sltp_manager.active_positions[position_id] = Mock(entry_price=entry_price, side="Buy")
+        sltp_manager.active_sl_orders[position_id] = Mock(trigger_price=49000, original_price=49000)
 
         # Act - цена выросла до 51000 (+2%, выше порога активации 1.5%)
         updated = await sltp_manager.update_profit_protection(position_id, 51000)
@@ -267,9 +248,9 @@ class TestEnhancedSLTPManager:
         assert updated is True
         # SL должен подняться до уровня защиты прибыли
         expected_protection_level = entry_price * (1 + 0.008)
-        assert sltp_manager.active_sl_orders[
-            position_id
-        ].trigger_price == pytest.approx(expected_protection_level)
+        assert sltp_manager.active_sl_orders[position_id].trigger_price == pytest.approx(
+            expected_protection_level
+        )
 
     @pytest.mark.asyncio
     async def test_register_sltp_orders(self, sltp_manager):

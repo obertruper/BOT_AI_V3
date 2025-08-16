@@ -18,9 +18,9 @@ from .event_bridge import EventBridge
 from .web_integration import WebIntegration
 
 __all__ = [
-    "WebIntegration",
-    "EventBridge",
     "DataAdapters",
+    "EventBridge",
+    "WebIntegration",
     # "Dependencies",
     # "PermissionManager",
 ]

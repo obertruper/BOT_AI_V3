@@ -45,9 +45,7 @@ def setup_file_handler(logger, filename, level=logging.INFO):
         backupCount=5,
         encoding="utf-8",  # 10MB
     )
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     handler.setLevel(level)
     logger.addHandler(handler)
@@ -269,8 +267,7 @@ class LogGenerator:
                 )
             else:
                 trading_logger.info(
-                    f"Trading event: {event_type} for {symbol} on {exchange}. "
-                    f"Strategy: {strategy}"
+                    f"Trading event: {event_type} for {symbol} on {exchange}. Strategy: {strategy}"
                 )
 
             await asyncio.sleep(0.1)
@@ -335,9 +332,7 @@ async def main():
         print(f"  - {log_file.name}: {size:.2f} KB")
 
     if (log_dir / "structured.json").exists():
-        print(
-            f"  - structured.json: {(log_dir / 'structured.json').stat().st_size / 1024:.2f} KB"
-        )
+        print(f"  - structured.json: {(log_dir / 'structured.json').stat().st_size / 1024:.2f} KB")
 
 
 if __name__ == "__main__":

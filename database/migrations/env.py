@@ -6,8 +6,9 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 # Добавляем корневую директорию проекта в sys.path
 sys.path.append(str(Path(__file__).parent.parent.parent))

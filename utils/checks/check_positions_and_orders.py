@@ -116,9 +116,7 @@ async def main():
                                 print(
                                     f"   - Unrealized PnL: {coin_info.get('unrealisedPnl', 'N/A')}"
                                 )
-                                print(
-                                    f"   - Used margin: {coin_info.get('usedMargin', 'N/A')}"
-                                )
+                                print(f"   - Used margin: {coin_info.get('usedMargin', 'N/A')}")
 
         except Exception as e:
             print(f"   Ошибка API: {e}")

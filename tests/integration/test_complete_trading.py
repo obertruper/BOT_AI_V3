@@ -89,22 +89,12 @@ async def test_complete_trading():
     # Расчет позиции (метод из V2)
     print("\n4. Расчет размера позиции (метод V2)...")
     fixed_balance = Decimal(
-        str(
-            config.get("trading", {})
-            .get("risk_management", {})
-            .get("fixed_risk_balance", 500)
-        )
+        str(config.get("trading", {}).get("risk_management", {}).get("fixed_risk_balance", 500))
     )
     risk_per_trade = Decimal(
-        str(
-            config.get("trading", {})
-            .get("risk_management", {})
-            .get("risk_per_trade", 0.02)
-        )
+        str(config.get("trading", {}).get("risk_management", {}).get("risk_per_trade", 0.02))
     )
-    leverage = Decimal(
-        str(config.get("trading", {}).get("orders", {}).get("default_leverage", 5))
-    )
+    leverage = Decimal(str(config.get("trading", {}).get("orders", {}).get("default_leverage", 5)))
 
     position_value_usd = fixed_balance * risk_per_trade * leverage
     position_size = float(position_value_usd / Decimal(str(current_price)))
@@ -211,9 +201,7 @@ async def test_complete_trading():
                         print(f"   Take Profit: ${pos.take_profit} ✓")
                         print(f"   Unrealized P&L: ${pos.unrealized_pnl}")
             else:
-                print(
-                    f"\n❌ Ошибка создания ордера: {response.error if response else 'Unknown'}"
-                )
+                print(f"\n❌ Ошибка создания ордера: {response.error if response else 'Unknown'}")
 
         except Exception as e:
             print(f"\n❌ Ошибка: {e}")

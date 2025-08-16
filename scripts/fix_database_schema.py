@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Скрипт исправления схемы базы данных
 Добавляет недостающие колонки и исправляет проблемы совместимости
@@ -103,9 +102,7 @@ class DatabaseSchemaFixer:
                     """
                     )
                     print(f"      ✅ Колонка '{column_name}' добавлена")
-                    self.fixes_applied.append(
-                        f"Added '{column_name}' column to signals table"
-                    )
+                    self.fixes_applied.append(f"Added '{column_name}' column to signals table")
                 else:
                     print(f"      ✅ Колонка '{column_name}' уже существует")
 
@@ -147,9 +144,7 @@ class DatabaseSchemaFixer:
                 )
 
                 print("   ✅ Записи исправлены")
-                self.fixes_applied.append(
-                    f"Fixed {null_side_count} signals with null side"
-                )
+                self.fixes_applied.append(f"Fixed {null_side_count} signals with null side")
             else:
                 print("   ✅ Все записи имеют корректный side")
 
@@ -194,9 +189,7 @@ class DatabaseSchemaFixer:
 
                 except Exception as e:
                     print(f"   ❌ Ошибка создания индекса '{index_name}': {e}")
-                    self.errors_found.append(
-                        f"Index '{index_name}' creation error: {e}"
-                    )
+                    self.errors_found.append(f"Index '{index_name}' creation error: {e}")
 
         except Exception as e:
             print(f"   ❌ Ошибка создания индексов: {e}")
@@ -245,9 +238,7 @@ class DatabaseSchemaFixer:
                 print("   ✅ Все сигналы имеют корректный side")
                 self.fixes_applied.append("All signals have valid side values")
             else:
-                print(
-                    f"   ⚠️ {signals_count - valid_side_count} сигналов требуют исправления"
-                )
+                print(f"   ⚠️ {signals_count - valid_side_count} сигналов требуют исправления")
                 self.errors_found.append(
                     f"{signals_count - valid_side_count} signals need side fix"
                 )
@@ -270,9 +261,7 @@ class DatabaseSchemaFixer:
         }
 
         # Сохраняем отчет
-        report_file = (
-            f"logs/schema_fix_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        )
+        report_file = f"logs/schema_fix_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(report_file, "w", encoding="utf-8") as f:
             import json
 
@@ -300,9 +289,7 @@ class DatabaseSchemaFixer:
             print("\n🔧 РЕКОМЕНДАЦИИ:")
             print("   1. Проверьте логи на наличие ошибок")
             print("   2. Перезапустите систему торговли")
-            print(
-                "   3. Запустите мониторинг: python scripts/monitor_system_enhanced.py"
-            )
+            print("   3. Запустите мониторинг: python scripts/monitor_system_enhanced.py")
         else:
             print("\n🎉 Все проблемы исправлены! Система готова к работе.")
 

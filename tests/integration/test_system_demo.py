@@ -70,22 +70,12 @@ async def demonstrate_position_calculation():
 
     # Параметры из конфига
     fixed_balance = Decimal(
-        str(
-            config.get("trading", {})
-            .get("risk_management", {})
-            .get("fixed_risk_balance", 500)
-        )
+        str(config.get("trading", {}).get("risk_management", {}).get("fixed_risk_balance", 500))
     )
     risk_per_trade = Decimal(
-        str(
-            config.get("trading", {})
-            .get("risk_management", {})
-            .get("risk_per_trade", 0.02)
-        )
+        str(config.get("trading", {}).get("risk_management", {}).get("risk_per_trade", 0.02))
     )
-    leverage = Decimal(
-        str(config.get("trading", {}).get("orders", {}).get("default_leverage", 5))
-    )
+    leverage = Decimal(str(config.get("trading", {}).get("orders", {}).get("default_leverage", 5)))
 
     # Пример расчета для BTC по $45000
     entry_price = Decimal("45000")

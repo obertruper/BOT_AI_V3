@@ -5,7 +5,7 @@ ML-специфичные fixtures и mock данные для тестиров�
 import pickle
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,7 @@ class MLFixtures:
     """Класс с ML fixtures для тестирования"""
 
     @staticmethod
-    def create_mock_model_files(directory: Path, symbols: List[str] = None):
+    def create_mock_model_files(directory: Path, symbols: list[str] = None):
         """Создание mock файлов моделей"""
         if symbols is None:
             symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
@@ -65,9 +65,7 @@ class MLFixtures:
                 pickle.dump(scaler, f)
 
     @staticmethod
-    def generate_feature_data(
-        n_samples: int = 96, n_features: int = 240
-    ) -> pd.DataFrame:
+    def generate_feature_data(n_samples: int = 96, n_features: int = 240) -> pd.DataFrame:
         """Генерация данных с признаками для ML"""
         # Базовые временные метки
         timestamps = pd.date_range(end=datetime.now(), periods=n_samples, freq="15min")
@@ -137,7 +135,7 @@ class MLFixtures:
         return outputs
 
     @staticmethod
-    def create_training_dataset(n_samples: int = 1000) -> Dict[str, Any]:
+    def create_training_dataset(n_samples: int = 1000) -> dict[str, Any]:
         """Создание тренировочного датасета"""
         # Генерируем OHLCV данные
         dates = pd.date_range(end=datetime.now(), periods=n_samples, freq="15min")
@@ -178,15 +176,13 @@ class MLFixtures:
 
         # Risk metrics
         for horizon in ["1h", "4h"]:
-            targets[f"max_drawdown_{horizon}"] = (
-                np.abs(np.random.randn(n_samples)) * 0.03
-            )
+            targets[f"max_drawdown_{horizon}"] = np.abs(np.random.randn(n_samples)) * 0.03
             targets[f"max_rally_{horizon}"] = np.abs(np.random.randn(n_samples)) * 0.03
 
         return {"ohlcv": ohlcv_data, "features": features, "targets": targets}
 
     @staticmethod
-    def create_mock_ml_pipeline_data() -> Dict[str, Any]:
+    def create_mock_ml_pipeline_data() -> dict[str, Any]:
         """Создание данных для тестирования ML pipeline"""
         return {
             "raw_market_data": {
@@ -218,9 +214,7 @@ class MLFixtures:
         }
 
     @staticmethod
-    def create_backtesting_data(
-        symbol: str = "BTCUSDT", days: int = 30
-    ) -> pd.DataFrame:
+    def create_backtesting_data(symbol: str = "BTCUSDT", days: int = 30) -> pd.DataFrame:
         """Создание данных для бэктестинга"""
         # Генерируем реалистичные OHLCV данные
         n_candles = days * 24 * 4  # 15-минутные свечи
@@ -246,9 +240,7 @@ class MLFixtures:
         data["high"] = data[["open", "close"]].max(axis=1) + np.abs(
             np.random.randn(n_candles) * 100
         )
-        data["low"] = data[["open", "close"]].min(axis=1) - np.abs(
-            np.random.randn(n_candles) * 100
-        )
+        data["low"] = data[["open", "close"]].min(axis=1) - np.abs(np.random.randn(n_candles) * 100)
 
         # Объем с дневной сезонностью
         hour_of_day = dates.hour
@@ -258,7 +250,7 @@ class MLFixtures:
         return data
 
     @staticmethod
-    def create_mock_exchange_data() -> Dict[str, Any]:
+    def create_mock_exchange_data() -> dict[str, Any]:
         """Создание mock данных биржи"""
         return {
             "orderbook": {

@@ -11,7 +11,7 @@
 import asyncio
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # Добавляем корневую директорию в путь
@@ -75,9 +75,7 @@ async def test_system():
         print(f"   {Fore.GREEN}✓{Style.RESET_ALL} PostgreSQL подключен (порт 5555)")
 
         # Проверка данных
-        data_count = await AsyncPGPool.fetch(
-            "SELECT COUNT(*) as cnt FROM raw_market_data"
-        )
+        data_count = await AsyncPGPool.fetch("SELECT COUNT(*) as cnt FROM raw_market_data")
         print(f"   • Записей в БД: {data_count[0]['cnt']}")
 
     except Exception as e:
@@ -91,9 +89,7 @@ async def test_system():
 
         client = await exchange_factory.create_exchange_client("bybit")
         if client:
-            print(
-                f"   {Fore.GREEN}✓{Style.RESET_ALL} Bybit клиент создан и аутентифицирован"
-            )
+            print(f"   {Fore.GREEN}✓{Style.RESET_ALL} Bybit клиент создан и аутентифицирован")
 
             # Проверка баланса
             try:
@@ -105,23 +101,17 @@ async def test_system():
                         amount = getattr(
                             balance,
                             "free",
-                            getattr(
-                                balance, "balance", getattr(balance, "available", 0)
-                            ),
+                            getattr(balance, "balance", getattr(balance, "available", 0)),
                         )
                         currency = getattr(
                             balance,
                             "currency",
-                            getattr(
-                                balance, "coin", getattr(balance, "asset", "UNKNOWN")
-                            ),
+                            getattr(balance, "coin", getattr(balance, "asset", "UNKNOWN")),
                         )
                         if amount > 0:
                             print(f"   • {currency}: {amount:.4f}")
             except Exception as e:
-                print(
-                    f"   {Fore.YELLOW}⚠{Style.RESET_ALL} Не удалось получить баланс: {e}"
-                )
+                print(f"   {Fore.YELLOW}⚠{Style.RESET_ALL} Не удалось получить баланс: {e}")
 
             # Закрываем соединение (если метод существует)
             if hasattr(client, "disconnect"):
@@ -146,9 +136,7 @@ async def test_system():
         print(
             f"   • Автообновление: {'Включено' if data_manager.data_config['auto_update'] else 'Отключено'}"
         )
-        print(
-            f"   • Интервал: {data_manager.data_config['update_interval'] / 60:.1f} минут"
-        )
+        print(f"   • Интервал: {data_manager.data_config['update_interval'] / 60:.1f} минут")
         print(f"   • Торговых пар: {len(data_manager.trading_pairs)}")
 
         # Проверка актуальности данных
@@ -157,11 +145,10 @@ async def test_system():
             latest_time = await data_manager._get_latest_data_time(symbol)
             if latest_time:
                 # Убеждаемся что оба времени в одном timezone
-                from datetime import timezone
 
                 if latest_time.tzinfo is None:
-                    latest_time = latest_time.replace(tzinfo=timezone.utc)
-                now = datetime.now(timezone.utc)
+                    latest_time = latest_time.replace(tzinfo=UTC)
+                now = datetime.now(UTC)
                 age = now - latest_time
                 if age < timedelta(hours=1):
                     print(
@@ -193,9 +180,7 @@ async def test_system():
             print(f"   {Fore.YELLOW}⚠{Style.RESET_ALL} ML модель не загружена")
 
     except Exception as e:
-        print(
-            f"   {Fore.YELLOW}⚠{Style.RESET_ALL} ML компоненты не инициализированы: {e}"
-        )
+        print(f"   {Fore.YELLOW}⚠{Style.RESET_ALL} ML компоненты не инициализированы: {e}")
 
     # 7. Проверка Trading Engine
     print(f"\n{Fore.YELLOW}7. Проверка Trading Engine...{Style.RESET_ALL}")
@@ -214,13 +199,9 @@ async def test_system():
 
     print(f"\n{Fore.YELLOW}📝 Рекомендации:{Style.RESET_ALL}")
     print(f"1. Запустить систему: {Fore.CYAN}./start_with_logs.sh{Style.RESET_ALL}")
-    print(
-        f"2. Мониторинг логов: {Fore.CYAN}tail -f data/logs/bot_trading_*.log{Style.RESET_ALL}"
-    )
+    print(f"2. Мониторинг логов: {Fore.CYAN}tail -f data/logs/bot_trading_*.log{Style.RESET_ALL}")
     print(f"3. Веб-интерфейс: {Fore.CYAN}http://localhost:5173{Style.RESET_ALL}")
-    print(
-        f"4. API документация: {Fore.CYAN}http://localhost:8080/api/docs{Style.RESET_ALL}"
-    )
+    print(f"4. API документация: {Fore.CYAN}http://localhost:8080/api/docs{Style.RESET_ALL}")
 
     return True
 

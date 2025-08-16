@@ -13,7 +13,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 from colorama import Fore, Style, init
@@ -37,9 +37,7 @@ class ConfigChecker:
 
     async def check_all(self):
         """Проверка всей конфигурации"""
-        print(
-            f"\n{Fore.CYAN}=== Проверка конфигурации BOT_AI_V3 ==={Style.RESET_ALL}\n"
-        )
+        print(f"\n{Fore.CYAN}=== Проверка конфигурации BOT_AI_V3 ==={Style.RESET_ALL}\n")
 
         # Инициализация конфигурации
         try:
@@ -53,9 +51,7 @@ class ConfigChecker:
         config_info = self.config_manager.get_config_info()
         if config_info:
             print(f"\n📁 Путь конфигурации: {config_info.path}")
-            print(
-                f"📅 Загружена: {config_info.loaded_at.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
+            print(f"📅 Загружена: {config_info.loaded_at.strftime('%Y-%m-%d %H:%M:%S')}")
 
         # Системная конфигурация
         self._check_system_config()
@@ -162,9 +158,7 @@ class ConfigChecker:
 
         # Вывод предупреждений
         if warnings:
-            print(
-                f"\n{Fore.YELLOW}⚠️ Предупреждения ({len(warnings)}):{Style.RESET_ALL}"
-            )
+            print(f"\n{Fore.YELLOW}⚠️ Предупреждения ({len(warnings)}):{Style.RESET_ALL}")
             for result in warnings:
                 print(f"  - [{result.field}] {result.message}")
                 if result.suggestion:
@@ -214,7 +208,7 @@ class ConfigChecker:
                 if result.suggestion:
                     print(f"  💡 {result.suggestion}")
 
-    def _print_config(self, config: Dict[str, Any], indent: int = 0):
+    def _print_config(self, config: dict[str, Any], indent: int = 0):
         """Рекурсивный вывод конфигурации"""
         for key, value in config.items():
             prefix = "  " * indent
@@ -236,7 +230,7 @@ class ConfigChecker:
         print(f"\n{Fore.CYAN}=== Валидация файла: {file_path} ==={Style.RESET_ALL}\n")
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             print(f"{Fore.GREEN}✅ YAML синтаксис корректен{Style.RESET_ALL}")

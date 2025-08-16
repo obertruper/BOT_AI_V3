@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Настройка логирования
 logging.basicConfig(
@@ -54,10 +54,10 @@ class TestResult:
     name: str
     status: TestStatus
     duration: float
-    screenshot_path: Optional[str] = None
-    error_message: Optional[str] = None
-    performance_metrics: Optional[Dict[str, Any]] = None
-    details: Optional[Dict[str, Any]] = None
+    screenshot_path: str | None = None
+    error_message: str | None = None
+    performance_metrics: dict[str, Any] | None = None
+    details: dict[str, Any] | None = None
 
 
 @dataclass
@@ -65,10 +65,10 @@ class TestSuite:
     """Набор тестов"""
 
     name: str
-    tests: List[TestResult]
+    tests: list[TestResult]
     device: str
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
 
     @property
     def duration(self) -> float:
@@ -98,7 +98,7 @@ class WebTestAgent:
         for dir_path in [self.results_dir, self.screenshots_dir, self.reports_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
-        self.test_suites: List[TestSuite] = []
+        self.test_suites: list[TestSuite] = []
         self.current_device = DeviceType.DESKTOP
 
         # Конфигурация тестов
@@ -115,7 +115,7 @@ class WebTestAgent:
 
         logger.info(f"WebTestAgent инициализирован для {base_url}")
 
-    async def run_full_test_suite(self) -> Dict[str, Any]:
+    async def run_full_test_suite(self) -> dict[str, Any]:
         """Запуск полного набора тестов для всех устройств"""
         logger.info("🚀 Запуск полного набора тестов WebTestAgent")
 
@@ -227,9 +227,7 @@ class WebTestAgent:
                 },
             )
 
-            logger.info(
-                f"📐 Установлен viewport {device.value['width']}x{device.value['height']}"
-            )
+            logger.info(f"📐 Установлен viewport {device.value['width']}x{device.value['height']}")
 
         except ImportError:
             # Fallback если MCP не доступен
@@ -287,7 +285,7 @@ class WebTestAgent:
                 name="dashboard_load",
                 status=TestStatus.FAILED,
                 duration=duration,
-                error_message=f"Ошибка загрузки dashboard: {str(e)}",
+                error_message=f"Ошибка загрузки dashboard: {e!s}",
             )
 
     async def _test_navigation(self) -> TestResult:
@@ -323,7 +321,7 @@ class WebTestAgent:
                         failed_navigations.append(page_name)
 
                 except Exception as nav_error:
-                    failed_navigations.append(f"{page_name}: {str(nav_error)}")
+                    failed_navigations.append(f"{page_name}: {nav_error!s}")
 
             duration = time.time() - start_time
 
@@ -356,7 +354,7 @@ class WebTestAgent:
                 name="navigation",
                 status=TestStatus.FAILED,
                 duration=duration,
-                error_message=f"Критическая ошибка навигации: {str(e)}",
+                error_message=f"Критическая ошибка навигации: {e!s}",
             )
 
     async def _test_traders_page(self) -> TestResult:
@@ -393,7 +391,7 @@ class WebTestAgent:
                 else:
                     interactive_tests.append("refresh_button: NOT_FOUND")
             except Exception as e:
-                interactive_tests.append(f"refresh_button: ERROR - {str(e)}")
+                interactive_tests.append(f"refresh_button: ERROR - {e!s}")
 
             duration = time.time() - start_time
 
@@ -423,7 +421,7 @@ class WebTestAgent:
                 name="traders_page",
                 status=TestStatus.FAILED,
                 duration=duration,
-                error_message=f"Ошибка тестирования страницы трейдеров: {str(e)}",
+                error_message=f"Ошибка тестирования страницы трейдеров: {e!s}",
             )
 
     async def _test_websocket_connection(self) -> TestResult:
@@ -481,10 +479,8 @@ class WebTestAgent:
 
             # Анализ результатов
             connection_working = (
-                ws_status
-                and "подключено" in ws_status.lower()
-                or js_ws_test.get("status") == "connected"
-            )
+                ws_status and "подключено" in ws_status.lower()
+            ) or js_ws_test.get("status") == "connected"
 
             if connection_working:
                 return TestResult(
@@ -510,7 +506,7 @@ class WebTestAgent:
                 name="websocket_connection",
                 status=TestStatus.FAILED,
                 duration=duration,
-                error_message=f"Ошибка тестирования WebSocket: {str(e)}",
+                error_message=f"Ошибка тестирования WebSocket: {e!s}",
             )
 
     async def _test_responsive_design(self) -> TestResult:
@@ -537,9 +533,7 @@ class WebTestAgent:
                 ] = await self._element_exists(grid_class)
 
             # Проверка контейнера
-            responsive_checks["responsive_container"] = await self._element_exists(
-                ".container"
-            )
+            responsive_checks["responsive_container"] = await self._element_exists(".container")
 
             # Проверка mobile-first подхода
             responsive_checks["mobile_friendly"] = await self._evaluate_javascript(
@@ -602,7 +596,7 @@ class WebTestAgent:
                 name="responsive_design",
                 status=TestStatus.FAILED,
                 duration=duration,
-                error_message=f"Ошибка тестирования адаптивности: {str(e)}",
+                error_message=f"Ошибка тестирования адаптивности: {e!s}",
             )
 
     async def _test_performance(self) -> TestResult:
@@ -694,7 +688,7 @@ class WebTestAgent:
                 name="performance",
                 status=TestStatus.FAILED,
                 duration=duration,
-                error_message=f"Ошибка тестирования производительности: {str(e)}",
+                error_message=f"Ошибка тестирования производительности: {e!s}",
             )
 
     async def _test_accessibility(self) -> TestResult:
@@ -752,13 +746,9 @@ class WebTestAgent:
 
             # Подсчет успешных проверок
             passed_checks = sum(
-                1
-                for k, v in accessibility_checks.items()
-                if k != "color_contrast_issues" and v
+                1 for k, v in accessibility_checks.items() if k != "color_contrast_issues" and v
             )
-            total_checks = (
-                len(accessibility_checks) - 1
-            )  # исключаем color_contrast_issues
+            total_checks = len(accessibility_checks) - 1  # исключаем color_contrast_issues
 
             success_rate = passed_checks / total_checks if total_checks > 0 else 0
 
@@ -792,7 +782,7 @@ class WebTestAgent:
                 name="accessibility",
                 status=TestStatus.FAILED,
                 duration=duration,
-                error_message=f"Ошибка тестирования доступности: {str(e)}",
+                error_message=f"Ошибка тестирования доступности: {e!s}",
             )
 
     async def _test_error_handling(self) -> TestResult:
@@ -815,14 +805,10 @@ class WebTestAgent:
                     or await self._element_exists("div:contains('Not Found')")
                 )
 
-                error_scenarios.append(
-                    {"test": "404_page", "handled": has_error_handling}
-                )
+                error_scenarios.append({"test": "404_page", "handled": has_error_handling})
 
             except Exception as e:
-                error_scenarios.append(
-                    {"test": "404_page", "handled": False, "error": str(e)}
-                )
+                error_scenarios.append({"test": "404_page", "handled": False, "error": str(e)})
 
             # Тест 2: JavaScript ошибки в консоли
             console_errors = await self._evaluate_javascript(
@@ -867,9 +853,7 @@ class WebTestAgent:
             )
             total_scenarios = len(error_scenarios)
 
-            success_rate = (
-                handled_scenarios / total_scenarios if total_scenarios > 0 else 0
-            )
+            success_rate = handled_scenarios / total_scenarios if total_scenarios > 0 else 0
 
             if success_rate >= 0.5:  # 50% сценариев должны быть обработаны
                 return TestResult(
@@ -901,7 +885,7 @@ class WebTestAgent:
                 name="error_handling",
                 status=TestStatus.FAILED,
                 duration=duration,
-                error_message=f"Ошибка тестирования обработки ошибок: {str(e)}",
+                error_message=f"Ошибка тестирования обработки ошибок: {e!s}",
             )
 
     # Вспомогательные методы для работы с браузером (имитация Puppeteer MCP)
@@ -923,7 +907,7 @@ class WebTestAgent:
         await asyncio.sleep(0.1)
         return True  # Для демонстрации
 
-    async def _get_element_text(self, selector: str) -> Optional[str]:
+    async def _get_element_text(self, selector: str) -> str | None:
         """Получение текста элемента"""
         await asyncio.sleep(0.1)
         return "Подключено"  # Имитация
@@ -975,7 +959,7 @@ class WebTestAgent:
 
         return str(screenshot_path)
 
-    async def _generate_comprehensive_report(self) -> Dict[str, Any]:
+    async def _generate_comprehensive_report(self) -> dict[str, Any]:
         """Генерация комплексного отчета"""
         logger.info("📊 Генерация комплексного отчета")
 
@@ -1011,31 +995,24 @@ class WebTestAgent:
                 "passed": suite.passed_count,
                 "failed": suite.failed_count,
                 "duration": suite.duration,
-                "success_rate": suite.passed_count / len(suite.tests)
-                if suite.tests
-                else 0,
+                "success_rate": suite.passed_count / len(suite.tests) if suite.tests else 0,
                 "tests": [asdict(test) for test in suite.tests],
             }
 
         # Расчет общего успеха
         if report_data["summary"]["total_tests"] > 0:
             report_data["summary"]["success_rate"] = (
-                report_data["summary"]["passed_tests"]
-                / report_data["summary"]["total_tests"]
+                report_data["summary"]["passed_tests"] / report_data["summary"]["total_tests"]
             )
 
         # Анализ производительности
         perf_tests = [
-            test
-            for suite in self.test_suites
-            for test in suite.tests
-            if test.performance_metrics
+            test for suite in self.test_suites for test in suite.tests if test.performance_metrics
         ]
 
         if perf_tests:
             avg_load_time = sum(
-                test.performance_metrics.get("measured_page_load", 0)
-                for test in perf_tests
+                test.performance_metrics.get("measured_page_load", 0) for test in perf_tests
             ) / len(perf_tests)
 
             report_data["performance_analysis"] = {
@@ -1068,7 +1045,7 @@ class WebTestAgent:
             "summary": report_data["summary"],
         }
 
-    def _generate_recommendations(self, report_data: Dict[str, Any]) -> List[str]:
+    def _generate_recommendations(self, report_data: dict[str, Any]) -> list[str]:
         """Генерация рекомендаций на основе результатов тестов"""
         recommendations = []
 
@@ -1104,9 +1081,7 @@ class WebTestAgent:
 
         return recommendations
 
-    async def _generate_html_report(
-        self, report_data: Dict[str, Any], timestamp: str
-    ) -> str:
+    async def _generate_html_report(self, report_data: dict[str, Any], timestamp: str) -> str:
         """Генерация HTML отчета"""
         html_template = """
 <!DOCTYPE html>
@@ -1208,9 +1183,7 @@ class WebTestAgent:
         for device_name, device_data in report_data["device_results"].items():
             tests_html = []
             for test in device_data["tests"]:
-                test_class = (
-                    "test-passed" if test["status"] == "passed" else "test-failed"
-                )
+                test_class = "test-passed" if test["status"] == "passed" else "test-failed"
                 tests_html.append(
                     f"""
                     <div class="test-item {test_class}">

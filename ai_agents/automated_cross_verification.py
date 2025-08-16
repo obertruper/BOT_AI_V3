@@ -11,9 +11,8 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
 from urllib.parse import urlparse
 
 import yaml
@@ -62,11 +61,11 @@ class ChatSession:
     tab_index: int
     status: str = "created"
     created_at: datetime = None
-    responses: List[str] = None
+    responses: list[str] = None
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.now(timezone.utc)
+            self.created_at = datetime.now(UTC)
         if self.responses is None:
             self.responses = []
 
@@ -78,8 +77,8 @@ class CrossVerificationTask:
     task_id: str
     description: str
     task_content: str
-    ai_systems: List[str]
-    chat_sessions: Dict[str, ChatSession]
+    ai_systems: list[str]
+    chat_sessions: dict[str, ChatSession]
     cross_report_path: str = None
     iteration_count: int = 0
     status: str = "created"
@@ -87,7 +86,7 @@ class CrossVerificationTask:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.now(timezone.utc)
+            self.created_at = datetime.now(UTC)
         if not self.chat_sessions:
             self.chat_sessions = {}
 
@@ -96,9 +95,7 @@ class AutomatedCrossVerification:
     """Автоматизированная система кросс-верификации"""
 
     def __init__(self, config_path: str = None):
-        self.config_path = (
-            config_path or "ai_agents/configs/cross_verification_config.yaml"
-        )
+        self.config_path = config_path or "ai_agents/configs/cross_verification_config.yaml"
         self.sessions_path = "ai_agents/configs/active_sessions.json"
         self.reports_dir = Path("docs/AI_VERIFICATION_REPORTS")
         self.reports_dir.mkdir(exist_ok=True)
@@ -128,10 +125,10 @@ class AutomatedCrossVerification:
             },
         }
 
-    def _load_config(self) -> Dict:
+    def _load_config(self) -> dict:
         """Загрузка конфигурации"""
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with open(self.config_path, encoding="utf-8") as f:
                 return yaml.safe_load(f)
         except FileNotFoundError:
             # Создаем дефолтную конфигурацию
@@ -155,32 +152,26 @@ class AutomatedCrossVerification:
             Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
 
             with open(self.config_path, "w", encoding="utf-8") as f:
-                yaml.dump(
-                    default_config, f, default_flow_style=False, allow_unicode=True
-                )
+                yaml.dump(default_config, f, default_flow_style=False, allow_unicode=True)
 
             return default_config
 
-    def _load_active_sessions(self) -> Dict:
+    def _load_active_sessions(self) -> dict:
         """Загрузка активных сессий"""
         try:
-            with open(self.sessions_path, "r", encoding="utf-8") as f:
+            with open(self.sessions_path, encoding="utf-8") as f:
                 data = json.load(f)
                 # Восстанавливаем объекты ChatSession
                 sessions = {}
                 for task_id, task_data in data.items():
                     chat_sessions = {}
-                    for ai_system, session_data in task_data.get(
-                        "chat_sessions", {}
-                    ).items():
+                    for ai_system, session_data in task_data.get("chat_sessions", {}).items():
                         session_data["created_at"] = datetime.fromisoformat(
                             session_data["created_at"]
                         )
                         chat_sessions[ai_system] = ChatSession(**session_data)
 
-                    task_data["created_at"] = datetime.fromisoformat(
-                        task_data["created_at"]
-                    )
+                    task_data["created_at"] = datetime.fromisoformat(task_data["created_at"])
                     task_data["chat_sessions"] = chat_sessions
                     sessions[task_id] = CrossVerificationTask(**task_data)
 
@@ -207,7 +198,7 @@ class AutomatedCrossVerification:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     async def create_cross_verification_task(
-        self, description: str, task_content: str, ai_systems: List[str] = None
+        self, description: str, task_content: str, ai_systems: list[str] = None
     ) -> str:
         """
         Создание новой задачи кросс-верификации
@@ -239,7 +230,7 @@ class AutomatedCrossVerification:
         logger.info(f"Создана задача кросс-верификации: {task_id}")
         return task_id
 
-    async def initialize_ai_chats(self, task_id: str) -> Dict[str, ChatSession]:
+    async def initialize_ai_chats(self, task_id: str) -> dict[str, ChatSession]:
         """
         Инициализация чатов со всеми AI системами
 
@@ -259,10 +250,7 @@ class AutomatedCrossVerification:
         # Параллельно открываем все AI системы
         if self.config.get("workflow", {}).get("parallel_processing", True):
             await asyncio.gather(
-                *[
-                    self._initialize_single_chat(task, ai_system)
-                    for ai_system in task.ai_systems
-                ]
+                *[self._initialize_single_chat(task, ai_system) for ai_system in task.ai_systems]
             )
         else:
             # Последовательно
@@ -272,9 +260,7 @@ class AutomatedCrossVerification:
         self._save_active_sessions()
         return task.chat_sessions
 
-    async def _initialize_single_chat(
-        self, task: CrossVerificationTask, ai_system: str
-    ):
+    async def _initialize_single_chat(self, task: CrossVerificationTask, ai_system: str):
         """Инициализация одного чата с AI системой"""
         if ai_system not in self.ai_systems:
             raise ValueError(f"Неизвестная AI система: {ai_system}")
@@ -288,18 +274,14 @@ class AutomatedCrossVerification:
                 current_tab = -1
             else:
                 # Открываем новую вкладку
-                await globals()["mcp__playwright__browser_tab_new"](
-                    url=ai_config["url"]
-                )
+                await globals()["mcp__playwright__browser_tab_new"](url=ai_config["url"])
 
                 # Получаем список вкладок для определения индекса
                 tabs = await globals()["mcp__playwright__browser_tab_list"]()
                 current_tab = len(tabs) - 1
 
                 # Ждем загрузки страницы
-                await asyncio.sleep(
-                    self.config.get("timeouts", {}).get("page_load", 30)
-                )
+                await asyncio.sleep(self.config.get("timeouts", {}).get("page_load", 30))
 
                 # Делаем скриншот для диагностики
                 screenshot_path = f"ai_chats_{ai_system}_{task.task_id}.png"
@@ -316,9 +298,7 @@ class AutomatedCrossVerification:
                         await globals()["mcp__playwright__browser_click"](
                             element="New chat button", ref=ai_config["new_chat_button"]
                         )
-                    await asyncio.sleep(
-                        self.config.get("timeouts", {}).get("click_wait", 5)
-                    )
+                    await asyncio.sleep(self.config.get("timeouts", {}).get("click_wait", 5))
                 except Exception as e:
                     logger.warning(f"Не удалось создать новый чат для {ai_system}: {e}")
 
@@ -378,7 +358,7 @@ class AutomatedCrossVerification:
 
     async def send_task_to_all_chats(
         self, task_id: str, expected_length: str = "long"
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         Отправка задачи во все инициализированные чаты с умным сбором ответов
 
@@ -394,9 +374,7 @@ class AutomatedCrossVerification:
 
         task = self.active_sessions[task_id]
 
-        logger.info(
-            f"Отправка задачи {task_id} во все чаты (ожидаем {expected_length} ответы)"
-        )
+        logger.info(f"Отправка задачи {task_id} во все чаты (ожидаем {expected_length} ответы)")
 
         # Используем улучшенную систему сбора ответов
         try:
@@ -455,13 +433,9 @@ class AutomatedCrossVerification:
 
         # Переключаемся на нужную вкладку
         if MCP_AVAILABLE:
-            await globals()["mcp__playwright__browser_tab_select"](
-                index=session.tab_index
-            )
+            await globals()["mcp__playwright__browser_tab_select"](index=session.tab_index)
         else:
-            logger.warning(
-                f"MCP функции недоступны для переключения на вкладку {ai_system}"
-            )
+            logger.warning(f"MCP функции недоступны для переключения на вкладку {ai_system}")
 
         # Формируем полный промпт
         full_prompt = (
@@ -486,7 +460,7 @@ class AutomatedCrossVerification:
 
         logger.info(f"Промпт отправлен в {ai_system}")
 
-    async def _basic_response_collection(self, task) -> Dict[str, str]:
+    async def _basic_response_collection(self, task) -> dict[str, str]:
         """Базовая система сбора ответов (fallback)"""
         responses = {}
 
@@ -495,10 +469,7 @@ class AutomatedCrossVerification:
 
         # Собираем ответы
         for ai_system in task.ai_systems:
-            if (
-                ai_system in task.chat_sessions
-                and task.chat_sessions[ai_system].status != "error"
-            ):
+            if ai_system in task.chat_sessions and task.chat_sessions[ai_system].status != "error":
                 try:
                     session = task.chat_sessions[ai_system]
 
@@ -512,9 +483,7 @@ class AutomatedCrossVerification:
 
                     # Получаем snapshot
                     if MCP_AVAILABLE:
-                        snapshot = await globals()[
-                            "mcp__playwright__browser_snapshot"
-                        ]()
+                        snapshot = await globals()["mcp__playwright__browser_snapshot"]()
                     else:
                         snapshot = "MCP недоступен"
 
@@ -532,18 +501,14 @@ class AutomatedCrossVerification:
 
         return responses
 
-    async def _send_to_single_chat(
-        self, task: CrossVerificationTask, ai_system: str
-    ) -> str:
+    async def _send_to_single_chat(self, task: CrossVerificationTask, ai_system: str) -> str:
         """Отправка задачи в один чат"""
         session = task.chat_sessions[ai_system]
         ai_config = self.ai_systems[ai_system]
 
         # Переключаемся на нужную вкладку
         if MCP_AVAILABLE:
-            await globals()["mcp__playwright__browser_tab_select"](
-                index=session.tab_index
-            )
+            await globals()["mcp__playwright__browser_tab_select"](index=session.tab_index)
         else:
             logger.warning("MCP функции недоступны")
 
@@ -687,12 +652,8 @@ class AutomatedCrossVerification:
             ai_name = self.ai_systems.get(ai_system, {}).get("name", ai_system.title())
             if ai_system in task.chat_sessions:
                 session = task.chat_sessions[ai_system]
-                status = (
-                    "✅ Завершено" if session.status == "responded" else "❌ Ошибка"
-                )
-                recommendations = (
-                    "Анализ получен" if session.responses else "Нет данных"
-                )
+                status = "✅ Завершено" if session.status == "responded" else "❌ Ошибка"
+                recommendations = "Анализ получен" if session.responses else "Нет данных"
             else:
                 status = "❌ Не инициализирован"
                 recommendations = "Нет данных"
@@ -714,7 +675,7 @@ class AutomatedCrossVerification:
 
         return content
 
-    async def send_cross_report_for_feedback(self, task_id: str) -> Dict[str, str]:
+    async def send_cross_report_for_feedback(self, task_id: str) -> dict[str, str]:
         """
         Отправка кросс-отчета обратно в AI системы для получения feedback
 
@@ -733,7 +694,7 @@ class AutomatedCrossVerification:
             raise ValueError(f"Кросс-отчет не создан для задачи {task_id}")
 
         # Читаем содержимое отчета
-        with open(task.cross_report_path, "r", encoding="utf-8") as f:
+        with open(task.cross_report_path, encoding="utf-8") as f:
             report_content = f.read()
 
         # Формируем feedback промпт
@@ -773,7 +734,7 @@ class AutomatedCrossVerification:
 
     async def run_full_workflow(
         self, description: str, task_content: str, max_iterations: int = None
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """
         Запуск полного workflow кросс-верификации
 
@@ -829,16 +790,14 @@ class AutomatedCrossVerification:
         logger.info(f"Workflow завершен для задачи {task_id}")
         return task_id, task.cross_report_path
 
-    def _should_stop_iterations(self, feedback: Dict[str, str]) -> bool:
+    def _should_stop_iterations(self, feedback: dict[str, str]) -> bool:
         """Проверка критериев остановки итераций"""
         # Простая эвристика: если все AI системы дают короткие ответы,
         # значит больше нечего добавить
-        avg_length = sum(len(response) for response in feedback.values()) / len(
-            feedback
-        )
+        avg_length = sum(len(response) for response in feedback.values()) / len(feedback)
         return avg_length < 500  # Менее 500 символов в среднем
 
-    def get_task_status(self, task_id: str) -> Dict:
+    def get_task_status(self, task_id: str) -> dict:
         """Получение статуса задачи"""
         if task_id not in self.active_sessions:
             return {"error": f"Задача {task_id} не найдена"}
@@ -862,7 +821,7 @@ class AutomatedCrossVerification:
             "created_at": task.created_at.isoformat(),
         }
 
-    def list_active_tasks(self) -> List[Dict]:
+    def list_active_tasks(self) -> list[dict]:
         """Список всех активных задач"""
         return [
             {
@@ -882,9 +841,7 @@ async def main():
     import sys
 
     if len(sys.argv) < 3:
-        print(
-            "Использование: python automated_cross_verification.py <description> <task_content>"
-        )
+        print("Использование: python automated_cross_verification.py <description> <task_content>")
         print(
             "Пример: python automated_cross_verification.py 'Стратегия скальпинга' 'Разработай стратегию скальпинга для BTC'"
         )
@@ -897,9 +854,7 @@ async def main():
     cross_verifier = AutomatedCrossVerification()
 
     # Запускаем полный workflow
-    task_id, report_path = await cross_verifier.run_full_workflow(
-        description, task_content
-    )
+    task_id, report_path = await cross_verifier.run_full_workflow(description, task_content)
 
     print("✅ Workflow завершен!")
     print(f"📋 Task ID: {task_id}")

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Тестирование оптимизаций производительности BOT_AI_V3
 """
@@ -8,7 +7,7 @@ import asyncio
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,7 +30,7 @@ class PerformanceTestSuite:
         self.results = {}
         self.process_manager = ProcessManager()
 
-    async def run_all_tests(self) -> Dict[str, Any]:
+    async def run_all_tests(self) -> dict[str, Any]:
         """Запуск всех тестов"""
         logger.info("🧪 Начинаем тестирование оптимизаций производительности")
         logger.info("=" * 60)
@@ -72,9 +71,7 @@ class PerformanceTestSuite:
         read_start = time.time()
         for i in range(1000):
             value = await performance_cache.get(f"test_key_{i}")
-            assert value == f"test_value_{i}", (
-                f"Неверное значение для ключа test_key_{i}"
-            )
+            assert value == f"test_value_{i}", f"Неверное значение для ключа test_key_{i}"
         read_time = time.time() - read_start
 
         # Тест batch операций
@@ -110,9 +107,7 @@ class PerformanceTestSuite:
 
         # Заполняем кеш до лимита
         for i in range(performance_cache.max_size + 100):
-            await performance_cache.set(
-                f"memory_test_{i}", f"large_value_{'x' * 100}_{i}"
-            )
+            await performance_cache.set(f"memory_test_{i}", f"large_value_{'x' * 100}_{i}")
 
         # Проверяем, что размер не превышает лимит
         final_stats = performance_cache.get_stats()
@@ -127,9 +122,7 @@ class PerformanceTestSuite:
 
         self.results["cache_memory"] = test_data
 
-        logger.info(
-            f"  ✅ Размер кеша: {test_data['final_size']}/{test_data['max_size']}"
-        )
+        logger.info(f"  ✅ Размер кеша: {test_data['final_size']}/{test_data['max_size']}")
         logger.info(f"  ✅ Evictions: {test_data['evictions']}")
         logger.info(f"  ✅ В пределах лимита: {test_data['within_limit']}")
 
@@ -270,16 +263,12 @@ class PerformanceTestSuite:
 
         # Общая оценка
         total_tests = len(self.results)
-        successful_tests = sum(
-            1 for test in self.results.values() if not test.get("error")
-        )
+        successful_tests = sum(1 for test in self.results.values() if not test.get("error"))
 
         logger.info("\n📊 Общая статистика:")
         logger.info(f"  Тестов выполнено: {total_tests}")
         logger.info(f"  Успешных: {successful_tests}")
-        logger.info(
-            f"  Процент успеха: {round(successful_tests / total_tests * 100, 1)}%"
-        )
+        logger.info(f"  Процент успеха: {round(successful_tests / total_tests * 100, 1)}%")
 
         # Рекомендации
         recommendations = cache_health.get("recommendations", [])

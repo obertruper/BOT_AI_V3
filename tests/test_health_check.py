@@ -36,9 +36,7 @@ async def test_health_check_endpoint():
         components = data["components"]
         if "basic_components" in data:
             # Детальная проверка доступна
-            assert (
-                "database" in components or "orchestrator" in data["basic_components"]
-            )
+            assert "database" in components or "orchestrator" in data["basic_components"]
         else:
             # Базовая проверка
             assert "orchestrator" in components

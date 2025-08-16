@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 
 # import talib  # Закомментировано для совместимости
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class FeatureConfig:
     """Конфигурация для генерации признаков"""
 
-    lookback_periods: List[int] = None
+    lookback_periods: list[int] = None
     price_features: bool = True
     volume_features: bool = True
     technical_indicators: bool = True
@@ -38,7 +38,7 @@ class FeatureEngineer:
     - Time features (час, день недели)
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         Инициализация генератора признаков.
 
@@ -216,12 +216,8 @@ class FeatureEngineer:
         # Уровни поддержки/сопротивления
         for period in [10, 20, 50]:
             if len(close_prices) >= period:
-                rolling_max = (
-                    pd.Series(high_prices).rolling(period).max().fillna(high_prices[0])
-                )
-                rolling_min = (
-                    pd.Series(low_prices).rolling(period).min().fillna(low_prices[0])
-                )
+                rolling_max = pd.Series(high_prices).rolling(period).max().fillna(high_prices[0])
+                rolling_min = pd.Series(low_prices).rolling(period).min().fillna(low_prices[0])
 
                 resistance_distance = (rolling_max - close_prices) / close_prices
                 support_distance = (close_prices - rolling_min) / close_prices
@@ -232,9 +228,7 @@ class FeatureEngineer:
                         support_distance.values.reshape(-1, 1),
                     ]
                 )
-                self.feature_names.extend(
-                    [f"resistance_dist_{period}", f"support_dist_{period}"]
-                )
+                self.feature_names.extend([f"resistance_dist_{period}", f"support_dist_{period}"])
 
         return np.concatenate(features, axis=1)
 
@@ -253,12 +247,10 @@ class FeatureEngineer:
         typical_price = (df["high"] + df["low"] + df["close"]) / 3
         for period in [10, 20, 50]:
             if len(volume) >= period:
-                vwap = (typical_price * df["volume"]).rolling(period).sum() / df[
-                    "volume"
-                ].rolling(period).sum()
-                vwap_distance = (
-                    close_prices - vwap.fillna(close_prices[0])
-                ) / close_prices
+                vwap = (typical_price * df["volume"]).rolling(period).sum() / df["volume"].rolling(
+                    period
+                ).sum()
+                vwap_distance = (close_prices - vwap.fillna(close_prices[0])) / close_prices
                 features.append(vwap_distance.values.reshape(-1, 1))
                 self.feature_names.append(f"vwap_distance_{period}")
 
@@ -311,8 +303,7 @@ class FeatureEngineer:
                 # ИСПРАВЛЕНО: вместо константы используем простую скользящую среднюю изменений
                 simple_changes = np.diff(close_prices, prepend=close_prices[0])
                 rsi_fallback = np.clip(
-                    (simple_changes + np.abs(simple_changes))
-                    / (2 * np.abs(simple_changes) + 1e-8),
+                    (simple_changes + np.abs(simple_changes)) / (2 * np.abs(simple_changes) + 1e-8),
                     0,
                     1,
                 )
@@ -336,28 +327,20 @@ class FeatureEngineer:
                 bb_width_norm = self._normalize_series(bb_width)
 
                 features.extend([bb_position.reshape(-1, 1), bb_width_norm])
-                self.feature_names.extend(
-                    [f"bb_position_{period}", f"bb_width_{period}"]
-                )
+                self.feature_names.extend([f"bb_position_{period}", f"bb_width_{period}"])
 
             except Exception as e:
                 logger.warning(f"Ошибка расчета BB {period}: {e}")
                 # ИСПРАВЛЕНО: вместо константы используем ценовые диапазоны
                 price_range = (high_prices - low_prices) / (close_prices + 1e-8)
-                bb_position = (close_prices - np.mean(close_prices)) / (
-                    np.std(close_prices) + 1e-8
-                )
+                bb_position = (close_prices - np.mean(close_prices)) / (np.std(close_prices) + 1e-8)
                 features.extend(
                     [
                         np.clip(price_range, 0, 1).reshape(-1, 1),
-                        np.clip((bb_position + 3) / 6, 0, 1).reshape(
-                            -1, 1
-                        ),  # Нормализуем к [0,1]
+                        np.clip((bb_position + 3) / 6, 0, 1).reshape(-1, 1),  # Нормализуем к [0,1]
                     ]
                 )
-                self.feature_names.extend(
-                    [f"bb_position_{period}", f"bb_width_{period}"]
-                )
+                self.feature_names.extend([f"bb_position_{period}", f"bb_width_{period}"])
 
         # ATR
         for period in self.atr_periods:
@@ -388,9 +371,7 @@ class FeatureEngineer:
         # Williams %R - несколько периодов
         for period in self.willr_periods:
             try:
-                willr = self._calculate_williams_r(
-                    high_prices, low_prices, close_prices, period
-                )
+                willr = self._calculate_williams_r(high_prices, low_prices, close_prices, period)
                 willr = np.nan_to_num(willr, nan=-50.0)
                 willr_norm = (willr + 100) / 100  # Нормализация к [0,1]
                 features.append(willr_norm.reshape(-1, 1))
@@ -398,9 +379,7 @@ class FeatureEngineer:
             except Exception as e:
                 logger.warning(f"Ошибка расчета Williams %R {period}: {e}")
                 # ИСПРАВЛЕНО: вместо константы используем позицию цены в диапазоне
-                price_position = (
-                    close_prices - np.minimum.accumulate(low_prices[::-1])[::-1]
-                ) / (
+                price_position = (close_prices - np.minimum.accumulate(low_prices[::-1])[::-1]) / (
                     np.maximum.accumulate(high_prices[::-1])[::-1]
                     - np.minimum.accumulate(low_prices[::-1])[::-1]
                     + 1e-8
@@ -435,9 +414,7 @@ class FeatureEngineer:
         # MFI - Money Flow Index
         for period in self.mfi_periods:
             try:
-                mfi = self._calculate_mfi(
-                    high_prices, low_prices, close_prices, volume, period
-                )
+                mfi = self._calculate_mfi(high_prices, low_prices, close_prices, volume, period)
                 mfi_norm = mfi / 100.0  # Нормализация к [0,1]
                 features.append(mfi_norm.reshape(-1, 1))
                 self.feature_names.append(f"mfi_{period}")
@@ -446,9 +423,7 @@ class FeatureEngineer:
                 # ИСПРАВЛЕНО: вместо константы используем объемно-взвешенную цену
                 typical_price = (high_prices + low_prices + close_prices) / 3
                 volume_price = typical_price * volume / (np.mean(volume) + 1e-8)
-                mfi_fallback = np.clip(
-                    volume_price / (np.max(volume_price) + 1e-8), 0, 1
-                )
+                mfi_fallback = np.clip(volume_price / (np.max(volume_price) + 1e-8), 0, 1)
                 features.append(mfi_fallback.reshape(-1, 1))
                 self.feature_names.append(f"mfi_{period}_fallback")
 
@@ -479,17 +454,11 @@ class FeatureEngineer:
         # Aroon
         for period in self.aroon_periods:
             try:
-                aroon_up, aroon_down = self._calculate_aroon(
-                    high_prices, low_prices, period
-                )
+                aroon_up, aroon_down = self._calculate_aroon(high_prices, low_prices, period)
                 aroon_up_norm = aroon_up / 100.0
                 aroon_down_norm = aroon_down / 100.0
-                features.extend(
-                    [aroon_up_norm.reshape(-1, 1), aroon_down_norm.reshape(-1, 1)]
-                )
-                self.feature_names.extend(
-                    [f"aroon_up_{period}", f"aroon_down_{period}"]
-                )
+                features.extend([aroon_up_norm.reshape(-1, 1), aroon_down_norm.reshape(-1, 1)])
+                self.feature_names.extend([f"aroon_up_{period}", f"aroon_down_{period}"])
             except Exception as e:
                 logger.warning(f"Ошибка расчета Aroon {period}: {e}")
                 # ИСПРАВЛЕНО: вместо константы используем трендовые показатели
@@ -501,9 +470,7 @@ class FeatureEngineer:
                         np.clip((high_trend + 1) / 2, 0, 1).reshape(-1, 1),
                     ]
                 )
-                self.feature_names.extend(
-                    [f"aroon_up_{period}", f"aroon_down_{period}"]
-                )
+                self.feature_names.extend([f"aroon_up_{period}", f"aroon_down_{period}"])
 
         # ADX и связанные индикаторы
         for period in self.adx_periods:
@@ -545,9 +512,7 @@ class FeatureEngineer:
 
         # Ultimate Oscillator
         try:
-            uo = self._calculate_ultimate_oscillator(
-                high_prices, low_prices, close_prices
-            )
+            uo = self._calculate_ultimate_oscillator(high_prices, low_prices, close_prices)
             uo_norm = uo / 100.0
             features.append(uo_norm.reshape(-1, 1))
             self.feature_names.append("ultimate_oscillator")
@@ -576,18 +541,14 @@ class FeatureEngineer:
             features.append(sar_distance.reshape(-1, 1))
             self.feature_names.append("sar_distance_default")
 
-            sar_aggressive = self._calculate_parabolic_sar(
-                high_prices, low_prices, 0.05, 0.3
-            )
+            sar_aggressive = self._calculate_parabolic_sar(high_prices, low_prices, 0.05, 0.3)
             sar_distance_agg = (close_prices - sar_aggressive) / close_prices
             features.append(sar_distance_agg.reshape(-1, 1))
             self.feature_names.append("sar_distance_aggressive")
         except Exception as e:
             logger.warning(f"Ошибка расчета Parabolic SAR: {e}")
             features.extend([np.zeros((len(close_prices), 1)) for _ in range(2)])
-            self.feature_names.extend(
-                ["sar_distance_default", "sar_distance_aggressive"]
-            )
+            self.feature_names.extend(["sar_distance_default", "sar_distance_aggressive"])
 
         # EMA - Exponential Moving Averages
         for period in self.ema_periods:
@@ -651,9 +612,7 @@ class FeatureEngineer:
                 )
             except Exception as e:
                 logger.warning(f"Ошибка расчета Stochastic {k_period},{d_period}: {e}")
-                features.extend(
-                    [np.full((len(close_prices), 1), 0.5) for _ in range(2)]
-                )
+                features.extend([np.full((len(close_prices), 1), 0.5) for _ in range(2)])
                 self.feature_names.extend(
                     [f"stoch_k_{k_period}_{d_period}", f"stoch_d_{k_period}_{d_period}"]
                 )
@@ -661,9 +620,7 @@ class FeatureEngineer:
         # Дополнительные индикаторы для достижения 240 признаков
         # Fisher Transform
         try:
-            fisher = self._calculate_fisher_transform(
-                high_prices, low_prices, close_prices
-            )
+            fisher = self._calculate_fisher_transform(high_prices, low_prices, close_prices)
             fisher_norm = self._normalize_series(fisher)
             features.append(fisher_norm)
             self.feature_names.append("fisher_transform")
@@ -701,9 +658,7 @@ class FeatureEngineer:
                     pd.Series(high_prices).rolling(tenkan_period).max()
                     + pd.Series(low_prices).rolling(tenkan_period).min()
                 ) / 2
-                tenkan_distance = (
-                    close_prices - tenkan.fillna(close_prices[0])
-                ) / close_prices
+                tenkan_distance = (close_prices - tenkan.fillna(close_prices[0])) / close_prices
                 features.append(tenkan_distance.values.reshape(-1, 1))
                 self.feature_names.append("ichimoku_tenkan_distance")
             else:
@@ -717,9 +672,7 @@ class FeatureEngineer:
                     pd.Series(high_prices).rolling(kijun_period).max()
                     + pd.Series(low_prices).rolling(kijun_period).min()
                 ) / 2
-                kijun_distance = (
-                    close_prices - kijun.fillna(close_prices[0])
-                ) / close_prices
+                kijun_distance = (close_prices - kijun.fillna(close_prices[0])) / close_prices
                 features.append(kijun_distance.values.reshape(-1, 1))
                 self.feature_names.append("ichimoku_kijun_distance")
             else:
@@ -728,16 +681,12 @@ class FeatureEngineer:
         except Exception as e:
             logger.warning(f"Ошибка расчета Ichimoku: {e}")
             features.extend([np.zeros((len(close_prices), 1)) for _ in range(2)])
-            self.feature_names.extend(
-                ["ichimoku_tenkan_distance", "ichimoku_kijun_distance"]
-            )
+            self.feature_names.extend(["ichimoku_tenkan_distance", "ichimoku_kijun_distance"])
 
         # Choppiness Index
         if len(close_prices) >= 14:
             try:
-                ci = self._calculate_choppiness_index(
-                    high_prices, low_prices, close_prices
-                )
+                ci = self._calculate_choppiness_index(high_prices, low_prices, close_prices)
                 features.append(ci.reshape(-1, 1))
                 self.feature_names.append("choppiness_index")
             except Exception as e:
@@ -828,9 +777,7 @@ class FeatureEngineer:
         for period in [10, 20]:
             if len(returns) >= period:
                 downside_returns = np.where(returns < 0, returns, 0)
-                downside_dev = (
-                    pd.Series(downside_returns).rolling(period).std().fillna(0)
-                )
+                downside_dev = pd.Series(downside_returns).rolling(period).std().fillna(0)
                 features.append(downside_dev.values.reshape(-1, 1))
                 self.feature_names.append(f"downside_deviation_{period}")
 
@@ -909,16 +856,12 @@ class FeatureEngineer:
 
             # Торговая сессия (азиатская, европейская, американская)
             # Азиатская: 00:00-08:00 UTC
-            is_asian = ((dt_series.dt.hour >= 0) & (dt_series.dt.hour < 8)).astype(
-                float
-            )
+            is_asian = ((dt_series.dt.hour >= 0) & (dt_series.dt.hour < 8)).astype(float)
             features.append(is_asian.values.reshape(-1, 1))
             self.feature_names.append("is_asian_session")
 
             # Европейская: 08:00-16:00 UTC
-            is_european = ((dt_series.dt.hour >= 8) & (dt_series.dt.hour < 16)).astype(
-                float
-            )
+            is_european = ((dt_series.dt.hour >= 8) & (dt_series.dt.hour < 16)).astype(float)
             features.append(is_european.values.reshape(-1, 1))
             self.feature_names.append("is_european_session")
 
@@ -931,33 +874,25 @@ class FeatureEngineer:
             # Sin/Cos представление часа
             hour_sin = np.sin(2 * np.pi * dt_series.dt.hour / 24)
             hour_cos = np.cos(2 * np.pi * dt_series.dt.hour / 24)
-            features.extend(
-                [hour_sin.values.reshape(-1, 1), hour_cos.values.reshape(-1, 1)]
-            )
+            features.extend([hour_sin.values.reshape(-1, 1), hour_cos.values.reshape(-1, 1)])
             self.feature_names.extend(["hour_sin", "hour_cos"])
 
             # Sin/Cos представление дня недели
             dow_sin = np.sin(2 * np.pi * dt_series.dt.dayofweek / 7)
             dow_cos = np.cos(2 * np.pi * dt_series.dt.dayofweek / 7)
-            features.extend(
-                [dow_sin.values.reshape(-1, 1), dow_cos.values.reshape(-1, 1)]
-            )
+            features.extend([dow_sin.values.reshape(-1, 1), dow_cos.values.reshape(-1, 1)])
             self.feature_names.extend(["day_of_week_sin", "day_of_week_cos"])
 
             # Sin/Cos представление дня месяца
             dom_sin = np.sin(2 * np.pi * dt_series.dt.day / 31)
             dom_cos = np.cos(2 * np.pi * dt_series.dt.day / 31)
-            features.extend(
-                [dom_sin.values.reshape(-1, 1), dom_cos.values.reshape(-1, 1)]
-            )
+            features.extend([dom_sin.values.reshape(-1, 1), dom_cos.values.reshape(-1, 1)])
             self.feature_names.extend(["day_of_month_sin", "day_of_month_cos"])
 
             # Sin/Cos представление месяца
             month_sin = np.sin(2 * np.pi * dt_series.dt.month / 12)
             month_cos = np.cos(2 * np.pi * dt_series.dt.month / 12)
-            features.extend(
-                [month_sin.values.reshape(-1, 1), month_cos.values.reshape(-1, 1)]
-            )
+            features.extend([month_sin.values.reshape(-1, 1), month_cos.values.reshape(-1, 1)])
             self.feature_names.extend(["month_sin", "month_cos"])
 
         else:
@@ -1042,9 +977,7 @@ class FeatureEngineer:
         # Модифицируем существующие признаки для символ-специфичности без изменения размерности
         if hasattr(self, "_current_symbol") and self._current_symbol:
             symbol_hash = hash(self._current_symbol) % 1000  # Символ-специфичный хэш
-            symbol_multiplier = 1.0 + (
-                symbol_hash / 10000.0
-            )  # Небольшой множитель от 1.0 до 1.1
+            symbol_multiplier = 1.0 + (symbol_hash / 10000.0)  # Небольшой множитель от 1.0 до 1.1
 
             # Применяем символ-специфичную модификацию к последним 10 признакам
             # Это не изменит размерность, но добавит уникальности
@@ -1063,7 +996,7 @@ class FeatureEngineer:
 
         return features_array
 
-    def get_feature_names(self) -> List[str]:
+    def get_feature_names(self) -> list[str]:
         """Получить названия признаков"""
         return self.feature_names
 
@@ -1108,7 +1041,7 @@ class FeatureEngineer:
 
     def _calculate_macd(
         self, prices: np.ndarray, fast: int = 12, slow: int = 26, signal: int = 9
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Расчет MACD индикатора"""
         if len(prices) < slow:
             zeros = np.zeros_like(prices)
@@ -1158,7 +1091,7 @@ class FeatureEngineer:
 
     def _calculate_bollinger_bands(
         self, prices: np.ndarray, period: int = 20, std_dev: float = 2.0
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Расчет полос Боллинджера"""
         if len(prices) < period:
             middle = np.full_like(prices, np.mean(prices) if len(prices) > 0 else 0)
@@ -1217,7 +1150,7 @@ class FeatureEngineer:
         close: np.ndarray,
         k_period: int = 14,
         d_period: int = 3,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Расчет стохастического осциллятора"""
         if len(high) < k_period:
             slowk = np.full_like(close, 50.0)
@@ -1236,9 +1169,7 @@ class FeatureEngineer:
                 slowk[i] = 50.0
 
         # Заполняем начальные значения
-        slowk[: k_period - 1] = (
-            slowk[k_period - 1] if k_period - 1 < len(slowk) else 50.0
-        )
+        slowk[: k_period - 1] = slowk[k_period - 1] if k_period - 1 < len(slowk) else 50.0
 
         # %D - скользящее среднее от %K
         slowd = self._calculate_sma(slowk, d_period)
@@ -1373,7 +1304,7 @@ class FeatureEngineer:
 
     def _calculate_aroon(
         self, high: np.ndarray, low: np.ndarray, period: int = 25
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Расчет Aroon индикатора"""
         if len(high) < period:
             return np.full_like(high, 50.0), np.full_like(low, 50.0)
@@ -1401,7 +1332,7 @@ class FeatureEngineer:
 
     def _calculate_adx(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Расчет ADX и связанных индикаторов"""
         if len(high) < period + 1:
             zeros = np.zeros_like(close)
@@ -1475,9 +1406,7 @@ class FeatureEngineer:
             smoothed[i] = (smoothed[i - 1] * (period - 1) + series[i]) / period
 
         # Заполняем начальные значения
-        smoothed[: period - 1] = (
-            smoothed[period - 1] if period - 1 < len(smoothed) else 0
-        )
+        smoothed[: period - 1] = smoothed[period - 1] if period - 1 < len(smoothed) else 0
 
         return smoothed
 
@@ -1622,9 +1551,7 @@ class FeatureEngineer:
         self.feature_names.append("price_impact")
 
         # Order Imbalance Proxy
-        order_imbalance = (close_prices - open_prices) / (
-            high_prices - low_prices + 1e-10
-        )
+        order_imbalance = (close_prices - open_prices) / (high_prices - low_prices + 1e-10)
         features.append(order_imbalance.reshape(-1, 1))
         self.feature_names.append("order_imbalance")
 
@@ -1652,9 +1579,7 @@ class FeatureEngineer:
 
         # Volume Concentration
         volume_series = pd.Series(volume)
-        volume_concentration = volume / (
-            volume_series.rolling(20).max().fillna(1) + 1e-10
-        )
+        volume_concentration = volume / (volume_series.rolling(20).max().fillna(1) + 1e-10)
         features.append(volume_concentration.values.reshape(-1, 1))
         self.feature_names.append("volume_concentration")
 
@@ -1674,7 +1599,7 @@ class FeatureEngineer:
         return np.concatenate(features, axis=1)
 
     def _calculate_advanced_features(
-        self, df: pd.DataFrame, existing_features: List[np.ndarray]
+        self, df: pd.DataFrame, existing_features: list[np.ndarray]
     ) -> np.ndarray:
         """Расчет продвинутых комбинированных признаков"""
         features = []
@@ -1686,20 +1611,12 @@ class FeatureEngineer:
         for period in [5, 10, 20]:
             if len(close_prices) >= period:
                 high_rolling = (
-                    pd.Series(df["high"].values)
-                    .rolling(period)
-                    .max()
-                    .fillna(df["high"].values[0])
+                    pd.Series(df["high"].values).rolling(period).max().fillna(df["high"].values[0])
                 )
                 low_rolling = (
-                    pd.Series(df["low"].values)
-                    .rolling(period)
-                    .min()
-                    .fillna(df["low"].values[0])
+                    pd.Series(df["low"].values).rolling(period).min().fillna(df["low"].values[0])
                 )
-                price_position = (close_prices - low_rolling) / (
-                    high_rolling - low_rolling + 1e-10
-                )
+                price_position = (close_prices - low_rolling) / (high_rolling - low_rolling + 1e-10)
                 features.append(price_position.values.reshape(-1, 1))
                 self.feature_names.append(f"price_position_{period}")
 
@@ -1717,13 +1634,11 @@ class FeatureEngineer:
         self.feature_names.append("volume_price_trend")
 
         # Chaikin Money Flow (20 период)
-        clv = (
-            (close_prices - df["low"].values) - (df["high"].values - close_prices)
-        ) / (df["high"].values - df["low"].values + 1e-10)
-        mfv = clv * volume
-        cmf = pd.Series(mfv).rolling(20).sum() / (
-            pd.Series(volume).rolling(20).sum() + 1e-10
+        clv = ((close_prices - df["low"].values) - (df["high"].values - close_prices)) / (
+            df["high"].values - df["low"].values + 1e-10
         )
+        mfv = clv * volume
+        cmf = pd.Series(mfv).rolling(20).sum() / (pd.Series(volume).rolling(20).sum() + 1e-10)
         features.append(cmf.fillna(0).values.reshape(-1, 1))
         self.feature_names.append("chaikin_money_flow")
 
@@ -1731,16 +1646,10 @@ class FeatureEngineer:
         for period in [20, 50]:
             if len(close_prices) >= period:
                 upper_channel = (
-                    pd.Series(df["high"].values)
-                    .rolling(period)
-                    .max()
-                    .fillna(df["high"].values[0])
+                    pd.Series(df["high"].values).rolling(period).max().fillna(df["high"].values[0])
                 )
                 lower_channel = (
-                    pd.Series(df["low"].values)
-                    .rolling(period)
-                    .min()
-                    .fillna(df["low"].values[0])
+                    pd.Series(df["low"].values).rolling(period).min().fillna(df["low"].values[0])
                 )
                 donchian_pos = (close_prices - lower_channel) / (
                     upper_channel - lower_channel + 1e-10
@@ -1791,7 +1700,7 @@ class FeatureEngineer:
         return np.concatenate(features, axis=1)
 
     def _calculate_lag_features(
-        self, df: pd.DataFrame, existing_features: List[np.ndarray]
+        self, df: pd.DataFrame, existing_features: list[np.ndarray]
     ) -> np.ndarray:
         """Расчет лаговых признаков"""
         features = []
@@ -1849,9 +1758,9 @@ class FeatureEngineer:
         # Hammer pattern
         lower_shadow = np.minimum(open_prices, close_prices) - low_prices
         upper_shadow = high_prices - np.maximum(open_prices, close_prices)
-        is_hammer = (
-            (lower_shadow > 2 * body_size) & (upper_shadow < body_size * 0.3)
-        ).astype(float)
+        is_hammer = ((lower_shadow > 2 * body_size) & (upper_shadow < body_size * 0.3)).astype(
+            float
+        )
         features.append(is_hammer.reshape(-1, 1))
         self.feature_names.append("is_hammer")
 
@@ -1922,8 +1831,7 @@ class FeatureEngineer:
 
         # Inside bar
         inside_bar = (
-            (high_prices <= np.roll(high_prices, 1))
-            & (low_prices >= np.roll(low_prices, 1))
+            (high_prices <= np.roll(high_prices, 1)) & (low_prices >= np.roll(low_prices, 1))
         ).astype(float)
         inside_bar[0] = 0
         features.append(inside_bar.reshape(-1, 1))
@@ -1931,8 +1839,7 @@ class FeatureEngineer:
 
         # Outside bar
         outside_bar = (
-            (high_prices >= np.roll(high_prices, 1))
-            & (low_prices <= np.roll(low_prices, 1))
+            (high_prices >= np.roll(high_prices, 1)) & (low_prices <= np.roll(low_prices, 1))
         ).astype(float)
         outside_bar[0] = 0
         features.append(outside_bar.reshape(-1, 1))
@@ -1997,9 +1904,7 @@ class FeatureEngineer:
                     sum_losses = np.sum(losses[i - period + 1 : i + 1])
 
                     if sum_gains + sum_losses != 0:
-                        cmo[i] = (
-                            (sum_gains - sum_losses) / (sum_gains + sum_losses) * 100
-                        )
+                        cmo[i] = (sum_gains - sum_losses) / (sum_gains + sum_losses) * 100
 
                 cmo_norm = cmo / 100.0
                 features.append(cmo_norm.reshape(-1, 1))
@@ -2073,9 +1978,7 @@ class FeatureEngineer:
 
         # Ease of Movement
         if len(close_prices) >= 14:
-            distance = (high_prices + low_prices) / 2 - np.roll(
-                (high_prices + low_prices) / 2, 1
-            )
+            distance = (high_prices + low_prices) / 2 - np.roll((high_prices + low_prices) / 2, 1)
             emv = distance / (volume / 1e6 / ((high_prices - low_prices) + 1e-10))
             emv[0] = 0
             emv_smooth = self._calculate_sma(emv, 14)
@@ -2171,12 +2074,8 @@ class FeatureEngineer:
         # Price Channel
         for period in [20, 50]:
             if len(close_prices) >= period:
-                upper_channel = (
-                    pd.Series(high_prices).rolling(period).max().fillna(high_prices[0])
-                )
-                lower_channel = (
-                    pd.Series(low_prices).rolling(period).min().fillna(low_prices[0])
-                )
+                upper_channel = pd.Series(high_prices).rolling(period).max().fillna(high_prices[0])
+                lower_channel = pd.Series(low_prices).rolling(period).min().fillna(low_prices[0])
                 center_line = (upper_channel + lower_channel) / 2
 
                 channel_pos = (close_prices - lower_channel) / (
@@ -2203,10 +2102,7 @@ class FeatureEngineer:
         """Оценка экспоненты Херста"""
         try:
             lags = range(2, min(20, len(prices) // 2))
-            tau = [
-                np.sqrt(np.std(np.subtract(prices[lag:], prices[:-lag])))
-                for lag in lags
-            ]
+            tau = [np.sqrt(np.std(np.subtract(prices[lag:], prices[:-lag]))) for lag in lags]
 
             # Линейная регрессия в логарифмическом пространстве
             poly = np.polyfit(np.log(lags), np.log(tau), 1)
@@ -2230,8 +2126,7 @@ class FeatureEngineer:
         for i in range(len(close)):
             if max_high.iloc[i] != min_low.iloc[i]:
                 value[i] = 2 * (
-                    (hl2[i] - min_low.iloc[i]) / (max_high.iloc[i] - min_low.iloc[i])
-                    - 0.5
+                    (hl2[i] - min_low.iloc[i]) / (max_high.iloc[i] - min_low.iloc[i]) - 0.5
                 )
             value[i] = np.clip(value[i], -0.999, 0.999)
 
@@ -2249,11 +2144,7 @@ class FeatureEngineer:
         if len(close) < period:
             return np.full_like(close, 0.5)
 
-        atr_sum = (
-            pd.Series(self._calculate_true_range(high, low, close))
-            .rolling(period)
-            .sum()
-        )
+        atr_sum = pd.Series(self._calculate_true_range(high, low, close)).rolling(period).sum()
         high_low_range = (
             pd.Series(high).rolling(period).max() - pd.Series(low).rolling(period).min()
         )
@@ -2261,10 +2152,6 @@ class FeatureEngineer:
         ci = np.zeros_like(close)
         for i in range(period - 1, len(close)):
             if high_low_range.iloc[i] > 0:
-                ci[i] = (
-                    100
-                    * np.log10(atr_sum.iloc[i] / high_low_range.iloc[i])
-                    / np.log10(period)
-                )
+                ci[i] = 100 * np.log10(atr_sum.iloc[i] / high_low_range.iloc[i]) / np.log10(period)
 
         return ci / 100.0  # Нормализация к [0, 1]

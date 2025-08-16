@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Скрипт исправления проблем системы BOT Trading v3
 Исправляет ошибки базы данных, PositionManager, 499 ошибки и другие критические проблемы
@@ -63,7 +62,7 @@ class SystemIssueFixer:
                 if os.path.exists(log_file):
                     print(f"   📄 Анализ лога: {log_file}")
 
-                    with open(log_file, "r", encoding="utf-8") as f:
+                    with open(log_file, encoding="utf-8") as f:
                         content = f.read()
 
                     # Ищем 499 ошибки
@@ -86,9 +85,7 @@ class SystemIssueFixer:
 
             if error_499_count > 0:
                 print(f"   ⚠️ Обнаружено {error_499_count} потенциальных 499 ошибок")
-                self.errors_found.append(
-                    f"Found {error_499_count} potential 499 errors"
-                )
+                self.errors_found.append(f"Found {error_499_count} potential 499 errors")
 
                 # Анализируем детали
                 print("   📊 Анализ деталей ошибок:")
@@ -117,7 +114,7 @@ class SystemIssueFixer:
                 if os.path.exists(file_path):
                     print(f"   📄 Анализ WebSocket файла: {file_path}")
 
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, encoding="utf-8") as f:
                         content = f.read()
 
                     # Проверяем настройки таймаутов
@@ -207,7 +204,7 @@ class SystemIssueFixer:
                 if os.path.exists(file_path):
                     print(f"   📄 Анализ HTTP клиента: {file_path}")
 
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, encoding="utf-8") as f:
                         content = f.read()
 
                     # Проверяем настройки таймаутов
@@ -294,7 +291,7 @@ class SystemIssueFixer:
                 if os.path.exists(file_path):
                     print(f"   📄 Анализ асинхронного файла: {file_path}")
 
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, encoding="utf-8") as f:
                         content = f.read()
 
                     # Проверяем проблемы с асинхронными операциями
@@ -502,9 +499,7 @@ if __name__ == "__main__":
 
             print("   📈 Последние 5 сигналов:")
             for row in result:
-                print(
-                    f"      ID {row['id']}: {row['symbol']} {row['side']} ({row['created_at']})"
-                )
+                print(f"      ID {row['id']}: {row['symbol']} {row['side']} ({row['created_at']})")
 
             # Проверяем, есть ли проблемы с типами данных
             result = await AsyncPGPool.fetch(
@@ -535,7 +530,7 @@ if __name__ == "__main__":
             position_manager_path = "trading/positions/position_manager.py"
 
             if os.path.exists(position_manager_path):
-                with open(position_manager_path, "r", encoding="utf-8") as f:
+                with open(position_manager_path, encoding="utf-8") as f:
                     content = f.read()
 
                 # Проверяем наличие методов
@@ -549,12 +544,12 @@ if __name__ == "__main__":
 
                 if missing_methods:
                     print(f"   ⚠️ Отсутствуют методы: {', '.join(missing_methods)}")
-                    self.errors_found.append(
-                        f"Missing PositionManager methods: {missing_methods}"
-                    )
+                    self.errors_found.append(f"Missing PositionManager methods: {missing_methods}")
 
                     # Создаем резервную копию
-                    backup_path = f"{position_manager_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    backup_path = (
+                        f"{position_manager_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    )
                     with open(backup_path, "w", encoding="utf-8") as f:
                         f.write(content)
                     print(f"   💾 Создана резервная копия: {backup_path}")
@@ -567,9 +562,7 @@ if __name__ == "__main__":
                     print("   ✅ Все методы PositionManager присутствуют")
             else:
                 print(f"   ❌ Файл {position_manager_path} не найден")
-                self.errors_found.append(
-                    f"PositionManager file not found: {position_manager_path}"
-                )
+                self.errors_found.append(f"PositionManager file not found: {position_manager_path}")
 
         except Exception as e:
             print(f"   ❌ Ошибка проверки PositionManager: {e}")
@@ -639,9 +632,7 @@ if __name__ == "__main__":
                     # Находим конец последнего метода
                     lines = content.split("\n")
                     for i in range(len(lines) - 1, -1, -1):
-                        if lines[i].strip() == "" or lines[i].strip().startswith(
-                            "class "
-                        ):
+                        if lines[i].strip() == "" or lines[i].strip().startswith("class "):
                             break
 
                     # Вставляем новые методы
@@ -659,9 +650,7 @@ if __name__ == "__main__":
                         f.write(new_content)
 
                     print(f"   ✅ Добавлены методы: {', '.join(missing_methods)}")
-                    self.fixes_applied.append(
-                        f"Added PositionManager methods: {missing_methods}"
-                    )
+                    self.fixes_applied.append(f"Added PositionManager methods: {missing_methods}")
                 else:
                     print("   ❌ Не удалось найти место для вставки методов")
                     self.errors_found.append(
@@ -677,7 +666,7 @@ if __name__ == "__main__":
             signal_processor_path = "core/signals/unified_signal_processor.py"
 
             if os.path.exists(signal_processor_path):
-                with open(signal_processor_path, "r", encoding="utf-8") as f:
+                with open(signal_processor_path, encoding="utf-8") as f:
                     content = f.read()
 
                 # Проверяем проблемные места
@@ -776,9 +765,7 @@ if __name__ == "__main__":
         if self.errors_found:
             print("\n🔧 ДОПОЛНИТЕЛЬНЫЕ РЕКОМЕНДАЦИИ:")
             print("   1. Перезапустите систему после исправлений")
-            print(
-                "   2. Запустите мониторинг 499 ошибок: python scripts/monitor_499_errors.py"
-            )
+            print("   2. Запустите мониторинг 499 ошибок: python scripts/monitor_499_errors.py")
             print("   3. Проверьте логи на наличие новых ошибок")
             print("   4. Запустите тесты: python -m pytest tests/")
             print("   5. Мониторьте систему: python scripts/monitor_system_enhanced.py")

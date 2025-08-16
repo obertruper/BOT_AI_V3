@@ -4,7 +4,6 @@ MACD (Moving Average Convergence Divergence) индикатор
 """
 
 import logging
-from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -222,9 +221,7 @@ class MACDIndicator(IndicatorBase):
         # 3. Сила на основе расстояния MACD от нулевой линии
         zero_distance = abs(current_macd)
         if len(histogram_series) >= 20:
-            macd_values = (
-                histogram_series.iloc[-20:] + histogram_series.iloc[-20:].mean()
-            )
+            macd_values = histogram_series.iloc[-20:] + histogram_series.iloc[-20:].mean()
             macd_range = macd_values.max() - macd_values.min()
             if macd_range > 0:
                 zero_strength = min(100, zero_distance / macd_range * 100)
@@ -239,7 +236,7 @@ class MACDIndicator(IndicatorBase):
 
         return avg_strength
 
-    def _check_divergence(self, prices: pd.Series, macd: pd.Series) -> Optional[str]:
+    def _check_divergence(self, prices: pd.Series, macd: pd.Series) -> str | None:
         """
         Проверка дивергенций между ценой и MACD
 
@@ -276,22 +273,14 @@ class MACDIndicator(IndicatorBase):
             and price_trough_idx[-1] > price_trough_idx[-2] + 3
         ):
             # Цена делает более низкий минимум
-            if (
-                recent_prices.iloc[price_trough_idx[-1]]
-                < recent_prices.iloc[price_trough_idx[-2]]
-            ):
+            if recent_prices.iloc[price_trough_idx[-1]] < recent_prices.iloc[price_trough_idx[-2]]:
                 # MACD делает более высокий минимум
                 nearest_macd_trough = min(
                     macd_trough_idx, key=lambda x: abs(x - price_trough_idx[-1])
                 )
-                prev_macd_trough = min(
-                    macd_trough_idx, key=lambda x: abs(x - price_trough_idx[-2])
-                )
+                prev_macd_trough = min(macd_trough_idx, key=lambda x: abs(x - price_trough_idx[-2]))
 
-                if (
-                    recent_macd.iloc[nearest_macd_trough]
-                    > recent_macd.iloc[prev_macd_trough]
-                ):
+                if recent_macd.iloc[nearest_macd_trough] > recent_macd.iloc[prev_macd_trough]:
                     return "bullish_divergence"
 
         # Проверка медвежьей дивергенции
@@ -301,27 +290,17 @@ class MACDIndicator(IndicatorBase):
             and price_peak_idx[-1] > price_peak_idx[-2] + 3
         ):
             # Цена делает более высокий максимум
-            if (
-                recent_prices.iloc[price_peak_idx[-1]]
-                > recent_prices.iloc[price_peak_idx[-2]]
-            ):
+            if recent_prices.iloc[price_peak_idx[-1]] > recent_prices.iloc[price_peak_idx[-2]]:
                 # MACD делает более низкий максимум
-                nearest_macd_peak = min(
-                    macd_peak_idx, key=lambda x: abs(x - price_peak_idx[-1])
-                )
-                prev_macd_peak = min(
-                    macd_peak_idx, key=lambda x: abs(x - price_peak_idx[-2])
-                )
+                nearest_macd_peak = min(macd_peak_idx, key=lambda x: abs(x - price_peak_idx[-1]))
+                prev_macd_peak = min(macd_peak_idx, key=lambda x: abs(x - price_peak_idx[-2]))
 
-                if (
-                    recent_macd.iloc[nearest_macd_peak]
-                    < recent_macd.iloc[prev_macd_peak]
-                ):
+                if recent_macd.iloc[nearest_macd_peak] < recent_macd.iloc[prev_macd_peak]:
                     return "bearish_divergence"
 
         return None
 
-    def _find_peaks(self, series: pd.Series, distance: int = 3) -> List[float]:
+    def _find_peaks(self, series: pd.Series, distance: int = 3) -> list[float]:
         """
         Поиск локальных максимумов в серии
 
@@ -344,7 +323,7 @@ class MACDIndicator(IndicatorBase):
 
         return peaks
 
-    def _get_peak_indices(self, series: pd.Series, distance: int = 3) -> List[int]:
+    def _get_peak_indices(self, series: pd.Series, distance: int = 3) -> list[int]:
         """
         Получение индексов локальных максимумов
 
@@ -385,9 +364,7 @@ class MACDIndicator(IndicatorBase):
         current_signal = signal_line.iloc[-1]
 
         # Направление MACD
-        macd_direction = (
-            "rising" if macd_line.iloc[-1] > macd_line.iloc[-5] else "falling"
-        )
+        macd_direction = "rising" if macd_line.iloc[-1] > macd_line.iloc[-5] else "falling"
 
         # Расположение относительно сигнальной линии
         position = "above" if current_macd > current_signal else "below"
@@ -413,16 +390,10 @@ class MACDIndicator(IndicatorBase):
         recent_hist = histogram.iloc[-5:]
 
         # Проверка роста/падения
-        if all(
-            recent_hist.iloc[i] > recent_hist.iloc[i - 1]
-            for i in range(1, len(recent_hist))
-        ):
+        if all(recent_hist.iloc[i] > recent_hist.iloc[i - 1] for i in range(1, len(recent_hist))):
             return "strongly_rising"
 
-        elif all(
-            recent_hist.iloc[i] < recent_hist.iloc[i - 1]
-            for i in range(1, len(recent_hist))
-        ):
+        elif all(recent_hist.iloc[i] < recent_hist.iloc[i - 1] for i in range(1, len(recent_hist))):
             return "strongly_falling"
 
         elif recent_hist.iloc[-1] > recent_hist.iloc[0]:
@@ -434,7 +405,7 @@ class MACDIndicator(IndicatorBase):
         else:
             return "neutral"
 
-    def _check_zero_cross(self, macd_line: pd.Series) -> Optional[str]:
+    def _check_zero_cross(self, macd_line: pd.Series) -> str | None:
         """
         Проверка пересечения нулевой линии
 
@@ -457,7 +428,7 @@ class MACDIndicator(IndicatorBase):
 
         return None
 
-    def get_required_columns(self) -> List[str]:
+    def get_required_columns(self) -> list[str]:
         """Необходимые колонки данных"""
         return ["close"]
 

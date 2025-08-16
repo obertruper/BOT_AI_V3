@@ -20,22 +20,25 @@ from .market_data import (
     RawMarketData,
     TechnicalIndicators,
 )
+from .ml_predictions import MLFeatureImportance, MLPrediction
 from .signal import Signal
 
 __all__ = [
-    "Order",
-    "Trade",
-    "Signal",
     "Balance",
-    "Performance",
-    "OrderStatus",
-    "OrderType",
-    "OrderSide",
-    "SignalType",
-    "RawMarketData",
-    "ProcessedMarketData",
-    "TechnicalIndicators",
+    "IntervalType",
+    "MLFeatureImportance",
+    "MLPrediction",
     "MarketDataSnapshot",
     "MarketType",
-    "IntervalType",
+    "Order",
+    "OrderSide",
+    "OrderStatus",
+    "OrderType",
+    "Performance",
+    "ProcessedMarketData",
+    "RawMarketData",
+    "Signal",
+    "SignalType",
+    "TechnicalIndicators",
+    "Trade",
 ]
