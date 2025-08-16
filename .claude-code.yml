@@ -1,0 +1,175 @@
+# Claude Code Configuration for BOT_AI_V3
+# This file configures how Claude Code interacts with this repository
+
+version: 1
+
+# Project context
+project:
+  name: BOT_AI_V3
+  description: High-performance algorithmic cryptocurrency trading platform with ML predictions
+  language: python
+  framework:
+    - FastAPI
+    - SQLAlchemy
+    - PyTorch
+  python_version: "3.12"
+
+# Custom instructions for Claude
+instructions:
+  general: |
+    This is a production cryptocurrency trading system. Follow these critical rules:
+    1. PostgreSQL ALWAYS runs on port 5555 (never 5432)
+    2. All I/O operations MUST use async/await
+    3. Exchange API keys ONLY in .env file
+    4. Use type hints for all functions
+    5. Follow existing code patterns and conventions
+
+  code_review: |
+    Focus on:
+    - Security: No exposed secrets or API keys
+    - Async patterns: Proper async/await usage
+    - Database: Verify port 5555 for PostgreSQL
+    - Type safety: Ensure type hints present
+    - Error handling: Check exception handling
+    - Performance: No blocking I/O in async functions
+
+  implementation: |
+    When implementing features:
+    - Check existing patterns in similar files
+    - Use absolute imports from project root
+    - Add comprehensive error handling
+    - Include logging for debugging
+    - Write unit tests for new functions
+    - Update documentation if needed
+
+# File patterns to review
+review:
+  include:
+    - "**/*.py"
+    - "**/*.sql"
+    - "**/*.yaml"
+    - "**/*.yml"
+    - "**/Dockerfile*"
+    - "**/*.js"
+    - "**/*.ts"
+    - "**/*.jsx"
+    - "**/*.tsx"
+  exclude:
+    - "**/migrations/versions/*.py"
+    - "**/node_modules/**"
+    - "**/venv/**"
+    - "**/.venv/**"
+    - "**/build/**"
+    - "**/dist/**"
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+    - "**/data/logs/**"
+
+# Security rules
+security:
+  scan_for_secrets: true
+  secret_patterns:
+    - "(?i)(api[_-]?key|api[_-]?secret|secret[_-]?key)\\s*[:=]\\s*['\"]?[a-zA-Z0-9]{20,}"
+    - "(?i)(bybit|binance|okx|gate|kucoin|htx|bingx)[_-]?(api)?[_-]?(key|secret)"
+    - "(?i)postgres://[^\\s]+"
+    - "(?i)bearer\\s+[a-zA-Z0-9]{20,}"
+  allowed_files_with_secrets:
+    - ".env.example"
+    - "docs/**/*.md"
+
+# Code quality settings
+quality:
+  max_line_length: 100
+  max_file_lines: 1000
+  max_function_lines: 50
+  max_complexity: 10
+  require_docstrings: true
+  require_type_hints: true
+
+# Testing requirements
+testing:
+  min_coverage: 70
+  test_file_pattern: "test_*.py"
+  test_directory: "tests/"
+  require_tests_for_new_code: true
+
+# Database settings
+database:
+  type: postgresql
+  port: 5555  # CRITICAL: Custom port
+  async_required: true
+  migration_tool: alembic
+
+# ML/AI specific settings
+ml:
+  model_path: "ml/models/"
+  feature_engineering: "ml/logic/feature_engineering_v2.py"
+  model_class: "UnifiedPatchTST"
+  gpu_required: true
+  inference_timeout: 50  # milliseconds
+
+# Exchange configurations
+exchanges:
+  supported:
+    - bybit
+    - binance
+    - okx
+    - gate
+    - kucoin
+    - htx
+    - bingx
+  rate_limiting: true
+  websocket_required: true
+
+# MCP (Model Context Protocol) servers
+mcp_servers:
+  - name: filesystem
+    description: File system access
+  - name: sequential-thinking
+    description: Complex problem solving
+  - name: memory
+    description: Context persistence
+  - name: github
+    description: GitHub integration
+  - name: postgres
+    description: Database access
+
+# Workflow triggers
+triggers:
+  review_on_pr: true
+  respond_to_mentions: true
+  auto_fix_simple_issues: false
+  require_approval_for_fixes: true
+
+# Response settings
+response:
+  language: en
+  detail_level: detailed
+  include_examples: true
+  max_response_length: 4000
+  code_block_syntax_highlight: true
+
+# Performance settings
+performance:
+  timeout_seconds: 300
+  max_retries: 3
+  cache_responses: true
+  parallel_file_review: true
+
+# Custom commands
+commands:
+  - name: analyze
+    description: Run comprehensive code analysis
+    trigger: "/claude analyze"
+  - name: fix
+    description: Attempt to fix identified issues
+    trigger: "/claude fix"
+  - name: explain
+    description: Explain code functionality
+    trigger: "/claude explain"
+  - name: optimize
+    description: Suggest optimizations
+    trigger: "/claude optimize"
+  - name: security
+    description: Security audit
+    trigger: "/claude security"

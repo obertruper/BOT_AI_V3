@@ -1,0 +1,246 @@
+name: Claude Code Assistant
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+jobs:
+  claude-assistant:
+    runs-on: ubuntu-latest
+    # Only run when comment contains trigger phrase or on PR events
+    if: |
+      (github.event_name == 'issue_comment' &&
+       (contains(github.event.comment.body, '@claude') ||
+        contains(github.event.comment.body, '/claude'))) ||
+      (github.event_name == 'pull_request_review_comment' &&
+       (contains(github.event.comment.body, '@claude') ||
+        contains(github.event.comment.body, '/claude'))) ||
+      (github.event_name == 'pull_request')
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Claude Code Action
+        uses: anthropics/claude-code-action@v1
+        with:
+          # Authentication
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Model configuration
+          model: claude-3-5-sonnet-20241022
+          max_tokens: 8192
+          temperature: 0
+
+          # Behavior configuration
+          auto_review: true
+          review_scope: changed_files
+
+          # Tools and MCP configuration
+          mcp_enabled: true
+          mcp_config: |
+            {
+              "mcpServers": {
+                "filesystem": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/workspace"]
+                },
+                "sequential-thinking": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+                },
+                "memory": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-memory"]
+                },
+                "github": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-github"],
+                  "env": {
+                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
+                  }
+                }
+              }
+            }
+
+          # Allowed tools pattern
+          allowed_tools: "*"
+
+          # Custom instructions for the project
+          custom_instructions: |
+            You are reviewing code for BOT_AI_V3, a high-performance cryptocurrency trading platform.
+
+            Key project requirements:
+            - PostgreSQL runs on port 5555 (NOT 5432)
+            - Always use async/await for all I/O operations
+            - Python 3.12+ with type hints required
+            - All exchange API keys must be in .env only
+            - Use absolute imports from project root
+
+            Focus areas for review:
+            1. Security: Check for exposed API keys or secrets
+            2. Async patterns: Ensure proper async/await usage
+            3. Database: Verify port 5555 is used for PostgreSQL
+            4. Type safety: Check type hints are present
+            5. Error handling: Ensure proper exception handling
+
+            Project structure:
+            - trading/: Core trading logic
+            - ml/: Machine learning components
+            - exchanges/: Exchange integrations (7 exchanges)
+            - database/: Database layer with async support
+            - core/: Core business logic
+
+          # Review settings
+          review_language: en
+          review_detail_level: detailed
+
+          # Performance settings
+          timeout_seconds: 300
+          retry_on_error: true
+          max_retries: 3
+
+  # Separate job for automatic PR review
+  claude-auto-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Changed Files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **/*.py
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.sql
+            **/*.yaml
+            **/*.yml
+          files_ignore: |
+            **/node_modules/**
+            **/venv/**
+            **/.venv/**
+            **/migrations/versions/**
+
+      - name: Claude PR Review
+        if: steps.changed-files.outputs.any_changed == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          model: claude-3-5-sonnet-20241022
+          mode: review
+          review_scope: changed_files
+          review_checklist: |
+            - [ ] No hardcoded secrets or API keys
+            - [ ] Proper async/await patterns used
+            - [ ] PostgreSQL port 5555 used (not 5432)
+            - [ ] Type hints present for all functions
+            - [ ] Proper error handling implemented
+            - [ ] No blocking I/O in async functions
+            - [ ] Imports are absolute from project root
+            - [ ] Code follows project conventions
+          auto_approve_safe_changes: false
+          post_review_comment: true
+
+      - name: Post Review Summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr_number = context.payload.pull_request.number;
+            const review_status = '${{ job.status }}';
+
+            let emoji = review_status === 'success' ? '✅' : '⚠️';
+            let message = `${emoji} Claude Code Review completed with status: ${review_status}`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr_number,
+              body: message
+            });
+
+  # Manual trigger for comprehensive analysis
+  claude-analyze:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '/claude analyze')
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Acknowledge Request
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue_number = context.issue.number;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue_number,
+              body: '🔍 Starting comprehensive code analysis with Claude...'
+            });
+
+      - name: Claude Comprehensive Analysis
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          model: claude-3-5-sonnet-20241022
+          max_tokens: 16384
+          mode: analyze
+          analysis_scope: repository
+          analysis_areas: |
+            - Architecture and design patterns
+            - Security vulnerabilities
+            - Performance bottlenecks
+            - Code quality and maintainability
+            - Test coverage gaps
+            - Documentation completeness
+            - Dependency security
+            - Async/await patterns
+            - Database query optimization
+            - ML model integration
+          output_format: markdown
+          post_as_comment: true

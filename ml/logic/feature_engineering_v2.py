@@ -268,8 +268,9 @@ class FeatureEngineer:
         """Базовые признаки из OHLCV данных без look-ahead bias"""
         df["returns"] = np.log(df["close"] / df["close"].shift(1))
 
-        # Доходности за разные периоды
-        for period in [5, 10, 20]:
+        # Доходности за разные периоды (РАСШИРЕНО для REQUIRED_FEATURES_240)
+        returns_periods = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120]
+        for period in returns_periods:
             df[f"returns_{period}"] = np.log(df["close"] / df["close"].shift(period))
 
         # Ценовые соотношения
@@ -353,6 +354,7 @@ class FeatureEngineer:
         # ========== MACD - все необходимые конфигурации ==========
         macd_configs = [
             (5, 13, 5),  # Быстрый MACD
+            (5, 35, 5),  # ТРЕБУЕТСЯ: для REQUIRED_FEATURES_240
             (8, 21, 5),  # Средний MACD
             (12, 26, 9),  # Классический MACD
             (19, 39, 9),  # Медленный MACD
@@ -398,7 +400,7 @@ class FeatureEngineer:
             df[f"atr_{period}"] = atr.average_true_range()
 
         # ========== ADX - все необходимые периоды ==========
-        adx_periods = [14, 20, 30]
+        adx_periods = [14, 21, 20, 30]  # Добавлен период 21 для REQUIRED_FEATURES_240
         for period in adx_periods:
             adx = ta.trend.ADXIndicator(df["high"], df["low"], df["close"], window=period)
             df[f"adx_{period}"] = adx.adx()
@@ -413,28 +415,33 @@ class FeatureEngineer:
             df[f"cci_{period}"] = cci.cci()
 
         # ========== Stochastic - все необходимые периоды ==========
-        stoch_configs = [(14, 3), (21, 5)]
+        stoch_configs = [(14, 3), (21, 3)]  # Исправлено: используем период 3 для совместимости
         for k_period, d_period in stoch_configs:
             stoch = ta.momentum.StochasticOscillator(
                 df["high"], df["low"], df["close"], window=k_period, smooth_window=d_period
             )
-            df[f"stoch_k_{k_period}_{d_period}"] = stoch.stoch()
-            df[f"stoch_d_{k_period}_{d_period}"] = stoch.stoch_signal()
+            df[f"stoch_k_{k_period}"] = stoch.stoch()  # ИСПРАВЛЕНО: убираем d_period из названия
+            df[f"stoch_d_{k_period}"] = (
+                stoch.stoch_signal()
+            )  # ИСПРАВЛЕНО: убираем d_period из названия
 
-        # Отдельные stoch_k и stoch_d для совместимости
-        df["stoch_k_14_3"] = df.get("stoch_k_14_3", 0)
-        df["stoch_d_14_3"] = df.get("stoch_d_14_3", 0)
-        df["stoch_k_21_5"] = df.get("stoch_k_21_5", 0)
-        df["stoch_d_21_5"] = df.get("stoch_d_21_5", 0)
+        # Дополнительные stochastic с периодом 21 для D-линии
+        stoch_21 = ta.momentum.StochasticOscillator(
+            df["high"], df["low"], df["close"], window=21, smooth_window=3
+        )
+        df["stoch_k_21"] = stoch_21.stoch()
+        df["stoch_d_21"] = stoch_21.stoch_signal()
 
         # ========== Williams %R - все необходимые периоды ==========
         willr_periods = [14, 21, 28]
         for period in willr_periods:
             willr = ta.momentum.WilliamsRIndicator(df["high"], df["low"], df["close"], lbp=period)
-            df[f"willr_{period}"] = willr.williams_r()
+            df[f"williams_r_{period}"] = willr.williams_r()
+
+        # ДОБАВЛЕНО: Williams %R для всех периодов из REQUIRED_FEATURES_240
 
         # ========== MFI - все необходимые периоды ==========
-        mfi_periods = [14, 20, 30]
+        mfi_periods = [14, 21, 20, 30]  # Добавлен период 21 для REQUIRED_FEATURES_240
         for period in mfi_periods:
             mfi = ta.volume.MFIIndicator(
                 df["high"], df["low"], df["close"], df["volume"], window=period
