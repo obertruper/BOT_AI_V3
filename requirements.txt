@@ -17,7 +17,7 @@ python-jose[cryptography]>=3.3.0  # ✅ JWT tokens
 # Криптобиржи (проверено январь 2025)
 ccxt>=4.2.50           # ✅ 100+ exchanges, active updates
 python-binance>=1.0.17 # ✅ Official Binance connector
-bybit>=0.2.12          # ✅ Official Bybit SDK
+# bybit>=0.2.12        # Commented: conflicts with urllib3 version
 
 # База данных (проверено январь 2025)
 psycopg2-binary>=2.9.9  # ✅ Latest PostgreSQL driver
@@ -51,8 +51,8 @@ structlog>=23.1.0
 requests>=2.31.0
 httpx>=0.24.0
 
-# WebSocket
-websockets>=11.0.0
+# WebSocket (using single version)
+# websockets>=11.0.0   # Commented: duplicate with line 8
 websocket-client>=1.5.0
 
 # Криптография
@@ -62,7 +62,7 @@ python-jose>=3.3.0
 # Мониторинг
 prometheus-client>=0.17.0
 sentry-sdk>=1.28.0,<2.0
-urllib3>=1.26.11,<2.0  # Явно указываем версию для разрешения конфликтов
+urllib3>=1.26.11,<2.2  # Увеличили верхнюю границу для совместимости
 
 # Утилиты
 click>=8.1.0
