@@ -1391,7 +1391,7 @@ class TradingEngine:
                 if self.balance_manager:
                     for exchange_name in self.exchange_registry.exchanges.keys():
                         try:
-                            exchange = self.exchange_registry.get_exchange(exchange_name)
+                            exchange = await self.exchange_registry.get_exchange(exchange_name)
                             balances = await exchange.get_balances()
 
                             for balance in balances:

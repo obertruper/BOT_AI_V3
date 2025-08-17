@@ -356,6 +356,59 @@ scheduler:
     mode: max
     patience: 4
     threshold: 0.001
+signal_filtering:
+  # Активная стратегия фильтрации: conservative/moderate/aggressive
+  strategy: "moderate"
+  
+  # Веса таймфреймов [15m, 1h, 4h, 12h] - 4h основной
+  timeframe_weights: [0.25, 0.25, 0.35, 0.15]
+  main_timeframe_index: 2  # 4h - основной таймфрейм
+  
+  # Консервативная стратегия - высочайшее качество сигналов
+  conservative:
+    min_timeframe_agreement: 3  # 3 из 4 таймфреймов должны согласиться
+    required_confidence_per_timeframe: 0.65  # минимальная уверенность каждого ТФ
+    main_timeframe_required_confidence: 0.70  # уверенность основного ТФ
+    min_expected_return_pct: 0.008  # 0.8% минимальная ожидаемая доходность
+    min_signal_strength: 0.7  # минимальная сила сигнала
+    max_risk_level: "MEDIUM"  # максимальный уровень риска
+    min_quality_score: 0.75  # минимальный итоговый балл качества
+    
+  # Умеренная стратегия - сбалансированное качество
+  moderate:
+    min_timeframe_agreement: 2  # 2 из 4 таймфреймов
+    required_confidence_per_timeframe: 0.55  # базовая уверенность
+    main_timeframe_required_confidence: 0.65  # уверенность основного ТФ
+    alternative_main_plus_one: true  # альтернатива: основной + 1 с высокой уверенностью
+    alternative_confidence_threshold: 0.75  # порог для альтернативного режима
+    min_expected_return_pct: 0.005  # 0.5% ожидаемая доходность
+    min_signal_strength: 0.5
+    max_risk_level: "HIGH"
+    min_quality_score: 0.60
+    
+  # Агрессивная стратегия - максимальное покрытие
+  aggressive:
+    min_timeframe_agreement: 1  # достаточно основного таймфрейма
+    required_confidence_per_timeframe: 0.45
+    main_timeframe_required_confidence: 0.55
+    min_expected_return_pct: 0.003  # 0.3% ожидаемая доходность
+    min_signal_strength: 0.4
+    max_risk_level: "HIGH"
+    min_quality_score: 0.45
+    
+  # Веса для расчета итогового качества сигнала
+  quality_weights:
+    agreement: 0.35  # согласованность таймфреймов
+    confidence: 0.30  # уверенность модели
+    return_expectation: 0.20  # ожидаемая доходность
+    risk_adjustment: 0.15  # корректировка на риск
+    
+  # Настройки логирования качества
+  logging:
+    log_rejection_reasons: true  # детальное логирование отклонений
+    log_quality_metrics: true  # логирование всех метрик качества
+    log_strategy_stats: true  # статистика эффективности стратегии
+
 signal_generation:
   interval_seconds: 30
 trading:

@@ -20,6 +20,7 @@ from ml.logic.feature_engineering import (  # Оригинальная верс�
     FeatureEngineer,
 )
 from ml.logic.patchtst_model import create_unified_model
+from ml.logic.signal_quality_analyzer import SignalQualityAnalyzer
 from ml.ml_prediction_logger import ml_prediction_logger
 
 logger = setup_logger("ml_manager")
@@ -168,6 +169,9 @@ class MLManager:
         self.context_length = 96  # 24 часа при 15-минутных свечах
         self.num_features = 240  # Вернули обратно для совместимости с моделью
         self.num_targets = 20  # Модель выдает 20 выходов
+
+        # Инициализируем анализатор качества сигналов
+        self.quality_analyzer = SignalQualityAnalyzer(config)
 
         logger.info(f"MLManager initialized, device: {self.device}")
 
@@ -553,7 +557,7 @@ class MLManager:
 
     def _interpret_predictions(self, outputs: torch.Tensor) -> dict[str, Any]:
         """
-        ИСПРАВЛЕННАЯ интерпретация выходов модели.
+        УЛУЧШЕННАЯ интерпретация выходов модели с анализом качества сигналов.
 
         КРИТИЧЕСКИ ВАЖНО: Правильная интерпретация классов направления!
         В обучении модели было установлено:
@@ -565,8 +569,9 @@ class MLManager:
             outputs: Тензор с 20 выходами модели
 
         Returns:
-            Dict с ПРАВИЛЬНО интерпретированными предсказаниями
+            Dict с ПРАВИЛЬНО интерпретированными предсказаниями и метриками качества
         """
+        # Этап 1: Извлечение и валидация данных модели
         outputs_np = outputs.cpu().numpy()[0]
 
         # Структура выходов (20 значений):
@@ -574,54 +579,11 @@ class MLManager:
         # 4-15: direction logits (12 values = 3 classes × 4 timeframes)
         # 16-19: risk metrics
 
-        # ВАЖНО: в модели с 20 выходами нет отдельных long/short levels!
-        # Используем future returns для расчета уровней
-
         future_returns = outputs_np[0:4]
         direction_logits = outputs_np[4:16]  # 12 значений!
         risk_metrics = outputs_np[16:20]
 
-        # В модели с 20 выходами используем future_returns для расчета уровней
-        # Конвертируем предсказанные доходности в проценты для SL/TP
-        long_levels = future_returns  # Используем future returns как базу для уровней
-        short_levels = -future_returns  # Инвертируем для коротких позиций
-
-        # ИСПРАВЛЕНИЕ: Не используем risk_metrics как confidence_scores
-        # Вместо этого используем вероятности направлений как индикатор уверенности
-        # Максимальная вероятность среди классов показывает уверенность модели
-        confidence_scores = np.zeros(4)
-        for i in range(4):
-            logits = direction_logits[i * 3 : (i + 1) * 3]
-            probs = np.exp(logits) / np.sum(np.exp(logits))
-            # Используем максимальную вероятность как уверенность
-            confidence_scores[i] = np.max(probs)
-
-        # ДИАГНОСТИЧЕСКОЕ ЛОГИРОВАНИЕ
-        logger.warning(
-            f"""
-🔍 ML ДИАГНОСТИКА - ИСПРАВЛЕННАЯ ИНТЕРПРЕТАЦИЯ:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Raw Model Outputs (все 20 значений):
-   {outputs_np}
-
-📈 Future Returns (0-3):
-   15m: {future_returns[0]:.6f}
-   1h:  {future_returns[1]:.6f}
-   4h:  {future_returns[2]:.6f}
-   12h: {future_returns[3]:.6f}
-
-🎯 Direction Logits (4-15) - 12 значений:
-   Raw logits: {direction_logits}
-   Структура: 4 таймфрейма × 3 класса (LONG=0, SHORT=1, NEUTRAL=2)
-
-⚡ Risk Metrics (16-19):
-   {risk_metrics}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-        )
-
         # ПРАВИЛЬНАЯ ИНТЕРПРЕТАЦИЯ DIRECTIONS (12 значений = 4 таймфрейма × 3 класса)
-        # Разбиваем на 4 группы по 3 логита
         direction_logits_reshaped = direction_logits.reshape(4, 3)  # 4 таймфрейма × 3 класса
 
         # Применяем softmax к каждому таймфрейму
@@ -638,242 +600,114 @@ class MLManager:
             direction_class = np.argmax(probs)
             directions.append(direction_class)
 
-            logger.info(
-                f"Таймфрейм {i + 1}: logits={logits}, probs={probs}, class={direction_class}"
-            )
-
         directions = np.array(directions)
-        logger.info(f"Direction predictions: {directions}")
 
-        # Определяем основной сигнал
-        # Используем взвешенное среднее классов с большим весом на ближайшие таймфреймы
+        # ДИАГНОСТИЧЕСКОЕ ЛОГИРОВАНИЕ ВХОДНЫХ ДАННЫХ
+        logger.info(
+            f"""
+🔍 ML ДИАГНОСТИКА - ВХОДНЫЕ ДАННЫЕ МОДЕЛИ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Raw Model Outputs (все 20 значений): {outputs_np}
+📈 Future Returns (0-3):
+   15m: {future_returns[0]:.6f}, 1h: {future_returns[1]:.6f}
+   4h: {future_returns[2]:.6f}, 12h: {future_returns[3]:.6f}
+🎯 Direction Predictions: {directions} [0=LONG, 1=SHORT, 2=NEUTRAL]
+⚡ Risk Metrics: {risk_metrics}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+        )
+
+        # Этап 2: Расчет weighted_direction для совместимости
         weights = np.array([0.4, 0.3, 0.2, 0.1])
         weighted_direction = np.sum(directions * weights)
 
-        # Определяем силу сигнала на основе согласованности предсказаний
-        # Чем больше таймфреймов согласны, тем сильнее сигнал
-        direction_counts = np.bincount(directions, minlength=3)
-        max_agreement = direction_counts.max() / len(directions)
-        signal_strength = max_agreement  # от 0.25 до 1.0
-
-        logger.info(f"Weighted direction: {weighted_direction:.3f}")
-        logger.info(
-            f"Direction counts: LONG={direction_counts[0]}, SHORT={direction_counts[1]}, NEUTRAL={direction_counts[2]}"
+        # Этап 3: Анализ качества сигнала с помощью нового анализатора
+        filter_result = self.quality_analyzer.analyze_signal_quality(
+            directions=directions,
+            direction_probs=direction_probs,
+            future_returns=future_returns,
+            risk_metrics=risk_metrics,
+            weighted_direction=weighted_direction
         )
-        logger.info(f"Signal strength (agreement): {signal_strength:.3f}")
 
-        # Определяем тип сигнала на основе взвешенного среднего
-        # ИСПРАВЛЕНО: Правильная интерпретация классов модели + улучшенные пороги
-        # В обучении: 0=LONG (покупка), 1=SHORT (продажа), 2=FLAT (нейтрально)
-        #
-        # НОВАЯ ЛОГИКА С УЧЕТОМ СИЛЫ СИГНАЛА:
-        # weighted_direction находится в диапазоне 0.0 - 2.0
-        # где 0.0 = все LONG, 1.0 = все SHORT, 2.0 = все NEUTRAL
-        #
-        # Используем согласованность как дополнительный фактор
-        # Если большинство таймфреймов согласны - сильный сигнал
-
-        # ИСПРАВЛЕНО: Добавляем multiframe_confirmation как в конфигурации
-        # Фокус на 4h таймфрейм (основной) + подтверждение от других
-        timeframe_names = ["15m", "1h", "4h", "12h"]
-        main_timeframe_idx = 2  # 4h - основной таймфрейм как в обучении
-
-        near_term_directions = directions[:2]  # 15m и 1h
-        far_term_directions = directions[2:]  # 4h и 12h
-        near_term_returns = future_returns[:2]  # Берем только 15m и 1h для расчетов
-
-        # Считаем голоса с приоритетом на ближайшие таймфреймы
-        near_long = np.sum(near_term_directions == 0)
-        near_short = np.sum(near_term_directions == 1)
-        near_neutral = np.sum(near_term_directions == 2)
-
-        far_long = np.sum(far_term_directions == 0)
-        far_short = np.sum(far_term_directions == 1)
-
-        # УЛУЧШЕННАЯ ЛОГИКА С БАЛАНСИРОВКОЙ:
-        # 1. Проверяем максимальные вероятности для каждого класса
-        max_probs = []
-        for probs in direction_probs:
-            max_probs.append(np.max(probs))
-        avg_max_prob = np.mean(max_probs)
-
-        # ИСПРАВЛЕНО: Используем правильный порог уверенности из конфига (0.4 = 40%)
-        if avg_max_prob < 0.4:  # Порог из конфигурации direction_confidence_threshold
+        # Этап 4: Принятие решения на основе анализа качества
+        if not filter_result.passed:
+            # Сигнал не прошел фильтры качества
             signal_type = "NEUTRAL"
-            signal_strength = 0.25  # Базовое значение как в обучении
-            logger.info(f"Модель неуверенна, avg_max_prob={avg_max_prob:.3f} < 0.4")
-
-        # 2. Если оба ближайших таймфрейма согласны - сильный сигнал
-        elif near_long == 2:  # Оба ближайших за LONG
-            signal_type = "LONG"
-            signal_strength = 0.9  # Высокая уверенность
-        elif near_short == 2:  # Оба ближайших за SHORT
-            signal_type = "SHORT"
-            signal_strength = 0.9  # Высокая уверенность
-
-        # 3. Если ближайшие разделились, смотрим на дальние
-        elif near_long == 1 and near_short == 0:
-            # Один LONG в ближайших, проверяем поддержку дальних
-            if far_long >= 1:  # Есть поддержка от дальних
-                signal_type = "LONG"
-                signal_strength = 0.7
-            else:
-                signal_type = "NEUTRAL"  # Нет поддержки
-                signal_strength = 0.4
-
-        elif near_short == 1 and near_long == 0:
-            # Один SHORT в ближайших, проверяем поддержку дальних
-            if far_short >= 1:  # Есть поддержка от дальних
-                signal_type = "SHORT"
-                signal_strength = 0.7
-            else:
-                signal_type = "NEUTRAL"  # Нет поддержки
-                signal_strength = 0.4
-
-        # 4. Конфликт в ближайших таймфреймах или все NEUTRAL
-        else:
-            # Используем предсказанные доходности для принятия решения
-            avg_near_return = np.mean(near_term_returns)
-
-            # ИСПРАВЛЕНО: Используем focal weighting для уверенности (как в обучении)
-            # Сбалансированный порог для торговых сигналов
-            focal_threshold = 0.005  # 0.5% - более строгий порог как в обучении
-            if abs(avg_near_return) > focal_threshold:
-                if avg_near_return > 0:
-                    signal_type = "LONG"
-                else:
-                    signal_type = "SHORT"
-                signal_strength = 0.5  # Средняя уверенность
-            else:
-                signal_type = "NEUTRAL"
-                signal_strength = 0.25  # Базовое значение как в обучении
-
-        # УПРОЩЕННЫЙ РАСЧЕТ SL/TP на основе силы сигнала и ближайших предсказаний
-        if signal_type in ["LONG", "SHORT"]:
-            # Используем адаптивные SL/TP в зависимости от силы сигнала
-
-            # Базовые значения (консервативные)
-            base_sl = 0.01  # 1%
-            base_tp = 0.02  # 2%
-
-            # Корректируем на основе силы сигнала
-            if signal_strength >= 0.8:  # Сильный сигнал
-                # Можем позволить чуть больший стоп и больший тейк
-                stop_loss_pct = base_sl * 1.5  # 1.5%
-                take_profit_pct = base_tp * 1.5  # 3%
-            elif signal_strength >= 0.6:  # Средний сигнал
-                stop_loss_pct = base_sl * 1.2  # 1.2%
-                take_profit_pct = base_tp * 1.2  # 2.4%
-            else:  # Слабый сигнал
-                # Очень консервативные параметры
-                stop_loss_pct = base_sl * 0.8  # 0.8%
-                take_profit_pct = base_tp * 0.8  # 1.6%
-
-            # Дополнительная корректировка на основе предсказанных движений
-            avg_near_return = np.mean(near_term_returns)
-            volatility = np.std(near_term_returns)
-
-            # Если высокая волатильность - увеличиваем стопы
-            if volatility > 0.01:  # Волатильность > 1%
-                stop_loss_pct *= 1.2
-                take_profit_pct *= 1.2
-
-            # Финальная проверка диапазонов
-            stop_loss_pct = np.clip(stop_loss_pct, 0.005, 0.02)  # 0.5% - 2%
-            take_profit_pct = np.clip(take_profit_pct, 0.01, 0.04)  # 1% - 4%
-
-        else:
+            signal_strength = 0.25  # Минимальное значение
+            combined_confidence = 0.25
             stop_loss_pct = None
             take_profit_pct = None
+            
+            logger.warning(
+                f"🚫 Сигнал отклонен анализатором качества. "
+                f"Причины: {'; '.join(filter_result.rejection_reasons)}"
+            )
+        else:
+            # Сигнал прошел фильтры - используем результат анализа
+            signal_type = filter_result.signal_type
+            metrics = filter_result.quality_metrics
+            
+            # Используем метрики качества для финальных параметров
+            signal_strength = metrics.agreement_score
+            combined_confidence = metrics.confidence_score
+            
+            # Расчет SL/TP на основе качества сигнала
+            if signal_type in ["LONG", "SHORT"]:
+                # Адаптивные SL/TP на основе качества
+                base_sl = 0.01  # 1%
+                base_tp = 0.02  # 2%
+                
+                # Корректировка на основе качества сигнала
+                quality_multiplier = 0.8 + (metrics.quality_score * 0.4)  # 0.8-1.2
+                
+                stop_loss_pct = base_sl * quality_multiplier
+                take_profit_pct = base_tp * quality_multiplier
+                
+                # Корректировка на волатильность
+                volatility = np.std(future_returns[:2])  # Ближайшие ТФ
+                if volatility > 0.01:
+                    stop_loss_pct *= 1.2
+                    take_profit_pct *= 1.2
+                
+                # Финальные ограничения
+                stop_loss_pct = np.clip(stop_loss_pct, 0.005, 0.025)  # 0.5% - 2.5%
+                take_profit_pct = np.clip(take_profit_pct, 0.01, 0.05)   # 1% - 5%
+            else:
+                stop_loss_pct = None
+                take_profit_pct = None
 
-        # Примечание: фактические цены SL/TP будут рассчитаны в ml_signal_processor
-        # на основе текущей цены и этих процентов
-
-        # Оценка риска
+        # Этап 5: Подготовка финального результата
+        # Дополнительные метрики для совместимости
+        confidence_scores = np.array([np.max(probs) for probs in direction_probs])
+        model_confidence = float(np.mean(confidence_scores))
         avg_risk = float(np.mean(risk_metrics))
         risk_level = "LOW" if avg_risk < 0.3 else "MEDIUM" if avg_risk < 0.7 else "HIGH"
-
-        # Вычисляем общую уверенность на основе:
-        # 1. Согласованности предсказаний (signal_strength)
-        # 2. Confidence scores от модели
-        # 3. Риск метрик
-
-        # ИСПРАВЛЕНИЕ: confidence_scores уже содержат вероятности (0-1), не нужен sigmoid
-        model_confidence = float(np.mean(confidence_scores))
-
-        # ИСПРАВЛЕНО: Применяем focal weighting как в обучении (focal_alpha=0.25)
-        # Focal Loss formula: alpha * (1 - p)^gamma, где gamma=2.0 из конфига
+        
+        # Focal weighting для совместимости с логгером
         focal_alpha = 0.25
         focal_gamma = 2.0
-
-        # Применяем focal weighting к уверенности модели
         focal_weighted_confidence = focal_alpha * (1 - model_confidence) ** focal_gamma
 
-        # ИСПРАВЛЕННАЯ формула комбинированной уверенности с focal weighting
-        # Базовая уверенность соответствует порогу из конфига (0.3)
-        base_confidence = 0.3 if signal_type in ["LONG", "SHORT"] else 0.25
-
-        # Бонус за согласованность направлений (используем данные из нового подсчета)
-        consistency_bonus = 0.0
-        if signal_type in ["LONG", "SHORT"]:
-            # Если большинство ближайших таймфреймов согласны - даем бонус
-            if len(set(near_term_directions)) == 1:  # Все ближайшие согласны
-                consistency_bonus = 0.3
-            elif near_term_directions[0] == near_term_directions[1]:  # Хотя бы два согласны
-                consistency_bonus = 0.15
-
-        # ИСПРАВЛЕНО: Комбинированная уверенность с focal weighting и multiframe confirmation
-        # Добавляем мультитаймфреймовое подтверждение
-        multiframe_bonus = 0.0
-        if signal_type in ["LONG", "SHORT"]:
-            main_direction = directions[main_timeframe_idx]  # 4h направление
-            main_signal = 0 if signal_type == "LONG" else 1
-
-            if main_direction == main_signal:
-                multiframe_bonus += 0.2  # Основной таймфрейм поддерживает
-
-                # Считаем поддержку от других таймфреймов
-                other_support = sum(1 for d in directions if d == main_signal)
-                if other_support >= 3:  # 3+ таймфрейма согласны
-                    multiframe_bonus += 0.15
-                elif other_support >= 2:  # 2+ таймфрейма согласны
-                    multiframe_bonus += 0.1
-
-        # Комбинированная уверенность с focal weighting
-        combined_confidence = min(
-            0.95,
-            base_confidence
-            + signal_strength * 0.25
-            + model_confidence * 0.2
-            + focal_weighted_confidence * 0.1
-            + (1.0 - avg_risk) * 0.1
-            + consistency_bonus
-            + multiframe_bonus,
-        )
-
-        # Вероятность успеха
-        success_probability = combined_confidence
-
-        # Логируем все предсказания для анализа
-        sl_str = f"{stop_loss_pct:.3f}" if stop_loss_pct is not None else "не определен"
-        tp_str = f"{take_profit_pct:.3f}" if take_profit_pct is not None else "не определен"
+        # Логирование финального результата
+        quality_score = filter_result.quality_metrics.quality_score if filter_result.passed else 0.0
+        strategy_used = filter_result.strategy_used.value
+        
+        sl_str = f"{stop_loss_pct:.3f}" if stop_loss_pct else "не определен"
+        tp_str = f"{take_profit_pct:.3f}" if take_profit_pct else "не определен"
 
         logger.info(
             f"""
-📊 ML Предсказание (ИСПРАВЛЕННАЯ ИНТЕРПРЕТАЦИЯ):
-   🎯 Направление: {signal_type} (взвешенное: {weighted_direction:.3f})
-   📈 Предсказания по таймфреймам: {directions}
-      [0=LONG, 1=SHORT, 2=NEUTRAL - ИСПРАВЛЕНО!]
-   🔥 Сила сигнала (согласованность): {signal_strength:.3f}
-   🎲 Уверенность модели: {model_confidence:.1%}
-   ⚡ Focal weighting: {focal_weighted_confidence:.3f}
-   🎯 Multiframe bonus: {multiframe_bonus:.3f}
-   ✅ Комбинированная уверенность: {combined_confidence:.1%}
+📊 ML ПРЕДСКАЗАНИЕ - РЕЗУЛЬТАТ АНАЛИЗА КАЧЕСТВА:
+   🎯 Направление: {signal_type} (стратегия: {strategy_used})
+   📈 Предсказания по ТФ: {directions} [0=LONG, 1=SHORT, 2=NEUTRAL]
+   ⭐ Качество сигнала: {quality_score:.3f}
+   🔥 Сила сигнала: {signal_strength:.3f}
+   🎲 Уверенность: {combined_confidence:.1%}
    ⚠️ Риск: {risk_level} ({avg_risk:.3f})
-   📊 Будущие доходности: 15м={future_returns[0]:.3f}, 1ч={future_returns[1]:.3f}, 4ч={future_returns[2]:.3f}, 12ч={future_returns[3]:.3f}
-   🛡️ Stop Loss %: {sl_str}
-   🎯 Take Profit %: {tp_str}
-   ⭐ Основной таймфрейм (4h): {timeframe_names[main_timeframe_idx]} = класс {directions[main_timeframe_idx]}
+   📊 Доходности: 15м={future_returns[0]:.3f}, 1ч={future_returns[1]:.3f}, 4ч={future_returns[2]:.3f}, 12ч={future_returns[3]:.3f}
+   🛡️ SL: {sl_str}, 🎯 TP: {tp_str}
+   ✅ Прошел фильтры: {'Да' if filter_result.passed else 'Нет'}
 """
         )
 
@@ -881,23 +715,29 @@ class MLManager:
         direction_map = {0: "LONG", 1: "SHORT", 2: "NEUTRAL"}
 
         return {
+            # Основные параметры сигнала
             "signal_type": signal_type,
             "signal_strength": float(signal_strength),
             "confidence": float(combined_confidence),
-            "signal_confidence": float(combined_confidence),  # Для совместимости с логгером
-            "success_probability": float(success_probability),
-            "stop_loss_pct": stop_loss_pct,  # Процент, не абсолютная цена!
-            "take_profit_pct": take_profit_pct,  # Процент, не абсолютная цена!
+            "signal_confidence": float(combined_confidence),  # Для совместимости
+            "success_probability": float(combined_confidence),
+            
+            # SL/TP проценты
+            "stop_loss_pct": stop_loss_pct,
+            "take_profit_pct": take_profit_pct,
+            
+            # Оценка риска
             "risk_level": risk_level,
-            "risk_score": float(avg_risk),  # Для логгера
+            "risk_score": float(avg_risk),
             "max_drawdown": float(risk_metrics[0]) if len(risk_metrics) > 0 else 0,
             "max_rally": float(risk_metrics[1]) if len(risk_metrics) > 1 else 0,
-            "primary_timeframe": "15m",  # Основной таймфрейм
-            # Детализированные предсказания для логгера
+            
+            # Детализированные предсказания
             "returns_15m": float(future_returns[0]),
             "returns_1h": float(future_returns[1]),
             "returns_4h": float(future_returns[2]),
             "returns_12h": float(future_returns[3]),
+            
             # Направления и уверенность по таймфреймам
             "direction_15m": direction_map.get(int(directions[0]), "NEUTRAL"),
             "direction_1h": direction_map.get(int(directions[1]), "NEUTRAL"),
@@ -907,13 +747,23 @@ class MLManager:
             "confidence_1h": float(confidence_scores[1]),
             "confidence_4h": float(confidence_scores[2]),
             "confidence_12h": float(confidence_scores[3]),
+            
+            # Метрики качества от анализатора
+            "quality_score": quality_score,
+            "agreement_score": filter_result.quality_metrics.agreement_score if filter_result.passed else 0.0,
+            "filter_strategy": strategy_used,
+            "passed_quality_filters": filter_result.passed,
+            "rejection_reasons": filter_result.rejection_reasons,
+            
+            # Дополнительные данные
+            "primary_timeframe": "4h",  # Основной таймфрейм
             "predictions": {
                 "returns_15m": float(future_returns[0]),
                 "returns_1h": float(future_returns[1]),
                 "returns_4h": float(future_returns[2]),
                 "returns_12h": float(future_returns[3]),
                 "direction_score": float(weighted_direction),
-                "directions_by_timeframe": directions.tolist(),  # [15m, 1h, 4h, 12h]
+                "directions_by_timeframe": directions.tolist(),
                 "direction_probabilities": [p.tolist() for p in direction_probs],
             },
             "timestamp": datetime.now(UTC).isoformat(),
@@ -958,4 +808,53 @@ class MLManager:
             "device": str(self.device),
             "model_loaded": self.model is not None,
             "scaler_loaded": self.scaler is not None,
+        }
+
+    def switch_filtering_strategy(self, strategy: str) -> bool:
+        """
+        Переключение стратегии фильтрации сигналов
+        
+        Args:
+            strategy: Название стратегии (conservative/moderate/aggressive)
+            
+        Returns:
+            True если успешно переключено
+        """
+        if self.quality_analyzer.switch_strategy(strategy):
+            logger.info(f"✅ Стратегия фильтрации переключена на: {strategy}")
+            return True
+        else:
+            logger.error(f"❌ Не удалось переключить стратегию на: {strategy}")
+            return False
+
+    def get_filtering_statistics(self) -> dict[str, Any]:
+        """
+        Получение статистики работы системы фильтрации
+        
+        Returns:
+            Словарь с детальной статистикой
+        """
+        return self.quality_analyzer.get_strategy_statistics()
+
+    def get_available_strategies(self) -> list[str]:
+        """
+        Получение списка доступных стратегий фильтрации
+        
+        Returns:
+            Список названий стратегий
+        """
+        return ["conservative", "moderate", "aggressive"]
+
+    def get_current_strategy_config(self) -> dict[str, Any]:
+        """
+        Получение конфигурации текущей стратегии
+        
+        Returns:
+            Параметры активной стратегии
+        """
+        return {
+            "active_strategy": self.quality_analyzer.active_strategy.value,
+            "strategy_params": self.quality_analyzer.strategy_params,
+            "timeframe_weights": self.quality_analyzer.timeframe_weights.tolist(),
+            "quality_weights": self.quality_analyzer.quality_weights,
         }
