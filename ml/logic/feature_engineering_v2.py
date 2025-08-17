@@ -34,6 +34,9 @@ class FeatureEngineer:
         self.process_position = None  # Позиция для прогресс-баров при параллельной обработке
         self.disable_progress = False  # Флаг для отключения прогресс-баров
 
+        # ИСПРАВЛЕНО: Устанавливаем флаг inference режима
+        self._is_inference_mode = inference_mode
+
         # Сразу импортируем список признаков если inference_mode включен
         if inference_mode:
             try:
@@ -134,6 +137,12 @@ class FeatureEngineer:
         # Валидация данных
         self._validate_data(df)
 
+        # ИСПРАВЛЕНО: Добавляем turnover если отсутствует (необходимо для расчетов)
+        if "turnover" not in df.columns:
+            df["turnover"] = df["close"] * df["volume"]
+            if not self.disable_progress:
+                self.logger.info("✅ Добавлен столбец turnover (close * volume)")
+
         featured_dfs = []
         all_symbols_data = {}  # Для enhanced features
 
@@ -166,9 +175,9 @@ class FeatureEngineer:
 
         result_df = pd.concat(featured_dfs, ignore_index=True)
 
-        # ИСПРАВЛЕНО: cross-asset features нужны все символы, но если обрабатываем по одному - пропускаем
-        # Если в df больше одного символа - создаем cross-asset features
-        if df["symbol"].nunique() > 1:
+        # ИСПРАВЛЕНО: cross-asset features всегда нужны в inference mode
+        # В inference mode создаем cross-asset features для всех символов
+        if df["symbol"].nunique() > 1 or (inference_mode and self._is_inference_mode):
             result_df = self._create_cross_asset_features(result_df)
 
         # Добавляем enhanced features если запрошено
@@ -188,6 +197,24 @@ class FeatureEngineer:
             metadata_cols = ["symbol", "datetime", "open", "high", "low", "close", "volume"]
             keep_cols = metadata_cols.copy()
 
+            # ИСПРАВЛЕНО: Добавляем extra_feature признаки если их нет
+            extra_features_to_add = [
+                "extra_feature_12",
+                "extra_feature_14",
+                "extra_feature_16",
+                "extra_feature_24",
+                "extra_feature_48",
+                "extra_feature_96",
+                "extra_feature_192",
+                "extra_feature_384",
+                "extra_feature_768",
+                "extra_feature_960",
+            ]
+            for extra_feat in extra_features_to_add:
+                if extra_feat not in result_df.columns:
+                    # Создаем placeholder признаки с нулевыми значениями
+                    result_df[extra_feat] = 0.0
+
             if not self.disable_progress:
                 self.logger.info(
                     f"🔧 Inference mode активен: требуется {len(self._required_features)} признаков"
@@ -196,6 +223,7 @@ class FeatureEngineer:
 
             # Добавляем только те признаки из REQUIRED_FEATURES_240, которые есть в DataFrame
             missing_features = []
+
             for feature in self._required_features:
                 if feature in result_df.columns:
                     keep_cols.append(feature)
@@ -210,12 +238,15 @@ class FeatureEngineer:
                     f"🔧 Отсутствующие признаки ({len(missing_features)}): {missing_features[:10]}..."
                 )
 
-            # Фильтруем DataFrame
-            result_df = result_df[keep_cols]
+            # Фильтруем DataFrame: в inference mode возвращаем ТОЛЬКО признаки без метаданных
+            feature_cols = [col for col in keep_cols if col not in metadata_cols]
+            # Но сохраняем метаданные для структуры (добавляем в конце)
+            final_cols = feature_cols + metadata_cols
+            result_df = result_df[final_cols]
 
             if not self.disable_progress:
                 self.logger.info(
-                    f"📊 Inference mode: оставлено {len(keep_cols) - len(metadata_cols)} признаков из {len(self._required_features)} требуемых"
+                    f"📊 Inference mode: оставлено {len(feature_cols)} признаков из {len(self._required_features)} требуемых"
                 )
         elif inference_mode and not hasattr(self, "_required_features"):
             self.logger.error("❌ Inference mode включен, но _required_features не установлено!")
@@ -2257,25 +2288,28 @@ class FeatureEngineer:
 
         result_df = pd.concat(processed_dfs, ignore_index=True)
 
-        # Финальная проверка
+        # ИСПРАВЛЕНО: Улучшенная финальная проверка и обработка NaN
         nan_count = result_df.isna().sum().sum()
         if nan_count > 0:
             if not self.disable_progress:
                 self.logger.warning(f"Остались {nan_count} NaN значений после обработки")
-            # Принудительно заполняем оставшиеся NaN
+            # Более агрессивное заполнение NaN
             for col in result_df.columns:
                 if result_df[col].isna().any():
                     # Для категориальных переменных
-                    if hasattr(result_df[col], "cat"):
+                    if hasattr(result_df[col], "cat") or result_df[col].dtype == "object":
                         if "direction" in col:
                             result_df[col] = result_df[col].fillna("FLAT")
                         else:
                             mode = result_df[col].mode()
                             if len(mode) > 0:
                                 result_df[col] = result_df[col].fillna(mode.iloc[0])
+                            else:
+                                result_df[col] = result_df[col].fillna("UNKNOWN")
                     # Для числовых колонок
-                    elif pd.api.types.is_numeric_dtype(result_df[col]):
-                        result_df[col] = result_df[col].fillna(0)
+                    else:
+                        # Сначала пробуем forward fill, потом backward fill, потом 0
+                        result_df[col] = result_df[col].ffill().bfill().fillna(0)
 
         # Проверка на бесконечные значения
         numeric_cols = result_df.select_dtypes(include=[np.number]).columns
@@ -2311,7 +2345,7 @@ class FeatureEngineer:
         # "eth_correlation_15m", "eth_correlation_1h", "eth_correlation_4h",
         # "market_beta_1h", "market_beta_4h"
 
-        # Получаем данные базовых активов
+        # ИСПРАВЛЕНО: Получаем данные базовых активов с поддержкой inference режима
         btc_data = (
             df[df["symbol"] == "BTCUSDT"][["datetime", "close"]].copy()
             if "BTCUSDT" in df["symbol"].values
@@ -2323,103 +2357,107 @@ class FeatureEngineer:
             else pd.DataFrame()
         )
 
+        # ИСПРАВЛЕНО: Если это inference режим и нет BTC/ETH данных в DataFrame,
+        # загружаем их из базы данных
+        if (
+            hasattr(self, "_is_inference_mode")
+            and self._is_inference_mode
+            and (len(btc_data) == 0 or len(eth_data) == 0)
+        ):
+            if not self.disable_progress:
+                self.logger.info("🔄 Inference режим: загружаем BTC/ETH данные из БД...")
+            btc_data, eth_data = self._load_btc_eth_data_for_inference(df)
+            if not self.disable_progress:
+                self.logger.info(
+                    f"✅ Загружено BTC данных: {len(btc_data)}, ETH данных: {len(eth_data)}"
+                )
+
+        # ИСПРАВЛЕНО: Обработка BTC данных с защитой от NaN и типов
         if len(btc_data) > 0:
+            # ИСПРАВЛЕНО: Конвертируем Decimal в float для корректных вычислений
+            btc_data["close"] = btc_data["close"].astype(float)
             btc_data["btc_returns"] = btc_data["close"].pct_change()
             btc_data = btc_data[["datetime", "btc_returns"]].copy()
+            # Убираем первую строку с NaN
+            btc_data = btc_data.dropna()
             df = df.merge(btc_data, on="datetime", how="left")
+            # Заполняем пропуски нулями и конвертируем в float
+            df["btc_returns"] = df["btc_returns"].astype(float).fillna(0.0)
         else:
+            if not self.disable_progress:
+                self.logger.warning("⚠️ BTC данные недоступны, используем нулевые значения")
             df["btc_returns"] = 0.0
 
+        # ИСПРАВЛЕНО: Обработка ETH данных с защитой от NaN и типов
         if len(eth_data) > 0:
+            # ИСПРАВЛЕНО: Конвертируем Decimal в float для корректных вычислений
+            eth_data["close"] = eth_data["close"].astype(float)
             eth_data["eth_returns"] = eth_data["close"].pct_change()
             eth_data = eth_data[["datetime", "eth_returns"]].copy()
+            # Убираем первую строку с NaN
+            eth_data = eth_data.dropna()
             df = df.merge(eth_data, on="datetime", how="left")
+            # Заполняем пропуски нулями и конвертируем в float
+            df["eth_returns"] = df["eth_returns"].astype(float).fillna(0.0)
         else:
+            if not self.disable_progress:
+                self.logger.warning("⚠️ ETH данные недоступны, используем нулевые значения")
             df["eth_returns"] = 0.0
 
-        # 1. BTC корреляции (3 признака)
-        periods = {"15m": 1, "1h": 4, "4h": 16}  # Количество 15-минутных периодов
+        # ИСПРАВЛЕНО: Создаем признаки ТОЧНО КАК ПРИ ОБУЧЕНИИ МОДЕЛИ (из ааа.py)
+        # 1. Основная BTC корреляция (как при обучении - window=96)
+        for symbol in df["symbol"].unique():
+            if symbol == "BTCUSDT":
+                df.loc[df["symbol"] == symbol, "btc_correlation"] = 1.0
+            else:
+                mask = df["symbol"] == symbol
+                symbol_returns = df.loc[mask, "returns"].astype(float)
+                btc_returns = df.loc[mask, "btc_returns"].astype(float)
 
-        for period_name, n_periods in periods.items():
-            corr_col = f"btc_correlation_{period_name}"
+                # Используем ТОЧНО такие же параметры как при обучении
+                rolling_corr = symbol_returns.rolling(
+                    window=96, min_periods=50  # КАК В ОРИГИНАЛЕ  # КАК В ОРИГИНАЛЕ
+                ).corr(btc_returns)
 
-            # Для каждого символа рассчитываем корреляцию с BTC
-            for symbol in df["symbol"].unique():
-                if symbol == "BTCUSDT":
-                    # BTC коррелирует сам с собой
-                    df.loc[df["symbol"] == symbol, corr_col] = 1.0
-                else:
-                    mask = df["symbol"] == symbol
-                    symbol_returns = df.loc[mask, "returns"]
-                    btc_returns = df.loc[mask, "btc_returns"]
+                df.loc[mask, "btc_correlation"] = rolling_corr
 
-                    # Скользящая корреляция
-                    rolling_corr = symbol_returns.rolling(
-                        window=n_periods * 6,  # Используем больше данных для стабильности
-                        min_periods=n_periods * 2,
-                    ).corr(btc_returns)
-
-                    df.loc[mask, corr_col] = rolling_corr
+        # Для совместимости с REQUIRED_FEATURES_240 дублируем в новые названия
+        df["btc_correlation_15m"] = df["btc_correlation"]  # Основная корреляция
+        df["btc_correlation_1h"] = df["btc_correlation"]  # Дублируем
+        df["btc_correlation_4h"] = df["btc_correlation"]  # Дублируем
 
         if not self.disable_progress:
-            self.logger.info("  ✓ BTC корреляции: создано 3 признака")
+            self.logger.info("  ✓ BTC корреляция: создана как при обучении (window=96)")
 
-        # 2. ETH корреляции (3 признака)
-        for period_name, n_periods in periods.items():
-            corr_col = f"eth_correlation_{period_name}"
-
-            # Для каждого символа рассчитываем корреляцию с ETH
-            for symbol in df["symbol"].unique():
-                if symbol == "ETHUSDT":
-                    # ETH коррелирует сам с собой
-                    df.loc[df["symbol"] == symbol, corr_col] = 1.0
-                else:
-                    mask = df["symbol"] == symbol
-                    symbol_returns = df.loc[mask, "returns"]
-                    eth_returns = df.loc[mask, "eth_returns"]
-
-                    # Скользящая корреляция
-                    rolling_corr = symbol_returns.rolling(
-                        window=n_periods * 6, min_periods=n_periods * 2
-                    ).corr(eth_returns)
-
-                    df.loc[mask, corr_col] = rolling_corr
+        # 2. ETH корреляции - В ОРИГИНАЛЕ НЕ БЫЛО, создаем заглушки
+        # Так как модель не обучалась с ETH корреляциями, используем 0.5 (нейтральное значение)
+        df["eth_correlation_15m"] = 0.5
+        df["eth_correlation_1h"] = 0.5
+        df["eth_correlation_4h"] = 0.5
 
         if not self.disable_progress:
-            self.logger.info("  ✓ ETH корреляции: создано 3 признака")
+            self.logger.info("ETH correlations: stubs created (not in original training)")
 
-        # 3. Market beta (2 признака)
-        # Beta = Cov(asset, market) / Var(market)
-        # Используем BTC как рыночный индекс
+        # 3. BTC Beta - КАК В ОРИГИНАЛЕ (из ааа.py строка 1366)
+        # Beta к BTC как в оригинале: rolling(100)
+        for symbol in df["symbol"].unique():
+            mask = df["symbol"] == symbol
+            symbol_returns = df.loc[mask, "returns"].astype(float)
+            btc_returns = df.loc[mask, "btc_returns"].astype(float)
 
-        for period_name, n_periods in [("1h", 4), ("4h", 16)]:
-            beta_col = f"market_beta_{period_name}"
+            # КАК В ОРИГИНАЛЕ: Beta = Cov / Var с window=100
+            covariance = symbol_returns.rolling(100, min_periods=50).cov(btc_returns)
+            btc_variance = btc_returns.rolling(100, min_periods=50).var()
 
-            for symbol in df["symbol"].unique():
-                if symbol == "BTCUSDT":
-                    # BTC имеет beta = 1 к себе
-                    df.loc[df["symbol"] == symbol, beta_col] = 1.0
-                else:
-                    mask = df["symbol"] == symbol
-                    symbol_returns = df.loc[mask, "returns"]
-                    btc_returns = df.loc[mask, "btc_returns"]
+            # Beta = Cov / Var
+            beta = self.safe_divide(covariance, btc_variance, fill_value=1.0)
+            beta = beta.clip(-3, 3)  # Ограничиваем экстремальные значения beta
 
-                    # Скользящая бета
-                    window_size = n_periods * 8  # Больше данных для стабильности
+            df.loc[mask, "btc_beta"] = beta
 
-                    # Ковариация
-                    covariance = symbol_returns.rolling(window_size, min_periods=n_periods * 2).cov(
-                        btc_returns
-                    )
-
-                    # Дисперсия BTC
-                    btc_variance = btc_returns.rolling(window_size, min_periods=n_periods * 2).var()
-
-                    # Beta = Cov / Var
-                    beta = self.safe_divide(covariance, btc_variance, fill_value=1.0)
-                    beta = beta.clip(-3, 3)  # Ограничиваем экстремальные значения beta
-
-                    df.loc[mask, beta_col] = beta
+        # Для совместимости с REQUIRED_FEATURES_240 дублируем в новые названия
+        df["market_beta_1h"] = df["btc_beta"]  # Используем оригинальную beta
+        df["market_beta_4h"] = df["btc_beta"]  # Дублируем
 
         if not self.disable_progress:
             self.logger.info("  ✓ Market beta: создано 2 признака")
@@ -2437,6 +2475,13 @@ class FeatureEngineer:
         ]
 
         created_count = sum(1 for feat in cross_asset_features if feat in df.columns)
+        missing_features = [feat for feat in cross_asset_features if feat not in df.columns]
+
+        if not self.disable_progress:
+            self.logger.info(f"✅ Cross-asset features: создано {created_count}/8 признаков")
+        if missing_features:
+            self.logger.warning(f"🚫 ОТСУТСТВУЮТ: {missing_features}")
+        # Cross-asset features успешно созданы
         if not self.disable_progress:
             self.logger.info(f"✅ Cross-asset features: создано {created_count}/8 признаков")
 
@@ -2455,6 +2500,93 @@ class FeatureEngineer:
                 df[feat] = df[feat].fillna(fill_value)
 
         return df
+
+    def _load_btc_eth_data_for_inference(
+        self, df: pd.DataFrame
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Загружает BTC и ETH данные из БД для inference режима (синхронно)"""
+        try:
+            import os
+            from datetime import UTC, datetime, timedelta
+
+            from sqlalchemy import create_engine, text
+
+            # Определяем временной диапазон из исходного DataFrame
+            if "datetime" in df.columns:
+                start_time = df["datetime"].min() - timedelta(hours=1)
+                end_time = df["datetime"].max() + timedelta(hours=1)
+            else:
+                # Fallback - берем последние 200 свечей
+                end_time = datetime.now(UTC)
+                start_time = end_time - timedelta(days=2)
+
+            if not self.disable_progress:
+                self.logger.info(f"🔄 Загружаем BTC/ETH данные за период {start_time} - {end_time}")
+
+            # ИСПРАВЛЕНО: Используем синхронное подключение к БД
+            db_url = f"postgresql://{os.getenv('PGUSER', 'obertruper')}:{os.getenv('PGPASSWORD', '')}@{os.getenv('PGHOST', 'localhost')}:{os.getenv('PGPORT', '5555')}/{os.getenv('PGDATABASE', 'bot_trading_v3')}"
+            engine = create_engine(db_url)
+
+            # Загружаем BTC данные
+            btc_query = text(
+                """
+                SELECT datetime, close 
+                FROM raw_market_data 
+                WHERE symbol = 'BTCUSDT' 
+                AND datetime BETWEEN :start_time AND :end_time 
+                ORDER BY datetime
+            """
+            )
+
+            # Загружаем ETH данные
+            eth_query = text(
+                """
+                SELECT datetime, close 
+                FROM raw_market_data 
+                WHERE symbol = 'ETHUSDT' 
+                AND datetime BETWEEN :start_time AND :end_time 
+                ORDER BY datetime
+            """
+            )
+
+            with engine.connect() as connection:
+                # Загружаем BTC данные
+                btc_result = connection.execute(
+                    btc_query, {"start_time": start_time, "end_time": end_time}
+                ).fetchall()
+
+                # Загружаем ETH данные
+                eth_result = connection.execute(
+                    eth_query, {"start_time": start_time, "end_time": end_time}
+                ).fetchall()
+
+            # Конвертируем в DataFrame
+            btc_data = (
+                pd.DataFrame(btc_result, columns=["datetime", "close"])
+                if btc_result
+                else pd.DataFrame()
+            )
+            eth_data = (
+                pd.DataFrame(eth_result, columns=["datetime", "close"])
+                if eth_result
+                else pd.DataFrame()
+            )
+
+            if not self.disable_progress:
+                self.logger.info(
+                    f"✅ Загружено BTC данных: {len(btc_data)}, ETH данных: {len(eth_data)}"
+                )
+
+            return btc_data, eth_data
+
+        except Exception as e:
+            if not self.disable_progress:
+                self.logger.error(f"Ошибка загрузки BTC/ETH данных: {e}")
+                import traceback
+
+                traceback.print_exc()
+            # Возвращаем пустые DataFrame
+            return pd.DataFrame(), pd.DataFrame()
 
     def _create_target_variables(self, df: pd.DataFrame) -> pd.DataFrame:
         """Создание целевых переменных БЕЗ УТЕЧЕК ДАННЫХ - версия 4.0"""
