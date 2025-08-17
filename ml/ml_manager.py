@@ -667,8 +667,11 @@ class MLManager:
         # Используем согласованность как дополнительный фактор
         # Если большинство таймфреймов согласны - сильный сигнал
 
-        # УПРОЩЕННАЯ ЛОГИКА: Фокус на ближайшие таймфреймы!
-        # Даем больший вес ближайшим предсказаниям
+        # ИСПРАВЛЕНО: Добавляем multiframe_confirmation как в конфигурации
+        # Фокус на 4h таймфрейм (основной) + подтверждение от других
+        timeframe_names = ["15m", "1h", "4h", "12h"]
+        main_timeframe_idx = 2  # 4h - основной таймфрейм как в обучении
+
         near_term_directions = directions[:2]  # 15m и 1h
         far_term_directions = directions[2:]  # 4h и 12h
         near_term_returns = future_returns[:2]  # Берем только 15m и 1h для расчетов
@@ -688,11 +691,11 @@ class MLManager:
             max_probs.append(np.max(probs))
         avg_max_prob = np.mean(max_probs)
 
-        # Если модель неуверенна (все вероятности близки к 0.33), не торгуем
-        if avg_max_prob < 0.35:  # Снижен порог уверенности для лучшего баланса LONG/SHORT
+        # ИСПРАВЛЕНО: Используем правильный порог уверенности из конфига (0.4 = 40%)
+        if avg_max_prob < 0.4:  # Порог из конфигурации direction_confidence_threshold
             signal_type = "NEUTRAL"
-            signal_strength = 0.2
-            logger.info(f"Модель неуверенна, avg_max_prob={avg_max_prob:.3f}")
+            signal_strength = 0.25  # Базовое значение как в обучении
+            logger.info(f"Модель неуверенна, avg_max_prob={avg_max_prob:.3f} < 0.4")
 
         # 2. Если оба ближайших таймфрейма согласны - сильный сигнал
         elif near_long == 2:  # Оба ближайших за LONG
@@ -726,8 +729,10 @@ class MLManager:
             # Используем предсказанные доходности для принятия решения
             avg_near_return = np.mean(near_term_returns)
 
+            # ИСПРАВЛЕНО: Используем focal weighting для уверенности (как в обучении)
             # Сбалансированный порог для торговых сигналов
-            if abs(avg_near_return) > 0.003:  # Более мягкий порог (0.3%) для баланса LONG/SHORT
+            focal_threshold = 0.005  # 0.5% - более строгий порог как в обучении
+            if abs(avg_near_return) > focal_threshold:
                 if avg_near_return > 0:
                     signal_type = "LONG"
                 else:
@@ -735,7 +740,7 @@ class MLManager:
                 signal_strength = 0.5  # Средняя уверенность
             else:
                 signal_type = "NEUTRAL"
-                signal_strength = 0.3
+                signal_strength = 0.25  # Базовое значение как в обучении
 
         # УПРОЩЕННЫЙ РАСЧЕТ SL/TP на основе силы сигнала и ближайших предсказаний
         if signal_type in ["LONG", "SHORT"]:
@@ -790,9 +795,17 @@ class MLManager:
         # ИСПРАВЛЕНИЕ: confidence_scores уже содержат вероятности (0-1), не нужен sigmoid
         model_confidence = float(np.mean(confidence_scores))
 
-        # ИСПРАВЛЕННАЯ формула комбинированной уверенности
-        # Увеличиваем базовую уверенность для торговых сигналов
-        base_confidence = 0.4 if signal_type in ["LONG", "SHORT"] else 0.2
+        # ИСПРАВЛЕНО: Применяем focal weighting как в обучении (focal_alpha=0.25)
+        # Focal Loss formula: alpha * (1 - p)^gamma, где gamma=2.0 из конфига
+        focal_alpha = 0.25
+        focal_gamma = 2.0
+
+        # Применяем focal weighting к уверенности модели
+        focal_weighted_confidence = focal_alpha * (1 - model_confidence) ** focal_gamma
+
+        # ИСПРАВЛЕННАЯ формула комбинированной уверенности с focal weighting
+        # Базовая уверенность соответствует порогу из конфига (0.3)
+        base_confidence = 0.3 if signal_type in ["LONG", "SHORT"] else 0.25
 
         # Бонус за согласованность направлений (используем данные из нового подсчета)
         consistency_bonus = 0.0
@@ -803,14 +816,33 @@ class MLManager:
             elif near_term_directions[0] == near_term_directions[1]:  # Хотя бы два согласны
                 consistency_bonus = 0.15
 
-        # Комбинированная уверенность с учетом типа сигнала
+        # ИСПРАВЛЕНО: Комбинированная уверенность с focal weighting и multiframe confirmation
+        # Добавляем мультитаймфреймовое подтверждение
+        multiframe_bonus = 0.0
+        if signal_type in ["LONG", "SHORT"]:
+            main_direction = directions[main_timeframe_idx]  # 4h направление
+            main_signal = 0 if signal_type == "LONG" else 1
+
+            if main_direction == main_signal:
+                multiframe_bonus += 0.2  # Основной таймфрейм поддерживает
+
+                # Считаем поддержку от других таймфреймов
+                other_support = sum(1 for d in directions if d == main_signal)
+                if other_support >= 3:  # 3+ таймфрейма согласны
+                    multiframe_bonus += 0.15
+                elif other_support >= 2:  # 2+ таймфрейма согласны
+                    multiframe_bonus += 0.1
+
+        # Комбинированная уверенность с focal weighting
         combined_confidence = min(
             0.95,
             base_confidence
-            + signal_strength * 0.3
+            + signal_strength * 0.25
             + model_confidence * 0.2
+            + focal_weighted_confidence * 0.1
             + (1.0 - avg_risk) * 0.1
-            + consistency_bonus,
+            + consistency_bonus
+            + multiframe_bonus,
         )
 
         # Вероятность успеха
