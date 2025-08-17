@@ -942,7 +942,7 @@ class MLSignalProcessor:
             cached = self.prediction_cache[cache_key]
             if isinstance(cached, Signal):
                 # Проверяем TTL
-                if (datetime.utcnow() - cached.created_at).total_seconds() < self._cache_ttl:
+                if (datetime.utcnow() - cached.created_at).total_seconds() < self.cache_ttl:
                     return cached
 
         # Генерируем новый сигнал

@@ -140,7 +140,13 @@ class FeatureEngineer:
         # Первый проход - базовые признаки
         for symbol in df["symbol"].unique():
             symbol_data = df[df["symbol"] == symbol].copy()
-            symbol_data = symbol_data.sort_values("datetime")
+
+            # ИСПРАВЛЕНО: Сортируем по datetime из индекса или колонки
+            if "datetime" in symbol_data.columns:
+                symbol_data = symbol_data.sort_values("datetime")
+            else:
+                # Сортируем по индексу, если datetime в индексе
+                symbol_data = symbol_data.sort_index()
 
             symbol_data = self._create_basic_features(symbol_data)
             symbol_data = self._create_technical_indicators(symbol_data)
@@ -251,9 +257,20 @@ class FeatureEngineer:
                 self.logger.warning(f"Обнаружено {extreme_moves.sum()} экстремальных движений цены")
 
         # Проверка временных гэпов (только значительные разрывы > 2 часов)
+        # ИСПРАВЛЕНО: Работаем с datetime в индексе, а не в колонке
         for symbol in df["symbol"].unique():
             symbol_data = df[df["symbol"] == symbol]
-            time_diff = symbol_data["datetime"].diff()
+
+            # Используем datetime из индекса или из колонки, если она есть
+            if "datetime" in symbol_data.columns:
+                time_series = symbol_data["datetime"]
+            elif hasattr(symbol_data.index, "to_series"):
+                time_series = symbol_data.index.to_series()
+            else:
+                # Если нет ни колонки, ни datetime индекса, пропускаем проверку
+                continue
+
+            time_diff = time_series.diff()
             expected_diff = pd.Timedelta("15 minutes")
             # Считаем большими только разрывы больше 2 часов (8 интервалов)
             large_gaps = time_diff > expected_diff * 8
@@ -269,14 +286,74 @@ class FeatureEngineer:
         df["returns"] = np.log(df["close"] / df["close"].shift(1))
 
         # Доходности за разные периоды (РАСШИРЕНО для REQUIRED_FEATURES_240)
-        returns_periods = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120]
+        # ИСПРАВЛЕНО: Добавлены все недостающие периоды из features_240.py
+        returns_periods = [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            13,
+            15,
+            20,
+            25,
+            30,
+            35,
+            40,
+            45,
+            50,
+            60,
+            70,
+            80,
+            90,
+            100,
+            120,
+            150,
+            200,
+        ]
         for period in returns_periods:
             df[f"returns_{period}"] = np.log(df["close"] / df["close"].shift(period))
 
-        # Волатильность за разные периоды (ДОБАВЛЕНО для REQUIRED_FEATURES_240)
-        volatility_periods = [5, 10, 15, 20, 30, 45, 60, 90]
+        # Волатильность за разные периоды (ИСПРАВЛЕНО для REQUIRED_FEATURES_240)
+        # ИСПРАВЛЕНО: Добавлены все недостающие периоды включая volatility_2, volatility_3
+        volatility_periods = [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            13,
+            15,
+            20,
+            25,
+            30,
+            35,
+            40,
+            45,
+            50,
+            60,
+            70,
+            80,
+            90,
+            100,
+            150,
+            200,
+        ]
         for period in volatility_periods:
-            df[f"volatility_{period}"] = df["returns"].rolling(period, min_periods=max(1, period//2)).std()
+            df[f"volatility_{period}"] = (
+                df["returns"].rolling(period, min_periods=max(1, period // 2)).std()
+            )
 
         # Микроструктурные признаки (ДОБАВЛЕНО для REQUIRED_FEATURES_240)
         # Спред high-low (bid-ask spread аппроксимация)
@@ -295,16 +372,18 @@ class FeatureEngineer:
         df["buy_pressure"] = np.where(df["price_direction"] > 0, df["volume"], 0)
         df["sell_pressure"] = np.where(df["price_direction"] < 0, df["volume"], 0)
         df["net_pressure"] = df["buy_pressure"] - df["sell_pressure"]
-        
+
         df["buy_pressure_ma_10"] = df["buy_pressure"].rolling(10, min_periods=5).mean()
         df["sell_pressure_ma_10"] = df["sell_pressure"].rolling(10, min_periods=5).mean()
         df["net_pressure_ma_10"] = df["net_pressure"].rolling(10, min_periods=5).mean()
 
         # Order flow признаки
         for period in [5, 10, 20]:
-            df[f"order_flow_{period}"] = df["order_imbalance"].rolling(period, min_periods=max(1, period//2)).sum()
+            df[f"order_flow_{period}"] = (
+                df["order_imbalance"].rolling(period, min_periods=max(1, period // 2)).sum()
+            )
             # Order flow ratio
-            total_volume = df["volume"].rolling(period, min_periods=max(1, period//2)).sum()
+            total_volume = df["volume"].rolling(period, min_periods=max(1, period // 2)).sum()
             df[f"order_flow_ratio_{period}"] = self.safe_divide(
                 df[f"order_flow_{period}"], total_volume, fill_value=0.0
             )
@@ -888,678 +967,588 @@ class FeatureEngineer:
         return df
 
     def _create_rally_detection_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Признаки для определения ралли и крупных движений"""
+        """Создает ТОЧНО 15 признаков ралли из REQUIRED_FEATURES_240"""
         if not self.disable_progress:
-            self.logger.info("Создание признаков для определения ралли...")
-        initial_cols = len(df.columns)
-        features_created = []
+            self.logger.info("🎯 Создание 15 RALLY_FEATURES...")
 
-        # 1. Накопленный объем за разные периоды (8 признаков)
-        # ИСПРАВЛЕНО: Используем log-трансформацию для больших объемов
-        for hours in [4, 8, 12, 24]:
-            periods = hours * 4  # 15-минутные свечи
-            col_cumsum = f"volume_cumsum_{hours}h"
-            col_ratio = f"volume_cumsum_{hours}h_ratio"
+        # RALLY_FEATURES из features_240.py:
+        # "current_rally_magnitude", "current_rally_duration", "current_rally_velocity",
+        # "current_drawdown_magnitude", "current_drawdown_duration", "current_drawdown_velocity",
+        # "recent_max_rally_1h", "recent_max_rally_4h", "recent_max_rally_12h",
+        # "recent_max_drawdown_1h", "recent_max_drawdown_4h", "recent_max_drawdown_12h",
+        # "prob_reach_1pct_4h", "prob_reach_2pct_4h", "prob_reach_3pct_12h"
 
-            # Используем log1p для безопасной трансформации
-            # log1p(x) = log(1 + x), безопасен для x=0
-            df[col_cumsum] = np.log1p(df["volume"].rolling(periods).sum())
+        # 1. Текущие ралли/падения (6 признаков)
+        # Рассчитываем текущий тренд начиная с последнего поворота
 
-            # Отношение к среднему объему за более длинный период
-            avg_volume_long = df["volume"].rolling(periods * 4).mean()
-            df[col_ratio] = self.safe_divide(
-                df["volume"].rolling(periods).sum(),
-                avg_volume_long * periods,  # Нормализуем на ожидаемую сумму
-                fill_value=1.0,
-                max_value=10.0,  # Ограничиваем экстремальные всплески
-            )
-            features_created.extend([col_cumsum, col_ratio])
+        # Определяем поворотные точки (локальные максимумы/минимумы)
+        window = 5  # 75 минут для определения поворота
+        local_max = (
+            df["high"]
+            .rolling(window * 2 + 1, center=True)
+            .apply(lambda x: x.iloc[window] == x.max(), raw=False)
+            .fillna(False)
+        )
+        local_min = (
+            df["low"]
+            .rolling(window * 2 + 1, center=True)
+            .apply(lambda x: x.iloc[window] == x.min(), raw=False)
+            .fillna(False)
+        )
 
-        if not self.disable_progress:
-            self.logger.info(
-                f"  ✓ Накопленный объем: создано {len([f for f in features_created if 'volume_cumsum' in f])} признаков"
-            )
+        # Находим индексы поворотных точек
+        turning_points = local_max.astype(bool) | local_min.astype(bool)
 
-        # 2. Аномальные всплески объема (3 признака)
-        volume_mean = df["volume"].rolling(96).mean()  # средний объем за 24ч
-        volume_std = df["volume"].rolling(96).std()
-        df["volume_zscore"] = self.safe_divide(
-            df["volume"] - volume_mean,
-            volume_std,
+        # Для каждой строки находим последнюю поворотную точку
+        last_turn_idx = turning_points.cumsum().groupby(df.index).transform("last")
+        last_turn_price = df["close"].where(turning_points).ffill()
+        last_turn_high = df["high"].where(turning_points).ffill()
+        last_turn_low = df["low"].where(turning_points).ffill()
+
+        # Длительность с последнего поворота (в количестве периодов)
+        # ИСПРАВЛЕНО: Обрабатываем как DatetimeIndex, так и RangeIndex
+        turn_indices = df.index[turning_points].tolist()
+        turn_duration = pd.Series(0, index=df.index, dtype=int)
+        for i, idx in enumerate(df.index):
+            # Находим последний поворот до текущего момента
+            recent_turns = [t for t in turn_indices if t <= idx]
+            if recent_turns:
+                last_turn = recent_turns[-1]
+                # Проверяем тип индекса и вычисляем длительность
+                if isinstance(df.index, pd.DatetimeIndex):
+                    # Для DatetimeIndex преобразуем timedelta в количество 15-минутных периодов
+                    duration_timedelta = idx - last_turn
+                    duration_periods = int(duration_timedelta.total_seconds() / (15 * 60))
+                else:
+                    # Для RangeIndex просто вычитаем индексы (уже в периодах)
+                    duration_periods = i - df.index.get_loc(last_turn)
+                turn_duration.iloc[i] = max(0, duration_periods)
+
+        # Текущее ралли (рост от последнего минимума)
+        current_is_rally = df["close"] > last_turn_price
+        df["current_rally_magnitude"] = np.where(
+            current_is_rally,
+            (df["close"] / last_turn_price - 1) * 100,
+            0.0,  # в процентах
+        )
+        df["current_rally_duration"] = np.where(current_is_rally, turn_duration, 0)
+        df["current_rally_velocity"] = self.safe_divide(
+            df["current_rally_magnitude"],
+            df["current_rally_duration"] + 1,  # +1 чтобы избежать деления на 0
             fill_value=0.0,
-            max_value=50.0,  # ИСПРАВЛЕНО: В крипто Z-score может достигать 20-50
-        )
-        df["volume_spike"] = (df["volume_zscore"] > 3).astype(int)
-        df["volume_spike_magnitude"] = df["volume_zscore"].clip(0, 10)
-        features_created.extend(["volume_zscore", "volume_spike", "volume_spike_magnitude"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Аномальные всплески объема: создано 3 признака")
-
-        # 3. Уровни поддержки/сопротивления (15 признаков)
-        # Локальные минимумы и максимумы
-        for window in [20, 50, 100]:  # 5ч, 12.5ч, 25ч
-            df[f"local_high_{window}"] = df["high"].rolling(window).max()
-            df[f"local_low_{window}"] = df["low"].rolling(window).min()
-            df[f"distance_from_high_{window}"] = (df["close"] - df[f"local_high_{window}"]) / df[
-                "close"
-            ]
-            df[f"distance_from_low_{window}"] = (df["close"] - df[f"local_low_{window}"]) / df[
-                "close"
-            ]
-            df[f"position_in_range_{window}"] = self.safe_divide(
-                df["close"] - df[f"local_low_{window}"],
-                df[f"local_high_{window}"] - df[f"local_low_{window}"],
-                fill_value=0.5,  # Середина диапазона
-                max_value=1.0,  # Позиция в диапазоне от 0 до 1
-            )
-            features_created.extend(
-                [
-                    f"local_high_{window}",
-                    f"local_low_{window}",
-                    f"distance_from_high_{window}",
-                    f"distance_from_low_{window}",
-                    f"position_in_range_{window}",
-                ]
-            )
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Уровни поддержки/сопротивления: создано 15 признаков")
-
-        # 4. Сжатие волатильности (признак будущего прорыва) (2 признака)
-        # Bollinger Bands уже есть, добавим Keltner Channels для сравнения
-        if "atr" in df.columns and "bb_width" in df.columns:
-            atr_multiplier = 2.0
-            ema20 = df["close"].ewm(span=20, adjust=False).mean()
-            kc_upper = ema20 + atr_multiplier * df["atr"]
-            kc_lower = ema20 - atr_multiplier * df["atr"]
-            # ИСПРАВЛЕНО: сравниваем относительные ширины каналов
-            kc_width = (kc_upper - kc_lower) / df["close"]
-
-            df["volatility_squeeze"] = (df["bb_width"] < kc_width).astype(int)
-            # ИСПРАВЛЕНО: продолжительность сжатия считается только для периодов squeeze
-            squeeze_group = (df["volatility_squeeze"] != df["volatility_squeeze"].shift()).cumsum()
-            df["volatility_squeeze_duration"] = (
-                df["volatility_squeeze"].groupby(squeeze_group).cumsum()
-            )
-            df.loc[df["volatility_squeeze"] == 0, "volatility_squeeze_duration"] = 0
-            features_created.extend(["volatility_squeeze", "volatility_squeeze_duration"])
-
-            if not self.disable_progress:
-                self.logger.info("  ✓ Сжатие волатильности: создано 2 признака")
-
-        # 5. Дивергенции RSI/MACD с ценой (4 признака)
-        if "rsi" in df.columns:
-            # RSI дивергенция
-            price_higher = (df["close"] > df["close"].shift(14)) & (
-                df["close"].shift(14) > df["close"].shift(28)
-            )
-            rsi_lower = (df["rsi"] < df["rsi"].shift(14)) & (
-                df["rsi"].shift(14) < df["rsi"].shift(28)
-            )
-            df["bearish_divergence_rsi"] = (price_higher & rsi_lower).astype(int)
-
-            price_lower = (df["close"] < df["close"].shift(14)) & (
-                df["close"].shift(14) < df["close"].shift(28)
-            )
-            rsi_higher = (df["rsi"] > df["rsi"].shift(14)) & (
-                df["rsi"].shift(14) > df["rsi"].shift(28)
-            )
-            df["bullish_divergence_rsi"] = (price_lower & rsi_higher).astype(int)
-            features_created.extend(["bearish_divergence_rsi", "bullish_divergence_rsi"])
-
-        if "macd" in df.columns:
-            # MACD дивергенция
-            macd_lower = (df["macd"] < df["macd"].shift(14)) & (
-                df["macd"].shift(14) < df["macd"].shift(28)
-            )
-            df["bearish_divergence_macd"] = (
-                (price_higher & macd_lower).astype(int) if "price_higher" in locals() else 0
-            )
-
-            macd_higher = (df["macd"] > df["macd"].shift(14)) & (
-                df["macd"].shift(14) > df["macd"].shift(28)
-            )
-            df["bullish_divergence_macd"] = (
-                (price_lower & macd_higher).astype(int) if "price_lower" in locals() else 0
-            )
-            features_created.extend(["bearish_divergence_macd", "bullish_divergence_macd"])
-
-        if not self.disable_progress:
-            self.logger.info(
-                f"  ✓ Дивергенции RSI/MACD: создано {len([f for f in features_created if 'divergence' in f])} признаков"
-            )
-
-        # 6. Паттерны накопления/распределения (4 признака)
-        # On-Balance Volume (OBV)
-        # ИСПРАВЛЕНО: Используем log-трансформацию для контроля масштаба
-        obv_change = df["volume"] * ((df["close"] > df["close"].shift(1)) * 2 - 1)
-
-        # Используем скользящее окно с log-трансформацией
-        obv_raw = obv_change.rolling(100).sum()  # 100 периодов (25 часов)
-
-        # Применяем log-трансформацию для контроля масштаба
-        df["obv"] = np.sign(obv_raw) * np.log1p(np.abs(obv_raw))
-
-        # Нормализуем OBV относительно среднего объема для сравнимости между активами
-        avg_volume = df["volume"].rolling(100).mean()
-        df["obv_normalized"] = self.safe_divide(
-            df["obv"],
-            np.log1p(avg_volume),  # Логарифмируем и средний объем
-            fill_value=0.0,
-            max_value=20.0,
         )
 
-        df["obv_ema"] = df["obv"].ewm(span=20, adjust=False).mean()
-        df["obv_divergence"] = df["obv"] - df["obv_ema"]
-
-        # Chaikin Money Flow
-        mfm = ((df["close"] - df["low"]) - (df["high"] - df["close"])) / (
-            df["high"] - df["low"] + 1e-10
+        # Текущее падение (падение от последнего максимума)
+        current_is_drawdown = df["close"] < last_turn_price
+        df["current_drawdown_magnitude"] = np.where(
+            current_is_drawdown,
+            (1 - df["close"] / last_turn_price) * 100,
+            0.0,  # в процентах
         )
-        mfv = mfm * df["volume"]
-        df["cmf"] = mfv.rolling(20).sum() / df["volume"].rolling(20).sum()
-        features_created.extend(["obv", "obv_normalized", "obv_ema", "obv_divergence", "cmf"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Паттерны накопления/распределения: создано 5 признаков")
-
-        # 7. Momentum и ускорение (4 признака)
-        # Используем groupby для правильного расчета по символам
-        df["momentum_1h"] = df.groupby("symbol")["close"].pct_change(4) * 100  # 1 час
-        df["momentum_4h"] = df.groupby("symbol")["close"].pct_change(16) * 100  # 4 часа
-        df["momentum_24h"] = df.groupby("symbol")["close"].pct_change(96) * 100  # 24 часа
-
-        # Ускорение (изменение momentum)
-        df["momentum_acceleration"] = df.groupby("symbol")["momentum_1h"].transform(
-            lambda x: x - x.shift(4)
-        )
-        features_created.extend(
-            ["momentum_1h", "momentum_4h", "momentum_24h", "momentum_acceleration"]
+        df["current_drawdown_duration"] = np.where(current_is_drawdown, turn_duration, 0)
+        df["current_drawdown_velocity"] = self.safe_divide(
+            df["current_drawdown_magnitude"], df["current_drawdown_duration"] + 1, fill_value=0.0
         )
 
         if not self.disable_progress:
-            self.logger.info("  ✓ Momentum индикаторы: создано 4 признака")
+            self.logger.info("  ✓ Текущие ралли/падения: создано 6 признаков")
 
-        # 8. Паттерн "пружина" - сильное сжатие перед движением (1 признак)
-        if (
-            "volatility_squeeze" in df.columns
-            and "volume_spike" in df.columns
-            and "atr_pct" in df.columns
-        ):
-            df["spring_pattern"] = (
-                (df["volatility_squeeze"] == 1)
-                & (df["volume_spike"] == 1)
-                & (df["atr_pct"].rolling(20).mean() < df["atr_pct"].rolling(100).mean() * 0.7)
-            ).astype(int)
-            features_created.append("spring_pattern")
+        # 2. Недавние максимумы ралли и падений (6 признаков)
+        periods = {"1h": 4, "4h": 16, "12h": 48}  # в 15-минутных свечах
 
-            if not self.disable_progress:
-                self.logger.info("  ✓ Паттерн 'пружина': создан 1 признак")
+        for period_name, n_candles in periods.items():
+            # Максимальное ралли за период
+            max_rally = 0
+            max_drawdown = 0
 
-        # Итоговая статистика
-        total_created = len(features_created)
+            for i in range(1, n_candles + 1):
+                # Ралли: максимальный рост от минимума в окне
+                rolling_min = df["low"].rolling(i, min_periods=1).min()
+                rally = (df["high"] / rolling_min - 1) * 100
+                max_rally = np.maximum(max_rally, rally)
+
+                # Падение: максимальное падение от максимума в окне
+                rolling_max = df["high"].rolling(i, min_periods=1).max()
+                drawdown = (1 - df["low"] / rolling_max) * 100
+                max_drawdown = np.maximum(max_drawdown, drawdown)
+
+            df[f"recent_max_rally_{period_name}"] = max_rally
+            df[f"recent_max_drawdown_{period_name}"] = max_drawdown
+
         if not self.disable_progress:
-            self.logger.info(
-                f"✅ Rally detection features: всего создано {total_created} признаков"
-            )
+            self.logger.info("  ✓ Недавние максимумы: создано 6 признаков")
+
+        # 3. Вероятности достижения уровней (3 признака)
+        # Основано на исторической волатильности и текущем моментуме
+
+        # Историческая волатильность
+        returns = df["close"].pct_change()
+        vol_4h = returns.rolling(16).std() * np.sqrt(16)  # 4-часовая волатильность
+        vol_12h = returns.rolling(48).std() * np.sqrt(48)  # 12-часовая волатильность
+
+        # Текущий моментум
+        momentum_1h = df["close"].pct_change(4)
+        momentum_4h = df["close"].pct_change(16)
+
+        # Простая модель вероятности: базируется на волатильности и моментуме
+        # P(reach X% in T hours) = sigmoid(momentum/volatility - threshold)
+
+        def sigmoid(x):
+            return 1 / (1 + np.exp(-np.clip(x, -10, 10)))
+
+        # Нормализуем моментум относительно волатильности
+        momentum_vol_ratio_4h = self.safe_divide(momentum_4h, vol_4h, fill_value=0.0)
+        momentum_vol_ratio_12h = self.safe_divide(momentum_4h, vol_12h, fill_value=0.0)
+
+        # Калибруем пороги так, чтобы базовая вероятность была ~30%
+        # При нулевом моментуме: P = 0.3
+        # threshold = -log(1/0.3 - 1) ≈ -0.85
+        base_threshold = -0.85
+
+        # 1% за 4 часа
+        df["prob_reach_1pct_4h"] = sigmoid(momentum_vol_ratio_4h * 2 + base_threshold)
+
+        # 2% за 4 часа
+        df["prob_reach_2pct_4h"] = sigmoid(momentum_vol_ratio_4h * 1.5 + base_threshold - 0.5)
+
+        # 3% за 12 часов
+        df["prob_reach_3pct_12h"] = sigmoid(momentum_vol_ratio_12h * 1.2 + base_threshold - 0.3)
+
+        if not self.disable_progress:
+            self.logger.info("  ✓ Вероятности достижения уровней: создано 3 признака")
+
+        # Итоговая проверка
+        rally_features = [
+            "current_rally_magnitude",
+            "current_rally_duration",
+            "current_rally_velocity",
+            "current_drawdown_magnitude",
+            "current_drawdown_duration",
+            "current_drawdown_velocity",
+            "recent_max_rally_1h",
+            "recent_max_rally_4h",
+            "recent_max_rally_12h",
+            "recent_max_drawdown_1h",
+            "recent_max_drawdown_4h",
+            "recent_max_drawdown_12h",
+            "prob_reach_1pct_4h",
+            "prob_reach_2pct_4h",
+            "prob_reach_3pct_12h",
+        ]
+
+        created_count = sum(1 for feat in rally_features if feat in df.columns)
+        if not self.disable_progress:
+            self.logger.info(f"✅ Rally features: создано {created_count}/15 признаков")
+
+        # Заполняем NaN значения
+        for feat in rally_features:
+            if feat in df.columns:
+                df[feat] = df[feat].fillna(0.0)
 
         return df
 
     def _create_signal_quality_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Признаки для оценки качества торговых сигналов"""
+        """Создает ТОЧНО 15 признаков качества сигналов из REQUIRED_FEATURES_240"""
         if not self.disable_progress:
-            self.logger.info("Создание признаков качества сигналов...")
-        initial_cols = len(df.columns)
-        features_created = []
+            self.logger.info("🎯 Создание 15 SIGNAL_QUALITY_FEATURES...")
 
-        # 1. Согласованность индикаторов
-        # Определяем сигналы от разных индикаторов
-        indicators_long = []
-        indicators_short = []
-        indicators_used = []
+        # SIGNAL_QUALITY_FEATURES из features_240.py:
+        # "momentum_score", "trend_strength", "trend_consistency", "momentum_divergence",
+        # "trend_acceleration", "trend_quality", "overbought_score", "oversold_score",
+        # "divergence_bull", "divergence_bear", "pattern_strength", "breakout_strength",
+        # "reversal_probability", "support_distance", "resistance_distance"
 
-        # RSI
+        # 1. Моментум и тренд (6 признаков)
+
+        # momentum_score - комбинированная оценка моментума
+        rsi_momentum = (
+            (df["rsi"] - 50) / 50 if "rsi" in df.columns else pd.Series(0, index=df.index)
+        )
+        macd_momentum = (
+            df["macd"] / (df["close"] * 0.01)
+            if "macd" in df.columns
+            else pd.Series(0, index=df.index)
+        )
+        price_momentum = df["close"].pct_change(10) * 10  # 10-периодный моментум
+        df["momentum_score"] = (
+            rsi_momentum + macd_momentum.fillna(0) + price_momentum.fillna(0)
+        ) / 3
+        df["momentum_score"] = df["momentum_score"].clip(-2, 2)  # Нормализуем в диапазон [-2, 2]
+
+        # trend_strength - сила тренда из ADX или альтернатива
+        if "adx" in df.columns:
+            df["trend_strength"] = df["adx"] / 100  # Нормализуем ADX к [0, 1]
+        else:
+            # Альтернативная оценка силы тренда
+            sma_short = df["close"].rolling(10).mean()
+            sma_long = df["close"].rolling(50).mean()
+            trend_diff = (sma_short - sma_long) / sma_long
+            df["trend_strength"] = trend_diff.abs().rolling(20).mean().fillna(0.5)
+
+        # trend_consistency - консистентность направления тренда
+        price_direction = np.sign(df["close"] - df["close"].shift(1))
+        df["trend_consistency"] = (
+            price_direction.rolling(20).mean().abs()
+        )  # Чем ближе к 1, тем консистентнее
+
+        # momentum_divergence - дивергенция между ценой и моментумом
+        price_momentum_20 = df["close"].pct_change(20)
+        rsi_momentum_20 = (
+            df["rsi"].diff(20) if "rsi" in df.columns else pd.Series(0, index=df.index)
+        )
+        # Нормализуем и сравниваем направления
+        price_dir = np.sign(price_momentum_20)
+        rsi_dir = np.sign(rsi_momentum_20)
+        df["momentum_divergence"] = (price_dir != rsi_dir).astype(float)  # 1 = дивергенция, 0 = нет
+
+        # trend_acceleration - ускорение тренда
+        momentum_short = df["close"].pct_change(5)
+        momentum_long = df["close"].pct_change(20)
+        df["trend_acceleration"] = momentum_short - momentum_long  # Положительное = ускорение вверх
+
+        # trend_quality - качество тренда (сила + консистентность)
+        df["trend_quality"] = df["trend_strength"] * df["trend_consistency"]
+
+        if not self.disable_progress:
+            self.logger.info("  ✓ Моментум и тренд: создано 6 признаков")
+
+        # 2. Уровни перекупленности/перепроданности (4 признака)
+
+        # overbought_score - степень перекупленности
         if "rsi" in df.columns:
-            indicators_long.append((df["rsi"] < 30).astype(int))
-            indicators_short.append((df["rsi"] > 70).astype(int))
-            indicators_used.append("RSI")
+            rsi_overbought = np.maximum(0, df["rsi"] - 70) / 30  # Шкала от 0 до 1
+        else:
+            rsi_overbought = pd.Series(0, index=df.index)
 
-        # MACD
-        if "macd_diff" in df.columns:
-            indicators_long.append((df["macd_diff"] > 0).astype(int))
-            indicators_short.append((df["macd_diff"] < 0).astype(int))
-            indicators_used.append("MACD")
-
-        # Bollinger Bands
+        # Добавляем оценку от Bollinger Bands
         if "bb_position" in df.columns:
-            indicators_long.append((df["bb_position"] < 0.2).astype(int))
-            indicators_short.append((df["bb_position"] > 0.8).astype(int))
-            indicators_used.append("Bollinger Bands")
-
-        # Stochastic
-        if "stoch_k" in df.columns:
-            indicators_long.append((df["stoch_k"] < 20).astype(int))
-            indicators_short.append((df["stoch_k"] > 80).astype(int))
-            indicators_used.append("Stochastic")
-
-        # ADX (сила тренда)
-        if "adx" in df.columns and "adx_pos" in df.columns and "adx_neg" in df.columns:
-            strong_trend = (df["adx"] > 25).astype(int)
-            indicators_long.append(strong_trend & (df["adx_pos"] > df["adx_neg"]))
-            indicators_short.append(strong_trend & (df["adx_neg"] > df["adx_pos"]))
-            indicators_used.append("ADX")
-
-        # Moving averages
-        if "close_sma_20_ratio" in df.columns and "close_sma_50_ratio" in df.columns:
-            indicators_long.append(
-                (df["close_sma_20_ratio"] > df["close_sma_50_ratio"]).astype(int)
-            )
-            indicators_short.append(
-                (df["close_sma_20_ratio"] < df["close_sma_50_ratio"]).astype(int)
-            )
-            indicators_used.append("Moving Averages")
-
-        # Считаем согласованность
-        if indicators_long:
-            df["indicators_consensus_long"] = sum(indicators_long) / len(indicators_long)
-            df["indicators_count_long"] = sum(indicators_long)
+            bb_overbought = np.maximum(0, df["bb_position"] - 0.8) / 0.2
         else:
-            df["indicators_consensus_long"] = 0
-            df["indicators_count_long"] = 0
+            bb_overbought = pd.Series(0, index=df.index)
 
-        if indicators_short:
-            df["indicators_consensus_short"] = sum(indicators_short) / len(indicators_short)
-            df["indicators_count_short"] = sum(indicators_short)
+        df["overbought_score"] = (rsi_overbought + bb_overbought) / 2
+
+        # oversold_score - степень перепроданности
+        if "rsi" in df.columns:
+            rsi_oversold = np.maximum(0, 30 - df["rsi"]) / 30
         else:
-            df["indicators_consensus_short"] = 0
-            df["indicators_count_short"] = 0
+            rsi_oversold = pd.Series(0, index=df.index)
 
-        features_created.extend(
-            [
-                "indicators_consensus_long",
-                "indicators_count_long",
-                "indicators_consensus_short",
-                "indicators_count_short",
-            ]
+        if "bb_position" in df.columns:
+            bb_oversold = np.maximum(0, 0.2 - df["bb_position"]) / 0.2
+        else:
+            bb_oversold = pd.Series(0, index=df.index)
+
+        df["oversold_score"] = (rsi_oversold + bb_oversold) / 2
+
+        # divergence_bull - бычья дивергенция (цена падает, индикаторы растут)
+        price_falling = df["close"] < df["close"].shift(10)
+        if "rsi" in df.columns:
+            rsi_rising = df["rsi"] > df["rsi"].shift(10)
+            df["divergence_bull"] = (price_falling & rsi_rising).astype(float)
+        else:
+            df["divergence_bull"] = pd.Series(0, index=df.index)
+
+        # divergence_bear - медвежья дивергенция (цена растет, индикаторы падают)
+        price_rising = df["close"] > df["close"].shift(10)
+        if "rsi" in df.columns:
+            rsi_falling = df["rsi"] < df["rsi"].shift(10)
+            df["divergence_bear"] = (price_rising & rsi_falling).astype(float)
+        else:
+            df["divergence_bear"] = pd.Series(0, index=df.index)
+
+        if not self.disable_progress:
+            self.logger.info("  ✓ Уровни перекупленности/перепроданности: создано 4 признака")
+
+        # 3. Паттерны и сила (5 признаков)
+
+        # pattern_strength - сила паттерна (на основе объема и волатильности)
+        volume_relative = df["volume"] / df["volume"].rolling(20).mean()
+        if "atr" in df.columns:
+            volatility_relative = df["atr"] / df["atr"].rolling(20).mean()
+        else:
+            volatility_relative = df["close"].rolling(5).std() / df["close"].rolling(20).std()
+
+        df["pattern_strength"] = (volume_relative * volatility_relative).fillna(1.0)
+        df["pattern_strength"] = df["pattern_strength"].clip(
+            0, 5
+        )  # Ограничиваем экстремальные значения
+
+        # breakout_strength - сила прорыва
+        if "bb_position" in df.columns:
+            # Прорыв Bollinger Bands
+            bb_breakout = (df["bb_position"] > 1) | (df["bb_position"] < 0)
+            breakout_magnitude = np.abs(df["bb_position"] - 0.5) * 2  # Сила отклонения от центра
+        else:
+            # Альтернативный расчет через ценовые уровни
+            high_20 = df["high"].rolling(20).max()
+            low_20 = df["low"].rolling(20).min()
+            bb_breakout = (df["close"] > high_20) | (df["close"] < low_20)
+            breakout_magnitude = np.maximum(
+                (df["close"] - high_20) / high_20, (low_20 - df["close"]) / low_20
+            ).fillna(0)
+
+        df["breakout_strength"] = bb_breakout.astype(float) * breakout_magnitude
+
+        # reversal_probability - вероятность разворота
+        # Основана на экстремальных значениях индикаторов
+        extreme_rsi = (
+            (df["rsi"] > 80) | (df["rsi"] < 20)
+            if "rsi" in df.columns
+            else pd.Series(False, index=df.index)
+        )
+        extreme_bb = (
+            (df["bb_position"] > 0.9) | (df["bb_position"] < 0.1)
+            if "bb_position" in df.columns
+            else pd.Series(False, index=df.index)
         )
 
-        if not self.disable_progress:
-            self.logger.info("  ✓ Согласованность индикаторов: создано 4 признака")
-            self.logger.info(f"    Используемые индикаторы: {', '.join(indicators_used)}")
+        # Увеличиваем вероятность разворота при экстремальных значениях
+        df["reversal_probability"] = (extreme_rsi.astype(float) + extreme_bb.astype(float)) / 2
 
-        # 2. Сила тренда на старших таймфреймах (4 признака)
-        # ИСПРАВЛЕНО: Нормализуем тренды относительно цены для избежания больших значений
-        # Эмулируем 1-часовой таймфрейм (4 свечи по 15 мин)
-        ma_1h = df["close"].rolling(4).mean()
-        ma_1h_prev = ma_1h.shift(4)
-        df["trend_1h"] = (
-            self.safe_divide(
-                ma_1h - ma_1h_prev,
-                ma_1h_prev,
-                fill_value=0.0,
-                max_value=0.1,  # Максимум 10% изменение
-            )
-            * 100
-        )  # В процентах
+        # support_distance - расстояние до ближайшей поддержки
+        low_50 = df["low"].rolling(50).min()  # Поддержка за 50 периодов
+        df["support_distance"] = (df["close"] - low_50) / df["close"]
 
-        if "atr_pct" in df.columns:
-            df["trend_1h_strength"] = self.safe_divide(
-                df["trend_1h"],
-                df["atr_pct"].rolling(4).mean() * 100,  # ATR уже в процентах
-                fill_value=0.0,
-                max_value=10.0,
-            )
-        else:
-            df["trend_1h_strength"] = df["trend_1h"] / 2  # Простая нормализация
-
-        # Эмулируем 4-часовой таймфрейм (16 свечей)
-        ma_4h = df["close"].rolling(16).mean()
-        ma_4h_prev = ma_4h.shift(16)
-        df["trend_4h"] = (
-            self.safe_divide(
-                ma_4h - ma_4h_prev,
-                ma_4h_prev,
-                fill_value=0.0,
-                max_value=0.2,  # Максимум 20% изменение
-            )
-            * 100
-        )  # В процентах
-
-        if "atr_pct" in df.columns:
-            df["trend_4h_strength"] = self.safe_divide(
-                df["trend_4h"],
-                df["atr_pct"].rolling(16).mean() * 100,  # ATR уже в процентах
-                fill_value=0.0,
-                max_value=10.0,
-            )
-        else:
-            df["trend_4h_strength"] = df["trend_4h"] / 2  # Простая нормализация
-
-        features_created.extend(["trend_1h", "trend_1h_strength", "trend_4h", "trend_4h_strength"])
+        # resistance_distance - расстояние до ближайшего сопротивления
+        high_50 = df["high"].rolling(50).max()  # Сопротивление за 50 периодов
+        df["resistance_distance"] = (high_50 - df["close"]) / df["close"]
 
         if not self.disable_progress:
-            self.logger.info("  ✓ Сила тренда на старших ТФ: создано 4 признака")
+            self.logger.info("  ✓ Паттерны и сила: создано 5 признаков")
 
-        # 3. Позиция в дневном диапазоне (7 признаков)
-        # Дневной диапазон (96 свечей = 24 часа)
-        df["daily_high"] = df["high"].rolling(96).max()
-        df["daily_low"] = df["low"].rolling(96).min()
-        # ИСПРАВЛЕНО: daily_range как процент от цены
-        df["daily_range"] = self.safe_divide(
-            df["daily_high"] - df["daily_low"],
-            df["close"],
-            fill_value=0.02,  # 2% по умолчанию
-            max_value=0.5,  # Максимум 50% от цены
-        )
-        # ИСПРАВЛЕНО: Правильный расчет позиции в дневном диапазоне
-        # daily_range уже в процентах, поэтому используем абсолютные цены
-        daily_range_abs = df["daily_high"] - df["daily_low"]
-        df["position_in_daily_range"] = self.safe_divide(
-            df["close"] - df["daily_low"], daily_range_abs, fill_value=0.5, max_value=1.0
-        )
+        # Итоговая проверка
+        signal_quality_features = [
+            "momentum_score",
+            "trend_strength",
+            "trend_consistency",
+            "momentum_divergence",
+            "trend_acceleration",
+            "trend_quality",
+            "overbought_score",
+            "oversold_score",
+            "divergence_bull",
+            "divergence_bear",
+            "pattern_strength",
+            "breakout_strength",
+            "reversal_probability",
+            "support_distance",
+            "resistance_distance",
+        ]
 
-        # Близость к экстремумам
-        df["near_daily_high"] = (df["position_in_daily_range"] > 0.9).astype(int)
-        df["near_daily_low"] = (df["position_in_daily_range"] < 0.1).astype(int)
-        features_created.extend(
-            [
-                "daily_high",
-                "daily_low",
-                "daily_range",
-                "position_in_daily_range",
-                "near_daily_high",
-                "near_daily_low",
-            ]
-        )
-
+        created_count = sum(1 for feat in signal_quality_features if feat in df.columns)
         if not self.disable_progress:
-            self.logger.info("  ✓ Позиция в дневном диапазоне: создано 6 признаков")
+            self.logger.info(f"✅ Signal quality features: создано {created_count}/15 признаков")
 
-        # 4. Качество структуры рынка (2 признака)
-        # Higher highs и higher lows для uptrend
-        hh = (df["high"] > df["high"].shift(4)) & (df["high"].shift(4) > df["high"].shift(8))
-        hl = (df["low"] > df["low"].shift(4)) & (df["low"].shift(4) > df["low"].shift(8))
-        df["uptrend_structure"] = (hh & hl).astype(int)
-
-        # Lower highs и lower lows для downtrend
-        lh = (df["high"] < df["high"].shift(4)) & (df["high"].shift(4) < df["high"].shift(8))
-        ll = (df["low"] < df["low"].shift(4)) & (df["low"].shift(4) < df["low"].shift(8))
-        df["downtrend_structure"] = (lh & ll).astype(int)
-        features_created.extend(["uptrend_structure", "downtrend_structure"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Качество структуры рынка: создано 2 признака")
-
-        # 5. Риск новостных событий (1 признак)
-        # Аномальный объем часто связан с новостями
-        if "volume_spike" in df.columns:
-            df["news_risk"] = (df["volume_spike"] == 1).astype(int)
-            features_created.append("news_risk")
-
-            if not self.disable_progress:
-                self.logger.info("  ✓ Риск новостных событий: создан 1 признак")
-
-        # 6. Оценка ликвидности (3 признака)
-        # Средний спред и объем за последний час
-        # Используем high-low спред вместо bid-ask
-        df["hl_spread"] = (df["high"] - df["low"]) / df["close"]
-
-        # ИСПРАВЛЕНО: Безопасный расчет liquidity_score с ограничениями
-        hl_spread_mean = df["hl_spread"].rolling(4).mean()
-        volume_mean = df["volume"].rolling(4).mean()
-
-        # Клиппинг hl_spread для избежания деления на очень малые числа
-        # Минимальный спред 0.01% (0.0001) для стейблкоинов
-        hl_spread_clipped = np.clip(hl_spread_mean, 0.0001, 1.0)
-
-        # Используем log-трансформацию для контроля масштаба
-        # liquidity_score теперь в диапазоне примерно [0, 20]
-        df["liquidity_score"] = np.log1p(volume_mean / (hl_spread_clipped * 1000))
-
-        # Ранжирование по ликвидности
-        df["liquidity_rank"] = df.groupby("datetime")["liquidity_score"].rank(pct=True)
-        features_created.extend(["hl_spread", "liquidity_score", "liquidity_rank"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Оценка ликвидности: создано 3 признака")
-
-        # 6. Signal Strength - комбинированная сила сигнала на основе исторических данных
-        # БЕЗ УТЕЧЕК: используем только исторические индикаторы
-
-        # Компоненты signal_strength:
-        # 1. Сила тренда (ADX)
-        trend_strength = df["adx"] / 100 if "adx" in df.columns else pd.Series(0.5, index=df.index)
-
-        # 2. Momentum (RSI отклонение от 50)
-        momentum_strength = (
-            np.abs(df["rsi"] - 50) / 50 if "rsi" in df.columns else pd.Series(0.5, index=df.index)
-        )
-
-        # 3. Волатильность (нормализованная историческая)
-        if "volatility_20" in df.columns:
-            # Используем историческое среднее, НЕ будущие данные
-            vol_mean_hist = df.groupby("symbol")["volatility_20"].transform(
-                lambda x: x.rolling(100, min_periods=20).mean()
-            )
-            vol_strength = df["volatility_20"] / (vol_mean_hist + 1e-6)
-            vol_strength = np.clip(vol_strength, 0, 2) / 2
-        else:
-            vol_strength = pd.Series(0.5, index=df.index)
-
-        # 4. Volume (нормализованный исторический)
-        if "volume" in df.columns:
-            # Используем историческое среднее, НЕ будущие данные
-            vol_mean_hist = df.groupby("symbol")["volume"].transform(
-                lambda x: x.rolling(100, min_periods=20).mean()
-            )
-            volume_strength = df["volume"] / (vol_mean_hist + 1e-6)
-            volume_strength = np.clip(volume_strength, 0, 2) / 2
-        else:
-            volume_strength = pd.Series(0.5, index=df.index)
-
-        # Комбинированная сила сигнала (признак, не целевая переменная)
-        df["signal_strength"] = (
-            0.3 * trend_strength
-            + 0.3 * momentum_strength
-            + 0.2 * vol_strength
-            + 0.2 * volume_strength
-        )
-        df["signal_strength"] = np.clip(df["signal_strength"], 0, 1)
-        features_created.append("signal_strength")
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Signal strength: создан 1 признак (без утечек)")
-
-        # Итоговая статистика
-        total_created = len(features_created)
-        if not self.disable_progress:
-            self.logger.info(f"✅ Signal quality features: всего создано {total_created} признаков")
+        # Заполняем NaN значения
+        for feat in signal_quality_features:
+            if feat in df.columns:
+                df[feat] = df[feat].fillna(0.0)
 
         return df
 
     def _create_futures_specific_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Признаки специфичные для торговли фьючерсами с плечом"""
+        """Создает ТОЧНО 10 фьючерс-специфичных признаков из REQUIRED_FEATURES_240"""
         if not self.disable_progress:
-            self.logger.info("Создание признаков для фьючерсной торговли...")
-        initial_cols = len(df.columns)
-        features_created = []
+            self.logger.info("🎯 Создание 10 FUTURES_FEATURES...")
 
-        # Динамическое плечо на основе волатильности
-        # Базовое плечо 5x, но корректируем на основе ATR
-        base_leverage = 5
+        # FUTURES_FEATURES из features_240.py:
+        # "funding_rate", "open_interest", "oi_change_1h", "long_short_ratio", "taker_buy_sell_ratio",
+        # "funding_momentum", "oi_weighted_momentum", "liquidation_pressure", "basis_spread", "term_structure"
 
-        # Корректируем плечо на основе волатильности
-        # Чем выше волатильность, тем меньше плечо
-        # ATR в процентах уже есть в df['atr_pct']
-        if "atr_pct" in df.columns:
-            volatility_factor = df["atr_pct"].rolling(24).mean()  # Средняя волатильность за 6 часов
+        # В реальной торговой системе эти данные должны поступать с биржи
+        # Для обучения модели создаем синтетические признаки на основе OHLCV
 
-            # Плечо от 3x до 10x в зависимости от волатильности
-            # При волатильности 0.5% -> leverage = 10
-            # При волатильности 2% -> leverage = 3
-            dynamic_leverage = base_leverage * (0.01 / (volatility_factor + 0.001))
-            dynamic_leverage = dynamic_leverage.clip(3, 10)  # Ограничиваем диапазон
+        # 1. Основные метрики фьючерсов (5 признаков)
+
+        # funding_rate - синтетический funding rate на основе momentum
+        # Положительный momentum -> длинные позиции доминируют -> положительный funding
+        momentum_4h = df["close"].pct_change(16)  # 4-часовой momentum
+        df["funding_rate"] = np.tanh(momentum_4h * 50) * 0.001  # В диапазоне ±0.1%
+
+        # open_interest - синтетический на основе объема
+        # Высокий объем часто коррелирует с высоким open interest
+        volume_normalized = df["volume"] / df["volume"].rolling(96).mean()
+        df["open_interest"] = volume_normalized.rolling(24).mean()  # Сглаженный показатель
+
+        # oi_change_1h - изменение open interest за час
+        df["oi_change_1h"] = df["open_interest"].pct_change(4)  # За 4 периода = 1 час
+
+        # long_short_ratio - на основе price momentum и volume
+        # При росте цены на объеме -> больше длинных позиций
+        price_change = df["close"].pct_change()
+        volume_weight = volume_normalized.clip(0.1, 3.0)  # Ограничиваем экстремальные значения
+        long_bias = pd.Series(
+            np.where(price_change > 0, price_change * volume_weight, 0), index=df.index
+        )
+        short_bias = pd.Series(
+            np.where(price_change < 0, abs(price_change) * volume_weight, 0), index=df.index
+        )
+        long_sum = long_bias.rolling(24).sum()
+        short_sum = short_bias.rolling(24).sum()
+        df["long_short_ratio"] = self.safe_divide(long_sum, short_sum, fill_value=1.0)
+
+        # taker_buy_sell_ratio - на основе close vs vwap
+        # Если close > vwap -> больше агрессивных покупок
+        if "vwap" in df.columns:
+            buy_pressure = np.maximum(0, df["close"] - df["vwap"]) / df["close"]
+            sell_pressure = np.maximum(0, df["vwap"] - df["close"]) / df["close"]
         else:
-            dynamic_leverage = pd.Series(base_leverage, index=df.index)
+            # Альтернатива через high/low
+            buy_pressure = (df["close"] - df["low"]) / (df["high"] - df["low"] + 1e-10)
+            sell_pressure = 1 - buy_pressure
 
-        # 1. Расчет ликвидационной цены
-        # Для LONG: Liq Price = Entry Price * (1 - 1/leverage + fees)
-        # Для SHORT: Liq Price = Entry Price * (1 + 1/leverage - fees)
-        maintenance_margin = 0.5 / 100  # 0.5% для Bybit
+        buy_sum = pd.Series(buy_pressure, index=df.index).rolling(12).sum()
+        sell_sum = pd.Series(sell_pressure, index=df.index).rolling(12).sum()
+        df["taker_buy_sell_ratio"] = self.safe_divide(buy_sum, sell_sum, fill_value=1.0)
 
-        df["long_liquidation_price"] = df["close"] * (1 - 1 / dynamic_leverage + maintenance_margin)
-        df["short_liquidation_price"] = df["close"] * (
-            1 + 1 / dynamic_leverage - maintenance_margin
+        if not self.disable_progress:
+            self.logger.info("  ✓ Основные метрики фьючерсов: создано 5 признаков")
+
+        # 2. Производные метрики (5 признаков)
+
+        # funding_momentum - изменение funding rate
+        df["funding_momentum"] = df["funding_rate"].diff(4)  # Изменение за час
+
+        # oi_weighted_momentum - momentum взвешенный на open interest
+        price_momentum = df["close"].pct_change(12)  # 3-часовой momentum
+        oi_weight = df["open_interest"] / (df["open_interest"].rolling(96).mean() + 1e-6)
+        df["oi_weighted_momentum"] = price_momentum * oi_weight.clip(0.1, 3.0)
+
+        # liquidation_pressure - давление ликвидаций
+        # Высокое при резких движениях против trend + высокое плечо (через volatility)
+        atr_normalized = (
+            df["atr_pct"] / df["atr_pct"].rolling(96).mean()
+            if "atr_pct" in df.columns
+            else pd.Series(1, index=df.index)
         )
+        price_shock = abs(df["close"].pct_change(4))  # Резкое движение за час
+        df["liquidation_pressure"] = price_shock * atr_normalized * volume_normalized
+        df["liquidation_pressure"] = df["liquidation_pressure"].clip(
+            0, 5
+        )  # Ограничиваем экстремальные значения
 
-        # Расстояние до ликвидации в процентах
-        df["long_liquidation_distance_pct"] = (
-            (df["close"] - df["long_liquidation_price"]) / df["close"]
-        ) * 100
-        df["short_liquidation_distance_pct"] = (
-            (df["short_liquidation_price"] - df["close"]) / df["close"]
-        ) * 100
+        # basis_spread - спред между фьючерсом и спотом
+        # Синтетический на основе funding rate (они коррелируют)
+        df["basis_spread"] = df["funding_rate"] * 8  # Примерно 8x от funding rate
 
-        # Сохраняем текущее динамическое плечо
-        df["current_leverage"] = dynamic_leverage
-        features_created.extend(
-            [
-                "long_liquidation_price",
-                "short_liquidation_price",
-                "long_liquidation_distance_pct",
-                "short_liquidation_distance_pct",
-                "current_leverage",
-            ]
-        )
+        # term_structure - структура сроков
+        # На основе volatility term structure (ближние vs дальние фьючерсы)
+        vol_short = df["close"].rolling(24).std()  # Краткосрочная волатильность
+        vol_long = df["close"].rolling(96).std()  # Долгосрочная волатильность
+        df["term_structure"] = self.safe_divide(vol_short, vol_long, fill_value=1.0)
 
         if not self.disable_progress:
-            self.logger.info("  ✓ Ликвидационные цены: создано 4 признака")
+            self.logger.info("  ✓ Производные метрики: создано 5 признаков")
 
-        # 2. Вероятность касания ликвидационной цены
-        # Основано на исторической волатильности
-        # Используем максимальное отклонение за последние 24 часа
-        max_drawdown_24h = df["low"].rolling(96).min() / df["close"].shift(96) - 1
-        max_rally_24h = df["high"].rolling(96).max() / df["close"].shift(96) - 1
+        # Итоговая проверка
+        futures_features = [
+            "funding_rate",
+            "open_interest",
+            "oi_change_1h",
+            "long_short_ratio",
+            "taker_buy_sell_ratio",
+            "funding_momentum",
+            "oi_weighted_momentum",
+            "liquidation_pressure",
+            "basis_spread",
+            "term_structure",
+        ]
 
-        # Простая оценка вероятности на основе исторических движений
-        df["long_liquidation_risk"] = (
-            (abs(max_drawdown_24h) > df["long_liquidation_distance_pct"] / 100).rolling(96).mean()
-        )
-        df["short_liquidation_risk"] = (
-            (max_rally_24h > df["short_liquidation_distance_pct"] / 100).rolling(96).mean()
-        )
-        features_created.extend(["long_liquidation_risk", "short_liquidation_risk"])
-
+        created_count = sum(1 for feat in futures_features if feat in df.columns)
         if not self.disable_progress:
-            self.logger.info("  ✓ Вероятность ликвидации: создано 2 признака")
+            self.logger.info(f"✅ Futures features: создано {created_count}/10 признаков")
 
-        # 3. Оптимальное плечо для текущей волатильности
-        # Правило: максимальное плечо = 20% / (дневная волатильность)
-        daily_volatility = df["returns"].rolling(96).std() * np.sqrt(96)  # Приведение к дневной
-        df["optimal_leverage"] = (0.2 / (daily_volatility + 0.01)).clip(1, 10)  # От 1x до 10x
-
-        # Безопасное плечо (консервативное)
-        df["safe_leverage"] = (0.1 / (daily_volatility + 0.01)).clip(1, 5)  # От 1x до 5x
-        features_created.extend(["optimal_leverage", "safe_leverage"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Оптимальное плечо: создано 2 признака")
-
-        # 4. Риск каскадных ликвидаций
-        # Когда много позиций могут быть ликвидированы одновременно
-        # Индикатор: резкие движения + высокий объем
-        if "volume_spike" in df.columns:
-            df["cascade_risk"] = (
-                (df["volume_spike"] == 1)
-                & (abs(df["returns"]) > df["returns"].rolling(96).std() * 2)
-            ).astype(int)
-            features_created.append("cascade_risk")
-
-            if not self.disable_progress:
-                self.logger.info("  ✓ Риск каскадных ликвидаций: создан 1 признак")
-
-        # 5. Funding rate влияние (для удержания позиций)
-        # Примерный funding rate (в реальности нужно загружать с биржи)
-        # Положительный funding = лонги платят шортам
-        # Используем разницу между спот и фьючерс как прокси
-        if "momentum_1h" in df.columns:
-            df["funding_proxy"] = df["momentum_1h"] * 0.01  # Упрощенная оценка
-
-            # Стоимость удержания позиции на день (3 funding периода)
-            df["long_holding_cost_daily"] = df["funding_proxy"] * 3
-            df["short_holding_cost_daily"] = -df["funding_proxy"] * 3
-            features_created.extend(
-                ["funding_proxy", "long_holding_cost_daily", "short_holding_cost_daily"]
-            )
-
-            if not self.disable_progress:
-                self.logger.info("  ✓ Funding rate влияние: создано 3 признака")
-
-        # 6. Метрики риска для размера позиции
-        # Value at Risk (VaR) - максимальная потеря с 95% вероятностью
-        returns_sorted = df["returns"].rolling(96).apply(lambda x: np.percentile(x, 5))
-        df["var_95"] = abs(returns_sorted)
-
-        # Рекомендуемый размер позиции относительно VaR
-        max_loss_per_trade = 2.0  # 2% максимальная потеря как в конфиге
-        df["recommended_position_size"] = max_loss_per_trade / (df["var_95"] * dynamic_leverage)
-        features_created.extend(["var_95", "recommended_position_size"])
-
-        if not self.disable_progress:
-            self.logger.info("  ✓ Метрики риска для позиций: создано 2 признака")
-
-        # Итоговая статистика
-        total_created = len(features_created)
-        if not self.disable_progress:
-            self.logger.info(
-                f"✅ Futures-specific features: всего создано {total_created} признаков"
-            )
+        # Заполняем NaN значения
+        for feat in futures_features:
+            if feat in df.columns:
+                df[feat] = df[feat].fillna(0.0)
 
         return df
 
     def _create_temporal_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Временные признаки"""
-        df["hour"] = df["datetime"].dt.hour
-        df["minute"] = df["datetime"].dt.minute
+        """Создает ТОЧНО 12 временных признаков из REQUIRED_FEATURES_240"""
+        if not self.disable_progress:
+            self.logger.info("🎯 Создание 12 TEMPORAL_FEATURES...")
 
-        # Циклическое кодирование времени
-        df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
-        df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+        # TEMPORAL_FEATURES из features_240.py:
+        # "hour_sin", "hour_cos", "day_sin", "day_cos", "week_sin", "week_cos",
+        # "month_sin", "month_cos", "is_weekend", "is_month_start", "is_month_end", "is_quarter_end"
 
-        df["dayofweek"] = df["datetime"].dt.dayofweek
-        df["is_weekend"] = (df["dayofweek"] >= 5).astype(int)
+        # 1. Циклические признаки времени (8 признаков)
 
-        df["dow_sin"] = np.sin(2 * np.pi * df["dayofweek"] / 7)
-        df["dow_cos"] = np.cos(2 * np.pi * df["dayofweek"] / 7)
+        # ИСПРАВЛЕНО: Получаем datetime из индекса или колонки
+        if "datetime" in df.columns:
+            datetime_series = df["datetime"]
+        else:
+            # Используем индекс как datetime
+            datetime_series = pd.Series(df.index, index=df.index)
 
-        df["day"] = df["datetime"].dt.day
-        df["month"] = df["datetime"].dt.month
+        # Час дня (0-23)
+        hour = datetime_series.dt.hour
+        df["hour_sin"] = np.sin(2 * np.pi * hour / 24)
+        df["hour_cos"] = np.cos(2 * np.pi * hour / 24)
 
-        # Дополнительные циклические признаки (ДОБАВЛЕНО для REQUIRED_FEATURES_240)
-        df["day_sin"] = np.sin(2 * np.pi * df["day"] / 31)  # Day of month
-        df["day_cos"] = np.cos(2 * np.pi * df["day"] / 31)
-        
-        df["week_sin"] = np.sin(2 * np.pi * df["datetime"].dt.isocalendar().week / 52)  # Week of year
-        df["week_cos"] = np.cos(2 * np.pi * df["datetime"].dt.isocalendar().week / 52)
+        # День месяца (1-31)
+        day = datetime_series.dt.day
+        df["day_sin"] = np.sin(2 * np.pi * day / 31)
+        df["day_cos"] = np.cos(2 * np.pi * day / 31)
 
-        df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
-        df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
+        # Неделя года (1-52)
+        week = datetime_series.dt.isocalendar().week
+        df["week_sin"] = np.sin(2 * np.pi * week / 52)
+        df["week_cos"] = np.cos(2 * np.pi * week / 52)
 
-        # Дополнительные временные признаки (ДОБАВЛЕНО для REQUIRED_FEATURES_240)
-        df["is_month_start"] = (df["day"] <= 3).astype(int)  # Первые 3 дня месяца
-        df["is_month_end"] = (df["day"] >= 28).astype(int)   # Последние дни месяца
-        df["is_quarter_end"] = df["datetime"].dt.month.isin([3, 6, 9, 12]).astype(int)
+        # Месяц года (1-12)
+        month = datetime_series.dt.month
+        df["month_sin"] = np.sin(2 * np.pi * month / 12)
+        df["month_cos"] = np.cos(2 * np.pi * month / 12)
 
-        # Торговые сессии
-        df["asian_session"] = ((df["hour"] >= 0) & (df["hour"] < 8)).astype(int)
-        df["european_session"] = ((df["hour"] >= 7) & (df["hour"] < 16)).astype(int)
-        df["american_session"] = ((df["hour"] >= 13) & (df["hour"] < 22)).astype(int)
+        if not self.disable_progress:
+            self.logger.info("  ✓ Циклические признаки времени: создано 8 признаков")
 
-        # Пересечение сессий
-        df["session_overlap"] = (
-            (df["asian_session"] + df["european_session"] + df["american_session"]) > 1
-        ).astype(int)
+        # 2. Категориальные временные признаки (4 признака)
+
+        # Выходные дни
+        dayofweek = datetime_series.dt.dayofweek
+        df["is_weekend"] = (dayofweek >= 5).astype(int)  # Суббота=5, Воскресенье=6
+
+        # Начало месяца (первые 3 дня)
+        df["is_month_start"] = (day <= 3).astype(int)
+
+        # Конец месяца (последние 4 дня)
+        df["is_month_end"] = (day >= 28).astype(int)
+
+        # Конец квартала (март, июнь, сентябрь, декабрь)
+        df["is_quarter_end"] = month.isin([3, 6, 9, 12]).astype(int)
+
+        if not self.disable_progress:
+            self.logger.info("  ✓ Категориальные временные признаки: создано 4 признака")
+
+        # Итоговая проверка
+        temporal_features = [
+            "hour_sin",
+            "hour_cos",
+            "day_sin",
+            "day_cos",
+            "week_sin",
+            "week_cos",
+            "month_sin",
+            "month_cos",
+            "is_weekend",
+            "is_month_start",
+            "is_month_end",
+            "is_quarter_end",
+        ]
+
+        created_count = sum(1 for feat in temporal_features if feat in df.columns)
+        if not self.disable_progress:
+            self.logger.info(f"✅ Temporal features: создано {created_count}/12 признаков")
+
+        # Заполняем NaN значения
+        for feat in temporal_features:
+            if feat in df.columns:
+                df[feat] = df[feat].fillna(0.0)
 
         return df
 
@@ -1656,9 +1645,29 @@ class FeatureEngineer:
         df["realized_vol_1h"] = returns.rolling(240).std() * np.sqrt(240)
 
         # GARCH-подобная волатильность (упрощенная)
-        df["garch_vol"] = returns.rolling(20).apply(
-            lambda x: np.sqrt(0.94 * x.var() + 0.06 * x.iloc[-1] ** 2) if len(x) > 0 else 0
-        )
+        # ИСПРАВЛЕНО: Улучшена обработка типов данных и NaN значений
+        def garch_volatility(x):
+            """Безопасная GARCH волатильность с проверкой типов"""
+            try:
+                if len(x) == 0 or x.isna().all():
+                    return 0.0
+
+                var_val = float(x.var())
+                last_val = float(x.iloc[-1])
+
+                if np.isnan(var_val) or np.isnan(last_val):
+                    return 0.0
+
+                result = 0.94 * var_val + 0.06 * (last_val**2)
+
+                if result < 0:
+                    return 0.0
+
+                return float(np.sqrt(result))
+            except (IndexError, ValueError, TypeError):
+                return 0.0
+
+        df["garch_vol"] = returns.rolling(20).apply(garch_volatility)
 
         # Режим волатильности
         if "atr" in df.columns:
@@ -1794,6 +1803,291 @@ class FeatureEngineer:
             )
         )
 
+        # ДОБАВЛЯЕМ ВСЕ ОТСУТСТВУЮЩИЕ ML_OPTIMIZED_FEATURES из features_240.py
+
+        # 15. Статистические признаки (price z-scores)
+        df["price_z_score_20"] = (df["close"] - df["close"].rolling(20).mean()) / df[
+            "close"
+        ].rolling(20).std()
+        df["price_z_score_50"] = (df["close"] - df["close"].rolling(50).mean()) / df[
+            "close"
+        ].rolling(50).std()
+        df["price_z_score_100"] = (df["close"] - df["close"].rolling(100).mean()) / df[
+            "close"
+        ].rolling(100).std()
+
+        # Volume z-scores
+        df["volume_z_score_20"] = (df["volume"] - df["volume"].rolling(20).mean()) / df[
+            "volume"
+        ].rolling(20).std()
+        df["volume_z_score_50"] = (df["volume"] - df["volume"].rolling(50).mean()) / df[
+            "volume"
+        ].rolling(50).std()
+
+        # Return moments
+        df["return_skewness_20"] = returns.rolling(20).skew()
+        df["return_skewness_50"] = returns.rolling(50).skew()
+        df["return_kurtosis_20"] = returns.rolling(20).kurt()
+        df["return_kurtosis_50"] = returns.rolling(50).kurt()
+
+        # Efficiency ratios
+        df["price_efficiency_ratio"] = self.safe_divide(
+            (df["close"] - df["close"].shift(20)).abs(), df["close"].diff().abs().rolling(20).sum()
+        )
+        df["volume_efficiency_ratio"] = self.safe_divide(
+            (df["volume"] - df["volume"].shift(20)).abs(),
+            df["volume"].diff().abs().rolling(20).sum(),
+        )
+
+        # Entropy features
+        def rolling_entropy(series, window=20, bins=10):
+            def entropy_calc(x):
+                if len(x) < bins:
+                    return 0
+                counts, _ = np.histogram(x, bins=bins)
+                probs = counts / counts.sum()
+                probs = probs[probs > 0]
+                return -np.sum(probs * np.log(probs))
+
+            return series.rolling(window).apply(entropy_calc)
+
+        df["entropy_20"] = rolling_entropy(returns, 20)
+        df["entropy_50"] = rolling_entropy(returns, 50)
+
+        # Autocorrelation features
+        df["autocorrelation_lag_1"] = returns.rolling(50).apply(
+            lambda x: x.autocorr(lag=1) if len(x) > 1 else 0
+        )
+        df["autocorrelation_lag_5"] = returns.rolling(50).apply(
+            lambda x: x.autocorr(lag=5) if len(x) > 5 else 0
+        )
+        df["autocorrelation_lag_10"] = returns.rolling(50).apply(
+            lambda x: x.autocorr(lag=10) if len(x) > 10 else 0
+        )
+
+        # Partial autocorrelation (simplified)
+        df["partial_autocorr_1"] = df[
+            "autocorrelation_lag_1"
+        ]  # Для лага 1 частная корреляция = обычная
+        df["partial_autocorr_5"] = df["autocorrelation_lag_5"] - df["autocorrelation_lag_1"] * df[
+            "autocorrelation_lag_1"
+        ].shift(4)
+
+        # 16. Pattern recognition features
+        # Higher highs, lower lows patterns
+        df["higher_high"] = (
+            (df["high"] > df["high"].shift(1)) & (df["high"].shift(1) > df["high"].shift(2))
+        ).astype(float)
+        df["lower_low"] = (
+            (df["low"] < df["low"].shift(1)) & (df["low"].shift(1) < df["low"].shift(2))
+        ).astype(float)
+        df["higher_low"] = (
+            (df["low"] > df["low"].shift(1)) & (df["low"].shift(1) > df["low"].shift(2))
+        ).astype(float)
+        df["lower_high"] = (
+            (df["high"] < df["high"].shift(1)) & (df["high"].shift(1) < df["high"].shift(2))
+        ).astype(float)
+
+        # Candlestick patterns
+        body = (df["close"] - df["open"]).abs()
+        upper_shadow = df["high"] - np.maximum(df["open"], df["close"])
+        lower_shadow = np.minimum(df["open"], df["close"]) - df["low"]
+
+        df["bullish_engulfing"] = (
+            (df["close"] > df["open"])
+            & (df["close"].shift(1) < df["open"].shift(1))
+            & (df["open"] < df["close"].shift(1))
+            & (df["close"] > df["open"].shift(1))
+        ).astype(float)
+
+        df["bearish_engulfing"] = (
+            (df["close"] < df["open"])
+            & (df["close"].shift(1) > df["open"].shift(1))
+            & (df["open"] > df["close"].shift(1))
+            & (df["close"] < df["open"].shift(1))
+        ).astype(float)
+
+        df["hammer"] = (
+            (lower_shadow > body * 2) & (upper_shadow < body * 0.1) & (body > 0)
+        ).astype(float)
+
+        df["shooting_star"] = (
+            (upper_shadow > body * 2) & (lower_shadow < body * 0.1) & (body > 0)
+        ).astype(float)
+
+        df["doji"] = (body < (df["high"] - df["low"]) * 0.1).astype(float)
+
+        # Three soldiers/crows patterns
+        df["three_white_soldiers"] = (
+            (df["close"] > df["open"])
+            & (df["close"].shift(1) > df["open"].shift(1))
+            & (df["close"].shift(2) > df["open"].shift(2))
+            & (df["close"] > df["close"].shift(1))
+            & (df["close"].shift(1) > df["close"].shift(2))
+        ).astype(float)
+
+        df["three_black_crows"] = (
+            (df["close"] < df["open"])
+            & (df["close"].shift(1) < df["open"].shift(1))
+            & (df["close"].shift(2) < df["open"].shift(2))
+            & (df["close"] < df["close"].shift(1))
+            & (df["close"].shift(1) < df["close"].shift(2))
+        ).astype(float)
+
+        # Star patterns (simplified)
+        gap_up = df["low"] > df["high"].shift(1)
+        gap_down = df["high"] < df["low"].shift(1)
+
+        df["morning_star"] = (
+            (df["close"].shift(2) < df["open"].shift(2))  # Bearish candle
+            & gap_down.shift(1)  # Gap down
+            & (df["close"] > df["open"])  # Bullish candle
+            & gap_up  # Gap up
+        ).astype(float)
+
+        df["evening_star"] = (
+            (df["close"].shift(2) > df["open"].shift(2))  # Bullish candle
+            & gap_up.shift(1)  # Gap up
+            & (df["close"] < df["open"])  # Bearish candle
+            & gap_down  # Gap down
+        ).astype(float)
+
+        # Harami patterns
+        prev_body = (df["close"].shift(1) - df["open"].shift(1)).abs()
+        df["harami_bull"] = (
+            (df["close"].shift(1) < df["open"].shift(1))  # Bearish mother
+            & (df["close"] > df["open"])  # Bullish baby
+            & (body < prev_body * 0.5)  # Baby smaller than mother
+        ).astype(float)
+
+        df["harami_bear"] = (
+            (df["close"].shift(1) > df["open"].shift(1))  # Bullish mother
+            & (df["close"] < df["open"])  # Bearish baby
+            & (body < prev_body * 0.5)  # Baby smaller than mother
+        ).astype(float)
+
+        # 17. Adaptive features
+        # Adaptive momentum based on volatility
+        vol_norm = df["realized_vol_1h"] / df["realized_vol_1h"].rolling(100).mean()
+        df["adaptive_momentum"] = returns.rolling(10).mean() * vol_norm.clip(0.5, 2.0)
+
+        # Adaptive volatility (GARCH-like)
+        df["adaptive_volatility"] = returns.rolling(20).std() * np.sqrt(vol_norm.clip(0.5, 2.0))
+
+        # Adaptive trend (trend strength adjusted for volatility)
+        trend_raw = (df["close"].rolling(20).mean() - df["close"].rolling(50).mean()) / df["close"]
+        df["adaptive_trend"] = trend_raw / (vol_norm + 0.01)
+
+        # 18. Regime features
+        # Market regimes based on volatility and trend
+        vol_percentile = df["realized_vol_1h"].rolling(200).rank(pct=True)
+        trend_strength = trend_raw.abs().rolling(50).rank(pct=True)
+
+        df["regime_state"] = 0  # Normal
+        df.loc[(vol_percentile > 0.8) & (trend_strength > 0.7), "regime_state"] = (
+            1  # Trending high vol
+        )
+        df.loc[(vol_percentile > 0.8) & (trend_strength < 0.3), "regime_state"] = (
+            2  # Sideways high vol
+        )
+        df.loc[(vol_percentile < 0.2) & (trend_strength > 0.7), "regime_state"] = (
+            3  # Trending low vol
+        )
+        df.loc[(vol_percentile < 0.2) & (trend_strength < 0.3), "regime_state"] = (
+            4  # Sideways low vol
+        )
+
+        # Market phase (bull/bear/sideways)
+        trend_50 = (df["close"] / df["close"].rolling(50).mean() - 1) * 100
+        df["market_phase"] = 0  # Sideways
+        df.loc[trend_50 > 5, "market_phase"] = 1  # Bull
+        df.loc[trend_50 < -5, "market_phase"] = -1  # Bear
+
+        # Regime classifications (with NaN handling)
+        try:
+            df["volatility_regime"] = pd.cut(
+                vol_percentile.fillna(0.5), bins=3, labels=[0, 1, 2], duplicates="drop"
+            ).astype(float)
+        except ValueError:
+            df["volatility_regime"] = 1.0  # Default to normal regime
+
+        try:
+            df["trend_regime"] = pd.cut(
+                trend_strength.fillna(0.5), bins=3, labels=[0, 1, 2], duplicates="drop"
+            ).astype(float)
+        except ValueError:
+            df["trend_regime"] = 1.0  # Default to normal regime
+
+        try:
+            momentum_percentile = (
+                df["adaptive_momentum"].abs().rolling(50).rank(pct=True).fillna(0.5)
+            )
+            df["momentum_regime"] = pd.cut(
+                momentum_percentile, bins=3, labels=[0, 1, 2], duplicates="drop"
+            ).astype(float)
+        except ValueError:
+            df["momentum_regime"] = 1.0
+
+        try:
+            volume_percentile = df["volume"].rolling(50).rank(pct=True).fillna(0.5)
+            df["volume_regime"] = pd.cut(
+                volume_percentile, bins=3, labels=[0, 1, 2], duplicates="drop"
+            ).astype(float)
+        except ValueError:
+            df["volume_regime"] = 1.0
+
+        # Correlation regime (if BTC data available)
+        if "btc_returns" in df.columns:
+            corr_rolling = returns.rolling(100).corr(df["btc_returns"])
+            try:
+                corr_percentile = corr_rolling.abs().rolling(50).rank(pct=True).fillna(0.5)
+                df["correlation_regime"] = pd.cut(
+                    corr_percentile, bins=3, labels=[0, 1, 2], duplicates="drop"
+                ).astype(float)
+            except ValueError:
+                df["correlation_regime"] = 1.0
+        else:
+            df["correlation_regime"] = 1.0  # Default normal
+
+        # 19. Basic price features
+        df["median_price"] = (df["high"] + df["low"]) / 2
+        df["typical_price"] = (df["high"] + df["low"] + df["close"]) / 3
+        df["weighted_close"] = (df["high"] + df["low"] + 2 * df["close"]) / 4
+        df["price_range"] = df["high"] - df["low"]
+        df["true_range"] = np.maximum(
+            df["high"] - df["low"],
+            np.maximum(
+                (df["high"] - df["close"].shift(1)).abs(), (df["low"] - df["close"].shift(1)).abs()
+            ),
+        )
+        df["average_price"] = (df["open"] + df["high"] + df["low"] + df["close"]) / 4
+
+        # Return features
+        df["log_return"] = np.log(df["close"] / df["close"].shift(1))
+        df["squared_return"] = returns**2
+        df["abs_return"] = returns.abs()
+
+        # Volume features
+        df["volume_rate"] = df["volume"] / df["volume"].rolling(20).mean()
+        df["volume_trend"] = (
+            df["volume"].rolling(10).mean() / df["volume"].rolling(30).mean() - 1
+        ) * 100
+        df["volume_oscillator"] = (
+            df["volume"].rolling(5).mean() / df["volume"].rolling(20).mean() - 1
+        ) * 100
+
+        # Price dynamics
+        df["price_momentum"] = (df["close"] / df["close"].shift(10) - 1) * 100
+        df["price_acceleration"] = df["price_momentum"] - df["price_momentum"].shift(5)
+        df["price_jerk"] = df["price_acceleration"] - df["price_acceleration"].shift(5)
+
+        # Rolling statistics
+        df["rolling_min_5"] = df["close"].rolling(5).min()
+        df["rolling_max_5"] = df["close"].rolling(5).max()
+        df["rolling_median_5"] = df["close"].rolling(5).median()
+        df["rolling_std_5"] = df["close"].rolling(5).std()
+        df["rolling_var_5"] = df["close"].rolling(5).var()
+
         # Заполнение пропусков
         ml_features = [
             "hurst_exponent",
@@ -1816,6 +2110,70 @@ class FeatureEngineer:
             "vpin",
             "liquidity_adj_returns",
             "cvar_5pct",
+            # Новые ML признаки
+            "price_z_score_20",
+            "price_z_score_50",
+            "price_z_score_100",
+            "volume_z_score_20",
+            "volume_z_score_50",
+            "return_skewness_20",
+            "return_skewness_50",
+            "return_kurtosis_20",
+            "return_kurtosis_50",
+            "price_efficiency_ratio",
+            "volume_efficiency_ratio",
+            "entropy_20",
+            "entropy_50",
+            "autocorrelation_lag_1",
+            "autocorrelation_lag_5",
+            "autocorrelation_lag_10",
+            "partial_autocorr_1",
+            "partial_autocorr_5",
+            "higher_high",
+            "lower_low",
+            "higher_low",
+            "lower_high",
+            "bullish_engulfing",
+            "bearish_engulfing",
+            "hammer",
+            "shooting_star",
+            "doji",
+            "three_white_soldiers",
+            "three_black_crows",
+            "morning_star",
+            "evening_star",
+            "harami_bull",
+            "harami_bear",
+            "adaptive_momentum",
+            "adaptive_volatility",
+            "adaptive_trend",
+            "regime_state",
+            "market_phase",
+            "volatility_regime",
+            "trend_regime",
+            "momentum_regime",
+            "volume_regime",
+            "correlation_regime",
+            "median_price",
+            "typical_price",
+            "weighted_close",
+            "price_range",
+            "true_range",
+            "average_price",
+            "log_return",
+            "squared_return",
+            "abs_return",
+            "volume_rate",
+            "volume_trend",
+            "volume_oscillator",
+            "price_momentum",
+            "price_acceleration",
+            "price_jerk",
+            "rolling_min_5",
+            "rolling_max_5",
+            "rolling_median_5",
+            "rolling_std_5",
+            "rolling_var_5",
         ]
 
         # Добавляем условные признаки если они были созданы
@@ -1828,6 +2186,10 @@ class FeatureEngineer:
         for feature in ml_features:
             if feature in df.columns:
                 df[feature] = df[feature].fillna(method="ffill").fillna(0)
+
+        if not self.disable_progress:
+            created_count = sum(1 for feat in ml_features if feat in df.columns)
+            self.logger.info(f"✅ ML optimized features: создано {created_count} признаков")
 
         return df
 
@@ -1940,87 +2302,157 @@ class FeatureEngineer:
         return result_df
 
     def _create_cross_asset_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Кросс-активные признаки"""
+        """Создает ТОЧНО 8 кросс-активных признаков из REQUIRED_FEATURES_240"""
         if not self.disable_progress:
-            self.logger.info("Создание кросс-активных признаков...")
+            self.logger.info("🎯 Создание 8 CROSS_ASSET_FEATURES...")
 
-        # BTC как базовый актив
-        btc_data = df[df["symbol"] == "BTCUSDT"][["datetime", "close", "returns"]].copy()
+        # CROSS_ASSET_FEATURES из features_240.py:
+        # "btc_correlation_15m", "btc_correlation_1h", "btc_correlation_4h",
+        # "eth_correlation_15m", "eth_correlation_1h", "eth_correlation_4h",
+        # "market_beta_1h", "market_beta_4h"
+
+        # Получаем данные базовых активов
+        btc_data = (
+            df[df["symbol"] == "BTCUSDT"][["datetime", "close"]].copy()
+            if "BTCUSDT" in df["symbol"].values
+            else pd.DataFrame()
+        )
+        eth_data = (
+            df[df["symbol"] == "ETHUSDT"][["datetime", "close"]].copy()
+            if "ETHUSDT" in df["symbol"].values
+            else pd.DataFrame()
+        )
+
         if len(btc_data) > 0:
-            btc_data.rename(columns={"close": "btc_close", "returns": "btc_returns"}, inplace=True)
-
+            btc_data["btc_returns"] = btc_data["close"].pct_change()
+            btc_data = btc_data[["datetime", "btc_returns"]].copy()
             df = df.merge(btc_data, on="datetime", how="left")
+        else:
+            df["btc_returns"] = 0.0
 
-            # Корреляция с BTC
+        if len(eth_data) > 0:
+            eth_data["eth_returns"] = eth_data["close"].pct_change()
+            eth_data = eth_data[["datetime", "eth_returns"]].copy()
+            df = df.merge(eth_data, on="datetime", how="left")
+        else:
+            df["eth_returns"] = 0.0
+
+        # 1. BTC корреляции (3 признака)
+        periods = {"15m": 1, "1h": 4, "4h": 16}  # Количество 15-минутных периодов
+
+        for period_name, n_periods in periods.items():
+            corr_col = f"btc_correlation_{period_name}"
+
+            # Для каждого символа рассчитываем корреляцию с BTC
             for symbol in df["symbol"].unique():
-                if symbol != "BTCUSDT":
+                if symbol == "BTCUSDT":
+                    # BTC коррелирует сам с собой
+                    df.loc[df["symbol"] == symbol, corr_col] = 1.0
+                else:
                     mask = df["symbol"] == symbol
-                    # ИСПРАВЛЕНО: используем min_periods для корреляции
-                    df.loc[mask, "btc_correlation"] = (
-                        df.loc[mask, "returns"]
-                        .rolling(window=96, min_periods=50)
-                        .corr(df.loc[mask, "btc_returns"])
+                    symbol_returns = df.loc[mask, "returns"]
+                    btc_returns = df.loc[mask, "btc_returns"]
+
+                    # Скользящая корреляция
+                    rolling_corr = symbol_returns.rolling(
+                        window=n_periods * 6,  # Используем больше данных для стабильности
+                        min_periods=n_periods * 2,
+                    ).corr(btc_returns)
+
+                    df.loc[mask, corr_col] = rolling_corr
+
+        if not self.disable_progress:
+            self.logger.info("  ✓ BTC корреляции: создано 3 признака")
+
+        # 2. ETH корреляции (3 признака)
+        for period_name, n_periods in periods.items():
+            corr_col = f"eth_correlation_{period_name}"
+
+            # Для каждого символа рассчитываем корреляцию с ETH
+            for symbol in df["symbol"].unique():
+                if symbol == "ETHUSDT":
+                    # ETH коррелирует сам с собой
+                    df.loc[df["symbol"] == symbol, corr_col] = 1.0
+                else:
+                    mask = df["symbol"] == symbol
+                    symbol_returns = df.loc[mask, "returns"]
+                    eth_returns = df.loc[mask, "eth_returns"]
+
+                    # Скользящая корреляция
+                    rolling_corr = symbol_returns.rolling(
+                        window=n_periods * 6, min_periods=n_periods * 2
+                    ).corr(eth_returns)
+
+                    df.loc[mask, corr_col] = rolling_corr
+
+        if not self.disable_progress:
+            self.logger.info("  ✓ ETH корреляции: создано 3 признака")
+
+        # 3. Market beta (2 признака)
+        # Beta = Cov(asset, market) / Var(market)
+        # Используем BTC как рыночный индекс
+
+        for period_name, n_periods in [("1h", 4), ("4h", 16)]:
+            beta_col = f"market_beta_{period_name}"
+
+            for symbol in df["symbol"].unique():
+                if symbol == "BTCUSDT":
+                    # BTC имеет beta = 1 к себе
+                    df.loc[df["symbol"] == symbol, beta_col] = 1.0
+                else:
+                    mask = df["symbol"] == symbol
+                    symbol_returns = df.loc[mask, "returns"]
+                    btc_returns = df.loc[mask, "btc_returns"]
+
+                    # Скользящая бета
+                    window_size = n_periods * 8  # Больше данных для стабильности
+
+                    # Ковариация
+                    covariance = symbol_returns.rolling(window_size, min_periods=n_periods * 2).cov(
+                        btc_returns
                     )
 
-            df.loc[df["symbol"] == "BTCUSDT", "btc_correlation"] = 1.0
+                    # Дисперсия BTC
+                    btc_variance = btc_returns.rolling(window_size, min_periods=n_periods * 2).var()
 
-            # Относительная сила к BTC
-            df["relative_strength_btc"] = df["close"] / df["btc_close"]
-            df["rs_btc_ma"] = df.groupby("symbol")["relative_strength_btc"].transform(
-                lambda x: x.rolling(20, min_periods=10).mean()
-            )
+                    # Beta = Cov / Var
+                    beta = self.safe_divide(covariance, btc_variance, fill_value=1.0)
+                    beta = beta.clip(-3, 3)  # Ограничиваем экстремальные значения beta
 
-            # ИСПРАВЛЕНО: заполняем NaN значения для BTC-связанных признаков
-            df["btc_close"] = df["btc_close"].fillna(method="ffill").fillna(method="bfill")
-            df["btc_returns"] = df["btc_returns"].fillna(0.0)
-            df["btc_correlation"] = df["btc_correlation"].fillna(0.5)  # нейтральная корреляция
-            df["relative_strength_btc"] = df["relative_strength_btc"].fillna(1.0)
-            df["rs_btc_ma"] = df["rs_btc_ma"].fillna(1.0)
-        else:
-            # Заполняем нулями если нет данных BTC
-            df["btc_close"] = 0
-            df["btc_returns"] = 0
-            df["btc_correlation"] = 0
-            df["relative_strength_btc"] = 0
-            df["rs_btc_ma"] = 0
+                    df.loc[mask, beta_col] = beta
 
-        # Определяем сектора
-        defi_tokens = ["AAVEUSDT", "UNIUSDT", "CAKEUSDT", "DYDXUSDT"]
-        layer1_tokens = ["ETHUSDT", "SOLUSDT", "AVAXUSDT", "DOTUSDT", "NEARUSDT"]
-        meme_tokens = [
-            "DOGEUSDT",
-            "FARTCOINUSDT",
-            "MELANIAUSDT",
-            "TRUMPUSDT",
-            "POPCATUSDT",
-            "PNUTUSDT",
-            "ZEREBROUSDT",
-            "WIFUSDT",
+        if not self.disable_progress:
+            self.logger.info("  ✓ Market beta: создано 2 признака")
+
+        # Итоговая проверка
+        cross_asset_features = [
+            "btc_correlation_15m",
+            "btc_correlation_1h",
+            "btc_correlation_4h",
+            "eth_correlation_15m",
+            "eth_correlation_1h",
+            "eth_correlation_4h",
+            "market_beta_1h",
+            "market_beta_4h",
         ]
 
-        df["sector"] = "other"
-        df.loc[df["symbol"].isin(defi_tokens), "sector"] = "defi"
-        df.loc[df["symbol"].isin(layer1_tokens), "sector"] = "layer1"
-        df.loc[df["symbol"].isin(meme_tokens), "sector"] = "meme"
-        df.loc[df["symbol"] == "BTCUSDT", "sector"] = "btc"
+        created_count = sum(1 for feat in cross_asset_features if feat in df.columns)
+        if not self.disable_progress:
+            self.logger.info(f"✅ Cross-asset features: создано {created_count}/8 признаков")
 
-        # Секторные доходности
-        df["sector_returns"] = df.groupby(["datetime", "sector"])["returns"].transform("mean")
+        # Заполняем NaN значения
+        for feat in cross_asset_features:
+            if feat in df.columns:
+                # Для корреляций используем нейтральное значение 0.5
+                if "correlation" in feat:
+                    fill_value = 0.5
+                # Для beta используем рыночную нейтральность 1.0
+                elif "beta" in feat:
+                    fill_value = 1.0
+                else:
+                    fill_value = 0.0
 
-        # Относительная доходность к сектору
-        df["relative_to_sector"] = df["returns"] - df["sector_returns"]
-
-        # Ранк доходности
-        df["returns_rank"] = df.groupby("datetime")["returns"].rank(pct=True)
-
-        # 24-часовой моментум - уже рассчитан в rally_detection_features
-        # Здесь только заполняем NaN значения если есть
-        if "momentum_24h" in df.columns and df["momentum_24h"].isna().any():
-            df["momentum_24h"] = df["momentum_24h"].fillna(0)
-        if "momentum_24h" in df.columns:
-            df["is_momentum_leader"] = (
-                df.groupby("datetime")["momentum_24h"].rank(ascending=False) <= 5
-            ).astype(int)
+                df[feat] = df[feat].fillna(fill_value)
 
         return df
 

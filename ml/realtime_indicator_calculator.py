@@ -368,6 +368,22 @@ class RealTimeIndicatorCalculator:
 
         cached_data, timestamp = self.cache[cache_key]
 
+        # Логируем для отладки
+        if not isinstance(timestamp, datetime):
+            logger.warning(
+                f"Неправильный тип timestamp в кеше: {type(timestamp)}, значение: {timestamp}"
+            )
+
+        # Проверяем тип timestamp и конвертируем если нужно
+        if isinstance(timestamp, (int, float)):
+            # Если timestamp это Unix timestamp в секундах или миллисекундах
+            if timestamp > 1e10:  # Миллисекунды
+                timestamp = datetime.fromtimestamp(timestamp / 1000, tz=UTC)
+            else:  # Секунды
+                timestamp = datetime.fromtimestamp(timestamp, tz=UTC)
+            # Обновляем кеш с правильным типом
+            self.cache[cache_key] = (cached_data, timestamp)
+
         # Проверяем TTL
         if (datetime.now(UTC) - timestamp).total_seconds() > self.cache_ttl:
             del self.cache[cache_key]
@@ -389,6 +405,16 @@ class RealTimeIndicatorCalculator:
         keys_to_remove = []
 
         for key, (data, timestamp) in self.cache.items():
+            # Проверяем тип timestamp и конвертируем если нужно
+            if isinstance(timestamp, (int, float)):
+                # Если timestamp это Unix timestamp в секундах или миллисекундах
+                if timestamp > 1e10:  # Миллисекунды
+                    timestamp = datetime.fromtimestamp(timestamp / 1000, tz=UTC)
+                else:  # Секунды
+                    timestamp = datetime.fromtimestamp(timestamp, tz=UTC)
+                # Обновляем кеш с правильным типом
+                self.cache[key] = (data, timestamp)
+
             if (current_time - timestamp).total_seconds() > self.cache_ttl:
                 keys_to_remove.append(key)
 
@@ -564,8 +590,18 @@ class RealTimeIndicatorCalculator:
         features_array = features_array.reshape(1, lookback, -1)
 
         # Проверяем дисперсию признаков
-        feature_std = np.std(features_array[0], axis=0)
-        non_zero_std = np.sum(feature_std > 1e-6)
+        # ИСПРАВЛЕНО: Безопасная проверка типов данных для предотвращения ошибки sqrt
+        try:
+            # Убеждаемся что данные в правильном формате numpy
+            features_sample = np.asarray(features_array[0], dtype=np.float64)
+            feature_std = np.std(features_sample, axis=0)
+            non_zero_std = np.sum(feature_std > 1e-6)
+        except (TypeError, ValueError) as e:
+            logger.warning(f"Ошибка вычисления дисперсии признаков: {e}")
+            # Fallback - простая проверка без std
+            non_zero_std = (
+                features_array.shape[2] if features_array.ndim > 2 else features_array.shape[1]
+            )
 
         logger.info(f"📊 ML признаки для {symbol}: shape={features_array.shape}")
         logger.info(
