@@ -278,6 +278,6 @@ class TestIntegration:
         total_params = sum(1 for p in model.parameters() if p.requires_grad)
 
         # Должны быть градиенты хотя бы у 80% параметров
-        assert params_with_grad / total_params > 0.8, (
-            f"Only {params_with_grad}/{total_params} params have gradients"
-        )
+        assert (
+            params_with_grad / total_params > 0.8
+        ), f"Only {params_with_grad}/{total_params} params have gradients"

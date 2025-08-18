@@ -349,9 +349,9 @@ class TestFeatureEngineerV2:
         # Проверяем бинарные целевые переменные
         binary_targets = [col for col in result.columns if "will_reach" in col]
         for target in binary_targets:
-            assert result[target].isin([0, 1]).all(), (
-                f"Целевая переменная {target} должна быть бинарной"
-            )
+            assert (
+                result[target].isin([0, 1]).all()
+            ), f"Целевая переменная {target} должна быть бинарной"
 
     def test_cross_asset_features(self, sample_config, multi_symbol_data):
         """Тест кросс-активных признаков"""
