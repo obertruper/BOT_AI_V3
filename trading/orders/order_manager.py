@@ -179,10 +179,14 @@ class OrderManager:
 
                 # ВАЖНО: Устанавливаем плечо перед открытием позиции (как в V2)
                 try:
-                    # Получаем плечо из конфигурации
-                    leverage = float(
-                        self.config.get("trading", {}).get("orders", {}).get("default_leverage", 5)
-                    )
+                    # Получаем плечо из конфигурации (используем централизованный подход из V2)
+                    try:
+                        from core.config import get_leverage
+                        leverage = get_leverage()
+                    except ImportError:
+                        # Fallback если core.config недоступен
+                        leverage = 5.0
+                        self.logger.warning("⚠️ Используем leverage по умолчанию: 5x")
 
                     self.logger.info(f"⚙️ Устанавливаем плечо {leverage}x для {order.symbol}")
                     leverage_set = await exchange.set_leverage(order.symbol, leverage)
@@ -227,15 +231,60 @@ class OrderManager:
                 position_idx = 1 if order.side == OrderSide.BUY else 2  # Для hedge mode
                 # position_idx = 0  # Для one-way mode
 
+                # 🛡️ Валидация SL/TP перед отправкой (исправление для Bybit API)
+                validated_sl = order.stop_loss
+                validated_tp = order.take_profit
+                current_price = float(order.price) if order.price else None
+                
+                if order.stop_loss and order.take_profit and current_price:
+                    # Проверяем корректность SL/TP для разных направлений
+                    if order.side == OrderSide.SELL:  # SHORT позиция
+                        # Для SELL (SHORT): SL должен быть ВЫШЕ цены, TP должен быть НИЖЕ цены
+                        if order.stop_loss <= current_price:
+                            self.logger.error(
+                                f"❌ НЕКОРРЕКТНЫЙ SL для SHORT: SL={order.stop_loss} <= Price={current_price}"
+                            )
+                            # Возможное исправление - но лучше отклонить ордер
+                            return False
+                            
+                        if order.take_profit >= current_price:
+                            self.logger.error(
+                                f"❌ НЕКОРРЕКТНЫЙ TP для SHORT: TP={order.take_profit} >= Price={current_price}"
+                            )
+                            return False
+                            
+                    elif order.side == OrderSide.BUY:  # LONG позиция
+                        # Для BUY (LONG): SL должен быть НИЖЕ цены, TP должен быть ВЫШЕ цены
+                        if order.stop_loss >= current_price:
+                            self.logger.error(
+                                f"❌ НЕКОРРЕКТНЫЙ SL для LONG: SL={order.stop_loss} >= Price={current_price}"
+                            )
+                            return False
+                            
+                        if order.take_profit <= current_price:
+                            self.logger.error(
+                                f"❌ НЕКОРРЕКТНЫЙ TP для LONG: TP={order.take_profit} <= Price={current_price}"
+                            )
+                            return False
+                    
+                    self.logger.info(
+                        f"✅ SL/TP валидация пройдена для {order.side.value}: "
+                        f"Price={current_price}, SL={validated_sl}, TP={validated_tp}"
+                    )
+
+                # 🛡️ Правильный маппинг order.side (может быть enum или string)
+                order_side_value = order.side.value if hasattr(order.side, 'value') else str(order.side)
+                exchange_side = order_side_map.get(order_side_value, ExchangeOrderSide.BUY)
+                
                 order_request = OrderRequest(
                     symbol=order.symbol,
-                    side=order_side_map.get(order.side, ExchangeOrderSide.BUY),
+                    side=exchange_side,
                     order_type=order_type_map.get(order.order_type.value, ExchangeOrderType.LIMIT),
                     quantity=order.quantity,
                     price=order.price if order.order_type.value == "limit" else None,
-                    # ВАЖНО: Добавляем SL/TP из ордера
-                    stop_loss=order.stop_loss,
-                    take_profit=order.take_profit,
+                    # ВАЖНО: Используем валидированные SL/TP
+                    stop_loss=validated_sl,
+                    take_profit=validated_tp,
                     position_idx=position_idx,  # Для правильного режима позиций
                     # Дополнительные параметры для Bybit
                     exchange_params={

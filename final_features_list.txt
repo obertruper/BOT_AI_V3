@@ -1,0 +1,234 @@
+# Финальный список 231 признаков из обучающего файла
+# КРИТИЧНО: Порядок должен быть сохранен!
+
+  1. returns
+  2. high_low_ratio
+  3. close_open_ratio
+  4. close_position
+  5. volume_ratio
+  6. turnover_ratio
+  7. vwap
+  8. close_vwap_ratio
+  9. vwap_extreme_deviation
+ 10. rsi
+ 11. rsi_oversold
+ 12. rsi_overbought
+ 13. macd
+ 14. macd_signal
+ 15. macd_diff
+ 16. bb_high
+ 17. bb_low
+ 18. bb_middle
+ 19. bb_width
+ 20. bb_position
+ 21. bb_breakout_upper
+ 22. bb_breakout_lower
+ 23. bb_breakout_strength
+ 24. atr
+ 25. atr_pct
+ 26. stoch_k
+ 27. stoch_d
+ 28. adx
+ 29. adx_pos
+ 30. adx_neg
+ 31. psar
+ 32. psar_trend
+ 33. psar_distance
+ 34. psar_distance_normalized
+ 35. ichimoku_conversion
+ 36. ichimoku_base
+ 37. ichimoku_span_a
+ 38. ichimoku_span_b
+ 39. ichimoku_cloud_thickness
+ 40. price_vs_cloud
+ 41. keltner_upper
+ 42. keltner_middle
+ 43. keltner_lower
+ 44. keltner_position
+ 45. donchian_upper
+ 46. donchian_middle
+ 47. donchian_lower
+ 48. donchian_breakout
+ 49. vwma_20
+ 50. close_vwma_ratio
+ 51. mfi
+ 52. mfi_overbought
+ 53. mfi_oversold
+ 54. cci
+ 55. cci_overbought
+ 56. cci_oversold
+ 57. williams_r
+ 58. ultimate_oscillator
+ 59. accumulation_distribution
+ 60. obv
+ 61. obv_ema
+ 62. obv_trend
+ 63. cmf
+ 64. adxr
+ 65. aroon_up
+ 66. aroon_down
+ 67. aroon_oscillator
+ 68. pivot
+ 69. resistance1
+ 70. support1
+ 71. resistance2
+ 72. support2
+ 73. dist_to_resistance1
+ 74. dist_to_support1
+ 75. roc
+ 76. trix
+ 77. hl_spread
+ 78. hl_spread_ma
+ 79. price_direction
+ 80. directed_volume
+ 81. volume_imbalance
+ 82. dollar_volume
+ 83. price_impact
+ 84. price_impact_log
+ 85. toxicity
+ 86. amihud_illiquidity
+ 87. amihud_ma
+ 88. kyle_lambda
+ 89. volatility_volume_ratio
+ 90. realized_vol_1h
+ 91. realized_vol_daily
+ 92. realized_vol_annual
+ 93. realized_vol
+ 94. volume_volatility_ratio
+ 95. volume_zscore
+ 96. volume_spike
+ 97. volume_spike_magnitude
+ 98. volatility_squeeze
+ 99. volatility_squeeze_duration
+100. bearish_divergence_rsi
+101. bullish_divergence_rsi
+102. bearish_divergence_macd
+103. bullish_divergence_macd
+104. obv_normalized
+105. obv_divergence
+106. momentum_1h
+107. momentum_4h
+108. momentum_24h
+109. momentum_acceleration
+110. spring_pattern
+111. indicators_consensus_long
+112. indicators_count_long
+113. indicators_consensus_short
+114. indicators_count_short
+115. trend_1h
+116. trend_1h_strength
+117. trend_4h
+118. trend_4h_strength
+119. daily_high
+120. daily_low
+121. daily_range
+122. position_in_daily_range
+123. near_daily_high
+124. near_daily_low
+125. uptrend_structure
+126. downtrend_structure
+127. news_risk
+128. liquidity_score
+129. liquidity_rank
+130. signal_strength
+131. long_liquidation_price
+132. short_liquidation_price
+133. long_liquidation_distance_pct
+134. short_liquidation_distance_pct
+135. current_leverage
+136. long_liquidation_risk
+137. short_liquidation_risk
+138. optimal_leverage
+139. safe_leverage
+140. cascade_risk
+141. funding_proxy
+142. long_holding_cost_daily
+143. short_holding_cost_daily
+144. var_95
+145. recommended_position_size
+146. hour
+147. minute
+148. hour_sin
+149. hour_cos
+150. dayofweek
+151. is_weekend
+152. dow_sin
+153. dow_cos
+154. day
+155. month
+156. month_sin
+157. month_cos
+158. asian_session
+159. european_session
+160. american_session
+161. session_overlap
+162. hurst_exponent
+163. fractal_dimension
+164. efficiency_ratio
+165. trend_quality
+166. realized_vol_5m
+167. realized_vol_15m
+168. garch_vol
+169. vol_regime
+170. return_entropy
+171. btc_beta
+172. idio_vol
+173. returns_ac_1
+174. returns_ac_5
+175. returns_ac_10
+176. price_jump
+177. jump_intensity
+178. ofi_persistence
+179. vpin
+180. liquidity_adj_returns
+181. cvar_5pct
+182. relative_strength_btc
+183. rs_btc_ma
+184. btc_close
+185. btc_returns
+186. btc_correlation
+187. sector
+188. sector_returns
+189. relative_to_sector
+190. returns_rank
+191. is_momentum_leader
+192. long_tp1_time
+193. long_tp2_time
+194. long_tp3_time
+195. long_sl_time
+196. short_tp1_time
+197. short_tp2_time
+198. short_tp3_time
+199. short_sl_time
+200. long_expected_value
+201. short_expected_value
+202. long_optimal_entry_time
+203. long_optimal_entry_price
+204. long_optimal_entry_improvement
+205. short_optimal_entry_time
+206. short_optimal_entry_price
+207. short_optimal_entry_improvement
+208. returns_5
+209. returns_10
+210. returns_20
+211. sma_5
+212. sma_10
+213. sma_20
+214. close_sma_5_ratio
+215. close_sma_10_ratio
+216. close_sma_20_ratio
+217. local_high_20
+218. local_high_50
+219. local_high_100
+220. local_low_20
+221. local_low_50
+222. local_low_100
+223. distance_from_high_20
+224. distance_from_high_50
+225. distance_from_high_100
+226. distance_from_low_20
+227. distance_from_low_50
+228. distance_from_low_100
+229. position_in_range_20
+230. position_in_range_50
+231. position_in_range_100

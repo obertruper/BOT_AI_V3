@@ -1,0 +1,289 @@
+🔍 АНАЛИЗ ПРИЗНАКОВ ИЗ ОБУЧАЮЩЕГО ФАЙЛА
+============================================================
+📁 Файл: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/BOT_AI_V2/ааа.py
+📊 Общее количество уникальных признаков: 244
+
+📋 РАСПРЕДЕЛЕНИЕ ПО СЕКЦИЯМ:
+----------------------------------------
+  basic               :  12 признаков
+  technical           :  55 признаков
+  microstructure      :  36 признаков
+  rally_detection     :  24 признаков
+  signal_quality      :  18 признаков
+  futures_specific    :  23 признаков
+  temporal            :  15 признаков
+  ml_optimized        :  44 признаков
+  cross_asset         :  17 признаков
+  ИТОГО               : 244 признаков
+  УНИКАЛЬНЫХ          : 244 признаков
+
+📁 BASIC
+------------------------------
+   1. returns
+   2. returns_5
+   3. returns_10
+   4. returns_20
+   5. high_low_ratio
+   6. close_open_ratio
+   7. close_position
+   8. volume_ratio
+   9. turnover_ratio
+  10. vwap
+  11. close_vwap_ratio
+  12. vwap_extreme_deviation
+
+📁 TECHNICAL
+------------------------------
+   1. sma_5
+   2. close_sma_5_ratio
+   3. sma_10
+   4. close_sma_10_ratio
+   5. sma_20
+   6. close_sma_20_ratio
+   7. sma_50
+   8. close_sma_50_ratio
+   9. sma_100
+  10. close_sma_100_ratio
+  11. sma_200
+  12. close_sma_200_ratio
+  13. ema_5
+  14. close_ema_5_ratio
+  15. ema_10
+  16. close_ema_10_ratio
+  17. ema_20
+  18. close_ema_20_ratio
+  19. ema_50
+  20. close_ema_50_ratio
+  21. ema_100
+  22. close_ema_100_ratio
+  23. ema_200
+  24. close_ema_200_ratio
+  25. rsi
+  26. rsi_oversold
+  27. rsi_overbought
+  28. macd
+  29. macd_signal
+  30. macd_diff
+  31. bb_high
+  32. bb_low
+  33. bb_middle
+  34. bb_width
+  35. bb_position
+  36. bb_breakout_upper
+  37. bb_breakout_lower
+  38. bb_breakout_strength
+  39. atr
+  40. atr_pct
+  41. stoch_k
+  42. stoch_d
+  43. adx
+  44. adx_pos
+  45. adx_neg
+  46. psar
+  47. psar_trend
+  48. psar_distance
+  49. psar_distance_normalized
+  50. ichimoku_tenkan_sen
+  51. ichimoku_kijun_sen
+  52. ichimoku_senkou_span_a
+  53. ichimoku_senkou_span_b
+  54. ichimoku_conversion_line
+  55. ichimoku_base_line
+
+📁 MICROSTRUCTURE
+------------------------------
+   1. spread
+   2. spread_ma_10
+   3. spread_std_10
+   4. order_imbalance
+   5. order_imbalance_ma_10
+   6. order_imbalance_std_10
+   7. buy_pressure
+   8. sell_pressure
+   9. net_pressure
+  10. buy_pressure_ma_10
+  11. sell_pressure_ma_10
+  12. net_pressure_ma_10
+  13. order_flow_5
+  14. order_flow_10
+  15. order_flow_20
+  16. order_flow_ratio_5
+  17. order_flow_ratio_10
+  18. order_flow_ratio_20
+  19. volume_profile_mean
+  20. volume_profile_std
+  21. volume_profile_skew
+  22. volume_price_trend
+  23. ease_of_movement
+  24. chaikin_money_flow
+  25. price_impact_5
+  26. price_impact_10
+  27. price_impact_20
+  28. kyle_lambda
+  29. amihud_illiquidity
+  30. effective_spread
+  31. quoted_spread
+  32. realized_spread
+  33. adverse_selection
+  34. order_flow_imbalance
+  35. trade_intensity
+  36. market_impact
+
+📁 RALLY DETECTION
+------------------------------
+   1. current_rally_magnitude
+   2. current_rally_duration
+   3. current_rally_velocity
+   4. current_drawdown_magnitude
+   5. current_drawdown_duration
+   6. current_drawdown_velocity
+   7. recent_max_rally_1h
+   8. recent_max_rally_4h
+   9. recent_max_rally_12h
+  10. recent_max_drawdown_1h
+  11. recent_max_drawdown_4h
+  12. recent_max_drawdown_12h
+  13. prob_reach_1pct_4h
+  14. prob_reach_2pct_4h
+  15. prob_reach_3pct_12h
+  16. trend_strength_5
+  17. trend_strength_20
+  18. trend_strength_60
+  19. trend_consistency_5
+  20. trend_consistency_20
+  21. trend_consistency_60
+  22. momentum_acceleration
+  23. momentum_persistence
+  24. momentum_mean_reversion
+
+📁 SIGNAL QUALITY
+------------------------------
+   1. indicators_consensus_long
+   2. indicators_count_long
+   3. indicators_strength_long
+   4. indicators_consensus_short
+   5. indicators_count_short
+   6. indicators_strength_short
+   7. indicators_net_consensus
+   8. indicators_total_strength
+   9. signal_quality_score
+  10. signal_confidence
+  11. signal_clarity
+  12. pattern_recognition_score
+  13. breakout_confirmation
+  14. price_momentum_divergence
+  15. volume_price_divergence
+  16. rsi_price_divergence
+  17. macd_price_divergence
+  18. sentiment_price_divergence
+
+📁 FUTURES SPECIFIC
+------------------------------
+   1. funding_rate
+   2. funding_rate_ma_8
+   3. funding_rate_std_8
+   4. funding_rate_zscore
+   5. open_interest
+   6. oi_change_1h
+   7. oi_change_4h
+   8. oi_change_24h
+   9. long_short_ratio
+  10. ls_ratio_ma_8
+  11. ls_ratio_std_8
+  12. taker_buy_sell_ratio
+  13. tbs_ratio_ma_8
+  14. tbs_ratio_std_8
+  15. funding_momentum
+  16. oi_weighted_momentum
+  17. liquidation_pressure
+  18. basis_spread
+  19. term_structure
+  20. contango_backwardation
+  21. futures_volume_ratio
+  22. spot_futures_volume_ratio
+  23. options_put_call_ratio
+
+📁 TEMPORAL
+------------------------------
+   1. hour_sin
+   2. hour_cos
+   3. day_sin
+   4. day_cos
+   5. week_sin
+   6. week_cos
+   7. month_sin
+   8. month_cos
+   9. is_weekend
+  10. is_month_start
+  11. is_month_end
+  12. is_quarter_end
+  13. is_us_market_hours
+  14. is_asian_market_hours
+  15. is_european_market_hours
+
+📁 ML OPTIMIZED
+------------------------------
+   1. price_zscore_20
+   2. volume_zscore_20
+   3. return_skewness_20
+   4. return_kurtosis_20
+   5. price_zscore_50
+   6. volume_zscore_50
+   7. return_skewness_50
+   8. return_kurtosis_50
+   9. price_zscore_100
+  10. volume_zscore_100
+  11. return_skewness_100
+  12. return_kurtosis_100
+  13. realized_vol_5m
+  14. realized_vol_15m
+  15. realized_vol_1h
+  16. realized_vol_4h
+  17. realized_vol_1d
+  18. garman_klass_vol
+  19. parkinson_vol
+  20. rogers_satchell_vol
+  21. returns_1m
+  22. returns_2m
+  23. returns_3m
+  24. returns_5m
+  25. returns_10m
+  26. returns_15m
+  27. returns_20m
+  28. returns_30m
+  29. returns_45m
+  30. returns_60m
+  31. returns_90m
+  32. returns_120m
+  33. volume_cumsum_log
+  34. volume_ema_ratio
+  35. volume_momentum
+  36. volume_acceleration
+  37. turnover_acceleration
+  38. vwap_deviation
+  39. efficiency_ratio
+  40. fractal_adaptive_ma
+  41. kaufman_adaptive_ma
+  42. mesa_adaptive_ma
+  43. zero_lag_ema
+  44. triple_exponential_ma
+
+📁 CROSS ASSET
+------------------------------
+   1. btc_correlation_15m
+   2. btc_correlation_1h
+   3. btc_correlation_4h
+   4. btc_beta_15m
+   5. btc_beta_1h
+   6. btc_beta_4h
+   7. eth_correlation_15m
+   8. eth_correlation_1h
+   9. eth_correlation_4h
+  10. eth_beta_15m
+  11. eth_beta_1h
+  12. eth_beta_4h
+  13. market_beta_1h
+  14. market_beta_4h
+  15. sector_momentum
+  16. relative_strength_vs_btc
+  17. relative_strength_vs_eth

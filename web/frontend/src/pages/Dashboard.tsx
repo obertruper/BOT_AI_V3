@@ -7,6 +7,7 @@ import ActivePositions from '@/components/dashboard/ActivePositions';
 import MLSignalsPanel from '@/components/dashboard/MLSignalsPanel';
 import MarketOverview from '@/components/dashboard/MarketOverview';
 import TradingActivity from '@/components/dashboard/TradingActivity';
+import RealTimeChart from '@/components/dashboard/RealTimeChart';
 
 const Dashboard: React.FC = () => {
   // Initialize store (WebSocket connection will handle updates)
@@ -74,7 +75,12 @@ const Dashboard: React.FC = () => {
         <MarketOverview />
       </div>
 
-      {/* Middle Row - Positions & ML Signals */}
+      {/* Middle Row - Real-Time Chart */}
+      <div className="grid grid-cols-1 gap-6">
+        <RealTimeChart symbol="BTCUSDT" />
+      </div>
+
+      {/* Lower Row - Positions & ML Signals */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <ActivePositions />
         <MLSignalsPanel />

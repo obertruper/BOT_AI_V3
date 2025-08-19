@@ -1097,7 +1097,7 @@ class TradingEngine:
                     )
                     return False
 
-            # Проверяем минимальное соотношение риск/прибыль
+            # Проверяем минимальное соотношение риск/прибыль (адаптивно по типу сигнала)
             if signal.suggested_stop_loss and signal.suggested_take_profit:
                 if signal.signal_type == SignalType.LONG:
                     risk = signal.suggested_price - signal.suggested_stop_loss
@@ -1106,13 +1106,25 @@ class TradingEngine:
                     risk = signal.suggested_stop_loss - signal.suggested_price
                     reward = signal.suggested_price - signal.suggested_take_profit
                 else:
-                    risk = reward = 1  # NEUTRAL не торгуем
+                    # NEUTRAL сигналы - используем более мягкие требования
+                    # Подход из BOT_AI_V2: разные пороги для разных типов сигналов
+                    risk = abs(signal.suggested_price - signal.suggested_stop_loss) if signal.suggested_stop_loss else 1
+                    reward = abs(signal.suggested_take_profit - signal.suggested_price) if signal.suggested_take_profit else 1
 
                 if risk > 0 and reward > 0:
                     risk_reward_ratio = reward / risk
-                    if risk_reward_ratio < 1.5:  # Минимум 1.5:1 соотношение
+                    
+                    # Адаптивные пороги risk/reward по типу сигнала
+                    if signal.signal_type == SignalType.NEUTRAL:
+                        min_rr_ratio = 1.0  # Для NEUTRAL достаточно 1:1 
+                        required_text = "> 1.0"
+                    else:
+                        min_rr_ratio = 1.5  # Для LONG/SHORT требуем 1.5:1
+                        required_text = "> 1.5"
+                    
+                    if risk_reward_ratio < min_rr_ratio:
                         self.logger.warning(
-                            f"Плохое соотношение риск/прибыль: {risk_reward_ratio:.2f} (требуется > 1.5)"
+                            f"Плохое соотношение риск/прибыль для {signal.signal_type.value}: {risk_reward_ratio:.2f} (требуется {required_text})"
                         )
                         return False
 
@@ -1302,6 +1314,22 @@ class TradingEngine:
 
             # Используем RiskManager для расчета размера позиции
             if self.risk_manager:
+                # Получаем актуальный баланс USDT для этой биржи
+                current_balance = None
+                if self.balance_manager:
+                    try:
+                        balances = await self.balance_manager.get_all_balances(signal.exchange)
+                        if signal.exchange in balances and "USDT" in balances[signal.exchange]:
+                            usdt_balance = balances[signal.exchange]["USDT"]
+                            current_balance = Decimal(str(usdt_balance["effective_available"]))
+                            self.logger.debug(
+                                f"💰 Актуальный баланс USDT на {signal.exchange}: ${current_balance}"
+                            )
+                        else:
+                            self.logger.warning(f"⚠️ Баланс USDT не найден для {signal.exchange}")
+                    except Exception as e:
+                        self.logger.error(f"❌ Ошибка получения баланса: {e}")
+
                 # Преобразуем сигнал в словарь для RiskManager
                 signal_dict = {
                     "symbol": signal.symbol,
@@ -1311,7 +1339,9 @@ class TradingEngine:
                 }
 
                 # Рассчитываем размер позиции через RiskManager (в USDT)
-                position_size_usdt = self.risk_manager.calculate_position_size(signal_dict)
+                position_size_usdt = self.risk_manager.calculate_position_size(
+                    signal_dict, balance=current_balance
+                )
 
                 # Конвертируем USDT в количество монет
                 quantity = Decimal(str(position_size_usdt)) / Decimal(str(signal.suggested_price))

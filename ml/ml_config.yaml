@@ -1,0 +1,75 @@
+# ML Configuration for BOT_AI_V3
+# Updated to match production feature engineering
+
+model:
+  name: "UnifiedPatchTST"
+  n_features: 240  # Модель обучена на 240 признаках (проверено в checkpoint)
+  d_model: 512
+  n_heads: 16
+  n_layers: 3
+  d_ff: 2048
+  dropout: 0.1
+  patch_len: 16
+  stride: 8
+  sequence_length: 168  # 42 часа при 15-минутных свечах
+  n_outputs: 20
+  activation: "gelu"
+  norm: "LayerNorm"
+
+training:
+  batch_size: 32
+  learning_rate: 0.0001
+  epochs: 100
+  patience: 10
+  validation_split: 0.2
+  test_split: 0.1
+  
+feature_engineering:
+  technical:
+    - name: sma
+      periods: [10, 20, 50]
+    - name: ema
+      periods: [10, 20, 50]
+    - name: rsi
+      period: 14
+    - name: macd
+      slow: 26
+      fast: 12
+      signal: 9
+    - name: bollinger_bands
+      period: 20
+      std_dev: 2
+    - name: atr
+      period: 14
+    - name: stochastic
+      period: 14
+      smooth_k: 3
+      smooth_d: 3
+    - name: adx
+      period: 14
+    - name: obv
+    - name: cmf
+      period: 20
+    - name: mfi
+      period: 14
+    - name: cci
+      period: 20
+    - name: williams_r
+      period: 14
+    - name: ultimate_oscillator
+      short: 7
+      medium: 14
+      long: 28
+
+paths:
+  model_dir: "ml/models/saved"
+  model_file: "best_model.pth"
+  scaler_file: "data_scaler.pkl"
+  config_file: "config.pkl"
+  
+inference:
+  batch_size: 1
+  use_gpu: true
+  device: "cuda:0"
+  max_sequence_length: 168
+  min_data_points: 200  # Минимум данных для генерации признаков
