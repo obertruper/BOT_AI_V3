@@ -26,10 +26,10 @@ This guide helps migrate from the old configuration-dependent feature engineerin
 
 ```python
 # Old
-from ml.logic.feature_engineering import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 
 # New
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 ```
 
 ### 2. Remove Config Dependencies
@@ -147,7 +147,7 @@ python test_ml_uniqueness.py
 
 ```python
 # Test script
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 import pandas as pd
 import numpy as np
 

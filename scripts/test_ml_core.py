@@ -15,7 +15,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.logger import setup_logger
-from ml.logic.feature_engineering import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 from ml.ml_manager import MLManager
 
 logger = setup_logger(__name__)

@@ -16,7 +16,7 @@ import torch
 from sklearn.preprocessing import StandardScaler
 
 from database.models import Signal, SignalType
-from ml.logic.feature_engineering import FeatureConfig, FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering import FeatureConfig, FeatureEngineer
 from ml.logic.patchtst_model import UnifiedPatchTSTForTrading
 from strategies.base.base_strategy import BaseStrategy
 

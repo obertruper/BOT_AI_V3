@@ -208,7 +208,7 @@ ATR_PERIOD = 14
 ### Basic Feature Creation
 
 ```python
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 
 # Initialize
 fe = FeatureEngineer({})

@@ -48,14 +48,14 @@ class WebIntegration:
             orchestrator: Главный оркестратор системы BOT_Trading v3.0
         """
         self.orchestrator = orchestrator
-        self.web_server: uvicorn.Server | None = None
+        self.web_server: uvicorn.Optional[Server] = None
         self.event_bridge: EventBridge | None = None
         self.data_adapters: DataAdapters | None = None
         self.is_running = False
 
         # Конфигурация веб-сервера
         self.host = "0.0.0.0"
-        self.port = 8080
+        self.port = 8083
         self.reload = False
 
         logger.info("WebIntegration инициализирован с orchestrator")
@@ -302,13 +302,13 @@ class WebIntegration:
 
 @asynccontextmanager
 async def web_integration_context(
-    orchestrator: SystemOrchestrator, host: str = "0.0.0.0", port: int = 8080
+    orchestrator: SystemOrchestrator, host: str = "0.0.0.0", port: int = 8083
 ):
     """
     Контекстный менеджер для веб-интеграции
 
     Использование:
-    async with web_integration_context(orchestrator, host="0.0.0.0", port=8080) as web_integration:
+    async with web_integration_context(orchestrator, host="0.0.0.0", port=8083) as web_integration:
         # Веб-сервер запущен и готов к работе
         await web_integration.some_operation()
     """

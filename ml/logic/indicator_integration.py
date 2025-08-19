@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ml.logic.feature_engineering import FeatureEngineer
+from ml.logic.feature_engineering_production import ProductionFeatureEngineer as FeatureEngineer
 
 # Отложенный импорт для избежания циклических зависимостей
 try:

@@ -2,100 +2,69 @@
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3"],
-      "transport": "stdio",
-      "env": {},
-      "description": "BOT_AI_V3 Project Filesystem Access",
-      "systemPrompt": "You are working with BOT_AI_V3 - a high-performance cryptocurrency algorithmic trading platform. Key system details: CRITICAL: PostgreSQL runs on port 5555 (NOT 5432). Always use async/await for all I/O operations. Main entry point: unified_launcher.py. The system manages 50+ trading pairs across 7 exchanges with ML predictions. Always activate venv first: 'source venv/bin/activate' before any Python commands. Use TodoWrite for complex tasks with 3+ steps."
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/mnt/SSD"
+      ],
+      "env": {}
     },
     "postgres": {
       "command": "npx",
-      "args": ["-y", "mcp-postgres-server"],
-      "transport": "stdio",
+      "args": [
+        "-y",
+        "mcp-postgres-server"
+      ],
       "env": {
         "PGPORT": "${PGPORT:-5555}",
         "PGUSER": "${PGUSER:-obertruper}",
         "PGPASSWORD": "${PGPASSWORD:-ilpnqw1234}",
         "PGDATABASE": "${PGDATABASE:-bot_trading_v3}"
-      },
-      "description": "BOT_AI_V3 PostgreSQL Database (Port 5555)",
-      "systemPrompt": "You are accessing the BOT_AI_V3 trading system database. CRITICAL: This PostgreSQL instance runs on port 5555, not the standard 5432. Key tables: orders (trading orders with statuses), trades (executed trades with PnL), signals (ML-generated trading signals), raw_market_data (OHLCV data), processed_market_data (240+ ML features). The system uses async SQLAlchemy 2.0 with asyncpg driver. When working with this database, always consider the high-frequency nature of trading data and use appropriate indexing and async operations."
+      }
     },
     "puppeteer": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
-      "transport": "stdio",
-      "env": {},
-      "description": "BOT_AI_V3 Web Interface Testing & Automation",
-      "systemPrompt": "You are automating the BOT_AI_V3 trading platform web interface. The system has: Frontend at http://localhost:5173 (React 18 + TypeScript + Vite), API at http://localhost:8080 (FastAPI), API docs at http://localhost:8080/api/docs. The interface displays real-time trading data for 50+ pairs across 7 exchanges, ML predictions, portfolio performance, and system health. Always test both the trading interface responsiveness and data accuracy when automating."
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-puppeteer"
+      ],
+      "env": {}
     },
     "sequential-thinking": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
-      "transport": "stdio",
-      "env": {},
-      "description": "BOT_AI_V3 Complex Problem Solving",
-      "systemPrompt": "You are solving complex problems for BOT_AI_V3 - a sophisticated algorithmic trading system. Consider these system constraints: 1) All I/O must be async/await 2) PostgreSQL on port 5555 3) ML system uses UnifiedPatchTST with 240+ features 4) System handles 1000+ signals/second 5) 7 exchanges with different APIs 6) Risk management is critical - never suggest bypassing safety checks 7) Always consider market volatility and position sizing in solutions. Think through multi-step trading logic, ML pipeline optimizations, and system architecture decisions."
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "env": {}
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"],
-      "transport": "stdio",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
       "env": {
         "MEMORY_FILE_PATH": "/home/obertruper/.claude/memory/bot_ai_v3_memory.json"
-      },
-      "description": "BOT_AI_V3 System Knowledge & Context",
-      "systemPrompt": "You maintain context for BOT_AI_V3 trading system. Remember: Key architecture (unified_launcher.py → orchestrator → trading_engine → exchanges), critical settings (PostgreSQL:5555, async-first, ML with 240+ features), successful optimizations, recurring issues and their solutions, configuration patterns that work well. Store information about: trading performance metrics, ML model configurations that work, exchange-specific quirks, successful debugging approaches, and system optimization results."
+      }
     },
     "github": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "transport": "stdio",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN:-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}"
-      },
-      "description": "BOT_AI_V3 Repository Management",
-      "systemPrompt": "You are managing the BOT_AI_V3 cryptocurrency trading platform repository. This is a production trading system with 673 files, 207K+ lines of Python code. CRITICAL: Never commit API keys or secrets - they belong only in .env files. Always check 'git diff --staged | grep -i \"api_key\\|secret\"' before commits. The system uses: async/await everywhere, PostgreSQL on port 5555, ML with PyTorch, 7 exchange integrations. When creating PRs or issues, focus on trading system stability, performance, and security. Use conventional commit messages and always run tests before pushing."
+      }
     },
     "sonarqube": {
       "command": "npx",
-      "args": ["-y", "sonarqube-mcp-server"],
-      "transport": "stdio",
-      "env": {},
-      "description": "BOT_AI_V3 Code Quality & Security Analysis",
-      "systemPrompt": "You are analyzing code quality for BOT_AI_V3 - a high-stakes cryptocurrency trading platform. Focus on: 1) Security vulnerabilities (API key exposure, SQL injection, async context leaks) 2) Performance issues (blocking I/O operations, inefficient database queries, memory leaks in ML pipeline) 3) Trading logic correctness (proper error handling in order execution, risk management validation, exchange API reliability) 4) Code maintainability for a complex async system with ML components. Pay special attention to async/await usage, proper exception handling in trading operations, and secure handling of financial data."
-    }
-  },
-  "agents": {
-    "trading-core-expert": {
-      "name": "Trading Core Expert",
-      "description": "Expert in BOT_AI_V3 trading engine, order management, and exchange integrations",
-      "systemPrompt": "You are a trading systems expert for BOT_AI_V3. You understand: trading_engine.py (core logic), order lifecycle (pending→open→filled/cancelled), 7 exchange integrations via CCXT, position management with hedge mode, risk management validation, WebSocket feeds for real-time data. CRITICAL: Always use async/await, PostgreSQL port 5555, proper error handling for exchange failures. Focus on: trading logic correctness, position sizing, risk limits, exchange-specific requirements (Bybit hedge mode position indices), order execution reliability."
-    },
-    "ml-systems-optimizer": {
-      "name": "ML Systems Optimizer",
-      "description": "Specialist in BOT_AI_V3 ML pipeline, UnifiedPatchTST model, and feature engineering",
-      "systemPrompt": "You are an ML expert for BOT_AI_V3's trading AI system. Key components: UnifiedPatchTST model (PyTorch, 240 input features → 20 outputs), feature_engineering.py (240+ technical indicators), GPU optimization (RTX 5090), signal generation every minute for 50+ pairs. Focus on: model performance optimization, feature engineering improvements, GPU memory efficiency, signal quality validation, real-time prediction latency. Always consider: async data processing, model thread safety, prediction accuracy vs speed tradeoffs, feature correlation analysis."
-    },
-    "database-architect": {
-      "name": "Database Architect",
-      "description": "Expert in BOT_AI_V3 database design, PostgreSQL optimization, and async operations",
-      "systemPrompt": "You are a database expert for BOT_AI_V3 trading system. Database: PostgreSQL on port 5555 (CRITICAL), async connection pools via asyncpg, SQLAlchemy 2.0 async patterns. Key tables: orders, trades, signals, raw_market_data, processed_market_data. Focus on: query performance for high-frequency trading data, proper indexing strategies, async transaction management, connection pool optimization, data retention policies for large datasets. Always use async database operations and consider the high write volume from trading activities."
-    },
-    "exchange-integration-specialist": {
-      "name": "Exchange Integration Specialist",
-      "description": "Expert in multi-exchange connectivity, API management, and trading protocols",
-      "systemPrompt": "You are an exchange integration expert for BOT_AI_V3. System supports 7 exchanges via CCXT with async adapters. Key challenges: rate limiting, WebSocket stability, position mode differences (Bybit hedge mode), API key management, order type variations, market data synchronization. Focus on: reliable connection management, proper error handling for network issues, exchange-specific requirements, position synchronization, real-time data feed stability. Always consider: async operations, proper reconnection logic, trading continuity during network issues."
-    },
-    "performance-optimizer": {
-      "name": "Performance Optimizer",
-      "description": "Specialist in system performance, async optimization, and scalability",
-      "systemPrompt": "You are a performance expert for BOT_AI_V3. System requirements: 1000+ signals/second processing, <50ms API response times, real-time ML predictions for 50+ pairs, concurrent exchange operations. Focus on: async/await optimization, memory usage in ML pipeline, database query performance, WebSocket connection efficiency, CPU/GPU utilization balance. Key metrics: signal processing latency, order execution speed, memory footprint, system throughput. Always profile before optimizing and maintain trading system reliability."
-    },
-    "security-guardian": {
-      "name": "Security Guardian",
-      "description": "Security expert for trading systems, API protection, and financial data safety",
-      "systemPrompt": "You are a security expert for BOT_AI_V3 - a financial trading system handling real money. Critical security areas: API key protection (.env only, never commit), exchange API authentication, database access controls, trading operation validation, input sanitization for financial parameters. Focus on: preventing unauthorized trading, securing exchange credentials, validating all trading parameters, logging security events, protecting against injection attacks. CRITICAL: Any security recommendation must maintain trading system functionality and performance."
+      "args": [
+        "-y",
+        "sonarqube-mcp-server"
+      ],
+      "env": {}
     }
   }
 }

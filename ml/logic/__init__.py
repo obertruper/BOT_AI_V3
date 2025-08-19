@@ -3,7 +3,7 @@ ML Logic модуль для BOT Trading v3
 Содержит основные модели машинного обучения и feature engineering
 """
 
-from .feature_engineering import FeatureEngineer
+from .feature_engineering_production import ProductionFeatureEngineer as FeatureEngineer
 from .indicator_integration import (
     FeatureEngineerWithIndicators,
     create_feature_config_from_indicators,

@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).parent))
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
 from data.data_loader import DataLoader
-from ml.logic.feature_engineering import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 
 logger = setup_logger(__name__)
 

@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from core.logger import setup_logger
 from ml.config.features_240 import REQUIRED_FEATURES_240
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 
 logger = setup_logger("test_inference_mode")
 

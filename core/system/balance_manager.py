@@ -94,6 +94,11 @@ class BalanceManager:
             logger.warning(f"⚠️  Redis недоступен для менеджера балансов: {e}")
             self.redis_client = None
 
+    def set_exchange_manager(self, exchange_manager):
+        """Установка менеджера бирж для получения балансов"""
+        self.exchange_manager = exchange_manager
+        logger.info("✅ Exchange Manager установлен в BalanceManager")
+
     async def start(self):
         """Запуск менеджера балансов"""
         if self._running:
@@ -103,11 +108,17 @@ class BalanceManager:
         self._running = True
         logger.info("🚀 Запуск BalanceManager")
 
-        # Запуск задач обновления для каждой биржи
-        exchanges = ["bybit", "binance", "okx", "gate", "kucoin", "htx", "bingx"]
-        for exchange in exchanges:
-            self.update_intervals[exchange] = self.default_update_interval
-            self._update_tasks[exchange] = asyncio.create_task(self._balance_update_loop(exchange))
+        # Запуск задач обновления для каждой биржи - ТОЛЬКО если есть exchange_manager
+        if self.exchange_manager:
+            exchanges = ["bybit", "binance", "okx", "gate", "kucoin", "htx", "bingx"]
+            for exchange in exchanges:
+                self.update_intervals[exchange] = self.default_update_interval
+                self._update_tasks[exchange] = asyncio.create_task(
+                    self._balance_update_loop(exchange)
+                )
+            logger.info("✅ Запущены задачи обновления балансов для всех бирж")
+        else:
+            logger.warning("⚠️ Exchange Manager не установлен, обновление балансов отключено")
 
         # Запуск задачи очистки
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
@@ -164,19 +175,26 @@ class BalanceManager:
             if not balance:
                 return False, f"Баланс для {symbol} на {exchange} не найден"
 
-            available = balance.available
+            # Конвертируем в Decimal для безопасных операций
+            available = Decimal(str(balance.available))
 
             # Учитываем резервирования
             if include_reservations:
                 reserved_amount = self._get_reserved_amount(exchange, symbol)
                 available -= reserved_amount
 
+            # Конвертируем amount в Decimal если необходимо
+            amount_decimal = Decimal(str(amount)) if not isinstance(amount, Decimal) else amount
+
             # Проверяем достаточность средств
-            if available < amount:
-                return False, f"Недостаточно средств: доступно {available}, требуется {amount}"
+            if available < amount_decimal:
+                return (
+                    False,
+                    f"Недостаточно средств: доступно {available}, требуется {amount_decimal}",
+                )
 
             # Проверяем минимальный остаток
-            remaining = available - amount
+            remaining = available - amount_decimal
             if remaining < self.minimum_balance_threshold:
                 return False, f"Операция оставит слишком мало средств: {remaining}"
 
@@ -426,9 +444,29 @@ class BalanceManager:
             try:
                 balance_data = await self.redis_client.get(f"balance:{exchange}:{symbol}")
                 if balance_data:
-                    # Здесь должна быть десериализация из Redis
-                    # Пока возвращаем None для принудительного обновления
-                    pass
+                    # Десериализация из Redis
+                    import json
+
+                    data = json.loads(balance_data)
+                    balance = ExchangeBalance(
+                        exchange=exchange,
+                        symbol=symbol,
+                        total=Decimal(data.get("total", "0")),
+                        available=Decimal(data.get("available", "0")),
+                        locked=Decimal(data.get("locked", "0")),
+                        last_updated=datetime.now(),  # Обновляем время
+                    )
+
+                    # Сохраняем в локальный кеш
+                    if exchange not in self.balances:
+                        self.balances[exchange] = {}
+                    self.balances[exchange][symbol] = balance
+
+                    self.stats["cache_hits"] += 1
+                    logger.debug(
+                        f"💰 Загружен баланс {symbol} на {exchange} из Redis: {balance.available}"
+                    )
+                    return balance
             except Exception as e:
                 logger.warning(f"⚠️  Ошибка загрузки баланса из Redis: {e}")
 
@@ -456,14 +494,76 @@ class BalanceManager:
     async def _update_exchange_balances(self, exchange: str):
         """Обновление балансов конкретной биржи"""
         try:
-            # Здесь должна быть логика получения балансов с биржи
-            # Пока просто заглушка
             logger.debug(f"🔄 Обновление балансов для {exchange}")
 
-            # В реальной реализации здесь будет:
-            # 1. Получение клиента биржи
-            # 2. Запрос балансов через API
-            # 3. Обновление локального кеша
+            # Проверяем наличие exchange_manager
+            if not self.exchange_manager:
+                logger.debug(
+                    f"⚠️ Пропуск обновления балансов для {exchange} - exchange_manager не установлен"
+                )
+                return
+
+            # Получаем клиента биржи
+            exchange_client = await self.exchange_manager.get_exchange(exchange)
+            if not exchange_client:
+                logger.warning(f"⚠️ Не удалось получить клиента для биржи {exchange}")
+                return
+
+            # Запрашиваем балансы через API
+            try:
+                balances = await exchange_client.get_balances()
+                logger.debug(f"📊 Получено {len(balances)} балансов с {exchange}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка получения балансов с {exchange}: {e}")
+                return
+
+            # Обновляем локальный кеш
+            if exchange not in self.balances:
+                self.balances[exchange] = {}
+
+            for balance in balances:
+                symbol = balance.currency.upper()
+
+                # Создаем объект ExchangeBalance
+                exchange_balance = ExchangeBalance(
+                    exchange=exchange,
+                    symbol=symbol,
+                    total=Decimal(str(balance.total)),
+                    available=Decimal(str(balance.available)),
+                    locked=Decimal(str(balance.frozen)),
+                    last_updated=datetime.now(),
+                )
+
+                self.balances[exchange][symbol] = exchange_balance
+
+                # Сохраняем в Redis если доступен
+                if self.redis_client:
+                    try:
+                        import json
+
+                        balance_data = json.dumps(
+                            {
+                                "total": str(exchange_balance.total),
+                                "available": str(exchange_balance.available),
+                                "locked": str(exchange_balance.locked),
+                            }
+                        )
+                        await self.redis_client.set(
+                            f"balance:{exchange}:{symbol}", balance_data, ex=300  # TTL 5 минут
+                        )
+                    except Exception as e:
+                        logger.debug(f"⚠️ Не удалось сохранить баланс в Redis: {e}")
+
+                # Логируем значимые балансы
+                if exchange_balance.total > 0:
+                    logger.info(
+                        f"💰 {exchange} {symbol}: total={exchange_balance.total:.4f}, "
+                        f"available={exchange_balance.available:.4f}, locked={exchange_balance.locked:.4f}"
+                    )
+
+            # Обновляем время последнего обновления
+            self.last_updates[exchange] = datetime.now()
+            logger.info(f"✅ Обновлены балансы для {exchange}: {len(balances)} валют")
 
         except Exception as e:
             logger.error(f"❌ Ошибка обновления балансов для {exchange}: {e}")

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from core.logger import setup_logger
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 from ml.realtime_indicator_calculator import RealTimeIndicatorCalculator
 
 logger = setup_logger(__name__)

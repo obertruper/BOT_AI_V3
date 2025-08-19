@@ -181,9 +181,9 @@ class UnifiedLauncher:
                 "enabled": True,
                 "command": "venv/bin/python web/launcher.py",
                 "name": "Web API",
-                "port": 8080,
+                "port": 8083,
                 "auto_restart": True,
-                "health_check_endpoint": "http://localhost:8080/api/health",
+                "health_check_endpoint": "http://localhost:8083/api/health",
                 "startup_delay": 3,
                 "env": {
                     "UNIFIED_MODE": "true",
@@ -200,7 +200,7 @@ class UnifiedLauncher:
                 "health_check_endpoint": "http://localhost:5173",
                 "startup_delay": 5,
                 "cwd": "web/frontend",
-                "env": {"VITE_API_URL": "http://localhost:8080"},
+                "env": {"VITE_API_URL": "http://localhost:8083"},
             },
         }
 
@@ -552,8 +552,8 @@ class UnifiedLauncher:
         if self.components_config["frontend"]["enabled"]:
             logger.info("  Dashboard: http://localhost:5173")
         if self.components_config["api"]["enabled"]:
-            logger.info("  API: http://localhost:8080")
-            logger.info("  API Docs: http://localhost:8080/api/docs")
+            logger.info("  API: http://localhost:8083")
+            logger.info("  API Docs: http://localhost:8083/api/docs")
 
         # Системные метрики
         metrics = await self._collect_metrics()

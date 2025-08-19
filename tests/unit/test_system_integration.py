@@ -156,7 +156,7 @@ class TestMLSystem:
     @pytest.mark.asyncio
     async def test_feature_engineering(self):
         """Тест инженерии признаков"""
-        from ml.logic.feature_engineering_v2 import FeatureEngineeringV2
+        from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineeringV2
 
         fe = FeatureEngineeringV2()
         assert fe is not None

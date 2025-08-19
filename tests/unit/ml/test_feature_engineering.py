@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ml.logic.feature_engineering import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 
 
 @pytest.mark.unit

@@ -13,7 +13,7 @@ traders:
     exchange: "bybit"
     strategy: "ml_signal"
     strategy_config:
-      signal_interval: 60  # Генерация сигналов каждую минуту
+      signal_interval: 180  # Генерация сигналов каждые 3 минуты
       indicators:
         - type: "RSI"
           period: 14

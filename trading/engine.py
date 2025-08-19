@@ -10,7 +10,8 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from core.signals.unified_signal_processor import UnifiedSignalProcessor as SignalProcessor
+# Удалено: UnifiedSignalProcessor пока не используется, signal_processor установлен в None
+# from core.signals.unified_signal_processor import UnifiedSignalProcessor as SignalProcessor
 from core.system.balance_manager import balance_manager
 from core.system.process_monitor import process_monitor
 from core.system.rate_limiter import rate_limiter
@@ -90,7 +91,7 @@ class TradingEngine:
         self._tasks: set[asyncio.Task] = set()
 
         # Основные компоненты
-        self.signal_processor: SignalProcessor | None = None
+        self.signal_processor = None  # Пока не используется, заменен на ML сигналы через ml_manager
         self.position_manager: PositionManager | None = None
         self.order_manager: OrderManager | None = None
         self.execution_engine: ExecutionEngine | None = None
@@ -177,7 +178,7 @@ class TradingEngine:
             from core.system.balance_manager import balance_manager
 
             self.balance_manager = balance_manager
-            await self.balance_manager.start()
+            # НЕ запускаем balance_manager сразу - сначала нужно установить exchange_manager
 
             # Также сохраняем другие компоненты для удобства
             self.worker_coordinator = worker_coordinator
@@ -234,13 +235,17 @@ class TradingEngine:
             exchange_registry=self.exchange_registry,
         )
 
-        # Risk Manager - временно отключен
-        self.risk_manager = None  # TODO: Реализовать RiskManager
-        # self.risk_manager = RiskManager(
-        #     config=self.config.get("risk_management", {}),
-        #     position_manager=self.position_manager,
-        #     exchange_registry=self.exchange_registry,
-        # )
+        # Risk Manager - включен для расчета размеров позиций
+        try:
+            self.risk_manager = RiskManager(
+                config=self.config.get("risk_management", {}),
+                position_manager=self.position_manager,
+                exchange_registry=self.exchange_registry,
+            )
+            self.logger.info("✅ RiskManager инициализирован")
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка инициализации RiskManager: {e}")
+            self.risk_manager = None
 
         # Strategy Manager
         self.strategy_manager = StrategyManager(
@@ -249,6 +254,12 @@ class TradingEngine:
             signal_processor=self.signal_processor,
         )
         await self.strategy_manager.initialize()
+
+        # Подключаем exchange_manager к balance_manager
+        if self.balance_manager and self.exchange_registry:
+            self.balance_manager.set_exchange_manager(self.exchange_registry)
+            await self.balance_manager.start()
+            self.logger.info("✅ BalanceManager подключен к Exchange Manager")
 
         self.logger.info("Основные компоненты инициализированы")
 
@@ -1016,9 +1027,13 @@ class TradingEngine:
                 self.logger.warning(f"Неверная цена: {signal.suggested_price}")
                 return False
 
-            # Проверка уверенности
-            if signal.confidence < 0.3:  # Минимальная уверенность 30%
-                self.logger.warning(f"Слишком низкая уверенность: {signal.confidence}")
+            # Проверка уверенности - снижен порог для работы с текущей моделью
+            if (
+                signal.confidence < 0.30
+            ):  # Снижено до 0.30 для соответствия текущим ML предсказаниям (33-37%)
+                self.logger.warning(
+                    f"Слишком низкая уверенность: {signal.confidence:.2%} (требуется > 30%)"
+                )
                 return False
 
             # Проверка stop loss и take profit в зависимости от направления
@@ -1063,6 +1078,43 @@ class TradingEngine:
                         f"SHORT: Take profit ({signal.suggested_take_profit}) >= цены ({signal.suggested_price})"
                     )
                     return False
+
+            # ДОПОЛНИТЕЛЬНЫЕ КРИТЕРИИ КАЧЕСТВА - "закручиваем гайки"
+
+            # Проверяем signal_strength если есть
+            if hasattr(signal, "signal_strength") and signal.signal_strength:
+                if signal.signal_strength < 0.40:  # Минимальная сила сигнала 40%
+                    self.logger.warning(
+                        f"Слишком слабый сигнал: {signal.signal_strength:.2%} (требуется > 40%)"
+                    )
+                    return False
+
+            # Проверяем quality_score если есть
+            if hasattr(signal, "quality_score") and signal.quality_score:
+                if signal.quality_score < 0.30:  # Минимальный качественный балл снижен до 30%
+                    self.logger.warning(
+                        f"Слишком низкое качество сигнала: {signal.quality_score:.2%} (требуется > 30%)"
+                    )
+                    return False
+
+            # Проверяем минимальное соотношение риск/прибыль
+            if signal.suggested_stop_loss and signal.suggested_take_profit:
+                if signal.signal_type == SignalType.LONG:
+                    risk = signal.suggested_price - signal.suggested_stop_loss
+                    reward = signal.suggested_take_profit - signal.suggested_price
+                elif signal.signal_type == SignalType.SHORT:
+                    risk = signal.suggested_stop_loss - signal.suggested_price
+                    reward = signal.suggested_price - signal.suggested_take_profit
+                else:
+                    risk = reward = 1  # NEUTRAL не торгуем
+
+                if risk > 0 and reward > 0:
+                    risk_reward_ratio = reward / risk
+                    if risk_reward_ratio < 1.5:  # Минимум 1.5:1 соотношение
+                        self.logger.warning(
+                            f"Плохое соотношение риск/прибыль: {risk_reward_ratio:.2f} (требуется > 1.5)"
+                        )
+                        return False
 
             return True
 
@@ -1248,22 +1300,32 @@ class TradingEngine:
                 str(self.config.get("trading", {}).get("min_order_value_usdt", 5.0))
             )
 
-            # Получаем дефолтный размер позиции из конфигурации или используем suggested_quantity
-            default_sizes = self.config.get("trading", {}).get("default_position_sizes", {})
+            # Используем RiskManager для расчета размера позиции
+            if self.risk_manager:
+                # Преобразуем сигнал в словарь для RiskManager
+                signal_dict = {
+                    "symbol": signal.symbol,
+                    "side": signal.signal_type.value,
+                    "price": float(signal.suggested_price),
+                    "confidence": getattr(signal, "confidence", 0.6),
+                }
 
-            if signal.symbol in default_sizes:
-                # Используем размер из конфигурации
-                quantity = Decimal(str(default_sizes[signal.symbol]))
-                self.logger.info(f"Используем размер из конфигурации: {quantity} {signal.symbol}")
-            elif hasattr(signal, "suggested_quantity") and signal.suggested_quantity:
-                # Используем размер из сигнала
-                quantity = Decimal(str(signal.suggested_quantity))
-                self.logger.info(f"Используем размер из сигнала: {quantity} {signal.symbol}")
-            else:
-                # Рассчитываем минимальный размер для $5
-                quantity = min_order_value_usdt / Decimal(str(signal.suggested_price))
+                # Рассчитываем размер позиции через RiskManager (в USDT)
+                position_size_usdt = self.risk_manager.calculate_position_size(signal_dict)
+
+                # Конвертируем USDT в количество монет
+                quantity = Decimal(str(position_size_usdt)) / Decimal(str(signal.suggested_price))
+
                 self.logger.info(
-                    f"Рассчитан минимальный размер для ${min_order_value_usdt}: {quantity} {signal.symbol}"
+                    f"RiskManager рассчитал размер: ${position_size_usdt:.2f} USDT = "
+                    f"{quantity:.8f} {signal.symbol} @ ${signal.suggested_price}"
+                )
+            else:
+                # Fallback: минимальный размер для $5
+                quantity = min_order_value_usdt / Decimal(str(signal.suggested_price))
+                self.logger.warning(
+                    f"RiskManager недоступен! Используем минимальный размер ${min_order_value_usdt}: "
+                    f"{quantity} {signal.symbol}"
                 )
 
             # Проверяем минимальный объем в USDT
@@ -1297,15 +1359,15 @@ class TradingEngine:
 
             # Проверяем баланс перед созданием ордера
             try:
-                # Определяем валюту для проверки баланса
-                required_currency = "USDT"  # Базовая валюта для большинства пар
-                required_amount = order_value_usdt
+                # ИСПРАВЛЕНО: Для фьючерсной торговли всегда нужен USDT (для маржи)
+                # Независимо от направления (LONG/SHORT), используется USDT как маржа
+                required_currency = "USDT"  # Всегда USDT для фьючерсов
+                required_amount = order_value_usdt  # Размер в USDT
 
-                if side == OrderSide.SELL:
-                    # Для продажи нужна базовая валюта (например, BTC для BTCUSDT)
-                    base_currency = signal.symbol.replace("USDT", "").replace("BUSD", "")
-                    required_currency = base_currency
-                    required_amount = quantity
+                # Примечание: для спотовой торговли логика была бы другой:
+                # - BUY: нужен USDT
+                # - SELL: нужна базовая валюта (BTC, ETH и т.д.)
+                # Но мы торгуем фьючерсами, где всегда используется USDT
 
                 # Проверяем доступность баланса
                 balance_available, balance_error = await balance_manager.check_balance_availability(

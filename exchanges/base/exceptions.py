@@ -15,9 +15,9 @@ from typing import Any
 from core.exceptions import (
     ErrorCategory,
     ErrorSeverity,
+    ExchangeError as CoreExchangeError,
+    NetworkError as CoreNetworkError,
 )
-from core.exceptions import ExchangeError as CoreExchangeError
-from core.exceptions import NetworkError as CoreNetworkError
 
 
 class ExchangeError(CoreExchangeError):

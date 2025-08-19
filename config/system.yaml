@@ -14,7 +14,7 @@ system:
     cache_size_mb: 512
   web_interface:
     host: 0.0.0.0
-    port: 8080
+    port: 8083
 database:
   type: postgresql
   host: 127.0.0.1
@@ -87,19 +87,19 @@ api:
   rest:
     enabled: false
     host: 0.0.0.0
-    port: 8081
+    port: 8084
     cors_enabled: true
     rate_limiting:
       enabled: true
       requests_per_minute: 100
   websocket:
     enabled: true
-    port: 8081
+    port: 8085
     max_connections: 100
     heartbeat_interval: 30
   webhook:
     enabled: true
-    port: 8082
+    port: 8086
     timeout_seconds: 30
     retry_attempts: 3
 notifications:
@@ -200,7 +200,7 @@ unified_system:
       integrated_with: core
     api:
       enabled: true
-      port: 8080
+      port: 8083
       auto_restart: true
       health_check_interval: 30
       startup_delay: 3
@@ -221,7 +221,7 @@ unified_system:
 ml:
   enabled: true
   signal_generation:
-    interval_seconds: 60
+    interval_seconds: 180  # Изменено: ML предсказания раз в 3 минуты
     batch_size: 10
     parallel_workers: 4
   symbols:
@@ -308,7 +308,7 @@ traders:
   exchange: bybit
   strategy: ml_signal
   strategy_config:
-    signal_interval: 60
+    signal_interval: 180  # Изменено: раз в 3 минуты
     indicators:
     - type: RSI
       period: 14

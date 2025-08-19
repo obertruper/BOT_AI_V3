@@ -41,7 +41,8 @@ class SignalScheduler:
         # Настройки планировщика
         ml_config = self.config.get("ml", {})
         self.symbols = ml_config.get("symbols", ["BTCUSDT"])
-        self.interval_seconds = ml_config.get("signal_interval_seconds", 60)
+        # Читаем интервал из конфигурации (по умолчанию 180 секунд = 3 минуты)
+        self.interval_seconds = ml_config.get("signal_generation", {}).get("interval_seconds", 180)
         self.exchange = ml_config.get("default_exchange", "bybit")
         self.enabled = ml_config.get("enabled", True)
 
@@ -373,7 +374,7 @@ async def main():
 
         # Бесконечный цикл
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(180)  # Проверка каждые 3 минуты
 
     except KeyboardInterrupt:
         logger.info("Остановка по запросу пользователя...")

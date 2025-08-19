@@ -71,10 +71,10 @@ class MLPredictionLogger:
             # Feature statistics
             **feature_stats,
             # Model outputs - raw predictions
-            "predicted_return_15m": float(predictions["returns_15m"]),
-            "predicted_return_1h": float(predictions["returns_1h"]),
-            "predicted_return_4h": float(predictions["returns_4h"]),
-            "predicted_return_12h": float(predictions["returns_12h"]),
+            "predicted_return_15m": float(predictions.get("returns_15m", 0)),
+            "predicted_return_1h": float(predictions.get("returns_1h", 0)),
+            "predicted_return_4h": float(predictions.get("returns_4h", 0)),
+            "predicted_return_12h": float(predictions.get("returns_12h", 0)),
             # Direction predictions
             "direction_15m": predictions["direction_15m"],
             "direction_15m_confidence": float(predictions["confidence_15m"]),
@@ -151,9 +151,14 @@ class MLPredictionLogger:
             last_row = market_data.iloc[-1]
             key_features["close_price"] = float(last_row.get("close", 0))
             key_features["volume"] = float(last_row.get("volume", 0))
+            # DEBUG: логируем что получили из market_data
+            logger.debug(
+                f"DEBUG market_data last row: close={last_row.get('close')}, volume={last_row.get('volume')}"
+            )
         else:
             key_features["close_price"] = 0
             key_features["volume"] = 0
+            logger.debug("DEBUG: market_data is None or empty")
 
         return key_features
 
@@ -178,40 +183,109 @@ class MLPredictionLogger:
     ) -> None:
         """Выводит детальные логи предсказания"""
 
-        logger.info(
-            f"""
-╔══════════════════════════════════════════════════════════════════════╗
-║                    ML PREDICTION DETAILS - {symbol:^10}              ║
-╠══════════════════════════════════════════════════════════════════════╣
-║ 📊 INPUT FEATURES                                                     ║
-║   • Feature Count: {record["features_count"]:<6} • Hash: {record["features_hash"]:016x}     ║
-║   • NaN Count: {record["nan_count"]:<6} • Zero Variance: {record["zero_variance_count"]:<6}        ║
-║   • Mean: {record["features_mean"]:>8.4f}  • Std: {record["features_std"]:>8.4f}            ║
-║   • Min:  {record["features_min"]:>8.4f}  • Max: {record["features_max"]:>8.4f}            ║
-╟──────────────────────────────────────────────────────────────────────╢
-║ 🎯 KEY INDICATORS                                                     ║
-║   • Close: ${record.get("close_price", 0):>10.2f}  • Volume: {record.get("volume", 0):>12.0f}  ║
-║   • RSI: {record.get("rsi", 0):>6.2f}  • MACD: {record.get("macd", 0):>8.4f}                  ║
-║   • BB Position: {record.get("bb_position", 0):>6.3f}  • ATR%: {record.get("atr_pct", 0):>6.3f}   ║
-╟──────────────────────────────────────────────────────────────────────╢
-║ 📈 PREDICTED RETURNS                                                  ║
-║   • 15m: {record["predicted_return_15m"]:>7.4f} ({record["direction_15m"]:^7}) [{record["direction_15m_confidence"]:>5.2%}]  ║
-║   • 1h:  {record["predicted_return_1h"]:>7.4f} ({record["direction_1h"]:^7}) [{record["direction_1h_confidence"]:>5.2%}]   ║
-║   • 4h:  {record["predicted_return_4h"]:>7.4f} ({record["direction_4h"]:^7}) [{record["direction_4h_confidence"]:>5.2%}]   ║
-║   • 12h: {record["predicted_return_12h"]:>7.4f} ({record["direction_12h"]:^7}) [{record["direction_12h_confidence"]:>5.2%}] ║
-╟──────────────────────────────────────────────────────────────────────╢
-║ ⚠️  RISK METRICS                                                      ║
-║   • Risk Score: {record.get("risk_score", 0):>6.3f}                                       ║
-║   • Max Drawdown: {record.get("max_drawdown_predicted", 0):>6.2%}                           ║
-║   • Max Rally: {record.get("max_rally_predicted", 0):>6.2%}                              ║
-╟──────────────────────────────────────────────────────────────────────╢
-║ 🎯 FINAL SIGNAL                                                       ║
-║   • Type: {record["signal_type"]:^10}  • Confidence: {record["signal_confidence"]:>5.2%}       ║
-║   • Primary Timeframe: {record.get("signal_timeframe", "N/A"):^10}                      ║
-║   • Inference Time: {record["inference_time_ms"]:>6.1f} ms                            ║
-╚══════════════════════════════════════════════════════════════════════╝
-"""
+        # DEBUG: Проверяем, что реально передается
+        logger.debug(
+            f"DEBUG predictions content: returns_15m={predictions.get('returns_15m')}, "
+            f"returns_1h={predictions.get('returns_1h')}, "
+            f"returns_4h={predictions.get('returns_4h')}, "
+            f"returns_12h={predictions.get('returns_12h')}"
         )
+
+        # Собираем всю таблицу в одну строку, чтобы она выводилась целиком
+        table_lines = []
+        table_lines.append(
+            "╔══════════════════════════════════════════════════════════════════════╗"
+        )
+        table_lines.append(
+            f"║                    ML PREDICTION DETAILS - {symbol:^10}              ║"
+        )
+        table_lines.append(
+            "╠══════════════════════════════════════════════════════════════════════╣"
+        )
+        table_lines.append(
+            "║ 📊 INPUT FEATURES                                                     ║"
+        )
+        table_lines.append(
+            f"║   • Feature Count: {record['features_count']:<6} • Hash: {record['features_hash']:016x}     ║"
+        )
+        table_lines.append(
+            f"║   • NaN Count: {record['nan_count']:<6} • Zero Variance: {record['zero_variance_count']:<6}        ║"
+        )
+        table_lines.append(
+            f"║   • Mean: {record['features_mean']:>8.4f}  • Std: {record['features_std']:>8.4f}            ║"
+        )
+        table_lines.append(
+            f"║   • Min:  {record['features_min']:>8.4f}  • Max: {record['features_max']:>8.4f}            ║"
+        )
+        table_lines.append(
+            "╟──────────────────────────────────────────────────────────────────────╢"
+        )
+        table_lines.append(
+            "║ 🎯 KEY INDICATORS                                                     ║"
+        )
+        table_lines.append(
+            f"║   • Close: ${record.get('close_price', 0):>10.2f}  • Volume: {record.get('volume', 0):>12.0f}  ║"
+        )
+        table_lines.append(
+            f"║   • RSI: {record.get('rsi', 0):>6.2f}  • MACD: {record.get('macd', 0):>8.4f}                  ║"
+        )
+        table_lines.append(
+            f"║   • BB Position: {record.get('bb_position', 0):>6.3f}  • ATR%: {record.get('atr_pct', 0):>6.3f}   ║"
+        )
+        table_lines.append(
+            "╟──────────────────────────────────────────────────────────────────────╢"
+        )
+        table_lines.append(
+            "║ 📈 PREDICTED RETURNS                                                  ║"
+        )
+        table_lines.append(
+            f"║   • 15m: {record['predicted_return_15m']:>7.4f} ({record['direction_15m']:^7}) [{record['direction_15m_confidence']:>5.2%}]  ║"
+        )
+        table_lines.append(
+            f"║   • 1h:  {record['predicted_return_1h']:>7.4f} ({record['direction_1h']:^7}) [{record['direction_1h_confidence']:>5.2%}]   ║"
+        )
+        table_lines.append(
+            f"║   • 4h:  {record['predicted_return_4h']:>7.4f} ({record['direction_4h']:^7}) [{record['direction_4h_confidence']:>5.2%}]   ║"
+        )
+        table_lines.append(
+            f"║   • 12h: {record['predicted_return_12h']:>7.4f} ({record['direction_12h']:^7}) [{record['direction_12h_confidence']:>5.2%}] ║"
+        )
+        table_lines.append(
+            "╟──────────────────────────────────────────────────────────────────────╢"
+        )
+        table_lines.append(
+            "║ ⚠️  RISK METRICS                                                      ║"
+        )
+        table_lines.append(
+            f"║   • Risk Score: {record.get('risk_score', 0):>6.3f}                                       ║"
+        )
+        table_lines.append(
+            f"║   • Max Drawdown: {record.get('max_drawdown_predicted', 0):>6.2%}                           ║"
+        )
+        table_lines.append(
+            f"║   • Max Rally: {record.get('max_rally_predicted', 0):>6.2%}                              ║"
+        )
+        table_lines.append(
+            "╟──────────────────────────────────────────────────────────────────────╢"
+        )
+        table_lines.append(
+            "║ 🎯 FINAL SIGNAL                                                       ║"
+        )
+        table_lines.append(
+            f"║   • Type: {record['signal_type']:^10}  • Confidence: {record['signal_confidence']:>5.2%}       ║"
+        )
+        table_lines.append(
+            f"║   • Primary Timeframe: {record.get('signal_timeframe', 'N/A'):^10}                      ║"
+        )
+        table_lines.append(
+            f"║   • Inference Time: {record['inference_time_ms']:>6.1f} ms                            ║"
+        )
+        table_lines.append(
+            "╚══════════════════════════════════════════════════════════════════════╝"
+        )
+
+        # Выводим всю таблицу одним вызовом logger.info
+        logger.info("\n" + "\n".join(table_lines))
 
         # Логируем дополнительную информацию для отладки
         if predictions.get("debug_info"):

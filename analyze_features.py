@@ -22,7 +22,7 @@ async def analyze_features():
 
     from core.config.config_manager import ConfigManager
     from database.connections.postgres import AsyncPGPool
-    from ml.logic.feature_engineering import FeatureEngineer
+    from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 
     # Получаем данные
     candles = await AsyncPGPool.fetch(

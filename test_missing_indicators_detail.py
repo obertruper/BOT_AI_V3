@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from ml.config.features_240 import REQUIRED_FEATURES_240
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

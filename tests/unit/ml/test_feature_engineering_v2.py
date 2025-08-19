@@ -12,7 +12,7 @@ import pytest
 # Добавляем корневую папку проекта в PYTHONPATH
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 
 
 class TestFeatureEngineerV2:

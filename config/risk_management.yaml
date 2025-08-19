@@ -4,11 +4,11 @@
 risk_management:
   enabled: true
 
-  # Основные параметры риска
-  risk_per_trade: 0.02  # 2% от баланса на сделку
-  fixed_risk_balance: 500  # Фиксированный баланс для расчета риска
+  # Основные параметры риска - ЕДИНАЯ ТОЧКА УПРАВЛЕНИЯ
+  risk_per_trade: 0.02  # 2% от баланса на сделку  
+  fixed_risk_balance: 500  # Фиксированный баланс для расчета риска ($500 -> $10 риск на сделку)
   max_total_risk: 0.10  # Максимальный общий риск 10%
-  max_positions: 10  # Максимальное количество позиций
+  max_positions: 5  # Максимальное количество позиций
 
   # Параметры плеча
   default_leverage: 5
@@ -20,15 +20,15 @@ risk_management:
     standard:
       risk_multiplier: 1.0
       confidence_threshold: 0.6
-      max_position_size: 1000
+      max_position_size: 50  # $50 маржи = $250 полная позиция (5x плечо)
     conservative:
       risk_multiplier: 0.7
       confidence_threshold: 0.7
-      max_position_size: 700
+      max_position_size: 35  # $35 маржи = $175 полная позиция (5x плечо)
     very_conservative:
       risk_multiplier: 0.5
       confidence_threshold: 0.8
-      max_position_size: 500
+      max_position_size: 25  # $25 маржи = $125 полная позиция (5x плечо)
 
   # Категории активов (из V2)
   asset_categories:

@@ -57,7 +57,7 @@ from ..base.models import (
     create_order_from_dict,
     create_position_from_dict,
 )
-from ..base.order_types import OrderRequest, OrderResponse, OrderStatus, OrderType
+from ..base.order_types import OrderRequest, OrderResponse, OrderSide, OrderStatus, OrderType
 
 
 def clean_symbol(symbol: str) -> str:
@@ -78,6 +78,94 @@ def safe_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except (ValueError, TypeError):
         return default
+
+
+def format_price(price: float, tick_size: float) -> str:
+    """
+    Форматирует цену в соответствии с требованиями Bybit API
+
+    Args:
+        price: Исходная цена
+        tick_size: Шаг цены из инструмента
+
+    Returns:
+        Отформатированная цена как строка
+    """
+    if price <= 0:
+        return "0"
+
+    if tick_size <= 0:
+        return str(price)
+
+    # Округляем до ближайшего значения кратного tick_size
+    rounded_price = round(price / tick_size) * tick_size
+
+    # Определяем количество знаков после запятой на основе tick_size
+    if tick_size >= 1:
+        decimal_places = 0
+    else:
+        # Считаем количество знаков после запятой в tick_size
+        step_str = f"{tick_size:.10f}".rstrip("0")
+        if "." in step_str:
+            decimal_places = len(step_str.split(".")[1])
+        else:
+            decimal_places = 0
+
+    # Форматируем с нужным количеством знаков
+    formatted_price = f"{rounded_price:.{decimal_places}f}"
+
+    return formatted_price
+
+
+def format_quantity(
+    quantity: float, qty_step: float, min_qty: float = 0.0, max_qty: float = float("inf")
+) -> str:
+    """
+    Форматирует количество в соответствии с требованиями Bybit API
+
+    Args:
+        quantity: Исходное количество
+        qty_step: Шаг количества из инструмента
+        min_qty: Минимальное количество
+        max_qty: Максимальное количество
+
+    Returns:
+        Отформатированное количество как строка
+
+    Raises:
+        ValueError: Если количество не соответствует требованиям
+    """
+    if quantity <= 0:
+        raise ValueError(f"Quantity must be positive: {quantity}")
+
+    # Округляем до ближайшего значения кратного qty_step
+    if qty_step > 0:
+        # Используем round() для корректного округления
+        rounded_qty = round(quantity / qty_step) * qty_step
+    else:
+        rounded_qty = quantity
+
+    # Проверяем границы
+    if rounded_qty < min_qty:
+        raise ValueError(f"Quantity {rounded_qty} is below minimum {min_qty}")
+    if rounded_qty > max_qty:
+        raise ValueError(f"Quantity {rounded_qty} is above maximum {max_qty}")
+
+    # Определяем количество знаков после запятой на основе qty_step
+    if qty_step >= 1:
+        decimal_places = 0
+    else:
+        # Считаем количество знаков после запятой в qty_step
+        step_str = f"{qty_step:.10f}".rstrip("0")
+        if "." in step_str:
+            decimal_places = len(step_str.split(".")[1])
+        else:
+            decimal_places = 0
+
+    # Форматируем с нужным количеством знаков
+    formatted_qty = f"{rounded_qty:.{decimal_places}f}"
+
+    return formatted_qty
 
 
 class BybitClient(BaseExchangeInterface):
@@ -661,11 +749,27 @@ class BybitClient(BaseExchangeInterface):
             for account in account_list:
                 coin_list = account.get("coin", [])
                 for coin_data in coin_list:
+                    # Безопасное преобразование строк в float (обработка пустых строк)
+                    wallet_balance_str = coin_data.get("walletBalance", "0")
+                    locked_str = coin_data.get("locked", "0")
+                    position_im_str = coin_data.get("totalPositionIM", "0")
+                    order_im_str = coin_data.get("totalOrderIM", "0")
+
+                    # Рассчитываем доступный баланс
+                    # wallet_balance - locked - totalPositionIM - totalOrderIM
+                    wallet_balance = float(wallet_balance_str) if wallet_balance_str else 0.0
+                    locked = float(locked_str) if locked_str else 0.0
+                    position_im = float(position_im_str) if position_im_str else 0.0
+                    order_im = float(order_im_str) if order_im_str else 0.0
+
+                    # Доступный баланс = общий минус заблокированный и маржа
+                    available = wallet_balance - locked - position_im - order_im
+
                     balance = Balance(
                         currency=coin_data.get("coin", ""),
-                        total=float(coin_data.get("walletBalance", "0")),
-                        available=float(coin_data.get("transferBalance", "0")),
-                        frozen=float(coin_data.get("locked", "0")),
+                        total=wallet_balance,
+                        available=max(0.0, available),  # Не может быть отрицательным
+                        frozen=locked + position_im + order_im,  # Всё что недоступно
                         account_type=account_type,
                         last_update=datetime.now(),
                     )
@@ -906,13 +1010,28 @@ class BybitClient(BaseExchangeInterface):
                 except Exception as e:
                     self.logger.warning(f"Failed to set leverage for {symbol}: {e}")
 
+            # Получаем информацию об инструменте для правильного форматирования qty
+            try:
+                instrument_info = await self.get_instrument_info(symbol)
+                formatted_qty = format_quantity(
+                    quantity=order_request.quantity,
+                    qty_step=instrument_info.qty_step,
+                    min_qty=instrument_info.min_order_qty,
+                    max_qty=instrument_info.max_order_qty,
+                )
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to get instrument info for {symbol}, using basic formatting: {e}"
+                )
+                formatted_qty = str(order_request.quantity)
+
             # Подготовка параметров
             params = {
                 "category": self.trading_category,  # Используем category из конфигурации
                 "symbol": symbol,
                 "side": order_request.side.value,
                 "orderType": self._map_order_type_to_bybit(order_request.order_type),
-                "qty": str(order_request.quantity),
+                "qty": formatted_qty,
                 "timeInForce": order_request.time_in_force.value,
             }
 
@@ -922,11 +1041,21 @@ class BybitClient(BaseExchangeInterface):
 
             # Добавляем цену для лимитных ордеров
             if order_request.price is not None:
-                params["price"] = str(order_request.price)
+                try:
+                    formatted_price = format_price(order_request.price, instrument_info.tick_size)
+                    params["price"] = formatted_price
+                except:
+                    params["price"] = str(order_request.price)
 
             # Добавляем стоп цену
             if order_request.stop_price is not None:
-                params["triggerPrice"] = str(order_request.stop_price)
+                try:
+                    formatted_stop_price = format_price(
+                        order_request.stop_price, instrument_info.tick_size
+                    )
+                    params["triggerPrice"] = formatted_stop_price
+                except:
+                    params["triggerPrice"] = str(order_request.stop_price)
 
             # Дополнительные параметры
             if order_request.reduce_only:
@@ -949,16 +1078,26 @@ class BybitClient(BaseExchangeInterface):
                         self.logger.warning(
                             f"Corrected SELL StopLoss from {order_request.stop_loss} to {sl_price}"
                         )
-                params["stopLoss"] = str(sl_price)
+                try:
+                    formatted_sl = format_price(sl_price, instrument_info.tick_size)
+                    params["stopLoss"] = formatted_sl
+                except:
+                    params["stopLoss"] = str(sl_price)
 
             if order_request.take_profit is not None:
-                params["takeProfit"] = str(order_request.take_profit)
+                try:
+                    formatted_tp = format_price(
+                        order_request.take_profit, instrument_info.tick_size
+                    )
+                    params["takeProfit"] = formatted_tp
+                except:
+                    params["takeProfit"] = str(order_request.take_profit)
 
             # Добавляем exchange-специфичные параметры
             params.update(order_request.exchange_params)
 
             self.logger.info(
-                f"Placing order: {symbol} {order_request.side.value} {order_request.quantity} {order_request.order_type.value}"
+                f"Placing order: {symbol} {order_request.side.value} {order_request.quantity} -> {formatted_qty} {order_request.order_type.value}"
             )
             self.logger.info(f"Order params: {params}")
 
@@ -1355,7 +1494,7 @@ class BybitClient(BaseExchangeInterface):
             close_quantity = quantity or abs(position.size)
 
             # Создаем рыночный ордер для закрытия
-            from ..base.order_types import OrderRequest, OrderSide, OrderType
+            # OrderSide, OrderType уже импортированы в начале файла
 
             order_request = OrderRequest(
                 symbol=symbol,

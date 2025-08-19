@@ -1,177 +1,125 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import useWebSocketLib, { ReadyState } from 'react-use-websocket';
-import { WebSocketEvent } from '@/types/trading';
+import { useEffect, useRef, useCallback } from 'react';
+import useWebSocket, { ReadyState } from 'react-use-websocket';
+import { useAppStore } from '@/store/useAppStore';
+import { SystemStatus, Position, MLSignal, Order, MarketData } from '@/services/apiService';
 
-interface UseWebSocketOptions {
-  onMessage?: (event: WebSocketEvent) => void
-  onConnect?: () => void
-  onDisconnect?: () => void
-  onError?: (error: Event) => void
-  reconnectAttempts?: number
-  reconnectInterval?: number
-  shouldReconnect?: boolean
+interface WebSocketMessage {
+  type: 'system_status' | 'position_update' | 'order_update' | 'ml_signal' | 'market_data' | 'notification';
+  data: any;
+  timestamp: string;
 }
 
-interface UseWebSocketReturn {
-  sendMessage: (type: string, data: any) => void
-  readyState: ReadyState
-  connectionStatus: string
-  lastMessage: WebSocketEvent | null
-  isConnected: boolean
-}
-
-export function useWebSocket(
-  endpoint: string,
-  options: UseWebSocketOptions = {},
-): UseWebSocketReturn {
+export const useWebSocketConnection = () => {
   const {
-    onMessage,
-    onConnect,
-    onDisconnect,
-    onError,
-    reconnectAttempts = 5,
-    reconnectInterval = 3000,
-    shouldReconnect = true,
-  } = options;
+    setSystemStatus,
+    setSystemConnected,
+    setPositions,
+    setOrders,
+    setMLSignals,
+    setMarketData,
+    addNotification,
+  } = useAppStore();
+  
+  const lastJsonMessage = useRef<WebSocketMessage | null>(null);
 
-  const [lastMessage, setLastMessage] = useState<WebSocketEvent | null>(null);
+  const { sendMessage, lastMessage, readyState } = useWebSocket(
+    'ws://localhost:8083/ws', 
+    {
+      onOpen: () => {
+        console.log('WebSocket connection established');
+        setSystemConnected(true);
+      },
+      onClose: () => {
+        console.log('WebSocket connection closed');
+        setSystemConnected(false);
+      },
+      onError: (error) => {
+        console.error('WebSocket error:', error);
+        setSystemConnected(false);
+      },
+      shouldReconnect: () => true,
+      reconnectAttempts: 10,
+      reconnectInterval: 3000,
+    }
+  );
 
-  // Создаем WebSocket URL
-  const socketUrl = `ws://localhost:8080/ws/${endpoint}`;
+  const handleMessage = useCallback((message: WebSocketMessage) => {
+    switch (message.type) {
+      case 'system_status':
+        setSystemStatus(message.data as SystemStatus);
+        break;
+        
+      case 'position_update':
+        if (Array.isArray(message.data)) {
+          setPositions(message.data as Position[]);
+        }
+        break;
+        
+      case 'order_update':
+        if (Array.isArray(message.data)) {
+          setOrders(message.data as Order[]);
+        }
+        break;
+        
+      case 'ml_signal':
+        if (Array.isArray(message.data)) {
+          setMLSignals(message.data as MLSignal[]);
+        }
+        break;
+        
+      case 'market_data':
+        setMarketData(message.data as MarketData[]);
+        break;
+        
+      case 'notification':
+        addNotification({
+          type: message.data.type || 'info',
+          title: message.data.title || 'System Notification',
+          message: message.data.message || 'No message provided',
+        });
+        break;
+        
+      default:
+        console.warn('Unknown WebSocket message type:', message.type);
+    }
+  }, [setSystemStatus, setPositions, setOrders, setMLSignals, setMarketData, addNotification]);
 
-  const {
-    sendJsonMessage,
-    lastJsonMessage,
-    readyState,
-    getWebSocket,
-  } = useWebSocketLib(socketUrl, {
-    onOpen: () => {
-      console.log(`WebSocket connected to ${endpoint}`);
-      onConnect?.();
-    },
-    onClose: () => {
-      console.log(`WebSocket disconnected from ${endpoint}`);
-      onDisconnect?.();
-    },
-    onError: (error) => {
-      console.error(`WebSocket error on ${endpoint}:`, error);
-      onError?.(error);
-    },
-    shouldReconnect: () => shouldReconnect,
-    reconnectAttempts,
-    reconnectInterval,
-    share: false, // Не делимся соединением между хуками
-  });
-
-  // Обработка входящих сообщений
   useEffect(() => {
-    if (lastJsonMessage) {
-      const event = lastJsonMessage as WebSocketEvent;
-      setLastMessage(event);
-      onMessage?.(event);
+    if (lastMessage !== null) {
+      try {
+        const message: WebSocketMessage = JSON.parse(lastMessage.data);
+        lastJsonMessage.current = message;
+        handleMessage(message);
+      } catch (error) {
+        console.error('Failed to parse WebSocket message:', error);
+      }
     }
-  }, [lastJsonMessage, onMessage]);
+  }, [lastMessage, handleMessage]);
 
-  // Функция для отправки сообщений
-  const sendMessage = useCallback((type: string, data: any) => {
-    if (readyState === ReadyState.OPEN) {
-      const message = {
-        type,
-        data,
-        timestamp: Date.now(),
-      };
-      sendJsonMessage(message);
-    } else {
-      console.warn('WebSocket is not connected. Message not sent:', { type, data });
-    }
-  }, [readyState, sendJsonMessage]);
-
-  // Определяем статус соединения
   const connectionStatus = {
-    [ReadyState.CONNECTING]: 'Подключение...',
-    [ReadyState.OPEN]: 'Подключено',
-    [ReadyState.CLOSING]: 'Отключение...',
-    [ReadyState.CLOSED]: 'Отключено',
-    [ReadyState.UNINSTANTIATED]: 'Не инициализировано',
+    [ReadyState.CONNECTING]: 'Connecting',
+    [ReadyState.OPEN]: 'Open',
+    [ReadyState.CLOSING]: 'Closing',
+    [ReadyState.CLOSED]: 'Closed',
+    [ReadyState.UNINSTANTIATED]: 'Uninstantiated',
   }[readyState];
 
-  const isConnected = readyState === ReadyState.OPEN;
+  const sendWebSocketMessage = useCallback((type: string, data: any) => {
+    if (readyState === ReadyState.OPEN) {
+      sendMessage(JSON.stringify({
+        type,
+        data,
+        timestamp: new Date().toISOString(),
+      }));
+    } else {
+      console.warn('WebSocket is not connected');
+    }
+  }, [sendMessage, readyState]);
 
   return {
-    sendMessage,
-    readyState,
     connectionStatus,
-    lastMessage,
-    isConnected,
+    isConnected: readyState === ReadyState.OPEN,
+    sendMessage: sendWebSocketMessage,
+    lastMessage: lastJsonMessage.current,
   };
-}
-
-// Специализированные хуки для разных типов WebSocket соединений
-
-export function usePriceUpdates() {
-  const [prices, setPrices] = useState<Record<string, number>>({});
-
-  const { sendMessage, isConnected } = useWebSocket('price_updates', {
-    onMessage: (event) => {
-      if (event.type === 'price_update') {
-        setPrices(prev => ({
-          ...prev,
-          [event.data.symbol]: event.data.price,
-        }));
-      }
-    },
-  });
-
-  const subscribeToPrices = useCallback((symbols: string[]) => {
-    if (isConnected) {
-      sendMessage('subscribe_prices', { symbols });
-    }
-  }, [sendMessage, isConnected]);
-
-  const unsubscribeFromPrices = useCallback((symbols: string[]) => {
-    if (isConnected) {
-      sendMessage('unsubscribe_prices', { symbols });
-    }
-  }, [sendMessage, isConnected]);
-
-  return {
-    prices,
-    subscribeToPrices,
-    unsubscribeFromPrices,
-    isConnected,
-  };
-}
-
-export function useTraderUpdates() {
-  const [traderEvents, setTraderEvents] = useState<WebSocketEvent[]>([]);
-
-  const { isConnected } = useWebSocket('trader_updates', {
-    onMessage: (event) => {
-      if (['trader_status', 'position_update', 'order_update'].includes(event.type)) {
-        setTraderEvents(prev => [event, ...prev.slice(0, 99)]); // Храним последние 100 событий
-      }
-    },
-  });
-
-  return {
-    traderEvents,
-    isConnected,
-  };
-}
-
-export function useSystemUpdates() {
-  const [systemStatus, setSystemStatus] = useState<any>(null);
-
-  const { isConnected } = useWebSocket('system_updates', {
-    onMessage: (event) => {
-      if (event.type === 'system_status') {
-        setSystemStatus(event.data);
-      }
-    },
-  });
-
-  return {
-    systemStatus,
-    isConnected,
-  };
-}
+};

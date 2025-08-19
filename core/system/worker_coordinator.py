@@ -90,6 +90,7 @@ class WorkerCoordinator:
         worker_type: str,
         worker_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        allow_duplicates: bool = False,
     ) -> str | None:
         """
         Регистрация воркера
@@ -98,19 +99,25 @@ class WorkerCoordinator:
             worker_type: Тип воркера ('ml_manager', 'signal_processor', etc.)
             worker_id: Уникальный ID воркера (если None - автогенерация)
             metadata: Дополнительные метаданные воркера
+            allow_duplicates: Разрешить дублирующие воркеры (soft-fail режим)
 
         Returns:
-            worker_id если регистрация успешна, None если такой воркер уже работает
+            worker_id если регистрация успешна, None если такой воркер уже работает и allow_duplicates=False
         """
         async with self._lock:
             # Проверяем, есть ли уже активный воркер данного типа
             active_workers = self._get_active_workers_by_type(worker_type)
 
             if active_workers:
-                logger.warning(
-                    f"⚠️  Воркер типа '{worker_type}' уже активен: {[w.worker_id for w in active_workers]}"
-                )
-                return None
+                if allow_duplicates:
+                    logger.warning(
+                        f"⚠️ Soft-fail: Воркер типа '{worker_type}' уже активен: {[w.worker_id for w in active_workers]}, но разрешаем дубликат"
+                    )
+                else:
+                    logger.warning(
+                        f"⚠️ Hard-fail: Воркер типа '{worker_type}' уже активен: {[w.worker_id for w in active_workers]}"
+                    )
+                    return None
 
             # Генерируем ID если не указан
             if worker_id is None:
@@ -297,6 +304,7 @@ class WorkerCoordinator:
             "workers_by_status": {},
             "active_tasks": len(self.task_assignments),
             "workers": [],
+            "health_summary": self._get_health_summary(),
         }
 
         for worker in self.workers.values():
@@ -310,7 +318,8 @@ class WorkerCoordinator:
                 stats["workers_by_status"][worker.status] = 0
             stats["workers_by_status"][worker.status] += 1
 
-            # Информация о воркере
+            # Информация о воркере с health check
+            worker_health = self._check_worker_health(worker)
             stats["workers"].append(
                 {
                     "worker_id": worker.worker_id,
@@ -322,6 +331,9 @@ class WorkerCoordinator:
                     "active_tasks": len(worker.tasks),
                     "tasks": list(worker.tasks),
                     "uptime_seconds": (datetime.now() - worker.started_at).total_seconds(),
+                    "health_status": worker_health["status"],
+                    "health_score": worker_health["score"],
+                    "health_issues": worker_health["issues"],
                 }
             )
 
@@ -377,10 +389,178 @@ class WorkerCoordinator:
             try:
                 await asyncio.sleep(self.cleanup_interval)
                 await self._cleanup_dead_processes()
+
+                # Дополнительно: проверка здоровья воркеров
+                await self._monitor_worker_health()
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"❌ Ошибка периодической очистки: {e}")
+
+    def _check_worker_health(self, worker: WorkerInfo) -> dict[str, Any]:
+        """Проверка здоровья отдельного воркера"""
+        now = datetime.now()
+        issues = []
+        score = 100  # Начальный идеальный балл
+
+        # Проверка heartbeat
+        heartbeat_age = (now - worker.last_heartbeat).total_seconds()
+        if heartbeat_age > self.heartbeat_timeout.total_seconds():
+            issues.append(f"No heartbeat for {heartbeat_age:.0f}s")
+            score -= 50
+        elif heartbeat_age > 60:  # Предупреждение если больше минуты
+            issues.append(f"Heartbeat delayed {heartbeat_age:.0f}s")
+            score -= 20
+
+        # Проверка существования процесса
+        try:
+            if not psutil.pid_exists(worker.process_id):
+                issues.append("Process not found")
+                score = 0
+        except Exception:
+            issues.append("Cannot check process")
+            score -= 30
+
+        # Проверка загрузки задачами
+        if len(worker.tasks) > 10:  # Слишком много задач
+            issues.append(f"High task load: {len(worker.tasks)}")
+            score -= 10
+
+        # Проверка времени работы (слишком долго без перезапуска)
+        uptime_hours = (now - worker.started_at).total_seconds() / 3600
+        if uptime_hours > 24:  # Более 24 часов
+            issues.append(f"Long uptime: {uptime_hours:.1f}h")
+            score -= 5
+
+        # Определение статуса
+        if score >= 80:
+            status = "healthy"
+        elif score >= 60:
+            status = "warning"
+        elif score >= 30:
+            status = "degraded"
+        else:
+            status = "critical"
+
+        return {
+            "status": status,
+            "score": max(0, score),
+            "issues": issues,
+            "heartbeat_age": heartbeat_age,
+            "uptime_hours": uptime_hours,
+        }
+
+    def _get_health_summary(self) -> dict[str, Any]:
+        """Общая сводка здоровья всех воркеров"""
+        if not self.workers:
+            return {
+                "overall_status": "no_workers",
+                "healthy_count": 0,
+                "warning_count": 0,
+                "critical_count": 0,
+                "avg_score": 0,
+                "recommendations": ["No workers registered"],
+            }
+
+        health_statuses = []
+        scores = []
+        all_issues = []
+
+        for worker in self.workers.values():
+            health = self._check_worker_health(worker)
+            health_statuses.append(health["status"])
+            scores.append(health["score"])
+            all_issues.extend(health["issues"])
+
+        # Подсчет статусов
+        status_counts = {
+            "healthy": health_statuses.count("healthy"),
+            "warning": health_statuses.count("warning"),
+            "degraded": health_statuses.count("degraded"),
+            "critical": health_statuses.count("critical"),
+        }
+
+        # Общий статус
+        if status_counts["critical"] > 0:
+            overall_status = "critical"
+        elif status_counts["degraded"] > 0:
+            overall_status = "degraded"
+        elif status_counts["warning"] > 0:
+            overall_status = "warning"
+        else:
+            overall_status = "healthy"
+
+        # Рекомендации
+        recommendations = []
+        if status_counts["critical"] > 0:
+            recommendations.append(f"Restart {status_counts['critical']} critical workers")
+        if status_counts["degraded"] > 0:
+            recommendations.append(f"Monitor {status_counts['degraded']} degraded workers")
+        if not recommendations:
+            recommendations.append("All workers healthy")
+
+        return {
+            "overall_status": overall_status,
+            "healthy_count": status_counts["healthy"],
+            "warning_count": status_counts["warning"],
+            "degraded_count": status_counts["degraded"],
+            "critical_count": status_counts["critical"],
+            "avg_score": sum(scores) / len(scores) if scores else 0,
+            "common_issues": list(set(all_issues)),
+            "recommendations": recommendations,
+        }
+
+    async def _monitor_worker_health(self):
+        """Мониторинг здоровья воркеров с действиями"""
+        try:
+            health_summary = self._get_health_summary()
+
+            # Логируем только проблемы
+            if health_summary["overall_status"] != "healthy":
+                logger.warning(
+                    f"🏥 Worker health issues detected: {health_summary['overall_status']} "
+                    f"(H:{health_summary['healthy_count']}, "
+                    f"W:{health_summary['warning_count']}, "
+                    f"C:{health_summary['critical_count']})"
+                )
+
+                for issue in health_summary["common_issues"]:
+                    logger.debug(f"   - {issue}")
+
+            # Автоматические действия для критических воркеров
+            for worker_id, worker in self.workers.items():
+                health = self._check_worker_health(worker)
+                if health["status"] == "critical" and health["score"] == 0:
+                    logger.error(f"💀 Worker {worker_id} is dead, removing from registry")
+                    await self.unregister_worker(worker_id)
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка мониторинга здоровья воркеров: {e}")
+
+    async def get_worker_health_report(self) -> dict[str, Any]:
+        """Получение подробного отчета о здоровье воркеров"""
+        stats = self.get_worker_stats()
+
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "coordinator_uptime": (
+                datetime.now() - datetime.now()
+            ).total_seconds(),  # Will be calculated properly in real usage
+            "health_summary": stats["health_summary"],
+            "worker_details": [
+                {
+                    "worker_id": w["worker_id"],
+                    "worker_type": w["worker_type"],
+                    "health_status": w["health_status"],
+                    "health_score": w["health_score"],
+                    "uptime_hours": w["uptime_seconds"] / 3600,
+                    "issues": w["health_issues"],
+                }
+                for w in stats["workers"]
+            ],
+            "recommendations": stats["health_summary"]["recommendations"],
+        }
 
 
 # Глобальный экземпляр координатора

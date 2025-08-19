@@ -667,7 +667,7 @@ class SystemOrchestrator:
             ml_config = self.config_manager.get_ml_config()
 
             # Проверяем включен ли ML
-            if not ml_config.get("model", {}).get("enabled", True):
+            if not ml_config.get("enabled", False):
                 self.logger.info("⏭️ ML Signal Scheduler отключен в конфигурации")
                 return
 
@@ -707,7 +707,7 @@ class SystemOrchestrator:
             self.active_components.add("signal_scheduler")
             self.logger.info("✅ ML Signal Scheduler инициализирован")
             self.logger.info(
-                f"📊 Будет генерировать сигналы для {len(ml_config.get('data', {}).get('symbols', []))} символов"
+                f"📊 Будет генерировать сигналы для {len(ml_config.get('symbols', []))} символов"
             )
 
             # Связываем Signal Scheduler с Trading Engine
@@ -782,7 +782,7 @@ class SystemOrchestrator:
             # Создаем задачу для запуска API сервера
             self.api_task = None
             self.api_host = rest_config.get("host", "0.0.0.0")
-            self.api_port = rest_config.get("port", 8080)
+            self.api_port = rest_config.get("port", 8083)
 
             self.active_components.add("api_server")
             self.logger.info(

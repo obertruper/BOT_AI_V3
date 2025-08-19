@@ -12,7 +12,7 @@ import pandas as pd
 from core.logger import setup_logger
 
 # Импортируем реальные компоненты
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 
 logger = setup_logger(__name__)
 

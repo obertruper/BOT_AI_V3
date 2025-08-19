@@ -564,7 +564,7 @@ async def general_exception_handler(request, exc):
 
 async def start_web_server(
     host: str = "0.0.0.0",
-    port: int = 8080,
+    port: int = 8083,
     orchestrator=None,
     trader_manager=None,
     exchange_factory=None,
@@ -604,4 +604,4 @@ async def start_web_server(
 
 if __name__ == "__main__":
     # Запуск в режиме разработки
-    asyncio.run(start_web_server(port=8080))
+    asyncio.run(start_web_server(port=8083))

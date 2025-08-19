@@ -24,8 +24,8 @@ trader:
   strategy: "IndicatorStrategy"
 
   strategy_config:
-    # Генерация сигналов каждую минуту
-    signal_interval: 60  # секунд
+    # Генерация сигналов каждые 3 минуты
+    signal_interval: 180  # секунд (изменено: раз в 3 минуты)
 
     # Индикаторы для генерации сигналов
     indicators:

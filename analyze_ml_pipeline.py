@@ -10,7 +10,7 @@ import pandas as pd
 
 from core.logger import setup_logger
 from database.connections.postgres import AsyncPGPool
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering_v2 import FeatureEngineer
 from ml.ml_manager import MLManager
 
 logger = setup_logger("ml_pipeline_analyzer")

@@ -51,7 +51,7 @@ async def compare_features():
     print("\n📊 ТЕКУЩАЯ ГЕНЕРАЦИЯ ПРИЗНАКОВ:")
 
     from core.config.config_manager import ConfigManager
-    from ml.logic.feature_engineering import FeatureEngineer
+    from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 
     config_manager = ConfigManager()
     config = {

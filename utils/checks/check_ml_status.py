@@ -75,7 +75,7 @@ async def check_ml_system():
         import numpy as np
         import pandas as pd
 
-        from ml.logic.feature_engineering import FeatureEngineer
+        from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 
         # Создаем тестовые данные
         test_data = pd.DataFrame(

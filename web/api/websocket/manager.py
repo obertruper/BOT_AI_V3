@@ -116,7 +116,7 @@ class WebSocketManager:
 
         # Состояние
         self._running = False
-        self._heartbeat_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Optional[Task] = None
 
         # Обработчики событий
         self.event_handlers: dict[str, list[Callable]] = {}

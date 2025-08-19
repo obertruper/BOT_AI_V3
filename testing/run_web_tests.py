@@ -360,9 +360,9 @@ if __name__ == "__main__":
             try:
                 # Попытка импорта MCP функций
                 globals()["mcp__puppeteer__puppeteer_navigate"] = mcp__puppeteer__puppeteer_navigate
-                globals()["mcp__puppeteer__puppeteer_screenshot"] = (
-                    mcp__puppeteer__puppeteer_screenshot
-                )
+                globals()[
+                    "mcp__puppeteer__puppeteer_screenshot"
+                ] = mcp__puppeteer__puppeteer_screenshot
                 globals()["mcp__puppeteer__puppeteer_click"] = mcp__puppeteer__puppeteer_click
                 globals()["mcp__puppeteer__puppeteer_hover"] = mcp__puppeteer__puppeteer_hover
                 globals()["mcp__puppeteer__puppeteer_evaluate"] = mcp__puppeteer__puppeteer_evaluate

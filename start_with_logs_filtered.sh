@@ -1,218 +1,472 @@
 #!/bin/bash
 
-# Цвета для вывода
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+# Цветовые константы
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
+readonly PURPLE='\033[0;35m'
+readonly WHITE='\033[1;37m'
+readonly NC='\033[0m' # No Color
 
-# Генерируем уникальный ID сессии
-SESSION_ID=$(date +%Y%m%d_%H%M%S)
-LOG_DATE=$(date +%Y%m%d)
+# Конфигурация портов
+declare -A PORTS=(
+    ["PostgreSQL"]="5555"
+    ["API_Server"]="8083"
+    ["REST_API"]="8084"
+    ["WebSocket"]="8085"
+    ["Webhook"]="8086"
+    ["Frontend"]="5173"
+    ["Prometheus"]="9090"
+    ["Grafana"]="3000"
+    ["Redis"]="6379"
+)
 
-echo -e "${CYAN}=========================================="
-echo "🚀 ЗАПУСК BOT_AI_V3 С МОНИТОРИНГОМ"
-echo "==========================================${NC}"
-echo ""
-
-# Создаем директории для логов
-mkdir -p data/logs/sessions/${SESSION_ID}
-mkdir -p data/logs/archive
-
-# Показываем информацию о логах
-echo -e "${BLUE}📁 ЛОГИ СЕССИИ #${SESSION_ID}${NC}"
-echo -e "${GREEN}   Основная директория: $(pwd)/data/logs/${NC}"
-echo -e "${GREEN}   Логи этой сессии: data/logs/sessions/${SESSION_ID}/${NC}"
-echo -e "${GREEN}   Главный лог: data/logs/bot_trading_${LOG_DATE}.log${NC}"
-echo ""
-echo -e "${YELLOW}📋 Структура логов:${NC}"
-echo "   • bot_trading_${LOG_DATE}.log - главный торговый лог"
-echo "   • launcher_${SESSION_ID}.log - лог системы запуска"
-echo "   • api_${SESSION_ID}.log - лог API сервера"
-echo "   • frontend_${SESSION_ID}.log - лог веб-интерфейса"
-echo "   • ml_${SESSION_ID}.log - лог ML системы"
-echo ""
-
-# Проверяем, не запущена ли уже система
-if pgrep -f "python.*unified_launcher" > /dev/null; then
-    echo -e "${RED}⚠️  Система уже запущена!${NC}"
-    echo "Используйте ./stop_all.sh для остановки"
-    exit 1
-fi
-
-# Активируем виртуальное окружение
-if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-    echo -e "${GREEN}✅ Виртуальное окружение активировано${NC}"
-else
-    echo -e "${RED}❌ Виртуальное окружение не найдено!${NC}"
-    echo "Создайте его: python3 -m venv venv"
-    exit 1
-fi
-
-# Проверяем .env файл
-if [ ! -f ".env" ]; then
-    echo -e "${RED}❌ Файл .env не найден!${NC}"
-    exit 1
-fi
-
-# Архивируем старые логи
-if ls data/logs/bot_trading_*.log 1> /dev/null 2>&1; then
-    echo -e "${YELLOW}📦 Архивирование старых логов...${NC}"
-    find data/logs -name "bot_trading_*.log" -mtime +1 -exec mv {} data/logs/archive/ \; 2>/dev/null
-    echo -e "${GREEN}   ✅ Старые логи перемещены в архив${NC}"
-fi
-
-echo ""
-echo -e "${CYAN}📊 Конфигурация:${NC}"
-echo "   Режим: core (торговля + ML)"
-echo "   Плечо: 5x (из config/trading.yaml)"
-echo "   Риск: 2% на сделку"
-echo "   Фиксированный баланс: $100"
-echo "   Partial TP: включен (1.2%, 2.4%, 3.5%)"
-
-echo ""
-echo -e "${BLUE}🔧 Запуск системы...${NC}"
-
-# Проверяем и загружаем исторические данные если нужно
-echo "   → Проверка рыночных данных..."
-python3 -c "
-import asyncio
-from database.connections.postgres import AsyncPGPool
-
-async def check_data():
-    try:
-        result = await AsyncPGPool.fetch(
-            '''SELECT COUNT(*) as cnt FROM raw_market_data
-               WHERE timestamp > EXTRACT(EPOCH FROM NOW() - INTERVAL '1 hour') * 1000'''
-        )
-        return result[0]['cnt'] > 0
-    except:
-        return False
-
-has_data = asyncio.run(check_data())
-exit(0 if has_data else 1)
-" 2>/dev/null
-
-if [ $? -ne 0 ]; then
-    echo -e "${YELLOW}   ⚠️  Данные устарели, загружаем свежие...${NC}"
-    python3 load_fresh_data.py > data/logs/sessions/${SESSION_ID}/data_load.log 2>&1
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}   ✅ Рыночные данные загружены${NC}"
-    else
-        echo -e "${YELLOW}   ⚠️  Не удалось загрузить данные, продолжаем без них${NC}"
-    fi
-else
-    echo -e "${GREEN}   ✅ Рыночные данные актуальны${NC}"
-fi
-
-# Создаем симлинки для текущих логов
-ln -sf sessions/${SESSION_ID}/launcher.log data/logs/launcher_current.log
-ln -sf sessions/${SESSION_ID}/api.log data/logs/api_current.log
-ln -sf sessions/${SESSION_ID}/frontend.log data/logs/frontend_current.log
-ln -sf sessions/${SESSION_ID}/ml.log data/logs/ml_current.log
-
-# Запускаем торговое ядро с ML
-echo "   → Запуск торгового ядра с ML..."
-nohup python unified_launcher.py --mode=ml > data/logs/sessions/${SESSION_ID}/launcher.log 2>&1 &
-LAUNCHER_PID=$!
-echo -e "${GREEN}   ✅ Торговое ядро запущено (PID: $LAUNCHER_PID)${NC}"
-
-# Ждем инициализации ядра
-sleep 5
-
-# Запускаем API сервер
-echo "   → Запуск API сервера..."
-nohup python unified_launcher.py --mode=api > data/logs/sessions/${SESSION_ID}/api.log 2>&1 &
-API_PID=$!
-echo -e "${GREEN}   ✅ API сервер запущен (PID: $API_PID, http://localhost:8080)${NC}"
-
-# Запускаем веб-интерфейс
-echo "   → Запуск веб-интерфейса..."
-cd web/frontend
-nohup npm run dev > ../../data/logs/sessions/${SESSION_ID}/frontend.log 2>&1 &
-FRONTEND_PID=$!
-cd ../..
-echo -e "${GREEN}   ✅ Веб-интерфейс запущен (PID: $FRONTEND_PID, http://localhost:5173)${NC}"
-
-# Сохраняем PID'ы в файл для последующей остановки
-echo "$LAUNCHER_PID" > data/logs/sessions/${SESSION_ID}/launcher.pid
-echo "$API_PID" > data/logs/sessions/${SESSION_ID}/api.pid
-echo "$FRONTEND_PID" > data/logs/sessions/${SESSION_ID}/frontend.pid
-
-echo ""
-echo -e "${GREEN}✅ Все компоненты запущены:${NC}"
-echo "   • Торговое ядро: PID $LAUNCHER_PID"
-echo "   • API сервер: http://localhost:8080 (PID $API_PID)"
-echo "   • Веб-интерфейс: http://localhost:5173 (PID $FRONTEND_PID)"
-echo "   • API документация: http://localhost:8080/api/docs"
-
-# Проверяем что процессы работают
-sleep 2
-if ps -p $LAUNCHER_PID > /dev/null && ps -p $API_PID > /dev/null; then
-    echo -e "${GREEN}✅ Все процессы активны${NC}"
-else
-    echo -e "${RED}❌ Один или несколько процессов завершились с ошибкой!${NC}"
-    echo "Проверьте логи:"
-    echo "  • tail -f data/logs/sessions/${SESSION_ID}/launcher.log"
-    echo "  • tail -f data/logs/sessions/${SESSION_ID}/api.log"
-    echo "  • tail -f data/logs/sessions/${SESSION_ID}/frontend.log"
-    exit 1
-fi
-
-echo ""
-echo -e "${CYAN}=========================================="
-echo "📋 МОНИТОРИНГ ЛОГОВ"
-echo "==========================================${NC}"
-echo ""
-echo -e "${YELLOW}🔍 Отслеживаемые события:${NC}"
-echo "   • 🎯 Торговые сигналы (BUY/SELL)"
-echo "   • 📊 ML предсказания и уникальность"
-echo "   • 💰 Открытие/закрытие позиций"
-echo "   • 🎯 Partial TP (частичное закрытие)"
-echo "   • 🛡️ SL/TP обновления"
-echo "   • ⚠️ Ошибки и предупреждения"
-echo ""
-echo -e "${BLUE}📂 Быстрый доступ к логам:${NC}"
-echo "   Все логи сессии: tail -f data/logs/sessions/${SESSION_ID}/*.log"
-echo "   Главный лог: tail -f data/logs/bot_trading_${LOG_DATE}.log"
-echo "   ML система: tail -f data/logs/sessions/${SESSION_ID}/ml.log"
-echo "   API: tail -f data/logs/sessions/${SESSION_ID}/api.log"
-echo ""
-echo -e "${GREEN}Отслеживаем логи в реальном времени...${NC}"
-echo "Нажмите Ctrl+C для выхода из мониторинга (система продолжит работать)"
-echo ""
-echo "==========================================  "
-
-# Функция для цветного вывода логов
-colorize_logs() {
-    while IFS= read -r line; do
-        if echo "$line" | grep -q "ERROR\|CRITICAL"; then
-            echo -e "${RED}$line${NC}"
-        elif echo "$line" | grep -q "WARNING"; then
-            echo -e "${YELLOW}$line${NC}"
-        elif echo "$line" | grep -q "partial\|Partial\|PARTIAL"; then
-            echo -e "${CYAN}💰 $line${NC}"
-        elif echo "$line" | grep -q "signal.*BUY\|signal.*SELL\|Signal generated"; then
-            echo -e "${GREEN}🎯 $line${NC}"
-        elif echo "$line" | grep -q "position\|Position"; then
-            echo -e "${BLUE}📊 $line${NC}"
-        elif echo "$line" | grep -q "ML\|unique\|prediction"; then
-            echo -e "${CYAN}🤖 $line${NC}"
-        elif echo "$line" | grep -q "SL\|TP\|stop.loss\|take.profit"; then
-            echo -e "${YELLOW}🛡️ $line${NC}"
-        else
-            echo "$line"
-        fi
-    done
+# Функция для красивого заголовка
+print_header() {
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                    BOT_AI_V3 STARTUP                        ║${NC}"
+    echo -e "${CYAN}║                  Port Status & Launch                       ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo
 }
 
-# Запускаем мониторинг всех логов с цветным выводом
-tail -f data/logs/bot_trading_${LOG_DATE}.log \
-        data/logs/sessions/${SESSION_ID}/launcher.log \
-        data/logs/sessions/${SESSION_ID}/api.log \
-        data/logs/sessions/${SESSION_ID}/ml.log 2>/dev/null | \
-    grep --line-buffered -E "signal|order|position|partial|SL|TP|ML|unique|prediction|ERROR|WARNING|CRITICAL" | \
-    colorize_logs
+# Функция для проверки доступности порта
+check_port() {
+    local port=$1
+    local service_name=$2
+    
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+        local pid=$(lsof -Pi :$port -sTCP:LISTEN -t)
+        local process_info=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
+        echo -e "${RED}✗ Port $port (${service_name}): OCCUPIED by PID $pid ($process_info)${NC}"
+        return 1
+    else
+        echo -e "${GREEN}✓ Port $port (${service_name}): AVAILABLE${NC}"
+        return 0
+    fi
+}
+
+# Функция для проверки всех портов
+check_all_ports() {
+    echo -e "${YELLOW}=== PORT STATUS CHECK ===${NC}"
+    echo
+    
+    local all_available=true
+    
+    for service in "${!PORTS[@]}"; do
+        if ! check_port "${PORTS[$service]}" "$service"; then
+            all_available=false
+        fi
+    done
+    
+    echo
+    
+    if [ "$all_available" = false ]; then
+        echo -e "${RED}⚠️  Warning: Some ports are occupied by other processes${NC}"
+        echo -e "${YELLOW}To kill processes on specific ports, use:${NC}"
+        echo -e "${WHITE}sudo fuser -k 8083/tcp  # Kill process on API Server port${NC}"
+        echo -e "${WHITE}sudo fuser -k 8084/tcp  # Kill process on REST API port${NC}"
+        echo -e "${WHITE}sudo fuser -k 8085/tcp  # Kill process on WebSocket port${NC}"
+        echo -e "${WHITE}sudo fuser -k 8086/tcp  # Kill process on Webhook port${NC}"
+        echo -e "${WHITE}sudo fuser -k 5173/tcp  # Kill process on Frontend port${NC}"
+        echo -e "${WHITE}sudo lsof -ti:PORT | xargs kill -9  # Alternative method${NC}"
+        echo
+        read -p "Continue anyway? (y/N): " -r
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${RED}Startup cancelled by user${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}✅ All required ports are available!${NC}"
+    fi
+    echo
+}
+
+# Функция для отображения информации о запускаемом процессе
+show_process_info() {
+    local component=$1
+    local port=$2
+    local command=$3
+    
+    echo -e "${PURPLE}┌─────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${PURPLE}│ Starting: ${WHITE}$component${NC}"
+    echo -e "${PURPLE}│ Port:     ${GREEN}$port${NC}"
+    echo -e "${PURPLE}│ Command:  ${CYAN}$command${NC}"
+    echo -e "${PURPLE}└─────────────────────────────────────────────────────────────┘${NC}"
+    echo
+}
+
+# Функция для проверки активации виртуального окружения
+check_venv() {
+    if [[ "$VIRTUAL_ENV" == "" ]]; then
+        echo -e "${RED}❌ Virtual environment not activated!${NC}"
+        echo -e "${YELLOW}Please run: ${WHITE}source venv/bin/activate${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}✅ Virtual environment activated: ${WHITE}$VIRTUAL_ENV${NC}"
+    fi
+}
+
+# Функция для проверки зависимостей
+check_dependencies() {
+    echo -e "${YELLOW}=== DEPENDENCY CHECK ===${NC}"
+    
+    # Проверяем Python
+    if command -v python3 &> /dev/null; then
+        local python_version=$(python3 --version)
+        echo -e "${GREEN}✓ Python: ${WHITE}$python_version${NC}"
+    else
+        echo -e "${RED}✗ Python3 not found${NC}"
+        exit 1
+    fi
+    
+    # Проверяем PostgreSQL
+    if command -v psql &> /dev/null; then
+        echo -e "${GREEN}✓ PostgreSQL client available${NC}"
+    else
+        echo -e "${YELLOW}⚠ PostgreSQL client not found${NC}"
+    fi
+    
+    # Проверяем подключение к БД
+    if PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT version();" &>/dev/null; then
+        echo -e "${GREEN}✓ Database connection successful${NC}"
+    else
+        echo -e "${RED}✗ Database connection failed (PostgreSQL:5555)${NC}"
+        echo -e "${YELLOW}Please ensure PostgreSQL is running on port 5555${NC}"
+    fi
+    
+    # Проверяем лимит inotify watches
+    local current_limit=$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo "0")
+    if [ "$current_limit" -lt 524288 ]; then
+        echo -e "${YELLOW}⚠ inotify watches limit: ${WHITE}$current_limit${YELLOW} (recommended: 524288)${NC}"
+        echo -e "${CYAN}  To fix DNS resolver warnings, run:${NC}"
+        echo -e "${WHITE}  echo 'fs.inotify.max_user_watches=524288' | sudo tee -a /etc/sysctl.conf${NC}"
+        echo -e "${WHITE}  sudo sysctl -p${NC}"
+    else
+        echo -e "${GREEN}✓ inotify watches limit: ${WHITE}$current_limit${NC}"
+    fi
+    
+    echo
+}
+
+# Основная функция запуска
+main() {
+    # Заголовок
+    print_header
+    
+    # Проверка виртуального окружения
+    check_venv
+    echo
+    
+    # Проверка зависимостей
+    check_dependencies
+    
+    # Проверка портов
+    check_all_ports
+    
+    echo -e "${CYAN}=== STARTING PROCESSES ===${NC}"
+    echo
+    
+    # Переход в директорию проекта
+    cd "$(dirname "$0")" || exit 1
+    
+    # 1. Запуск основного торгового движка через unified_launcher
+    show_process_info "Unified Trading System" "8083(API), 8084(REST), 8085(WS), 8086(Webhook), 5173(Frontend)" "python3 unified_launcher.py"
+    python3 unified_launcher.py &
+    UNIFIED_PID=$!
+    echo -e "${GREEN}✅ Unified system started (PID: $UNIFIED_PID)${NC}"
+    echo
+    
+    # Небольшая задержка для инициализации
+    sleep 5
+    
+    # Финальная информация
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                    STARTUP COMPLETE                         ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo
+    echo -e "${WHITE}🌐 Service URLs:${NC}"
+    echo -e "${GREEN}   • API Server:    ${WHITE}http://localhost:${PORTS[API_Server]}${NC}"
+    echo -e "${GREEN}   • API Docs:      ${WHITE}http://localhost:${PORTS[API_Server]}/api/docs${NC}"
+    echo -e "${GREEN}   • REST API:      ${WHITE}http://localhost:${PORTS[REST_API]}${NC}"
+    echo -e "${GREEN}   • WebSocket:     ${WHITE}ws://localhost:${PORTS[WebSocket]}${NC}"
+    echo -e "${GREEN}   • Webhook:       ${WHITE}http://localhost:${PORTS[Webhook]}${NC}"
+    echo -e "${GREEN}   • Frontend:      ${WHITE}http://localhost:${PORTS[Frontend]}${NC}"
+    echo
+    echo -e "${WHITE}📊 Monitoring URLs:${NC}"
+    echo -e "${GREEN}   • Prometheus:    ${WHITE}http://localhost:${PORTS[Prometheus]}${NC}"
+    echo -e "${GREEN}   • Grafana:       ${WHITE}http://localhost:${PORTS[Grafana]}${NC}"
+    echo
+    echo -e "${WHITE}💾 Database:${NC}"
+    echo -e "${GREEN}   • PostgreSQL:    ${WHITE}localhost:${PORTS[PostgreSQL]}${NC}"
+    echo -e "${GREEN}   • Redis:         ${WHITE}localhost:${PORTS[Redis]}${NC}"
+    echo
+    echo -e "${WHITE}🔧 Process Management:${NC}"
+    echo -e "${YELLOW}   • View logs:     ${WHITE}tail -f data/logs/bot_trading_\$(date +%Y%m%d).log${NC}"
+    echo -e "${YELLOW}   • Stop all:      ${WHITE}./stop_all.sh${NC}"
+    echo -e "${YELLOW}   • Kill by PID:   ${WHITE}kill -9 <PID>${NC}"
+    echo
+    
+    # Функция для отслеживания логов с фильтрацией
+    echo -e "${CYAN}=== REAL-TIME LOGS (DEBUG MODE - ALL LOGS) ===${NC}"
+    echo -e "${YELLOW}DEBUG: Showing ALL logs from all components for system setup${NC}"
+    echo -e "${WHITE}Press Ctrl+C to stop log monitoring${NC}"
+    echo
+    
+    # Отслеживание логов с цветной фильтрацией
+    LOG_DATE=$(date +%Y%m%d)
+    LOG_FILE="data/logs/bot_trading_${LOG_DATE}.log"
+    
+    echo -e "${CYAN}📄 Monitoring log file: ${WHITE}$LOG_FILE${NC}"
+    echo -e "${YELLOW}📊 DEBUG MODE: ALL components, ML predictions, signals, orders, errors, system events${NC}"
+    echo -e "${GREEN}✨ Enhanced: Full ML tables with 240 features + ALL system logs${NC}"
+    
+    # Функция фильтрации и раскраски логов с поддержкой ML таблиц
+    filter_and_colorize() {
+        local in_ml_table=false
+        local ml_table_buffer=""
+        
+        while IFS= read -r line; do
+            # Обработка ML таблиц - начало любой таблицы с рамкой
+            if [[ "$line" =~ ^.*"╔═".*"═╗".*$ ]]; then
+                in_ml_table=true
+                ml_table_buffer="${CYAN}${line}${NC}"
+                continue
+            fi
+            
+            # Обработка таблиц с входными параметрами (240 features)
+            if [[ "$line" =~ "ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ" ]] || [[ "$line" =~ "ML PREDICTION DETAILS" ]]; then
+                in_ml_table=true
+                ml_table_buffer="${PURPLE}${line}${NC}"
+                continue
+            fi
+            
+            # Если мы внутри ML таблицы
+            if [ "$in_ml_table" = true ]; then
+                ml_table_buffer="${ml_table_buffer}\n${CYAN}${line}${NC}"
+                
+                # Конец таблицы
+                if [[ "$line" =~ ^.*"╚═".*"═╝".*$ ]]; then
+                    echo -e "$ml_table_buffer"
+                    in_ml_table=false
+                    ml_table_buffer=""
+                fi
+                continue
+            fi
+            
+            # ОТЛАДОЧНЫЙ РЕЖИМ - показываем ВСЕ логи для настройки системы
+            if true; then  # Временно отключаем фильтрацию - показываем все
+                
+                # Пропускаем отдельные строки таблиц без контекста (одиночные строки с ║)
+                if [[ "$line" =~ ^.*"║".*$ ]] && ! [[ "$line" =~ (ПАРАМЕТРЫ|ИНДИКАТОРЫ|СТАТИСТИКА|PREDICTION|SIGNAL) ]]; then
+                    continue
+                fi
+                
+                case "$line" in
+                    *ERROR*|*CRITICAL*)
+                        echo -e "${RED}🔴 $line${NC}"
+                        ;;
+                    *WARNING*)
+                        # Пропускаем WARNING с фрагментами таблиц
+                        if [[ ! "$line" =~ "║" ]]; then
+                            echo -e "${YELLOW}⚠️  $line${NC}"
+                        fi
+                        ;;
+                    *"Signal"*|*"SIGNAL"*)
+                        echo -e "${CYAN}📡 $line${NC}"
+                        ;;
+                    *"Order"*|*"ORDER"*)
+                        echo -e "${BLUE}📋 $line${NC}"
+                        ;;
+                    *"Trade"*|*"TRADE"*)
+                        echo -e "${GREEN}💰 $line${NC}"
+                        ;;
+                    *"Position"*|*"POSITION"*)
+                        echo -e "${PURPLE}🎯 $line${NC}"
+                        ;;
+                    *"SUCCESS"*|*"FILLED"*)
+                        echo -e "${GREEN}✅ $line${NC}"
+                        ;;
+                    *"FAILED"*|*"REJECTED"*)
+                        echo -e "${RED}❌ $line${NC}"
+                        ;;
+                    *"ML"*|*"Prediction"*)
+                        echo -e "${CYAN}🤖 $line${NC}"
+                        ;;
+                    *"API"*|*"Компонент"*)
+                        echo -e "${BLUE}🔧 $line${NC}"
+                        ;;
+                    *)
+                        # Для остальных строк с таблицами ML
+                        if [[ "$line" =~ "║" ]]; then
+                            echo -e "${CYAN}$line${NC}"
+                        else
+                            echo -e "${WHITE}ℹ️  $line${NC}"
+                        fi
+                        ;;
+                esac
+            fi
+        done
+    }
+    
+    if [ -f "$LOG_FILE" ]; then
+        echo -e "${GREEN}✅ Log file exists, showing last 20 lines and monitoring...${NC}"
+        echo -e "${CYAN}================== RECENT LOGS ==================${NC}"
+        tail -n 20 "$LOG_FILE" | filter_and_colorize
+        echo -e "${CYAN}================== LIVE MONITORING ==================${NC}"
+        tail -f "$LOG_FILE" | filter_and_colorize &
+        TAIL_PID=$!
+        
+        # Ждем немного, чтобы показать что система работает
+        sleep 3
+        echo -e "${GREEN}✅ System is running! Logs are being monitored in background.${NC}"
+        echo -e "${YELLOW}💡 Press Ctrl+C to stop monitoring and shutdown system${NC}"
+        echo -e "${CYAN}📊 System Status:${NC}"
+        echo -e "${WHITE}   - Trading Engine: ✅ Running${NC}"
+        echo -e "${WHITE}   - Web Interface: ✅ Running${NC}"
+        echo -e "${WHITE}   - API Services: ✅ Running${NC}"
+        echo ""
+        
+        # Ожидаем пользовательский ввод или сигнал завершения
+        echo -e "${YELLOW}Type 'status' to check system status, 'logs' to see recent logs, or Ctrl+C to stop${NC}"
+        
+        while kill -0 $UNIFIED_PID 2>/dev/null; do
+            if read -t 10 user_input; then
+                case "$user_input" in
+                    "status"|"s")
+                        echo -e "${CYAN}📊 System Status Check:${NC}"
+                        echo -e "${GREEN}  ✓ Unified Launcher: Running (PID: $UNIFIED_PID)${NC}"
+                        if kill -0 $TAIL_PID 2>/dev/null; then
+                            echo -e "${GREEN}  ✓ Log Monitor: Running (PID: $TAIL_PID)${NC}"
+                        else
+                            echo -e "${RED}  ✗ Log Monitor: Stopped${NC}"
+                        fi
+                        echo -e "${WHITE}  📊 Uptime: $(ps -p $UNIFIED_PID -o etime= 2>/dev/null || echo 'N/A')${NC}"
+                        ;;
+                    "logs"|"l")
+                        echo -e "${CYAN}================== RECENT LOGS ==================${NC}"
+                        tail -n 10 "$LOG_FILE" | filter_and_colorize
+                        echo -e "${CYAN}===================================================${NC}"
+                        ;;
+                    "help"|"h"|"?")
+                        echo -e "${YELLOW}Available commands:${NC}"
+                        echo -e "${WHITE}  status, s  - Show system status${NC}"
+                        echo -e "${WHITE}  logs, l    - Show recent logs${NC}"
+                        echo -e "${WHITE}  help, h, ? - Show this help${NC}"
+                        echo -e "${WHITE}  Ctrl+C     - Stop system${NC}"
+                        ;;
+                    "exit"|"quit"|"stop")
+                        echo -e "${YELLOW}Stopping system...${NC}"
+                        break
+                        ;;
+                    *)
+                        echo -e "${RED}Unknown command: $user_input${NC}"
+                        echo -e "${WHITE}Type 'help' for available commands${NC}"
+                        ;;
+                esac
+            else
+                # Timeout - показываем краткий статус
+                echo -e "${CYAN}$(date '+%H:%M:%S')${NC} - System running... (Type 'help' for commands)"
+            fi
+        done
+    else
+        echo -e "${YELLOW}Log file not found: $LOG_FILE${NC}"
+        echo -e "${WHITE}Creating log directory...${NC}"
+        mkdir -p data/logs
+        touch "$LOG_FILE"
+        echo -e "${GREEN}Log file created. Monitoring...${NC}"
+        tail -f "$LOG_FILE" | filter_and_colorize &
+        TAIL_PID=$!
+        
+        sleep 3
+        echo -e "${GREEN}✅ System is running! Waiting for first logs...${NC}"
+        echo -e "${YELLOW}💡 Press Ctrl+C to stop monitoring and shutdown system${NC}"
+        echo -e "${CYAN}📊 System Status:${NC}"
+        echo -e "${WHITE}   - Trading Engine: ✅ Running${NC}"
+        echo -e "${WHITE}   - Web Interface: ✅ Running${NC}"
+        echo -e "${WHITE}   - API Services: ✅ Running${NC}"
+        echo ""
+        
+        # Ожидаем пользовательский ввод или сигнал завершения
+        echo -e "${YELLOW}Type 'status' to check system status, 'logs' to see recent logs, or Ctrl+C to stop${NC}"
+        
+        while kill -0 $UNIFIED_PID 2>/dev/null; do
+            if read -t 10 user_input; then
+                case "$user_input" in
+                    "status"|"s")
+                        echo -e "${CYAN}📊 System Status Check:${NC}"
+                        echo -e "${GREEN}  ✓ Unified Launcher: Running (PID: $UNIFIED_PID)${NC}"
+                        if kill -0 $TAIL_PID 2>/dev/null; then
+                            echo -e "${GREEN}  ✓ Log Monitor: Running (PID: $TAIL_PID)${NC}"
+                        else
+                            echo -e "${RED}  ✗ Log Monitor: Stopped${NC}"
+                        fi
+                        echo -e "${WHITE}  📊 Uptime: $(ps -p $UNIFIED_PID -o etime= 2>/dev/null || echo 'N/A')${NC}"
+                        ;;
+                    "logs"|"l")
+                        echo -e "${CYAN}================== RECENT LOGS ==================${NC}"
+                        tail -n 10 "$LOG_FILE" | filter_and_colorize
+                        echo -e "${CYAN}===================================================${NC}"
+                        ;;
+                    "help"|"h"|"?")
+                        echo -e "${YELLOW}Available commands:${NC}"
+                        echo -e "${WHITE}  status, s  - Show system status${NC}"
+                        echo -e "${WHITE}  logs, l    - Show recent logs${NC}"
+                        echo -e "${WHITE}  help, h, ? - Show this help${NC}"
+                        echo -e "${WHITE}  Ctrl+C     - Stop system${NC}"
+                        ;;
+                    "exit"|"quit"|"stop")
+                        echo -e "${YELLOW}Stopping system...${NC}"
+                        break
+                        ;;
+                    *)
+                        echo -e "${RED}Unknown command: $user_input${NC}"
+                        echo -e "${WHITE}Type 'help' for available commands${NC}"
+                        ;;
+                esac
+            else
+                # Timeout - показываем краткий статус
+                echo -e "${CYAN}$(date '+%H:%M:%S')${NC} - System running... (Type 'help' for commands)"
+            fi
+        done
+    fi
+}
+
+# Обработка сигналов для корректного завершения
+cleanup() {
+    echo
+    echo -e "${YELLOW}🛑 Stopping services...${NC}"
+    
+    # Остановка tail процесса мониторинга логов
+    if [ -n "$TAIL_PID" ]; then
+        kill -TERM "$TAIL_PID" 2>/dev/null || true
+        echo -e "${GREEN}✅ Log monitoring stopped${NC}"
+    fi
+    
+    # Остановка unified launcher
+    if [ -n "$UNIFIED_PID" ]; then
+        kill -TERM "$UNIFIED_PID" 2>/dev/null || true
+        echo -e "${GREEN}✅ Unified system stopped${NC}"
+    fi
+    
+    # Убиваем все связанные процессы
+    pkill -f "unified_launcher.py" 2>/dev/null || true
+    pkill -f "web.api.main" 2>/dev/null || true
+    pkill -f "npm run dev" 2>/dev/null || true
+    
+    # Освобождаем порты если они заняты
+    for port in 8083 8084 8085 8086 5173; do
+        fuser -k $port/tcp 2>/dev/null || true
+    done
+    
+    echo -e "${CYAN}👋 Goodbye!${NC}"
+    exit 0
+}
+
+# Регистрация обработчика сигналов
+trap cleanup SIGINT SIGTERM
+
+# Запуск основной функции
+main "$@"

@@ -17,8 +17,8 @@ from sqlalchemy.dialects.postgresql import insert
 from core.logger import setup_logger
 from database.connections import get_async_db
 from database.models.market_data import ProcessedMarketData, RawMarketData
-from ml.config.features_240 import REQUIRED_FEATURES_240
-from ml.logic.feature_engineering_v2 import FeatureEngineer
+from ml.logic.feature_engineering_production import ProductionFeatureEngineer as FeatureEngineer
+from production_features_config import PRODUCTION_FEATURES as REQUIRED_FEATURES_231
 
 logger = setup_logger(__name__)
 
@@ -39,13 +39,14 @@ class RealTimeIndicatorCalculator:
         Args:
             cache_ttl: Время жизни кеша в секундах
             config: Конфигурация системы
-            use_inference_mode: Использовать ли inference mode для генерации только 240 признаков
+            use_inference_mode: Использовать ли inference mode для генерации только 231 признаков
         """
         # Передаем inference_mode в конфигурацию FeatureEngineer
-        engineer_config = config or {}
-        engineer_config["inference_mode"] = use_inference_mode
+        # ProductionFeatureEngineer работает без конфигурации
+        # Передаем пустую конфигурацию, код адаптирован под это
+        engineer_config = {}
 
-        self.feature_engineer = FeatureEngineer(engineer_config, inference_mode=use_inference_mode)
+        self.feature_engineer = FeatureEngineer(engineer_config)
         # Отключаем прогресс-бар чтобы не блокировать async операции
         self.feature_engineer.disable_progress = False  # Включаем логи для отладки
         self.cache = {}  # Кеш рассчитанных индикаторов
@@ -65,7 +66,7 @@ class RealTimeIndicatorCalculator:
 
         Args:
             symbol: Торговый символ
-            ohlcv_df: DataFrame с OHLCV данными (должен содержать минимум 240 свечей)
+            ohlcv_df: DataFrame с OHLCV данными (должен содержать минимум 150 свечей)
             save_to_db: Сохранять ли результаты в БД
 
         Returns:
@@ -92,40 +93,54 @@ class RealTimeIndicatorCalculator:
             df = self._prepare_dataframe(ohlcv_df, symbol)
 
             # Рассчитываем все признаки
-            logger.info(
-                f"About to call create_features for {symbol} (inference_mode={self.use_inference_mode})"
-            )
-            features_result = self.feature_engineer.create_features(
-                df, inference_mode=self.use_inference_mode
-            )
+            logger.info(f"About to call create_features for {symbol}")
+            # ProductionFeatureEngineer не принимает inference_mode, но принимает use_enhanced_features
+            features_result = self.feature_engineer.create_features(df, use_enhanced_features=True)
             logger.info(
                 f"create_features returned type: {type(features_result)}, shape: {getattr(features_result, 'shape', 'no shape')}"
             )
 
             # ИСПРАВЛЕНО: Используем точный список признаков из конфигурации
             if isinstance(features_result, pd.DataFrame):
-                # Используем ТОЛЬКО признаки из REQUIRED_FEATURES_240
+                # Используем ТОЛЬКО признаки из REQUIRED_FEATURES_231
                 available_cols = features_result.columns.tolist()
                 selected_features = []
 
-                # Выбираем признаки в правильном порядке из REQUIRED_FEATURES_240
-                for feature in REQUIRED_FEATURES_240:
+                # Выбираем признаки в правильном порядке из REQUIRED_FEATURES_231
+                for feature in REQUIRED_FEATURES_231:
                     if feature in available_cols:
                         selected_features.append(feature)
                     else:
                         # Если признак отсутствует, логируем предупреждение
                         logger.warning(f"Признак {feature} отсутствует в результатах")
 
-                # Проверяем, что получили ровно 240 признаков
-                if len(selected_features) != 240:
-                    logger.error(f"Получено {len(selected_features)} признаков вместо 240!")
-                    # Дополняем нулями если меньше 240
-                    while len(selected_features) < 240:
+                # Проверяем, что получили ровно 231 признаков
+                if len(selected_features) != 231:
+                    logger.error(f"Получено {len(selected_features)} признаков вместо 231!")
+                    # Дополняем нулями если меньше 231
+                    while len(selected_features) < 231:
                         selected_features.append("padding_0")
                         features_result["padding_0"] = 0.0
 
-                features_array = features_result[selected_features[:240]].values
-                feature_names = selected_features[:240]
+                # ИСПРАВЛЕНО: Фильтруем только числовые колонки перед созданием массива
+                numeric_features = []
+                for feature in selected_features[:231]:
+                    if feature in features_result.columns:
+                        # Проверяем что колонка содержит числовые данные
+                        if pd.api.types.is_numeric_dtype(features_result[feature]):
+                            numeric_features.append(feature)
+                        else:
+                            logger.debug(f"Пропускаем не-числовую колонку: {feature}")
+                            # Заменяем на заглушку
+                            features_result[f"{feature}_numeric"] = 0.0
+                            numeric_features.append(f"{feature}_numeric")
+                    else:
+                        # Если колонки нет, создаем заглушку
+                        features_result[f"{feature}_missing"] = 0.0
+                        numeric_features.append(f"{feature}_missing")
+
+                features_array = features_result[numeric_features].values
+                feature_names = numeric_features
             elif isinstance(features_result, np.ndarray):
                 features_array = features_result
                 feature_names = [f"feature_{i}" for i in range(features_array.shape[1])]
@@ -265,7 +280,12 @@ class RealTimeIndicatorCalculator:
         # Группируем индикаторы по категориям
         technical_indicators = {}
         microstructure_features = {}
-        ml_features = features.copy()
+        # ИСПРАВЛЕНО: Фильтруем только числовые признаки
+        ml_features = {
+            k: v
+            for k, v in features.items()
+            if isinstance(v, (int, float, np.integer, np.floating)) and not isinstance(v, str)
+        }
 
         # Технические индикаторы
         tech_indicators_list = [
@@ -440,9 +460,7 @@ class RealTimeIndicatorCalculator:
             df = self._prepare_dataframe(ohlcv_df, symbol)
 
             # Прямо вызываем create_features (это синхронный метод)
-            features_result = self.feature_engineer.create_features(
-                df, inference_mode=self.use_inference_mode
-            )
+            features_result = self.feature_engineer.create_features(df, use_enhanced_features=True)
 
             # Обработка результата - используем точный список признаков
             if isinstance(features_result, pd.DataFrame):
@@ -450,11 +468,11 @@ class RealTimeIndicatorCalculator:
                     f"🔧 get_features_for_ml: DataFrame shape {features_result.shape}, columns: {len(features_result.columns)}"
                 )
 
-                # Используем ТОЛЬКО признаки из REQUIRED_FEATURES_240
+                # Используем ТОЛЬКО признаки из REQUIRED_FEATURES_231
                 available_cols = features_result.columns.tolist()
                 selected_features = []
 
-                for feature in REQUIRED_FEATURES_240:
+                for feature in REQUIRED_FEATURES_231:
                     if feature in available_cols:
                         selected_features.append(feature)
                     else:
@@ -463,13 +481,13 @@ class RealTimeIndicatorCalculator:
                         features_result[feature] = 0.0
                         logger.debug(f"Добавлен нулевой признак: {feature}")
 
-                # Гарантируем ровно 240 признаков
+                # Гарантируем ровно 231 признаков
                 logger.info(
-                    f"🔧 get_features_for_ml: selected_features={len(selected_features)}, required={len(REQUIRED_FEATURES_240)}"
+                    f"🔧 get_features_for_ml: selected_features={len(selected_features)}, required={len(REQUIRED_FEATURES_231)}"
                 )
-                assert len(selected_features) == 240, (
-                    f"Должно быть 240 признаков, получено {len(selected_features)}"
-                )
+                assert (
+                    len(selected_features) == 231
+                ), f"Должно быть 231 признаков, получено {len(selected_features)}"
                 features_array = features_result[selected_features].values
                 logger.info(
                     f"🔧 get_features_for_ml: final features_array shape: {features_array.shape}"
@@ -488,9 +506,9 @@ class RealTimeIndicatorCalculator:
                 logger.info(
                     f"✅ get_features_for_ml: Extracted {len(last_features)} features for {symbol}"
                 )
-                assert len(last_features) == 240, (
-                    f"Ожидалось 240 признаков, получено {len(last_features)}"
-                )
+                assert (
+                    len(last_features) == 231
+                ), f"Ожидалось 231 признаков, получено {len(last_features)}"
                 return last_features
             else:
                 logger.error(f"Неожиданная форма features_array: {features_array.shape}")
@@ -530,40 +548,67 @@ class RealTimeIndicatorCalculator:
 
         # Рассчитываем признаки для всего DataFrame
         # FeatureEngineer возвращает массив (n_samples, n_features)
-        features_result = self.feature_engineer.create_features(
-            df, inference_mode=self.use_inference_mode
-        )
+        # ProductionFeatureEngineer не принимает inference_mode
+        features_result = self.feature_engineer.create_features(df, use_enhanced_features=True)
 
         if isinstance(features_result, pd.DataFrame):
-            # ИСПРАВЛЕНО: Используем ТОЛЬКО признаки из REQUIRED_FEATURES_240
+            # ИСПРАВЛЕНО: Используем ВСЕ доступные числовые признаки для ML модели
             available_cols = features_result.columns.tolist()
-            logger.debug(f"🔧 DataFrame от FeatureEngineer: {len(available_cols)} колонок")
-            logger.debug(f"🔧 Первые 10 колонок: {available_cols[:10]}")
+            logger.info(f"🔧 DataFrame от FeatureEngineer: {len(available_cols)} колонок")
 
-            selected_features = []
+            # Исключаем служебные колонки и целевые переменные
+            exclude_cols = [
+                "datetime",
+                "symbol",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "quote_volume",
+                "turnover",
+                "sector",
+            ]
 
-            # Выбираем признаки в правильном порядке из REQUIRED_FEATURES_240
-            for feature in REQUIRED_FEATURES_240:
-                if feature in available_cols:
-                    selected_features.append(feature)
-                else:
-                    # Если признак отсутствует, добавляем нулевой
-                    selected_features.append(feature)
-                    features_result[feature] = 0.0
-                    logger.debug(f"Добавлен нулевой признак: {feature}")
+            # Исключаем целевые переменные (содержат строки 'UP', 'DOWN', 'FLAT')
+            target_patterns = ["direction_", "future_return_", "target_tp_", "target_sl_"]
+            for col in available_cols:
+                if any(pattern in col for pattern in target_patterns):
+                    exclude_cols.append(col)
 
-            # Гарантируем ровно 240 признаков
-            logger.debug(
-                f"🔧 prepare_ml_input: selected_features={len(selected_features)}, required={len(REQUIRED_FEATURES_240)}"
-            )
-            assert len(selected_features) == 240, (
-                f"Должно быть 240 признаков, получено {len(selected_features)}"
-            )
+            # Берем все признаки кроме служебных
+            all_features = [col for col in available_cols if col not in exclude_cols]
+
+            # ОГРАНИЧИВАЕМ до первых 240 признаков (как в обучении модели)
+            selected_features = all_features[:240]
+            logger.info(f"🎯 Всего доступно признаков: {len(all_features)}")
+            logger.info(f"🎯 Выбрано для ML модели: {len(selected_features)} (ограничено до 240)")
+
+            # Логируем статус enhanced features
+            enhanced_features = [
+                col
+                for col in selected_features
+                if any(
+                    x in col
+                    for x in [
+                        "trend_strength",
+                        "regime",
+                        "volatility_ratio",
+                        "ofi",
+                        "trade_intensity",
+                    ]
+                )
+            ]
+            if enhanced_features:
+                logger.info(f"✅ Enhanced features активны: {len(enhanced_features)} найдено")
+                logger.info(f"   Enhanced features: {enhanced_features}")
+            else:
+                logger.warning("⚠️ Enhanced features НЕ найдены!")
+
+            # Создаем массив признаков
             features_array = features_result[selected_features].values
-            logger.info(
-                f"✅ Использовано точно {len(selected_features)} признаков из REQUIRED_FEATURES_240"
-            )
-            logger.debug(f"🔧 features_array shape после фильтрации: {features_array.shape}")
+            logger.info(f"✅ Использовано {len(selected_features)} признаков для ML модели")
+            logger.info(f"🔧 features_array shape: {features_array.shape}")
         elif isinstance(features_result, np.ndarray):
             logger.info(
                 f"🔧 prepare_ml_input: FeatureEngineer вернул np.ndarray shape: {features_result.shape}"
@@ -592,24 +637,35 @@ class RealTimeIndicatorCalculator:
         # Проверяем дисперсию признаков
         # ИСПРАВЛЕНО: Безопасная проверка типов данных для предотвращения ошибки sqrt
         try:
-            # Убеждаемся что данные в правильном формате numpy
-            features_sample = np.asarray(features_array[0], dtype=np.float64)
-            feature_std = np.std(features_sample, axis=0)
-            non_zero_std = np.sum(feature_std > 1e-6)
+            # Убеждаемся что данные в правильном формате numpy - только числовые данные
+            features_sample = features_array[0]
+            if features_sample.dtype.kind not in ["i", "u", "f"]:  # integer, unsigned, float
+                logger.debug("Массив содержит не-числовые данные, пропускаем проверку дисперсии")
+                non_zero_std = (
+                    features_array.shape[2] if features_array.ndim > 2 else features_array.shape[1]
+                )
+                feature_std = None
+            else:
+                feature_std = np.std(features_sample, axis=0)
+                non_zero_std = np.sum(feature_std > 1e-6)
         except (TypeError, ValueError) as e:
             logger.warning(f"Ошибка вычисления дисперсии признаков: {e}")
             # Fallback - простая проверка без std
             non_zero_std = (
                 features_array.shape[2] if features_array.ndim > 2 else features_array.shape[1]
             )
+            feature_std = None
 
         logger.info(f"📊 ML признаки для {symbol}: shape={features_array.shape}")
         logger.info(
             f"   Признаков с ненулевой дисперсией: {non_zero_std}/{features_array.shape[2]}"
         )
-        logger.debug(
-            f"   Дисперсия: min={feature_std.min():.6f}, max={feature_std.max():.6f}, mean={feature_std.mean():.6f}"
-        )
+        if feature_std is not None:
+            logger.debug(
+                f"   Дисперсия: min={feature_std.min():.6f}, max={feature_std.max():.6f}, mean={feature_std.mean():.6f}"
+            )
+        else:
+            logger.debug("   Дисперсия: не вычислена (не-числовые данные)")
 
         # Метаданные
         metadata = {

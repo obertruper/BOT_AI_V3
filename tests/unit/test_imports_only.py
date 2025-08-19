@@ -112,7 +112,7 @@ class TestMLImports:
 
     def test_model_imports(self):
         """Тест импортов моделей"""
-        from ml.logic.feature_engineering import FeatureEngineer
+        from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
         from ml.logic.patchtst_model import UnifiedPatchTST
 
         assert UnifiedPatchTST is not None

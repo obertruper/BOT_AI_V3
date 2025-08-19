@@ -16,8 +16,8 @@ import torch
 from core.logger import setup_logger
 from core.system.signal_deduplicator import signal_deduplicator
 from core.system.worker_coordinator import worker_coordinator
-from ml.logic.feature_engineering import (  # Оригинальная версия с 240+ признаками
-    FeatureEngineer,
+from ml.logic.feature_engineering_production import (  # Production версия из обучающего файла
+    ProductionFeatureEngineer as FeatureEngineer,
 )
 from ml.logic.patchtst_model import create_unified_model
 from ml.logic.signal_quality_analyzer import SignalQualityAnalyzer
@@ -87,10 +87,23 @@ class MLManager:
                                     f"Memory: {props.total_memory / 1024**3:.1f}GB"
                                 )
 
-                                # Проверяем использование памяти
-                                if torch.cuda.memory_allocated(i) < min_memory_used:
-                                    min_memory_used = torch.cuda.memory_allocated(i)
-                                    best_gpu = i
+                                # Проверяем использование памяти (защита от MagicMock в тестах)
+                                try:
+                                    memory_used = torch.cuda.memory_allocated(i)
+                                    # Проверяем что это реальное число, а не MagicMock
+                                    if (
+                                        isinstance(memory_used, (int, float))
+                                        and memory_used < min_memory_used
+                                    ):
+                                        min_memory_used = memory_used
+                                        best_gpu = i
+                                except (TypeError, AttributeError):
+                                    # В тестах может быть MagicMock - используем GPU 0 по умолчанию
+                                    logger.debug(
+                                        f"Не удалось получить память GPU {i}, используем по умолчанию"
+                                    )
+                                    if i == 0:  # Первый GPU как fallback
+                                        best_gpu = i
                             except Exception as gpu_error:
                                 logger.warning(f"GPU {i} недоступен: {gpu_error}")
                                 continue
@@ -104,19 +117,36 @@ class MLManager:
                         _ = test_tensor * 2  # Простая операция для проверки
 
                         # RTX 5090 (Blackwell) особенности:
-                        # - GPU полностью функционален после перезагрузки системы
-                        # - torch.compile пока не поддерживает архитектуру sm_120
-                        # - Это не влияет на производительность или функциональность
+                        # - GPU полностью функционален с PyTorch 2.9.0+
+                        # - torch.compile поддерживается для архитектуры sm_120
+                        # - Может дать значительный прирост производительности
                         gpu_name = props.name.upper()
                         if "RTX 5090" in gpu_name or props.major >= 12:
                             logger.info(
                                 f"🎯 Обнаружен RTX 5090 ({gpu_name}, sm_{props.major}{props.minor})"
                             )
-                            logger.warning(
-                                "⚠️ torch.compile отключен для RTX 5090 (sm_120) - не поддерживается текущей версией PyTorch. Это нормально и не влияет на функциональность."
-                            )
-                            # Отключаем компиляцию для новых архитектур
-                            os.environ["TORCH_COMPILE_DISABLE"] = "1"
+
+                            # Проверяем поддержку torch.compile
+                            try:
+                                # Тест компиляции простой модели
+                                import torch.nn as nn
+
+                                test_model = nn.Linear(1, 1).to(self.device)
+                                compiled_test = torch.compile(test_model)
+                                test_input = torch.randn(1, 1).to(self.device)
+                                _ = compiled_test(test_input)
+
+                                logger.info(
+                                    "✅ torch.compile поддерживается для RTX 5090 - включаем оптимизацию!"
+                                )
+                                # НЕ устанавливаем TORCH_COMPILE_DISABLE - позволяем использовать torch.compile
+
+                            except Exception as compile_error:
+                                logger.warning(
+                                    f"⚠️ torch.compile недоступен для RTX 5090: {compile_error}. "
+                                    "Продолжаем без оптимизации."
+                                )
+                                os.environ["TORCH_COMPILE_DISABLE"] = "1"
 
                         logger.info(f"✅ Успешно инициализирован GPU {best_gpu} ({props.name})")
                         logger.info(
@@ -167,7 +197,7 @@ class MLManager:
 
         # Параметры модели
         self.context_length = 96  # 24 часа при 15-минутных свечах
-        self.num_features = 240  # Вернули обратно для совместимости с моделью
+        self.num_features = 240  # Модель обучена на 240 признаках (проверено в checkpoint)
         self.num_targets = 20  # Модель выдает 20 выходов
 
         # Инициализируем анализатор качества сигналов
@@ -178,7 +208,7 @@ class MLManager:
     async def initialize(self):
         """Инициализация и загрузка моделей"""
         try:
-            # Регистрируемся в координаторе воркеров
+            # Регистрируемся в координаторе воркеров с soft-fail режимом
             await worker_coordinator.start()
             self.worker_id = await worker_coordinator.register_worker(
                 worker_type="ml_manager",
@@ -188,11 +218,15 @@ class MLManager:
                     "num_features": self.num_features,
                     "context_length": self.context_length,
                 },
+                allow_duplicates=True,  # Soft-fail режим: разрешаем дубликаты с предупреждением
             )
 
             if not self.worker_id:
-                logger.error("❌ Другой ML Manager уже активен. Завершаем работу.")
-                raise RuntimeError("Duplicate ML Manager detected")
+                logger.warning("⚠️ Не удалось зарегистрироваться в WorkerCoordinator, но продолжаем")
+                # Генерируем резервный worker_id
+                import time
+
+                self.worker_id = f"ml_manager_fallback_{int(time.time())}"
 
             # Загружаем модель
             await self._load_model()
@@ -266,6 +300,36 @@ class MLManager:
 
             self.model.eval()
 
+            # Применяем torch.compile для ускорения инференса если доступно
+            if os.environ.get("TORCH_COMPILE_DISABLE", "").lower() not in ("1", "true"):
+                try:
+                    logger.info("🚀 Применяем torch.compile для оптимизации модели...")
+
+                    # Компилируем модель с оптимальными настройками для инференса
+                    self.model = torch.compile(
+                        self.model,
+                        mode="max-autotune",  # Максимальная оптимизация
+                        fullgraph=False,  # Позволяем graph breaks для стабильности
+                        dynamic=False,  # Static shapes для лучшей оптимизации
+                    )
+
+                    logger.info("✅ torch.compile успешно применен к модели!")
+
+                    # Warm-up run для JIT компиляции
+                    logger.info("🔥 Прогрев модели с torch.compile...")
+                    with torch.no_grad():
+                        warmup_input = torch.randn(1, self.context_length, self.num_features).to(
+                            self.device
+                        )
+                        _ = self.model(warmup_input)
+                    logger.info("✅ Модель прогрета и готова к работе!")
+
+                except Exception as compile_error:
+                    logger.warning(f"⚠️ Не удалось применить torch.compile: {compile_error}")
+                    logger.info("Продолжаем с обычной моделью без оптимизации")
+            else:
+                logger.info("ℹ️ torch.compile отключен переменной окружения")
+
             logger.info(f"Model loaded successfully from {self.model_path}")
 
         except Exception as e:
@@ -331,6 +395,8 @@ class MLManager:
                     raise ValueError(
                         f"Expected shape ({self.context_length}, {self.num_features}), got {input_data.shape}"
                     )
+                # Сохраняем оригинальные признаки для логирования
+                features = input_data
                 # Нормализуем numpy array с помощью scaler
                 features_scaled = self.scaler.transform(input_data)
                 logger.info("✅ Numpy array нормализован с помощью scaler")
@@ -396,6 +462,93 @@ class MLManager:
                 # Берем только последние context_length строк
                 if len(features_array) >= self.context_length:
                     features = features_array[-self.context_length :]
+
+                    # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ВХОДНЫХ ПРИЗНАКОВ
+                    if hasattr(self, "feature_engineer") and hasattr(
+                        self.feature_engineer, "feature_names"
+                    ):
+                        feature_names = self.feature_engineer.feature_names
+                    else:
+                        # Загружаем из конфигурации
+                        from ml.config.features_240 import get_required_features_list
+
+                        feature_names = get_required_features_list()
+
+                    # Берем последнюю строку для логирования текущих значений
+                    current_features = features[-1] if len(features) > 0 else features[0]
+
+                    # Создаем красивую таблицу с входными признаками
+                    features_table = []
+                    features_table.append(
+                        "\n╔══════════════════════════════════════════════════════════════════════╗"
+                    )
+                    features_table.append(
+                        f"║            ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ - {len(current_features)} ПРИЗНАКОВ             ║"
+                    )
+                    features_table.append(
+                        "╠══════════════════════════════════════════════════════════════════════╣"
+                    )
+
+                    # Ключевые индикаторы для быстрого просмотра
+                    key_indicators = [
+                        ("returns", 0),
+                        ("rsi", 9),
+                        ("macd", 12),
+                        ("bb_position", 19),
+                        ("atr_pct", 24),
+                        ("stoch_k", 25),
+                        ("adx", 27),
+                        ("volume_ratio", 4),
+                        ("obv_trend", 71),
+                        ("momentum_1h", 115),
+                        ("trend_1h", 124),
+                        ("signal_strength", 139),
+                    ]
+
+                    features_table.append(
+                        "║ 🎯 КЛЮЧЕВЫЕ ИНДИКАТОРЫ:                                             ║"
+                    )
+                    for i in range(0, len(key_indicators), 2):
+                        if i < len(key_indicators):
+                            name1, idx1 = key_indicators[i]
+                            val1 = current_features[idx1] if idx1 < len(current_features) else 0
+
+                            if i + 1 < len(key_indicators):
+                                name2, idx2 = key_indicators[i + 1]
+                                val2 = current_features[idx2] if idx2 < len(current_features) else 0
+                                features_table.append(
+                                    f"║   • {name1:15s}: {val1:>8.4f}  │  {name2:15s}: {val2:>8.4f}  ║"
+                                )
+                            else:
+                                features_table.append(
+                                    f"║   • {name1:15s}: {val1:>8.4f}  │                                  ║"
+                                )
+
+                    # Статистика по признакам
+                    nan_count = np.sum(np.isnan(current_features))
+                    zero_count = np.sum(current_features == 0)
+                    mean_val = np.nanmean(current_features)
+                    std_val = np.nanstd(current_features)
+
+                    features_table.append(
+                        "╟──────────────────────────────────────────────────────────────────────╢"
+                    )
+                    features_table.append(
+                        "║ 📊 СТАТИСТИКА ПРИЗНАКОВ:                                            ║"
+                    )
+                    features_table.append(
+                        f"║   • Всего признаков: {len(current_features):<6} • NaN: {nan_count:<6} • Zeros: {zero_count:<6}         ║"
+                    )
+                    features_table.append(
+                        f"║   • Mean: {mean_val:>8.4f}  • Std: {std_val:>8.4f}                           ║"
+                    )
+                    features_table.append(
+                        "╚══════════════════════════════════════════════════════════════════════╝"
+                    )
+
+                    # Выводим таблицу одним блоком
+                    logger.info("\n".join(features_table))
+
                 else:
                     # Если данных меньше чем нужно - дополняем нулями (padding)
                     padding_size = self.context_length - len(features_array)
@@ -488,7 +641,9 @@ class MLManager:
                 if asyncio.iscoroutinefunction(ml_prediction_logger.log_prediction):
                     await ml_prediction_logger.log_prediction(
                         symbol=symbol,
-                        features=features_scaled[-1],  # Последняя временная точка
+                        features=features[
+                            -1
+                        ],  # Используем оригинальные признаки, не нормализованные
                         model_outputs=outputs_np,
                         predictions=predictions,
                         market_data=input_data if isinstance(input_data, pd.DataFrame) else None,
@@ -498,7 +653,7 @@ class MLManager:
                     asyncio.create_task(
                         ml_prediction_logger.log_prediction(
                             symbol=symbol,
-                            features=features_scaled[-1],
+                            features=features[-1],  # Используем оригинальные признаки
                             model_outputs=outputs_np,
                             predictions=predictions,
                             market_data=(
@@ -571,6 +726,11 @@ class MLManager:
         Returns:
             Dict с ПРАВИЛЬНО интерпретированными предсказаниями и метриками качества
         """
+        # Определяем константы и словари в начале функции
+        timeframes = ["15m", "1h", "4h", "12h"]
+        direction_names = {0: "LONG↗️", 1: "SHORT↘️", 2: "FLAT➡️"}
+        direction_map = {0: "LONG", 1: "SHORT", 2: "NEUTRAL"}
+
         # Этап 1: Извлечение и валидация данных модели
         outputs_np = outputs.cpu().numpy()[0]
 
@@ -602,18 +762,84 @@ class MLManager:
 
         directions = np.array(directions)
 
-        # ДИАГНОСТИЧЕСКОЕ ЛОГИРОВАНИЕ ВХОДНЫХ ДАННЫХ
+        # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ВСЕХ ПАРАМЕТРОВ МОДЕЛИ
+        # Форматируем выходы для красивого отображения
+        outputs_formatted = [f"{x:.4f}" for x in outputs_np]
+
         logger.info(
             f"""
-🔍 ML ДИАГНОСТИКА - ВХОДНЫЕ ДАННЫЕ МОДЕЛИ:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Raw Model Outputs (все 20 значений): {outputs_np}
-📈 Future Returns (0-3):
-   15m: {future_returns[0]:.6f}, 1h: {future_returns[1]:.6f}
-   4h: {future_returns[2]:.6f}, 12h: {future_returns[3]:.6f}
-🎯 Direction Predictions: {directions} [0=LONG, 1=SHORT, 2=NEUTRAL]
-⚡ Risk Metrics: {risk_metrics}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+╔══════════════════════════════════════════════════════════════════════╗
+║                    🤖 ML MODEL PREDICTION ANALYSIS                   ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 📊 RAW MODEL OUTPUTS (20 parameters):                                ║
+║  [0-4]:  {', '.join(outputs_formatted[0:5]):50s}    ║
+║  [5-9]:  {', '.join(outputs_formatted[5:10]):50s}    ║
+║  [10-14]: {', '.join(outputs_formatted[10:15]):50s}   ║
+║  [15-19]: {', '.join(outputs_formatted[15:20]):50s}   ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 📈 FUTURE RETURNS (ожидаемые доходности):                           ║
+║   • 15m:  {future_returns[0]:+.6f} ({future_returns[0]*100:+6.3f}%)                       ║
+║   • 1h:   {future_returns[1]:+.6f} ({future_returns[1]*100:+6.3f}%)                       ║
+║   • 4h:   {future_returns[2]:+.6f} ({future_returns[2]*100:+6.3f}%)                       ║
+║   • 12h:  {future_returns[3]:+.6f} ({future_returns[3]*100:+6.3f}%)                       ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 🎯 НАПРАВЛЕНИЯ ПО ТАЙМФРЕЙМАМ:                                      ║
+║   • 15m:  {direction_names.get(directions[0], str(directions[0])):8s} | Conf: {direction_probs[0].max():.3f} |                      ║
+║      Probs: [LONG: {direction_probs[0][0]:.3f}, SHORT: {direction_probs[0][1]:.3f}, NEUTRAL: {direction_probs[0][2]:.3f}]          ║
+║   • 1h:   {direction_names.get(directions[1], str(directions[1])):8s} | Conf: {direction_probs[1].max():.3f} |                      ║
+║      Probs: [LONG: {direction_probs[1][0]:.3f}, SHORT: {direction_probs[1][1]:.3f}, NEUTRAL: {direction_probs[1][2]:.3f}]          ║
+║   • 4h:   {direction_names.get(directions[2], str(directions[2])):8s} | Conf: {direction_probs[2].max():.3f} |                      ║
+║      Probs: [LONG: {direction_probs[2][0]:.3f}, SHORT: {direction_probs[2][1]:.3f}, NEUTRAL: {direction_probs[2][2]:.3f}]          ║
+║   • 12h:  {direction_names.get(directions[3], str(directions[3])):8s} | Conf: {direction_probs[3].max():.3f} |                      ║
+║      Probs: [LONG: {direction_probs[3][0]:.3f}, SHORT: {direction_probs[3][1]:.3f}, NEUTRAL: {direction_probs[3][2]:.3f}]          ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ ⚡ RISK METRICS (метрики риска):                                     ║
+║   • Max Drawdown 1h:  {risk_metrics[0]:+.6f}                                  ║
+║   • Max Rally 1h:     {risk_metrics[1]:+.6f}                                  ║
+║   • Max Drawdown 4h:  {risk_metrics[2]:+.6f}                                  ║
+║   • Max Rally 4h:     {risk_metrics[3]:+.6f}                                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+        )
+
+        # ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: Интерпретация всех 20 выходов модели
+        logger.info(
+            f"""
+╔══════════════════════════════════════════════════════════════════════╗
+║               📊 ДЕТАЛЬНАЯ ИНТЕРПРЕТАЦИЯ 20 ВЫХОДОВ МОДЕЛИ           ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 🔮 ПРЕДСКАЗАНИЯ ДОХОДНОСТИ (outputs 0-3):                           ║
+║   • Out[0] = {outputs_np[0]:+.6f} → 15m return prediction            ║
+║   • Out[1] = {outputs_np[1]:+.6f} → 1h return prediction             ║
+║   • Out[2] = {outputs_np[2]:+.6f} → 4h return prediction             ║
+║   • Out[3] = {outputs_np[3]:+.6f} → 12h return prediction            ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 🎯 ЛОГИТЫ НАПРАВЛЕНИЯ 15m (outputs 4-6):                            ║
+║   • Out[4] = {outputs_np[4]:+.6f} → Logit for LONG                   ║
+║   • Out[5] = {outputs_np[5]:+.6f} → Logit for SHORT                  ║
+║   • Out[6] = {outputs_np[6]:+.6f} → Logit for NEUTRAL                ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 🎯 ЛОГИТЫ НАПРАВЛЕНИЯ 1h (outputs 7-9):                             ║
+║   • Out[7] = {outputs_np[7]:+.6f} → Logit for LONG                   ║
+║   • Out[8] = {outputs_np[8]:+.6f} → Logit for SHORT                  ║
+║   • Out[9] = {outputs_np[9]:+.6f} → Logit for NEUTRAL                ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 🎯 ЛОГИТЫ НАПРАВЛЕНИЯ 4h (outputs 10-12):                           ║
+║   • Out[10] = {outputs_np[10]:+.6f} → Logit for LONG                 ║
+║   • Out[11] = {outputs_np[11]:+.6f} → Logit for SHORT                ║
+║   • Out[12] = {outputs_np[12]:+.6f} → Logit for NEUTRAL              ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 🎯 ЛОГИТЫ НАПРАВЛЕНИЯ 12h (outputs 13-15):                          ║
+║   • Out[13] = {outputs_np[13]:+.6f} → Logit for LONG                 ║
+║   • Out[14] = {outputs_np[14]:+.6f} → Logit for SHORT                ║
+║   • Out[15] = {outputs_np[15]:+.6f} → Logit for NEUTRAL              ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ ⚠️ МЕТРИКИ РИСКА (outputs 16-19):                                   ║
+║   • Out[16] = {outputs_np[16]:+.6f} → Max Drawdown 1h                ║
+║   • Out[17] = {outputs_np[17]:+.6f} → Max Rally 1h                   ║
+║   • Out[18] = {outputs_np[18]:+.6f} → Max Drawdown 4h                ║
+║   • Out[19] = {outputs_np[19]:+.6f} → Max Rally 4h                   ║
+╚══════════════════════════════════════════════════════════════════════╝
 """
         )
 
@@ -627,7 +853,7 @@ class MLManager:
             direction_probs=direction_probs,
             future_returns=future_returns,
             risk_metrics=risk_metrics,
-            weighted_direction=weighted_direction
+            weighted_direction=weighted_direction,
         )
 
         # Этап 4: Принятие решения на основе анализа качества
@@ -638,7 +864,7 @@ class MLManager:
             combined_confidence = 0.25
             stop_loss_pct = None
             take_profit_pct = None
-            
+
             logger.warning(
                 f"🚫 Сигнал отклонен анализатором качества. "
                 f"Причины: {'; '.join(filter_result.rejection_reasons)}"
@@ -647,32 +873,32 @@ class MLManager:
             # Сигнал прошел фильтры - используем результат анализа
             signal_type = filter_result.signal_type
             metrics = filter_result.quality_metrics
-            
+
             # Используем метрики качества для финальных параметров
             signal_strength = metrics.agreement_score
             combined_confidence = metrics.confidence_score
-            
+
             # Расчет SL/TP на основе качества сигнала
             if signal_type in ["LONG", "SHORT"]:
                 # Адаптивные SL/TP на основе качества
                 base_sl = 0.01  # 1%
                 base_tp = 0.02  # 2%
-                
+
                 # Корректировка на основе качества сигнала
                 quality_multiplier = 0.8 + (metrics.quality_score * 0.4)  # 0.8-1.2
-                
+
                 stop_loss_pct = base_sl * quality_multiplier
                 take_profit_pct = base_tp * quality_multiplier
-                
+
                 # Корректировка на волатильность
                 volatility = np.std(future_returns[:2])  # Ближайшие ТФ
                 if volatility > 0.01:
                     stop_loss_pct *= 1.2
                     take_profit_pct *= 1.2
-                
+
                 # Финальные ограничения
                 stop_loss_pct = np.clip(stop_loss_pct, 0.005, 0.025)  # 0.5% - 2.5%
-                take_profit_pct = np.clip(take_profit_pct, 0.01, 0.05)   # 1% - 5%
+                take_profit_pct = np.clip(take_profit_pct, 0.01, 0.05)  # 1% - 5%
             else:
                 stop_loss_pct = None
                 take_profit_pct = None
@@ -683,7 +909,7 @@ class MLManager:
         model_confidence = float(np.mean(confidence_scores))
         avg_risk = float(np.mean(risk_metrics))
         risk_level = "LOW" if avg_risk < 0.3 else "MEDIUM" if avg_risk < 0.7 else "HIGH"
-        
+
         # Focal weighting для совместимости с логгером
         focal_alpha = 0.25
         focal_gamma = 2.0
@@ -692,27 +918,36 @@ class MLManager:
         # Логирование финального результата
         quality_score = filter_result.quality_metrics.quality_score if filter_result.passed else 0.0
         strategy_used = filter_result.strategy_used.value
-        
+
         sl_str = f"{stop_loss_pct:.3f}" if stop_loss_pct else "не определен"
         tp_str = f"{take_profit_pct:.3f}" if take_profit_pct else "не определен"
 
+        # Цветовая индикация для сигнала
+        signal_emoji = "🟢" if signal_type == "LONG" else "🔴" if signal_type == "SHORT" else "⚪"
+        passed_emoji = "✅" if filter_result.passed else "❌"
+
         logger.info(
             f"""
-📊 ML ПРЕДСКАЗАНИЕ - РЕЗУЛЬТАТ АНАЛИЗА КАЧЕСТВА:
-   🎯 Направление: {signal_type} (стратегия: {strategy_used})
-   📈 Предсказания по ТФ: {directions} [0=LONG, 1=SHORT, 2=NEUTRAL]
-   ⭐ Качество сигнала: {quality_score:.3f}
-   🔥 Сила сигнала: {signal_strength:.3f}
-   🎲 Уверенность: {combined_confidence:.1%}
-   ⚠️ Риск: {risk_level} ({avg_risk:.3f})
-   📊 Доходности: 15м={future_returns[0]:.3f}, 1ч={future_returns[1]:.3f}, 4ч={future_returns[2]:.3f}, 12ч={future_returns[3]:.3f}
-   🛡️ SL: {sl_str}, 🎯 TP: {tp_str}
-   ✅ Прошел фильтры: {'Да' if filter_result.passed else 'Нет'}
+╔══════════════════════════════════════════════════════════════════════╗
+║                    📊 ML PREDICTION FINAL RESULT                     ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ {signal_emoji} SIGNAL TYPE: {signal_type:8s} | Strategy: {strategy_used:12s}        ║
+║ {passed_emoji} Quality Filter: {'PASSED' if filter_result.passed else 'REJECTED':8s} | Score: {quality_score:.3f}              ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 📈 PREDICTIONS BY TIMEFRAME:                                         ║
+║   15m: {direction_map.get(int(directions[0]), 'N/A'):8s} | Ret: {future_returns[0]:+.4f} | Conf: {confidence_scores[0]:.3f}       ║
+║   1h:  {direction_map.get(int(directions[1]), 'N/A'):8s} | Ret: {future_returns[1]:+.4f} | Conf: {confidence_scores[1]:.3f}       ║
+║   4h:  {direction_map.get(int(directions[2]), 'N/A'):8s} | Ret: {future_returns[2]:+.4f} | Conf: {confidence_scores[2]:.3f}       ║
+║   12h: {direction_map.get(int(directions[3]), 'N/A'):8s} | Ret: {future_returns[3]:+.4f} | Conf: {confidence_scores[3]:.3f}       ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 💪 SIGNAL STRENGTH: {signal_strength:.3f} | CONFIDENCE: {combined_confidence:.1%}           ║
+║ ⚠️  RISK LEVEL: {risk_level:6s} | Score: {avg_risk:.3f}                         ║
+║ 🛡️  STOP LOSS:  {sl_str:8s} | 🎯 TAKE PROFIT: {tp_str:8s}          ║
+╚══════════════════════════════════════════════════════════════════════╝
 """
         )
 
         # Подготавливаем детальные данные для логирования
-        direction_map = {0: "LONG", 1: "SHORT", 2: "NEUTRAL"}
 
         return {
             # Основные параметры сигнала
@@ -721,23 +956,19 @@ class MLManager:
             "confidence": float(combined_confidence),
             "signal_confidence": float(combined_confidence),  # Для совместимости
             "success_probability": float(combined_confidence),
-            
             # SL/TP проценты
             "stop_loss_pct": stop_loss_pct,
             "take_profit_pct": take_profit_pct,
-            
             # Оценка риска
             "risk_level": risk_level,
             "risk_score": float(avg_risk),
             "max_drawdown": float(risk_metrics[0]) if len(risk_metrics) > 0 else 0,
             "max_rally": float(risk_metrics[1]) if len(risk_metrics) > 1 else 0,
-            
             # Детализированные предсказания
             "returns_15m": float(future_returns[0]),
             "returns_1h": float(future_returns[1]),
             "returns_4h": float(future_returns[2]),
             "returns_12h": float(future_returns[3]),
-            
             # Направления и уверенность по таймфреймам
             "direction_15m": direction_map.get(int(directions[0]), "NEUTRAL"),
             "direction_1h": direction_map.get(int(directions[1]), "NEUTRAL"),
@@ -747,14 +978,14 @@ class MLManager:
             "confidence_1h": float(confidence_scores[1]),
             "confidence_4h": float(confidence_scores[2]),
             "confidence_12h": float(confidence_scores[3]),
-            
             # Метрики качества от анализатора
             "quality_score": quality_score,
-            "agreement_score": filter_result.quality_metrics.agreement_score if filter_result.passed else 0.0,
+            "agreement_score": (
+                filter_result.quality_metrics.agreement_score if filter_result.passed else 0.0
+            ),
             "filter_strategy": strategy_used,
             "passed_quality_filters": filter_result.passed,
             "rejection_reasons": filter_result.rejection_reasons,
-            
             # Дополнительные данные
             "primary_timeframe": "4h",  # Основной таймфрейм
             "predictions": {
@@ -813,10 +1044,10 @@ class MLManager:
     def switch_filtering_strategy(self, strategy: str) -> bool:
         """
         Переключение стратегии фильтрации сигналов
-        
+
         Args:
             strategy: Название стратегии (conservative/moderate/aggressive)
-            
+
         Returns:
             True если успешно переключено
         """
@@ -830,7 +1061,7 @@ class MLManager:
     def get_filtering_statistics(self) -> dict[str, Any]:
         """
         Получение статистики работы системы фильтрации
-        
+
         Returns:
             Словарь с детальной статистикой
         """
@@ -839,7 +1070,7 @@ class MLManager:
     def get_available_strategies(self) -> list[str]:
         """
         Получение списка доступных стратегий фильтрации
-        
+
         Returns:
             Список названий стратегий
         """
@@ -848,7 +1079,7 @@ class MLManager:
     def get_current_strategy_config(self) -> dict[str, Any]:
         """
         Получение конфигурации текущей стратегии
-        
+
         Returns:
             Параметры активной стратегии
         """

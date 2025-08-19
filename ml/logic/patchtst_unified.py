@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from models.patchtst import PositionalEncoding
 
 
@@ -600,9 +601,9 @@ class UnifiedTradingLoss(nn.Module):
         Returns:
             loss: скаляр
         """
-        assert predictions.shape == targets.shape, (
-            f"Shape mismatch: predictions {predictions.shape} vs targets {targets.shape}"
-        )
+        assert (
+            predictions.shape == targets.shape
+        ), f"Shape mismatch: predictions {predictions.shape} vs targets {targets.shape}"
 
         batch_size = predictions.shape[0]
         losses = []

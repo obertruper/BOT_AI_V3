@@ -1,3 +1,25 @@
+ml:
+  enabled: true
+  signal_generation:
+    interval_seconds: 180  # 3 минуты между ML предсказаниями
+    batch_size: 10
+    parallel_workers: 4
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  - ADAUSDT
+  - DOGEUSDT
+  - DOTUSDT
+  - LINKUSDT
+  model:
+    enabled: true
+    path: models/saved/best_model_20250728_215703.pth
+    scaler_path: models/saved/data_scaler.pkl
+    device: cuda
+    
 backtesting:
   commission: 0.001
   initial_capital: 100000
@@ -296,7 +318,7 @@ remote_server:
   ports:
     jupyter: 8888
     tensorboard: 6006
-    web_ui: 8080
+    web_ui: 8083
   python_path: /opt/conda/bin/python
   remote_path: /root/crypto_ai_trading
   ssh_alias: vast-current
@@ -358,7 +380,7 @@ scheduler:
     threshold: 0.001
 signal_filtering:
   # Активная стратегия фильтрации: conservative/moderate/aggressive
-  strategy: "moderate"
+  strategy: "moderate"  # Изменено на moderate для баланса
   
   # Веса таймфреймов [15m, 1h, 4h, 12h] - 4h основной
   timeframe_weights: [0.25, 0.25, 0.35, 0.15]
@@ -366,35 +388,35 @@ signal_filtering:
   
   # Консервативная стратегия - высочайшее качество сигналов
   conservative:
-    min_timeframe_agreement: 3  # 3 из 4 таймфреймов должны согласиться
-    required_confidence_per_timeframe: 0.65  # минимальная уверенность каждого ТФ
-    main_timeframe_required_confidence: 0.70  # уверенность основного ТФ
-    min_expected_return_pct: 0.008  # 0.8% минимальная ожидаемая доходность
-    min_signal_strength: 0.7  # минимальная сила сигнала
-    max_risk_level: "MEDIUM"  # максимальный уровень риска
-    min_quality_score: 0.75  # минимальный итоговый балл качества
+    min_timeframe_agreement: 2  # Снижено с 3 до 2
+    required_confidence_per_timeframe: 0.45  # Снижено с 0.65 до 0.45
+    main_timeframe_required_confidence: 0.50  # Снижено с 0.70 до 0.50
+    min_expected_return_pct: 0.002  # Снижено с 0.008 до 0.002 (0.2%)
+    min_signal_strength: 0.35  # Снижено с 0.7 до 0.35
+    max_risk_level: "HIGH"  # Изменено с MEDIUM на HIGH
+    min_quality_score: 0.35  # Снижено с 0.75 до 0.35
     
   # Умеренная стратегия - сбалансированное качество
   moderate:
-    min_timeframe_agreement: 2  # 2 из 4 таймфреймов
-    required_confidence_per_timeframe: 0.55  # базовая уверенность
-    main_timeframe_required_confidence: 0.65  # уверенность основного ТФ
+    min_timeframe_agreement: 1  # Снижено с 2 до 1
+    required_confidence_per_timeframe: 0.25  # Снижено с 0.35 до 0.25
+    main_timeframe_required_confidence: 0.30  # Снижено с 0.40 до 0.30
     alternative_main_plus_one: true  # альтернатива: основной + 1 с высокой уверенностью
-    alternative_confidence_threshold: 0.75  # порог для альтернативного режима
-    min_expected_return_pct: 0.005  # 0.5% ожидаемая доходность
-    min_signal_strength: 0.5
+    alternative_confidence_threshold: 0.40  # Снижено с 0.50 до 0.40
+    min_expected_return_pct: 0.0001  # Снижено с 0.001 до 0.0001 (0.01%)
+    min_signal_strength: 0.15  # Снижено с 0.25 до 0.15
     max_risk_level: "HIGH"
-    min_quality_score: 0.60
+    min_quality_score: 0.15  # Снижено с 0.25 до 0.15
     
   # Агрессивная стратегия - максимальное покрытие
   aggressive:
     min_timeframe_agreement: 1  # достаточно основного таймфрейма
-    required_confidence_per_timeframe: 0.45
-    main_timeframe_required_confidence: 0.55
-    min_expected_return_pct: 0.003  # 0.3% ожидаемая доходность
-    min_signal_strength: 0.4
+    required_confidence_per_timeframe: 0.25  # Снижено с 0.45 до 0.25
+    main_timeframe_required_confidence: 0.30  # Снижено с 0.55 до 0.30
+    min_expected_return_pct: 0.0005  # Снижено с 0.003 до 0.0005 (0.05%)
+    min_signal_strength: 0.15  # Снижено с 0.4 до 0.15
     max_risk_level: "HIGH"
-    min_quality_score: 0.45
+    min_quality_score: 0.15  # Снижено с 0.45 до 0.15
     
   # Веса для расчета итогового качества сигнала
   quality_weights:

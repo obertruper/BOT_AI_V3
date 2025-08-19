@@ -204,9 +204,9 @@ class OrderManager:
                 # Создаем OrderRequest для Bybit
                 from exchanges.base.order_types import (
                     OrderRequest,
+                    OrderSide as ExchangeOrderSide,
+                    OrderType as ExchangeOrderType,
                 )
-                from exchanges.base.order_types import OrderSide as ExchangeOrderSide
-                from exchanges.base.order_types import OrderType as ExchangeOrderType
 
                 # Маппинг типов ордеров
                 order_type_map = {
@@ -214,19 +214,22 @@ class OrderManager:
                     "market": ExchangeOrderType.MARKET,
                 }
 
+                # Исправляем маппинг для правильного соответствия database OrderSide -> Exchange OrderSide
                 order_side_map = {
+                    OrderSide.BUY.value: ExchangeOrderSide.BUY,  # "buy" -> "Buy"
+                    OrderSide.SELL.value: ExchangeOrderSide.SELL,  # "sell" -> "Sell"
+                    # Дополнительно для строк (на случай если придут строки)
                     "buy": ExchangeOrderSide.BUY,
                     "sell": ExchangeOrderSide.SELL,
                 }
 
-                # Определяем position_idx для hedge mode
-                # TODO: Загрузить из конфига или определить автоматически
-                position_idx = 1 if order.side.value == "buy" else 2  # Для hedge mode
+                # Определяем position_idx для hedge mode (исправлено для правильного enum)
+                position_idx = 1 if order.side == OrderSide.BUY else 2  # Для hedge mode
                 # position_idx = 0  # Для one-way mode
 
                 order_request = OrderRequest(
                     symbol=order.symbol,
-                    side=order_side_map.get(order.side.value, ExchangeOrderSide.BUY),
+                    side=order_side_map.get(order.side, ExchangeOrderSide.BUY),
                     order_type=order_type_map.get(order.order_type.value, ExchangeOrderType.LIMIT),
                     quantity=order.quantity,
                     price=order.price if order.order_type.value == "limit" else None,

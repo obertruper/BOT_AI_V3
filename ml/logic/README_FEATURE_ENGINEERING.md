@@ -11,7 +11,7 @@
 Основной класс для генерации признаков:
 
 ```python
-from ml.logic.feature_engineering import FeatureEngineer, FeatureConfig
+from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer, FeatureConfig
 
 # Создание с настройками по умолчанию
 engineer = FeatureEngineer()
@@ -126,7 +126,7 @@ engineer = FeatureEngineer(config)
 
 ```python
 import pandas as pd
-from ml.logic.feature_engineering import FeatureEngineer
+from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 
 # Загрузка OHLCV данных
 df = pd.read_csv('ohlcv_data.csv')

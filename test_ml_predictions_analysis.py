@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
 from database.connections.postgres import AsyncPGPool
-from ml.logic.feature_engineering import FeatureEngineering
+from ml.logic.archive_old_versions.feature_engineering import FeatureEngineering
 from ml.ml_manager import MLManager
 
 logger = setup_logger("ml_prediction_analyzer")

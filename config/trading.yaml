@@ -1,15 +1,7 @@
 trading:
   risk_management:
-    # Фиксированный баланс для расчета позиций (из V2)
-    fixed_risk_balance: 100      # УМЕНЬШЕНО до $100 для безопасности
-    # fixed_risk_balance: 500    # $500 для production (как COPE в V2)
-    use_fixed_balance: true       # Использовать фиксированный баланс вместо реального
-
-    max_position_size: 100        # УМЕНЬШЕНО: Максимум $100 на позицию (было 5000)
-    min_position_size: 5          # УМЕНЬШЕНО: Минимум $5 на позицию (было 10)
-    max_open_positions: 3         # УМЕНЬШЕНО: Максимум 3 позиции одновременно (было 5)
-    max_daily_loss: 100
-    risk_per_trade: 0.02          # 2% риск на сделку (проверено в V2)
+    # Удалено - управление через risk_management.yaml
+    # См. config/risk_management.yaml для настроек риска
 
     # Формула расчета позиции из V2:
     # position_size = (fixed_risk_balance * risk_per_trade * leverage) / entry_price
@@ -36,18 +28,6 @@ trading:
   paper_trading:
     enabled: false
     initial_balance: 10000
-risk_management:
-  enabled: true
-  max_risk_per_trade: 0.02       # 2% максимальный риск на сделку
-  max_total_risk: 0.1            # 10% общий риск портфеля
-  max_positions: 10              # Максимум открытых позиций
-  max_leverage: 10               # Максимальное плечо (для development)
-
-  # Параметры из V2 для расчета позиций
-  position_sizing:
-    method: "fixed_balance"      # Метод из V2: фиксированный баланс
-    fixed_balance: 50            # УМЕНЬШЕНО: Баланс для расчетов $50 (было 100)
-    use_real_balance: false      # false = используем fixed_balance
 position_management:
   sync_interval: 60
   max_positions_per_symbol: 2

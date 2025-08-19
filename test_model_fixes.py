@@ -38,7 +38,7 @@ async def test_model_fixes():
 
     # 2. Проверяем feature engineering
     print("\n2️⃣ Проверка feature engineering...")
-    from ml.logic.feature_engineering import FeatureEngineer
+    from ml.logic.archive_old_versions.feature_engineering import FeatureEngineer
 
     fe = FeatureEngineer(config)
     # У оригинального feature_engineering нет атрибута feature_names
@@ -57,9 +57,9 @@ async def test_model_fixes():
         }
     )
     test_features = fe.create_features(test_df)
-    assert test_features.shape[1] == 240, (
-        f"Ошибка: ожидалось 240, получено {test_features.shape[1]}"
-    )
+    assert (
+        test_features.shape[1] == 240
+    ), f"Ошибка: ожидалось 240, получено {test_features.shape[1]}"
     print("✅ Feature engineering корректный: 240 признаков")
 
     # 3. Получаем данные из БД
