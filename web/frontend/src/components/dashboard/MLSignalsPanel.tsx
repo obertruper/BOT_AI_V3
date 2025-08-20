@@ -6,15 +6,21 @@ const MLSignalsPanel: React.FC = () => {
   const mlSignals = useMLSignals();
 
   const getSignalColor = (signalType: string) => {
-    return signalType === 'buy' ? 'text-green-400' : 'text-red-400';
+    if (signalType === 'LONG' || signalType === 'buy') return 'text-green-400';
+    if (signalType === 'SHORT' || signalType === 'sell') return 'text-red-400';
+    return 'text-gray-400'; // FLAT/NEUTRAL
   };
 
   const getSignalBgColor = (signalType: string) => {
-    return signalType === 'buy' ? 'bg-green-400/20' : 'bg-red-400/20';
+    if (signalType === 'LONG' || signalType === 'buy') return 'bg-green-400/20';
+    if (signalType === 'SHORT' || signalType === 'sell') return 'bg-red-400/20';
+    return 'bg-gray-400/20'; // FLAT/NEUTRAL
   };
 
   const getSignalIcon = (signalType: string) => {
-    return signalType === 'buy' ? TrendingUp : TrendingDown;
+    if (signalType === 'LONG' || signalType === 'buy') return TrendingUp;
+    if (signalType === 'SHORT' || signalType === 'sell') return TrendingDown;
+    return Clock; // FLAT/NEUTRAL
   };
 
   const getConfidenceColor = (confidence: number) => {
@@ -40,8 +46,9 @@ const MLSignalsPanel: React.FC = () => {
   };
 
   const recentSignals = mlSignals.slice(0, 6);
-  const buySignals = mlSignals.filter(s => s.signal_type === 'buy').length;
-  const sellSignals = mlSignals.filter(s => s.signal_type === 'sell').length;
+  const longSignals = mlSignals.filter(s => s.signal_type === 'LONG' || s.signal_type === 'buy').length;
+  const shortSignals = mlSignals.filter(s => s.signal_type === 'SHORT' || s.signal_type === 'sell').length;
+  const flatSignals = mlSignals.filter(s => s.signal_type === 'FLAT' || s.signal_type === 'NEUTRAL').length;
   const avgConfidence = mlSignals.length > 0 
     ? mlSignals.reduce((sum, s) => sum + s.confidence, 0) / mlSignals.length 
     : 0;
@@ -79,15 +86,15 @@ const MLSignalsPanel: React.FC = () => {
         <div className="relative group">
           <div className="absolute inset-0 bg-gradient-to-br from-green-600/20 to-emerald-600/20 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="relative bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 text-center border border-gray-700/50 hover:border-green-500/50 transition-all">
-            <div className="text-2xl font-bold text-green-400">{buySignals}</div>
-            <div className="text-xs text-gray-400 font-medium">Buy Signals</div>
+            <div className="text-2xl font-bold text-green-400">{longSignals}</div>
+            <div className="text-xs text-gray-400 font-medium">LONG сигналы</div>
           </div>
         </div>
         <div className="relative group">
           <div className="absolute inset-0 bg-gradient-to-br from-red-600/20 to-rose-600/20 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="relative bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 text-center border border-gray-700/50 hover:border-red-500/50 transition-all">
-            <div className="text-2xl font-bold text-red-400">{sellSignals}</div>
-            <div className="text-xs text-gray-400 font-medium">Sell Signals</div>
+            <div className="text-2xl font-bold text-red-400">{shortSignals}</div>
+            <div className="text-xs text-gray-400 font-medium">SHORT сигналы</div>
           </div>
         </div>
       </div>

@@ -10,6 +10,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
+# Импортируем необходимые модели для работы с ордерами
+from database.models.base_models import OrderSide, OrderStatus, OrderType
+
 # Удалено: UnifiedSignalProcessor пока не используется, signal_processor установлен в None
 # from core.signals.unified_signal_processor import UnifiedSignalProcessor as SignalProcessor
 from core.system.balance_manager import balance_manager
@@ -111,6 +114,7 @@ class TradingEngine:
         # Кеш и состояние
         self._price_cache: dict[str, Decimal] = {}
         self._instrument_cache: dict[str, Any] = {}  # Кеш информации об инструментах
+        self._recent_signal_times: dict[str, float] = {}  # Защита от частых сигналов
         self._last_sync: datetime | None = None
         self._db_session_factory: Any | None = None
 
@@ -1291,6 +1295,49 @@ class TradingEngine:
 
             side = OrderSide.BUY if signal_type_lower in ["long", "buy"] else OrderSide.SELL
 
+            # ПРОВЕРКА СУЩЕСТВУЮЩИХ ПОЗИЦИЙ - предотвращаем дублирование
+            try:
+                # Проверяем активные позиции через position_manager
+                if self.position_manager:
+                    existing_position = await self.position_manager.get_position(signal.symbol)
+                    if existing_position:
+                        position_side = existing_position.get("side", "").lower()
+                        position_size = existing_position.get("quantity", 0)
+                        
+                        # Если есть позиция в том же направлении - пропускаем
+                        if (position_side == "long" and side == OrderSide.BUY) or \
+                           (position_side == "short" and side == OrderSide.SELL):
+                            self.logger.warning(
+                                f"⚠️ Уже есть {position_side} позиция для {signal.symbol} "
+                                f"размером {position_size}. Пропускаем новый сигнал."
+                            )
+                            return []
+                        
+                        # Если позиция в противоположном направлении - можем открыть хедж или закрыть
+                        if (position_side == "long" and side == OrderSide.SELL) or \
+                           (position_side == "short" and side == OrderSide.BUY):
+                            self.logger.info(
+                                f"📊 Обнаружена противоположная позиция {position_side} для {signal.symbol}. "
+                                f"Создаем ордер для закрытия/хеджирования."
+                            )
+                
+                # Дополнительная проверка через недавние ордера (защита от частых сигналов)
+                last_order_time = self._recent_signal_times.get(signal.symbol, 0)
+                current_time = asyncio.get_event_loop().time()
+                if current_time - last_order_time < 60:  # Минимум 60 секунд между ордерами на один символ
+                    self.logger.warning(
+                        f"⚠️ Слишком частые сигналы для {signal.symbol}. "
+                        f"Последний был {current_time - last_order_time:.1f}с назад."
+                    )
+                    return []
+                    
+                # Обновляем время последнего сигнала
+                self._recent_signal_times[signal.symbol] = current_time
+                
+            except Exception as check_error:
+                self.logger.error(f"❌ Ошибка проверки существующих позиций: {check_error}")
+                # Продолжаем, но с осторожностью
+            
             # Применяем rate limiting перед любыми API вызовами
             try:
                 wait_time = await rate_limiter.acquire(signal.exchange, "get_positions")
@@ -1440,8 +1487,13 @@ class TradingEngine:
 
             # Создаем ордер
             from database.models.base_models import Order, OrderStatus, OrderType
+            import uuid
+
+            # Генерируем уникальный ID для ордера
+            order_id = f"order_{uuid.uuid4().hex[:12]}_{signal.symbol}"
 
             order = Order(
+                order_id=order_id,  # Добавляем ID ордера
                 symbol=signal.symbol,
                 exchange=signal.exchange,
                 side=side,
@@ -1456,6 +1508,7 @@ class TradingEngine:
                     "confidence": signal.confidence,
                     "created_by": "TradingEngine",
                     "signal_id": getattr(signal, "id", None),
+                    "balance_reservation_id": reservation_id if 'reservation_id' in locals() else None,
                 },
             )
 

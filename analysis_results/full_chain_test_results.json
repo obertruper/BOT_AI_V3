@@ -1,0 +1,249 @@
+{
+  "total_execution_time": 1.3160946369171143,
+  "total_chains_tested": 8,
+  "successful_chains": 7,
+  "failed_chains": 1,
+  "success_rate": 87.5,
+  "chain_results": {
+    "trading_chain": {
+      "chain_name": "trading_chain",
+      "success": true,
+      "execution_time": 0.38456034660339355,
+      "steps_completed": 9,
+      "total_steps": 9,
+      "errors": [],
+      "performance_metrics": {
+        "System Startup": 0.07307910919189453,
+        "Trading Engine Init": 0.3113377094268799,
+        "Market Data Processing": 3.218650817871094e-05,
+        "Signal Processing": 1.5497207641601562e-05,
+        "Order Creation": 1.3828277587890625e-05,
+        "Risk Validation": 9.059906005859375e-06,
+        "Exchange Execution": 1.4781951904296875e-05,
+        "Position Update": 7.152557373046875e-06,
+        "Database Save": 8.58306884765625e-06
+      },
+      "coverage_data": {}
+    },
+    "ml_prediction_chain": {
+      "chain_name": "ml_prediction_chain",
+      "success": false,
+      "execution_time": 0.9205315113067627,
+      "steps_completed": 2,
+      "total_steps": 6,
+      "errors": [
+        "Шаг 'Model Inference' превысил таймаут: 0.920с > 0.02с"
+      ],
+      "performance_metrics": {
+        "Market Data Collection": 1.1205673217773438e-05,
+        "Feature Engineering": 1.049041748046875e-05,
+        "Model Inference": 0.9203734397888184
+      },
+      "coverage_data": {}
+    },
+    "api_request_chain": {
+      "chain_name": "api_request_chain",
+      "success": true,
+      "execution_time": 7.843971252441406e-05,
+      "steps_completed": 5,
+      "total_steps": 5,
+      "errors": [],
+      "performance_metrics": {
+        "Request Authentication": 1.9073486328125e-05,
+        "Request Validation": 9.775161743164062e-06,
+        "Business Logic": 9.5367431640625e-06,
+        "Database Query": 1.5497207641601562e-05,
+        "Response Formatting": 9.059906005859375e-06
+      },
+      "coverage_data": {}
+    },
+    "websocket_chain": {
+      "chain_name": "websocket_chain",
+      "success": true,
+      "execution_time": 3.337860107421875e-05,
+      "steps_completed": 4,
+      "total_steps": 4,
+      "errors": [],
+      "performance_metrics": {
+        "WebSocket Connection": 8.106231689453125e-06,
+        "Message Parsing": 6.9141387939453125e-06,
+        "Real-time Processing": 6.198883056640625e-06,
+        "Broadcast Update": 4.76837158203125e-06
+      },
+      "coverage_data": {}
+    },
+    "database_chain": {
+      "chain_name": "database_chain",
+      "success": true,
+      "execution_time": 6.389617919921875e-05,
+      "steps_completed": 5,
+      "total_steps": 5,
+      "errors": [],
+      "performance_metrics": {
+        "Connection Pool Init": 1.71661376953125e-05,
+        "Transaction Start": 1.4781951904296875e-05,
+        "Data Insert": 1.049041748046875e-05,
+        "Data Query": 5.7220458984375e-06,
+        "Transaction Commit": 7.62939453125e-06
+      },
+      "coverage_data": {}
+    },
+    "system_startup_chain": {
+      "chain_name": "system_startup_chain",
+      "success": true,
+      "execution_time": 0.010648012161254883,
+      "steps_completed": 5,
+      "total_steps": 5,
+      "errors": [],
+      "performance_metrics": {
+        "Environment Check": 8.106231689453125e-06,
+        "Database Connection": 0.007719516754150391,
+        "Exchange Connections": 3.4809112548828125e-05,
+        "ML Model Loading": 2.3603439331054688e-05,
+        "System Orchestrator": 0.0028409957885742188
+      },
+      "coverage_data": {}
+    },
+    "order_execution_chain": {
+      "chain_name": "order_execution_chain",
+      "success": true,
+      "execution_time": 7.772445678710938e-05,
+      "steps_completed": 6,
+      "total_steps": 6,
+      "errors": [],
+      "performance_metrics": {
+        "Order Validation": 1.9788742065429688e-05,
+        "Balance Check": 1.049041748046875e-05,
+        "Risk Assessment": 1.1920928955078125e-05,
+        "Order Placement": 9.298324584960938e-06,
+        "Order Tracking": 7.3909759521484375e-06,
+        "Execution Confirmation": 5.9604644775390625e-06
+      },
+      "coverage_data": {}
+    },
+    "risk_management_chain": {
+      "chain_name": "risk_management_chain",
+      "success": true,
+      "execution_time": 3.9577484130859375e-05,
+      "steps_completed": 5,
+      "total_steps": 5,
+      "errors": [],
+      "performance_metrics": {
+        "Portfolio Assessment": 7.62939453125e-06,
+        "Risk Calculation": 6.67572021484375e-06,
+        "Exposure Check": 5.245208740234375e-06,
+        "Stop Loss Management": 6.9141387939453125e-06,
+        "Position Sizing": 5.0067901611328125e-06
+      },
+      "coverage_data": {}
+    }
+  },
+  "performance_summary": {
+    "average_chain_time": 0.16450411081314087,
+    "max_chain_time": 0.9205315113067627,
+    "average_step_times": {
+      "System Startup": 0.07307910919189453,
+      "Trading Engine Init": 0.3113377094268799,
+      "Market Data Processing": 3.218650817871094e-05,
+      "Signal Processing": 1.5497207641601562e-05,
+      "Order Creation": 1.3828277587890625e-05,
+      "Risk Validation": 9.059906005859375e-06,
+      "Exchange Execution": 1.4781951904296875e-05,
+      "Position Update": 7.152557373046875e-06,
+      "Database Save": 8.58306884765625e-06,
+      "Market Data Collection": 1.1205673217773438e-05,
+      "Feature Engineering": 1.049041748046875e-05,
+      "Model Inference": 0.9203734397888184,
+      "Request Authentication": 1.9073486328125e-05,
+      "Request Validation": 9.775161743164062e-06,
+      "Business Logic": 9.5367431640625e-06,
+      "Database Query": 1.5497207641601562e-05,
+      "Response Formatting": 9.059906005859375e-06,
+      "WebSocket Connection": 8.106231689453125e-06,
+      "Message Parsing": 6.9141387939453125e-06,
+      "Real-time Processing": 6.198883056640625e-06,
+      "Broadcast Update": 4.76837158203125e-06,
+      "Connection Pool Init": 1.71661376953125e-05,
+      "Transaction Start": 1.4781951904296875e-05,
+      "Data Insert": 1.049041748046875e-05,
+      "Data Query": 5.7220458984375e-06,
+      "Transaction Commit": 7.62939453125e-06,
+      "Environment Check": 8.106231689453125e-06,
+      "Database Connection": 0.007719516754150391,
+      "Exchange Connections": 3.4809112548828125e-05,
+      "ML Model Loading": 2.3603439331054688e-05,
+      "System Orchestrator": 0.0028409957885742188,
+      "Order Validation": 1.9788742065429688e-05,
+      "Balance Check": 1.049041748046875e-05,
+      "Risk Assessment": 1.1920928955078125e-05,
+      "Order Placement": 9.298324584960938e-06,
+      "Order Tracking": 7.3909759521484375e-06,
+      "Execution Confirmation": 5.9604644775390625e-06,
+      "Portfolio Assessment": 7.62939453125e-06,
+      "Risk Calculation": 6.67572021484375e-06,
+      "Exposure Check": 5.245208740234375e-06,
+      "Stop Loss Management": 6.9141387939453125e-06,
+      "Position Sizing": 5.0067901611328125e-06
+    },
+    "max_step_times": {
+      "System Startup": 0.07307910919189453,
+      "Trading Engine Init": 0.3113377094268799,
+      "Market Data Processing": 3.218650817871094e-05,
+      "Signal Processing": 1.5497207641601562e-05,
+      "Order Creation": 1.3828277587890625e-05,
+      "Risk Validation": 9.059906005859375e-06,
+      "Exchange Execution": 1.4781951904296875e-05,
+      "Position Update": 7.152557373046875e-06,
+      "Database Save": 8.58306884765625e-06,
+      "Market Data Collection": 1.1205673217773438e-05,
+      "Feature Engineering": 1.049041748046875e-05,
+      "Model Inference": 0.9203734397888184,
+      "Request Authentication": 1.9073486328125e-05,
+      "Request Validation": 9.775161743164062e-06,
+      "Business Logic": 9.5367431640625e-06,
+      "Database Query": 1.5497207641601562e-05,
+      "Response Formatting": 9.059906005859375e-06,
+      "WebSocket Connection": 8.106231689453125e-06,
+      "Message Parsing": 6.9141387939453125e-06,
+      "Real-time Processing": 6.198883056640625e-06,
+      "Broadcast Update": 4.76837158203125e-06,
+      "Connection Pool Init": 1.71661376953125e-05,
+      "Transaction Start": 1.4781951904296875e-05,
+      "Data Insert": 1.049041748046875e-05,
+      "Data Query": 5.7220458984375e-06,
+      "Transaction Commit": 7.62939453125e-06,
+      "Environment Check": 8.106231689453125e-06,
+      "Database Connection": 0.007719516754150391,
+      "Exchange Connections": 3.4809112548828125e-05,
+      "ML Model Loading": 2.3603439331054688e-05,
+      "System Orchestrator": 0.0028409957885742188,
+      "Order Validation": 1.9788742065429688e-05,
+      "Balance Check": 1.049041748046875e-05,
+      "Risk Assessment": 1.1920928955078125e-05,
+      "Order Placement": 9.298324584960938e-06,
+      "Order Tracking": 7.3909759521484375e-06,
+      "Execution Confirmation": 5.9604644775390625e-06,
+      "Portfolio Assessment": 7.62939453125e-06,
+      "Risk Calculation": 6.67572021484375e-06,
+      "Exposure Check": 5.245208740234375e-06,
+      "Stop Loss Management": 6.9141387939453125e-06,
+      "Position Sizing": 5.0067901611328125e-06
+    },
+    "performance_violations": []
+  },
+  "coverage_summary": {
+    "functions_tested": 45,
+    "chains_tested": 8,
+    "estimated_coverage": 2.2970903522205206,
+    "critical_paths_covered": [
+      "trading_chain",
+      "ml_prediction_chain",
+      "api_request_chain",
+      "websocket_chain",
+      "database_chain",
+      "system_startup_chain",
+      "order_execution_chain",
+      "risk_management_chain"
+    ]
+  }
+}

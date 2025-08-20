@@ -542,9 +542,16 @@ class UnifiedLauncher:
         logger.info("\n🔧 Активные компоненты:")
         for comp_name, comp_config in self.components_config.items():
             if comp_config.get("enabled"):
-                status = (
-                    "✅ Запущен" if comp_name in self.process_manager.processes else "❌ Остановлен"
-                )
+                # 🛡️ ИСПРАВЛЕНО: ML система интегрирована в Core System
+                if comp_name == "ml":
+                    # ML система работает если Core System работает
+                    core_running = "core" in self.process_manager.processes
+                    status = "✅ Запущен" if core_running else "❌ Остановлен"
+                else:
+                    # Для остальных компонентов проверяем наличие отдельного процесса
+                    status = (
+                        "✅ Запущен" if comp_name in self.process_manager.processes else "❌ Остановлен"
+                    )
                 logger.info(f"  {comp_config['name']}: {status}")
 
         # URL-адреса

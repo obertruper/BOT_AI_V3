@@ -91,8 +91,9 @@ class ModelOutputAdapter:
         volume_changes = outputs[self.output_mapping["volume_change"]]
         price_ranges = outputs[self.output_mapping["price_range"]]
 
-        # Интерпретируем направления (0=DOWN, 1=FLAT, 2=UP в модели)
-        # Конвертируем в вероятности
+        # 🛡️ ИСПРАВЛЕНО: Правильная интерпретация direction классов из обучения
+        # В проекте обучения: classes = ['LONG', 'SHORT', 'FLAT']
+        # Это означает: 0=LONG, 1=SHORT, 2=FLAT (НЕ 0=DOWN, 1=FLAT, 2=UP!)
         direction_probs = self._softmax_directions(directions)
 
         # Определяем основное направление
@@ -103,9 +104,9 @@ class ModelOutputAdapter:
         short_profit_probs = []
 
         for i, tf in enumerate(self.timeframes):
-            # Вероятность прибыли для LONG = вероятность UP
-            long_prob = direction_probs[i][2]  # UP
-            short_prob = direction_probs[i][0]  # DOWN
+            # 🛡️ ИСПРАВЛЕНО: Правильные индексы согласно обучающему проекту
+            long_prob = direction_probs[i][0]   # 0=LONG в обученной модели
+            short_prob = direction_probs[i][1]  # 1=SHORT в обученной модели
 
             long_profit_probs.append(long_prob)
             short_profit_probs.append(short_prob)
@@ -146,9 +147,9 @@ class ModelOutputAdapter:
                 },
                 "direction_probabilities": {
                     tf: {
-                        "down": float(probs[0]),
-                        "flat": float(probs[1]),
-                        "up": float(probs[2]),
+                        "long": float(probs[0]),   # 🛡️ ИСПРАВЛЕНО: 0=LONG
+                        "short": float(probs[1]),  # 🛡️ ИСПРАВЛЕНО: 1=SHORT  
+                        "flat": float(probs[2]),   # 🛡️ ИСПРАВЛЕНО: 2=FLAT
                     }
                     for tf, probs in zip(self.timeframes, direction_probs, strict=False)
                 },
@@ -182,17 +183,20 @@ class ModelOutputAdapter:
     def _softmax_directions(self, directions: np.ndarray) -> np.ndarray:
         """
         Применяет softmax для преобразования направлений в вероятности
-        Предполагаем что модель выдает logits для 3 классов
+        🛡️ ИСПРАВЛЕНО: Правильная интерпретация классов из обучения
+        Классы: 0=LONG, 1=SHORT, 2=FLAT
         """
         # Если directions уже нормализованы (0-2), создаем one-hot
         probs = []
         for dir_value in directions:
-            # Создаем псевдо-вероятности на основе предсказанного класса
-            prob = np.zeros(3)
+            # 🛡️ ИСПРАВЛЕНО: Создаем псевдо-вероятности согласно классам обучения
+            prob = np.zeros(3)  # [LONG, SHORT, FLAT]
             if 0 <= dir_value <= 2:
                 prob[int(dir_value)] = 0.8  # Высокая вероятность для предсказанного класса
-                prob[(int(dir_value) + 1) % 3] = 0.15  # Средняя для соседнего
-                prob[(int(dir_value) + 2) % 3] = 0.05  # Низкая для противоположного
+                # Остальное распределяем между другими классами
+                other_indices = [i for i in range(3) if i != int(dir_value)]
+                prob[other_indices[0]] = 0.15
+                prob[other_indices[1]] = 0.05
             else:
                 # Если значение вне диапазона, равномерное распределение
                 prob[:] = 1 / 3
@@ -203,15 +207,16 @@ class ModelOutputAdapter:
     def _determine_primary_direction(self, directions: np.ndarray) -> str:
         """
         Определяет основное направление на основе всех временных горизонтов
+        🛡️ ИСПРАВЛЕНО: Правильные классы 0=LONG, 1=SHORT, 2=FLAT
         """
         # Подсчитываем голоса
         votes = np.bincount(directions.astype(int).clip(0, 2), minlength=3)
 
-        # 0=DOWN, 1=FLAT, 2=UP
-        if votes[2] > votes[0] and votes[2] >= votes[1]:
-            return "UP"
-        elif votes[0] > votes[2] and votes[0] >= votes[1]:
-            return "DOWN"
+        # 🛡️ ИСПРАВЛЕНО: 0=LONG, 1=SHORT, 2=FLAT (согласно обучающему проекту)
+        if votes[0] > votes[1] and votes[0] >= votes[2]:
+            return "LONG"
+        elif votes[1] > votes[0] and votes[1] >= votes[2]:
+            return "SHORT"
         else:
             return "FLAT"
 

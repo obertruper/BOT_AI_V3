@@ -378,14 +378,24 @@ class UnifiedPatchTSTForTrading(nn.Module):
         short_levels = self.short_levels_head(x_projected)  # (B, 4)
         risk_metrics = self.risk_metrics_head(x_projected)  # (B, 4)
 
-        # Объединяем все выходы - ИСПРАВЛЕНО: возвращаем логиты вместо классов
-        # Для direction нам нужны сырые логиты для дифференцируемости
-        direction_scores = torch.mean(direction_logits_reshaped, dim=-1)  # (B, 4) - средний score
+        # Объединяем все выходы - ИСПРАВЛЕНО: возвращаем классы как в обучающем проекте
+        # Получаем предсказанные классы из вероятностей (как в training проекте)
+        direction_probs = torch.softmax(direction_logits_reshaped, dim=-1)  # (B, 4, 3)
+        direction_classes = torch.argmax(direction_probs, dim=-1).float()  # (B, 4) - классы 0,1,2
+        
+        # Применяем порог уверенности (как в training проекте)
+        confidence_threshold = self.config.get("model", {}).get("direction_confidence_threshold", 0.5)
+        max_probs, _ = torch.max(direction_probs, dim=-1)
+        low_confidence_mask = max_probs < confidence_threshold
+        
+        # Устанавливаем FLAT (класс 2) для низкоуверенных предсказаний
+        if low_confidence_mask.any():
+            direction_classes[low_confidence_mask] = 2.0  # FLAT = 2
 
         outputs = torch.cat(
             [
                 future_returns,  # 0-3: future returns
-                direction_scores,  # 4-7: direction scores (не классы!)
+                direction_classes,  # 4-7: direction classes (0=LONG, 1=SHORT, 2=FLAT)
                 long_levels,  # 8-11: long levels
                 short_levels,  # 12-15: short levels
                 risk_metrics,  # 16-19: risk metrics
