@@ -84,6 +84,18 @@ class MLDirectionStatsResponse(BaseModel):
     confidence_by_direction: dict[str, float]
 
 
+@router.get("/signals/recent", response_model=list[MLSignalResponse])
+async def get_recent_ml_signals(
+    limit: int = Query(10, description="Количество сигналов"),
+    symbol: str = Query(None, description="Фильтр по символу"),
+    db: AsyncSession = Depends(get_db)
+) -> list[MLSignalResponse]:
+    """
+    Получить последние ML сигналы (alias для latest для совместимости с фронтендом)
+    """
+    return await get_latest_ml_signals(limit=limit, symbol=symbol, db=db)
+
+
 @router.get("/signals/latest", response_model=list[MLSignalResponse])
 async def get_latest_ml_signals(
     limit: int = Query(default=10, ge=1, le=100),
