@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+import os
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -494,7 +495,10 @@ class ProcessMonitor:
             # Системные метрики
             memory = psutil.virtual_memory()
             cpu_percent = psutil.cpu_percent(interval=1)
-            disk = psutil.disk_usage("/")
+
+            # Используем SSD path если доступен, иначе root
+            disk_path = "/mnt/SSD" if os.path.exists("/mnt/SSD") else "/"
+            disk = psutil.disk_usage(disk_path)
 
             # Сетевые подключения
             connections = len(psutil.net_connections(kind="inet"))

@@ -53,9 +53,7 @@ class PartialTPManager:
         self._active_partials: dict[str, dict] = {}
         self._partial_locks: dict[str, asyncio.Lock] = {}
 
-    async def setup_partial_tp(
-        self, position: dict[str, Any], config: dict | None = None
-    ) -> bool:
+    async def setup_partial_tp(self, position: dict[str, Any], config: dict | None = None) -> bool:
         """
         Настройка частичного закрытия для позиции
 

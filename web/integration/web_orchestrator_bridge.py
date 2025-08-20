@@ -6,7 +6,7 @@
 """
 
 from datetime import datetime
-from typing import Any, Union
+from typing import Any
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -229,7 +229,7 @@ class WebOrchestratorBridge:
 
     # =================== POSITIONS ===================
 
-    async def get_positions(self, trader_id: Union[str, None] = None) -> list[dict[str, Any]]:
+    async def get_positions(self, trader_id: str | None = None) -> list[dict[str, Any]]:
         """Получение списка позиций"""
         try:
             if self.use_mock:
@@ -322,7 +322,7 @@ class WebOrchestratorBridge:
 
 
 # Глобальный экземпляр моста
-_bridge_instance: Union[WebOrchestratorBridge, None] = None
+_bridge_instance: WebOrchestratorBridge | None = None
 
 
 def get_web_orchestrator_bridge() -> WebOrchestratorBridge:

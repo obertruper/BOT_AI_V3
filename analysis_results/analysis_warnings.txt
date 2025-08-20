@@ -1,8 +1,8 @@
 ⚠️ ВНИМАНИЕ: Обнаружены ошибки в анализе!
-Проверьте лог: data/logs/background_analysis_20250820_120745.log
+Проверьте лог: data/logs/background_analysis_20250820_121640.log
 
    ❌ Провалилось: 2 ошибок
-  ❌ ml_prediction_chain: 5/6 шагов, 0.617с
+  ❌ ml_prediction_chain: 5/6 шагов, 0.637с
 ==================================== ERRORS ====================================
 _______ ERROR collecting tests/analysis/test_code_analyzer_validation.py _______
 _________ ERROR collecting tests/analysis/test_code_usage_analyzer.py __________

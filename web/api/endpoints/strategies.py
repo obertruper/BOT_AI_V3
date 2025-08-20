@@ -9,7 +9,7 @@ REST API для управления стратегиями:
 """
 
 from datetime import datetime
-from typing import Any,Union
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -79,7 +79,7 @@ class BacktestResult(BaseModel):
     profit_factor: float
     status: str  # running, completed, failed
     created_at: datetime
-    completed_at: Union[datetime, None] = None
+    completed_at: datetime | None = None
 
 
 class StrategyPerformance(BaseModel):
@@ -105,7 +105,7 @@ class StrategyPerformance(BaseModel):
 
 @router.get("/", response_model=list[StrategyInfo])
 async def get_strategies(
-    category: Union[str, None] = Query(None, description="Фильтр по категории"),
+    category: str | None = Query(None, description="Фильтр по категории"),
     active_only: bool = Query(False, description="Только активные стратегии"),
 ):
     """Получить список всех доступных стратегий"""

@@ -20,7 +20,7 @@ import asyncio
 import hashlib
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Union
+from typing import Any
 
 from core.logging.logger_factory import get_global_logger_factory
 
