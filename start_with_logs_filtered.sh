@@ -210,8 +210,8 @@ main() {
     echo
     
     # Функция для отслеживания логов с фильтрацией
-    echo -e "${CYAN}=== REAL-TIME LOGS (DEBUG MODE - ALL LOGS) ===${NC}"
-    echo -e "${YELLOW}DEBUG: Showing ALL logs from all components for system setup${NC}"
+    echo -e "${CYAN}=== REAL-TIME LOGS (DEVELOPMENT MODE - ALL LOGS) ===${NC}"
+    echo -e "${YELLOW}🔧 РЕЖИМ РАЗРАБОТКИ: Показываем ВСЕ логи для отладки системы${NC}"
     echo -e "${WHITE}Press Ctrl+C to stop log monitoring${NC}"
     echo
     
@@ -220,8 +220,8 @@ main() {
     LOG_FILE="data/logs/bot_trading_${LOG_DATE}.log"
     
     echo -e "${CYAN}📄 Monitoring log file: ${WHITE}$LOG_FILE${NC}"
-    echo -e "${YELLOW}📊 DEBUG MODE: ALL components, ML predictions, signals, orders, errors, system events${NC}"
-    echo -e "${GREEN}✨ Enhanced: Full ML tables with 240 features + ALL system logs${NC}"
+    echo -e "${YELLOW}🔧 РАЗРАБОТКА: Все компоненты, ML предсказания, сигналы, ордера, ошибки, система${NC}"
+    echo -e "${GREEN}✨ Полные ML таблицы с 240 признаками + все события системы для отладки${NC}"
     
     # Функция фильтрации и раскраски логов с поддержкой ML таблиц
     filter_and_colorize() {
@@ -236,10 +236,10 @@ main() {
                 continue
             fi
             
-            # Обработка таблиц с входными параметрами (240 features)
-            if [[ "$line" =~ "ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ" ]] || [[ "$line" =~ "ML PREDICTION DETAILS" ]]; then
+            # Обработка таблиц с ML данными - улучшенное распознавание
+            if [[ "$line" =~ (ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ|ML PREDICTION DETAILS|ВЫХОДНЫЕ ПАРАМЕТРЫ|MODEL OUTPUT|SIGNAL DETAILS|ИНДИКАТОРЫ|FEATURES) ]]; then
                 in_ml_table=true
-                ml_table_buffer="${PURPLE}${line}${NC}"
+                ml_table_buffer="${PURPLE}🤖 ${line}${NC}"
                 continue
             fi
             
@@ -256,11 +256,11 @@ main() {
                 continue
             fi
             
-            # ОТЛАДОЧНЫЙ РЕЖИМ - показываем ВСЕ логи для настройки системы
-            if true; then  # Временно отключаем фильтрацию - показываем все
+            # РЕЖИМ РАЗРАБОТКИ - показываем ВСЕ логи для отладки
+            if true; then  # Показываем все логи в режиме разработки
                 
-                # Пропускаем отдельные строки таблиц без контекста (одиночные строки с ║)
-                if [[ "$line" =~ ^.*"║".*$ ]] && ! [[ "$line" =~ (ПАРАМЕТРЫ|ИНДИКАТОРЫ|СТАТИСТИКА|PREDICTION|SIGNAL) ]]; then
+                # Пропускаем только фрагменты таблиц без контекста
+                if [[ "$line" =~ ^.*"║".*$ ]] && ! [[ "$line" =~ (ПАРАМЕТРЫ|ИНДИКАТОРЫ|СТАТИСТИКА|PREDICTION|SIGNAL|ВХОДНЫЕ|ВЫХОДНЫЕ) ]]; then
                     continue
                 fi
                 
@@ -344,6 +344,28 @@ main() {
                             echo -e "${RED}  ✗ Log Monitor: Stopped${NC}"
                         fi
                         echo -e "${WHITE}  📊 Uptime: $(ps -p $UNIFIED_PID -o etime= 2>/dev/null || echo 'N/A')${NC}"
+                        
+                        # Проверка портов и сервисов
+                        echo -e "${CYAN}  🌐 Service Status:${NC}"
+                        for service in "${!PORTS[@]}"; do
+                            if lsof -Pi :${PORTS[$service]} -sTCP:LISTEN -t >/dev/null 2>&1; then
+                                echo -e "${GREEN}    ✓ ${service}: Running on port ${PORTS[$service]}${NC}"
+                            else
+                                echo -e "${RED}    ✗ ${service}: Not running on port ${PORTS[$service]}${NC}"
+                            fi
+                        done
+                        
+                        # Проверка БД и статистики
+                        echo -e "${CYAN}  💾 Database & Statistics:${NC}"
+                        if PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT 1;" &>/dev/null; then
+                            local signal_count=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM signals WHERE created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            local order_count=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM orders WHERE created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            echo -e "${GREEN}    ✓ PostgreSQL: Connected${NC}"
+                            echo -e "${WHITE}    📊 Signals last hour: ${signal_count:-0}${NC}"
+                            echo -e "${WHITE}    📋 Orders last hour: ${order_count:-0}${NC}"
+                        else
+                            echo -e "${RED}    ✗ PostgreSQL: Connection failed${NC}"
+                        fi
                         ;;
                     "logs"|"l")
                         echo -e "${CYAN}================== RECENT LOGS ==================${NC}"
@@ -404,6 +426,28 @@ main() {
                             echo -e "${RED}  ✗ Log Monitor: Stopped${NC}"
                         fi
                         echo -e "${WHITE}  📊 Uptime: $(ps -p $UNIFIED_PID -o etime= 2>/dev/null || echo 'N/A')${NC}"
+                        
+                        # Проверка портов и сервисов
+                        echo -e "${CYAN}  🌐 Service Status:${NC}"
+                        for service in "${!PORTS[@]}"; do
+                            if lsof -Pi :${PORTS[$service]} -sTCP:LISTEN -t >/dev/null 2>&1; then
+                                echo -e "${GREEN}    ✓ ${service}: Running on port ${PORTS[$service]}${NC}"
+                            else
+                                echo -e "${RED}    ✗ ${service}: Not running on port ${PORTS[$service]}${NC}"
+                            fi
+                        done
+                        
+                        # Проверка БД и статистики
+                        echo -e "${CYAN}  💾 Database & Statistics:${NC}"
+                        if PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT 1;" &>/dev/null; then
+                            local signal_count=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM signals WHERE created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            local order_count=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM orders WHERE created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            echo -e "${GREEN}    ✓ PostgreSQL: Connected${NC}"
+                            echo -e "${WHITE}    📊 Signals last hour: ${signal_count:-0}${NC}"
+                            echo -e "${WHITE}    📋 Orders last hour: ${order_count:-0}${NC}"
+                        else
+                            echo -e "${RED}    ✗ PostgreSQL: Connection failed${NC}"
+                        fi
                         ;;
                     "logs"|"l")
                         echo -e "${CYAN}================== RECENT LOGS ==================${NC}"

@@ -64,6 +64,37 @@ class TestRunner:
                 "timeout": 180,
                 "description": "Быстрые smoke тесты",
             },
+            # === DYNAMIC SL/TP TEST SUITES ===
+            "dynamic_sltp_unit": {
+                "path": "tests/unit/trading/orders/test_dynamic_sltp_calculator.py",
+                "markers": "-m 'unit and sltp'",
+                "timeout": 300,
+                "description": "Dynamic SL/TP unit тесты",
+            },
+            "dynamic_sltp_integration": {
+                "path": "tests/integration/test_dynamic_sltp_integration.py",
+                "markers": "-m 'integration and sltp'",
+                "timeout": 600,
+                "description": "Dynamic SL/TP интеграционные тесты",
+            },
+            "dynamic_sltp_e2e": {
+                "path": "tests/integration/test_dynamic_sltp_e2e.py",
+                "markers": "-m 'e2e and sltp'",
+                "timeout": 900,
+                "description": "Dynamic SL/TP end-to-end тесты",
+            },
+            "dynamic_sltp_performance": {
+                "path": "tests/performance/test_dynamic_sltp_performance.py",
+                "markers": "-m 'performance and sltp'",
+                "timeout": 1200,
+                "description": "Dynamic SL/TP performance тесты",
+            },
+            "dynamic_sltp_all": {
+                "path": "tests/unit/trading/orders/test_dynamic_sltp_calculator.py tests/integration/test_dynamic_sltp_integration.py tests/integration/test_dynamic_sltp_e2e.py",
+                "markers": "-m sltp",
+                "timeout": 1500,
+                "description": "Полный набор Dynamic SL/TP тестов",
+            },
         }
 
         # Предопределенные цепочки
@@ -73,6 +104,10 @@ class TestRunner:
             "full": ["unit", "ml", "database", "integration", "performance"],
             "ml-focus": ["ml", "database", "integration"],
             "ci": ["smoke", "unit", "ml"],
+            # Dynamic SL/TP chains
+            "dynamic_sltp_quick": ["dynamic_sltp_unit", "dynamic_sltp_integration"],
+            "dynamic_sltp_complete": ["dynamic_sltp_unit", "dynamic_sltp_integration", "dynamic_sltp_e2e"],
+            "dynamic_sltp_full": ["dynamic_sltp_unit", "dynamic_sltp_integration", "dynamic_sltp_e2e", "dynamic_sltp_performance"],
         }
 
     def print_header(self, text: str):
