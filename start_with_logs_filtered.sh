@@ -266,44 +266,60 @@ main() {
                 
                 case "$line" in
                     *ERROR*|*CRITICAL*)
-                        echo -e "${RED}🔴 $line${NC}"
+                        echo -e "${RED}🔴 ERROR: $line${NC}"
                         ;;
                     *WARNING*)
-                        # Пропускаем WARNING с фрагментами таблиц
-                        if [[ ! "$line" =~ "║" ]]; then
-                            echo -e "${YELLOW}⚠️  $line${NC}"
+                        # Пропускаем технические WARNING
+                        if [[ ! "$line" =~ (urllib3|watchdog|DNS|inotify|"║") ]]; then
+                            echo -e "${YELLOW}⚠️  WARNING: $line${NC}"
                         fi
                         ;;
-                    *"Signal"*|*"SIGNAL"*)
-                        echo -e "${CYAN}📡 $line${NC}"
+                    *"Signal"*|*"SIGNAL"*|*"сигнал"*)
+                        echo -e "${CYAN}📡 SIGNAL: $line${NC}"
                         ;;
-                    *"Order"*|*"ORDER"*)
-                        echo -e "${BLUE}📋 $line${NC}"
+                    *"Order"*|*"ORDER"*|*"ордер"*)
+                        echo -e "${BLUE}📋 ORDER: $line${NC}"
                         ;;
-                    *"Trade"*|*"TRADE"*)
-                        echo -e "${GREEN}💰 $line${NC}"
+                    *"Trade"*|*"TRADE"*|*"сделка"*)
+                        echo -e "${GREEN}💰 TRADE: $line${NC}"
                         ;;
-                    *"Position"*|*"POSITION"*)
-                        echo -e "${PURPLE}🎯 $line${NC}"
+                    *"Position"*|*"POSITION"*|*"позиция"*)
+                        echo -e "${PURPLE}🎯 POSITION: $line${NC}"
                         ;;
-                    *"SUCCESS"*|*"FILLED"*)
-                        echo -e "${GREEN}✅ $line${NC}"
+                    *"SUCCESS"*|*"FILLED"*|*"выполнен"*)
+                        echo -e "${GREEN}✅ SUCCESS: $line${NC}"
                         ;;
-                    *"FAILED"*|*"REJECTED"*)
-                        echo -e "${RED}❌ $line${NC}"
+                    *"FAILED"*|*"REJECTED"*|*"отклонен"*|*"ошибка"*)
+                        echo -e "${RED}❌ FAILED: $line${NC}"
                         ;;
-                    *"ML"*|*"Prediction"*)
-                        echo -e "${CYAN}🤖 $line${NC}"
+                    *"ML"*|*"Prediction"*|*"предсказание"*|*"модель"*)
+                        echo -e "${PURPLE}🤖 ML: $line${NC}"
                         ;;
-                    *"API"*|*"Компонент"*)
-                        echo -e "${BLUE}🔧 $line${NC}"
+                    *"API"*|*"Компонент"*|*"started"*|*"stopped"*|*"запущен"*|*"остановлен"*)
+                        echo -e "${BLUE}🔧 SYSTEM: $line${NC}"
+                        ;;
+                    *"balance"*|*"баланс"*|*"leverage"*|*"плечо"*)
+                        echo -e "${YELLOW}💳 BALANCE: $line${NC}"
+                        ;;
+                    *"stop_loss"*|*"take_profit"*|*"SL"*|*"TP"*)
+                        echo -e "${CYAN}🛡️  RISK: $line${NC}"
+                        ;;
+                    *"connected"*|*"disconnected"*|*"подключен"*|*"отключен"*)
+                        echo -e "${GREEN}🔗 CONNECTION: $line${NC}"
+                        ;;
+                    *"WebSocket"*|*"websocket"*)
+                        echo -e "${CYAN}🔌 WEBSOCKET: $line${NC}"
                         ;;
                     *)
-                        # Для остальных строк с таблицами ML
+                        # Для остальных строк - более умная обработка
                         if [[ "$line" =~ "║" ]]; then
-                            echo -e "${CYAN}$line${NC}"
+                            echo -e "${CYAN}   $line${NC}"  # ML таблицы
+                        elif [[ "$line" =~ (INFO|info) ]]; then
+                            echo -e "${WHITE}ℹ️  INFO: $line${NC}"
+                        elif [[ "$line" =~ (DEBUG|debug) ]]; then
+                            echo -e "${WHITE}🔍 DEBUG: $line${NC}"
                         else
-                            echo -e "${WHITE}ℹ️  $line${NC}"
+                            echo -e "${WHITE}📝 LOG: $line${NC}"
                         fi
                         ;;
                 esac
@@ -330,7 +346,14 @@ main() {
         echo ""
         
         # Ожидаем пользовательский ввод или сигнал завершения
-        echo -e "${YELLOW}Type 'status' to check system status, 'logs' to see recent logs, or Ctrl+C to stop${NC}"
+        echo -e "${YELLOW}💡 Интерактивные команды:${NC}"
+        echo -e "${WHITE}   • 'status' (s) - статус системы и портов${NC}"
+        echo -e "${WHITE}   • 'ml' (m) - ML система и предсказания${NC}"  
+        echo -e "${WHITE}   • 'pos' (p) - позиции и ордера${NC}"
+        echo -e "${WHITE}   • 'logs' (l) - последние логи${NC}"
+        echo -e "${WHITE}   • 'help' (h) - справка${NC}"
+        echo -e "${WHITE}   • Ctrl+C - остановка системы${NC}"
+        echo
         
         while kill -0 $UNIFIED_PID 2>/dev/null; do
             if read -t 10 user_input; then
@@ -372,9 +395,37 @@ main() {
                         tail -n 10 "$LOG_FILE" | filter_and_colorize
                         echo -e "${CYAN}===================================================${NC}"
                         ;;
+                    "ml"|"m")
+                        echo -e "${CYAN}🤖 ML System Status:${NC}"
+                        if PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT 1;" &>/dev/null; then
+                            # ML статистика
+                            local ml_signals=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM signals WHERE strategy_name LIKE '%ML%' AND created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            local ml_long=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM signals WHERE strategy_name LIKE '%ML%' AND signal_type = 'LONG' AND created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            local ml_short=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM signals WHERE strategy_name LIKE '%ML%' AND signal_type = 'SHORT' AND created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            local avg_confidence=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT ROUND(AVG(confidence)*100) FROM signals WHERE strategy_name LIKE '%ML%' AND created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            
+                            echo -e "${WHITE}    🎯 ML Signals (1h): ${ml_signals:-0} total${NC}"
+                            echo -e "${GREEN}    📈 LONG signals: ${ml_long:-0}${NC}"
+                            echo -e "${RED}    📉 SHORT signals: ${ml_short:-0}${NC}"
+                            echo -e "${PURPLE}    🎲 Avg Confidence: ${avg_confidence:-0}%${NC}"
+                        else
+                            echo -e "${RED}    ✗ Database unavailable${NC}"
+                        fi
+                        ;;
+                    "pos"|"p")
+                        echo -e "${CYAN}🎯 Active Positions:${NC}"
+                        if PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT 1;" &>/dev/null; then
+                            echo -e "${WHITE}    Recent orders:${NC}"
+                            PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT symbol, order_type, status, quantity, price FROM orders WHERE created_at > NOW() - INTERVAL '1 hour' ORDER BY created_at DESC LIMIT 5;" 2>/dev/null || echo -e "${RED}    ✗ Error fetching orders${NC}"
+                        else
+                            echo -e "${RED}    ✗ Database unavailable${NC}"
+                        fi
+                        ;;
                     "help"|"h"|"?")
                         echo -e "${YELLOW}Available commands:${NC}"
                         echo -e "${WHITE}  status, s  - Show system status${NC}"
+                        echo -e "${WHITE}  ml, m      - Show ML system statistics${NC}"
+                        echo -e "${WHITE}  pos, p     - Show active positions${NC}"
                         echo -e "${WHITE}  logs, l    - Show recent logs${NC}"
                         echo -e "${WHITE}  help, h, ? - Show this help${NC}"
                         echo -e "${WHITE}  Ctrl+C     - Stop system${NC}"
@@ -412,7 +463,14 @@ main() {
         echo ""
         
         # Ожидаем пользовательский ввод или сигнал завершения
-        echo -e "${YELLOW}Type 'status' to check system status, 'logs' to see recent logs, or Ctrl+C to stop${NC}"
+        echo -e "${YELLOW}💡 Интерактивные команды:${NC}"
+        echo -e "${WHITE}   • 'status' (s) - статус системы и портов${NC}"
+        echo -e "${WHITE}   • 'ml' (m) - ML система и предсказания${NC}"  
+        echo -e "${WHITE}   • 'pos' (p) - позиции и ордера${NC}"
+        echo -e "${WHITE}   • 'logs' (l) - последние логи${NC}"
+        echo -e "${WHITE}   • 'help' (h) - справка${NC}"
+        echo -e "${WHITE}   • Ctrl+C - остановка системы${NC}"
+        echo
         
         while kill -0 $UNIFIED_PID 2>/dev/null; do
             if read -t 10 user_input; then
@@ -454,9 +512,37 @@ main() {
                         tail -n 10 "$LOG_FILE" | filter_and_colorize
                         echo -e "${CYAN}===================================================${NC}"
                         ;;
+                    "ml"|"m")
+                        echo -e "${CYAN}🤖 ML System Status:${NC}"
+                        if PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT 1;" &>/dev/null; then
+                            # ML статистика
+                            local ml_signals=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM signals WHERE strategy_name LIKE '%ML%' AND created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            local ml_long=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM signals WHERE strategy_name LIKE '%ML%' AND signal_type = 'LONG' AND created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            local ml_short=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT COUNT(*) FROM signals WHERE strategy_name LIKE '%ML%' AND signal_type = 'SHORT' AND created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            local avg_confidence=$(PGPORT=5555 psql -U obertruper -d bot_trading_v3 -t -c "SELECT ROUND(AVG(confidence)*100) FROM signals WHERE strategy_name LIKE '%ML%' AND created_at > NOW() - INTERVAL '1 hour';" 2>/dev/null | tr -d ' ')
+                            
+                            echo -e "${WHITE}    🎯 ML Signals (1h): ${ml_signals:-0} total${NC}"
+                            echo -e "${GREEN}    📈 LONG signals: ${ml_long:-0}${NC}"
+                            echo -e "${RED}    📉 SHORT signals: ${ml_short:-0}${NC}"
+                            echo -e "${PURPLE}    🎲 Avg Confidence: ${avg_confidence:-0}%${NC}"
+                        else
+                            echo -e "${RED}    ✗ Database unavailable${NC}"
+                        fi
+                        ;;
+                    "pos"|"p")
+                        echo -e "${CYAN}🎯 Active Positions:${NC}"
+                        if PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT 1;" &>/dev/null; then
+                            echo -e "${WHITE}    Recent orders:${NC}"
+                            PGPORT=5555 psql -U obertruper -d bot_trading_v3 -c "SELECT symbol, order_type, status, quantity, price FROM orders WHERE created_at > NOW() - INTERVAL '1 hour' ORDER BY created_at DESC LIMIT 5;" 2>/dev/null || echo -e "${RED}    ✗ Error fetching orders${NC}"
+                        else
+                            echo -e "${RED}    ✗ Database unavailable${NC}"
+                        fi
+                        ;;
                     "help"|"h"|"?")
                         echo -e "${YELLOW}Available commands:${NC}"
                         echo -e "${WHITE}  status, s  - Show system status${NC}"
+                        echo -e "${WHITE}  ml, m      - Show ML system statistics${NC}"
+                        echo -e "${WHITE}  pos, p     - Show active positions${NC}"
                         echo -e "${WHITE}  logs, l    - Show recent logs${NC}"
                         echo -e "${WHITE}  help, h, ? - Show this help${NC}"
                         echo -e "${WHITE}  Ctrl+C     - Stop system${NC}"

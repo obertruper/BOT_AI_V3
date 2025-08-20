@@ -168,3 +168,5 @@ backups/
 mcp_servers.json
 .mcp.json
 BOT_AI_V2/
+# Локальные примеры и legacy код
+BOT_AI_V2/
