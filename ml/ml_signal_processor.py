@@ -87,6 +87,14 @@ class MLSignalProcessor:
 
         logger.info("MLSignalProcessor initialized")
 
+        # Статистика кэша для мониторинга
+        self.cache_stats = {
+            "hits": 0,
+            "misses": 0,
+            "unique_symbols": set(),
+            "last_cleanup": datetime.utcnow(),
+        }
+
     async def process_market_data(
         self,
         symbol: str,
@@ -107,28 +115,52 @@ class MLSignalProcessor:
             Signal объект или None
         """
         try:
-            # ИСПРАВЛЕНО: Создаем уникальный ключ кэша на основе фактических данных
-            # Создаем абсолютно уникальный кэш-ключ для каждого символа
-            # ИСПРАВЛЕНО: Убираем data_hash чтобы каждый символ получал уникальные предсказания
+            # ИСПРАВЛЕНО: Создаем абсолютно уникальный ключ кэша для каждого символа
+            # Включаем секунды для точности и хеш данных для гарантии уникальности
+            import hashlib
             from datetime import datetime
 
-            current_minute = datetime.utcnow().strftime("%Y%m%d%H%M")  # До минут
+            current_time = datetime.utcnow().strftime("%Y%m%d%H%M%S")  # До секунд для точности
 
-            # Простой ключ: биржа:символ:время - гарантирует уникальность для каждого символа
-            cache_key = f"{exchange}:{symbol}:{current_minute}"
+            # Создаем хеш последних данных для уникальности предсказаний
+            if ohlcv_data is not None and len(ohlcv_data) > 0:
+                # Используем последние 3 цены закрытия для хеша данных
+                last_closes = (
+                    ohlcv_data.tail(3)["close"].values
+                    if "close" in ohlcv_data.columns
+                    else [0, 0, 0]
+                )
+                data_hash = hashlib.md5(str(last_closes).encode()).hexdigest()[:8]
+            else:
+                data_hash = "no_data"
 
-            logger.debug(f"Cache key для {symbol}: {cache_key}")
+            # Полный уникальный ключ: биржа:символ:время:хеш_данных
+            cache_key = f"{exchange}:{symbol}:{current_time}:{data_hash}"
+
+            logger.debug(f"🔑 Уникальный cache key для {symbol}: {cache_key}")
 
             cached = self._get_cached_prediction(cache_key)
             if cached:
-                logger.debug(f"Using cached prediction for {cache_key}")
+                self.cache_stats["hits"] += 1
+                logger.debug(f"✅ Cache HIT для {symbol}: {cache_key}")
                 return self._create_signal_from_prediction(
                     cached, symbol, exchange, additional_data
                 )
 
             # Получаем предсказание от ML модели
-            logger.info(f"🔄 Генерируем НОВОЕ предсказание для {symbol} (нет в кэше)")
+            self.cache_stats["misses"] += 1
+            self.cache_stats["unique_symbols"].add(symbol)
+            logger.info(f"🔄 Cache MISS для {symbol} - генерируем НОВОЕ предсказание")
             prediction = await self.ml_manager.predict(ohlcv_data)
+
+            # ДОБАВЛЕНО: Логируем уникальность предсказания
+            if prediction and "signal_type" in prediction:
+                signal_type = prediction.get("signal_type", "UNKNOWN")
+                confidence = prediction.get("confidence", 0)
+                logger.info(
+                    f"🎯 Новое предсказание для {symbol}: {signal_type} "
+                    f"(уверенность: {confidence:.2%})"
+                )
 
             # Кэшируем результат
             self._cache_prediction(cache_key, prediction)
@@ -375,17 +407,56 @@ class MLSignalProcessor:
         self._cleanup_cache()
 
     def _cleanup_cache(self):
-        """Очищает устаревшие записи из кэша"""
+        """
+        Очищает устаревшие записи из кэша с расширенной логикой
+        Поддерживает как новый, так и старый формат ключей кэша
+        """
         current_time = datetime.now(UTC)
         keys_to_remove = []
 
+        cache_size_before = len(self.prediction_cache)
+
         for key, data in self.prediction_cache.items():
-            cached_time = datetime.fromisoformat(data["timestamp"])
-            if current_time - cached_time > timedelta(seconds=self.cache_ttl):
+            try:
+                # Проверяем TTL на основе timestamp в данных
+                if isinstance(data, dict) and "timestamp" in data:
+                    cached_time = datetime.fromisoformat(data["timestamp"])
+                    if current_time - cached_time > timedelta(seconds=self.cache_ttl):
+                        keys_to_remove.append(key)
+                else:
+                    # Если нет timestamp, удаляем запись (некорректные данные)
+                    keys_to_remove.append(key)
+            except (ValueError, TypeError) as e:
+                # Если не можем распарсить timestamp, удаляем запись
+                logger.debug(f"Удаляем некорректную запись кэша {key}: {e}")
                 keys_to_remove.append(key)
 
+        # Удаляем устаревшие записи
         for key in keys_to_remove:
             del self.prediction_cache[key]
+
+        # Дополнительная очистка по размеру кэша (защита от переполнения)
+        max_cache_size = 1000  # Максимум 1000 записей
+        if len(self.prediction_cache) > max_cache_size:
+            # Сортируем по времени и удаляем самые старые
+            sorted_items = sorted(
+                self.prediction_cache.items(),
+                key=lambda x: x[1].get("timestamp", "1970-01-01T00:00:00"),
+            )
+
+            items_to_remove = len(self.prediction_cache) - max_cache_size
+            for i in range(items_to_remove):
+                key_to_remove = sorted_items[i][0]
+                del self.prediction_cache[key_to_remove]
+                keys_to_remove.append(key_to_remove)
+
+        cache_size_after = len(self.prediction_cache)
+        if keys_to_remove:
+            self.cache_stats["last_cleanup"] = current_time
+            logger.debug(
+                f"🧹 Очистка кэша: удалено {len(keys_to_remove)} записей "
+                f"(было: {cache_size_before}, стало: {cache_size_after})"
+            )
 
     async def validate_signal(self, signal: Signal) -> bool:
         """
@@ -901,6 +972,7 @@ class MLSignalProcessor:
                 "success_rate": 0.0,
                 "save_rate": 0.0,
                 "error_rate": 0.0,
+                "cache_metrics": self.get_cache_metrics(),
             }
 
         return {
@@ -908,6 +980,28 @@ class MLSignalProcessor:
             "success_rate": self._stats["valid_signals_generated"] / total,
             "save_rate": self._stats["signals_saved"] / total,
             "error_rate": self._stats["processing_errors"] / total,
+            "cache_metrics": self.get_cache_metrics(),
+        }
+
+    def get_cache_metrics(self) -> dict[str, Any]:
+        """
+        Возвращает детальные метрики кэша для мониторинга уникальности предсказаний
+
+        Returns:
+            Словарь с метриками кэша
+        """
+        total_requests = self.cache_stats["hits"] + self.cache_stats["misses"]
+        hit_rate = self.cache_stats["hits"] / total_requests if total_requests > 0 else 0
+
+        return {
+            "cache_hits": self.cache_stats["hits"],
+            "cache_misses": self.cache_stats["misses"],
+            "cache_hit_rate": hit_rate,
+            "cache_size": len(self.prediction_cache),
+            "unique_symbols_processed": len(self.cache_stats["unique_symbols"]),
+            "symbols_list": list(self.cache_stats["unique_symbols"]),
+            "cache_ttl_seconds": self.cache_ttl,
+            "last_cleanup": self.cache_stats["last_cleanup"].isoformat(),
         }
 
     async def queue_signal(self, signal_data: dict[str, Any]):
@@ -1211,3 +1305,27 @@ class MLSignalProcessor:
             await self.data_loader.cleanup()
 
         logger.info("MLSignalProcessor shutdown complete")
+
+    def get_cache_stats(self) -> dict[str, Any]:
+        """
+        Получение статистики кэша для API эндпоинтов
+
+        Returns:
+            Словарь с метриками кэша
+        """
+        # Получаем уникальные символы из кэша
+        symbols_in_cache = set()
+        for key in self.prediction_cache.keys():
+            # Ключ кэша имеет формат: {exchange}:{symbol}:{time}:{data_hash}
+            parts = key.split(":")
+            if len(parts) >= 2:
+                symbols_in_cache.add(parts[1])
+
+        return {
+            "cache_hits": self.cache_stats.get("cache_hits", 0),
+            "cache_misses": self.cache_stats.get("cache_misses", 0),
+            "cache_size": len(self.prediction_cache),
+            "symbols": symbols_in_cache,
+            "ttl_seconds": 300,  # Из конфигурации
+            "last_cleanup": self.cache_stats.get("last_cleanup", datetime.now(UTC).isoformat()),
+        }

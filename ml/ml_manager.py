@@ -559,6 +559,31 @@ class MLManager:
                 features_scaled = self.scaler.transform(features)
                 logger.info("✅ Данные нормализованы с помощью scaler")
 
+                # ФИЛЬТРАЦИЯ ZERO VARIANCE FEATURES (из BOT_AI_V2)
+                # Находим признаки с нулевой дисперсией
+                feature_stds = features_scaled.std(axis=0)
+                zero_variance_mask = feature_stds < 1e-6
+                zero_variance_count = zero_variance_mask.sum()
+
+                if zero_variance_count > 0:
+                    logger.warning(
+                        f"🚨 Обнаружено {zero_variance_count} признаков с нулевой дисперсией"
+                    )
+
+                    # Заменяем zero variance признаки на малое случайное значение
+                    # (подход из BOT_AI_V2: сохраняем размерность но добавляем шум)
+                    for i, is_zero_var in enumerate(zero_variance_mask):
+                        if is_zero_var:
+                            # Добавляем небольшой гауссов шум вместо константных значений
+                            noise = np.random.normal(0, 1e-4, features_scaled.shape[0])
+                            features_scaled[:, i] = features_scaled[:, i] + noise
+
+                    logger.info(
+                        "✅ Zero variance признаки заменены на шум для улучшения ML качества"
+                    )
+                else:
+                    logger.info("✅ Zero variance признаки не обнаружены")
+
             # Преобразуем в тензор
             x = torch.FloatTensor(features_scaled).unsqueeze(0).to(self.device)
 

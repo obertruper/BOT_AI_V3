@@ -18,6 +18,7 @@ from core.system.rate_limiter import rate_limiter
 from core.system.signal_deduplicator import signal_deduplicator
 from core.system.worker_coordinator import worker_coordinator
 
+# Импортируем необходимые модели для работы с ордерами
 # from database.repositories.signal_repository import SignalRepository  # Старый репозиторий с дублированием
 from database.repositories.signal_repository_fixed import (
     SignalRepositoryFixed as SignalRepository,  # Исправленный
@@ -111,6 +112,7 @@ class TradingEngine:
         # Кеш и состояние
         self._price_cache: dict[str, Decimal] = {}
         self._instrument_cache: dict[str, Any] = {}  # Кеш информации об инструментах
+        self._recent_signal_times: dict[str, float] = {}  # Защита от частых сигналов
         self._last_sync: datetime | None = None
         self._db_session_factory: Any | None = None
 
@@ -1097,7 +1099,7 @@ class TradingEngine:
                     )
                     return False
 
-            # Проверяем минимальное соотношение риск/прибыль
+            # Проверяем минимальное соотношение риск/прибыль (адаптивно по типу сигнала)
             if signal.suggested_stop_loss and signal.suggested_take_profit:
                 if signal.signal_type == SignalType.LONG:
                     risk = signal.suggested_price - signal.suggested_stop_loss
@@ -1106,13 +1108,33 @@ class TradingEngine:
                     risk = signal.suggested_stop_loss - signal.suggested_price
                     reward = signal.suggested_price - signal.suggested_take_profit
                 else:
-                    risk = reward = 1  # NEUTRAL не торгуем
+                    # NEUTRAL сигналы - используем более мягкие требования
+                    # Подход из BOT_AI_V2: разные пороги для разных типов сигналов
+                    risk = (
+                        abs(signal.suggested_price - signal.suggested_stop_loss)
+                        if signal.suggested_stop_loss
+                        else 1
+                    )
+                    reward = (
+                        abs(signal.suggested_take_profit - signal.suggested_price)
+                        if signal.suggested_take_profit
+                        else 1
+                    )
 
                 if risk > 0 and reward > 0:
                     risk_reward_ratio = reward / risk
-                    if risk_reward_ratio < 1.5:  # Минимум 1.5:1 соотношение
+
+                    # Адаптивные пороги risk/reward по типу сигнала
+                    if signal.signal_type == SignalType.NEUTRAL:
+                        min_rr_ratio = 1.0  # Для NEUTRAL достаточно 1:1
+                        required_text = "> 1.0"
+                    else:
+                        min_rr_ratio = 1.5  # Для LONG/SHORT требуем 1.5:1
+                        required_text = "> 1.5"
+
+                    if risk_reward_ratio < min_rr_ratio:
                         self.logger.warning(
-                            f"Плохое соотношение риск/прибыль: {risk_reward_ratio:.2f} (требуется > 1.5)"
+                            f"Плохое соотношение риск/прибыль для {signal.signal_type.value}: {risk_reward_ratio:.2f} (требуется {required_text})"
                         )
                         return False
 
@@ -1279,6 +1301,53 @@ class TradingEngine:
 
             side = OrderSide.BUY if signal_type_lower in ["long", "buy"] else OrderSide.SELL
 
+            # ПРОВЕРКА СУЩЕСТВУЮЩИХ ПОЗИЦИЙ - предотвращаем дублирование
+            try:
+                # Проверяем активные позиции через position_manager
+                if self.position_manager:
+                    existing_position = await self.position_manager.get_position(signal.symbol)
+                    if existing_position:
+                        position_side = existing_position.get("side", "").lower()
+                        position_size = existing_position.get("quantity", 0)
+
+                        # Если есть позиция в том же направлении - пропускаем
+                        if (position_side == "long" and side == OrderSide.BUY) or (
+                            position_side == "short" and side == OrderSide.SELL
+                        ):
+                            self.logger.warning(
+                                f"⚠️ Уже есть {position_side} позиция для {signal.symbol} "
+                                f"размером {position_size}. Пропускаем новый сигнал."
+                            )
+                            return []
+
+                        # Если позиция в противоположном направлении - можем открыть хедж или закрыть
+                        if (position_side == "long" and side == OrderSide.SELL) or (
+                            position_side == "short" and side == OrderSide.BUY
+                        ):
+                            self.logger.info(
+                                f"📊 Обнаружена противоположная позиция {position_side} для {signal.symbol}. "
+                                f"Создаем ордер для закрытия/хеджирования."
+                            )
+
+                # Дополнительная проверка через недавние ордера (защита от частых сигналов)
+                last_order_time = self._recent_signal_times.get(signal.symbol, 0)
+                current_time = asyncio.get_event_loop().time()
+                if (
+                    current_time - last_order_time < 60
+                ):  # Минимум 60 секунд между ордерами на один символ
+                    self.logger.warning(
+                        f"⚠️ Слишком частые сигналы для {signal.symbol}. "
+                        f"Последний был {current_time - last_order_time:.1f}с назад."
+                    )
+                    return []
+
+                # Обновляем время последнего сигнала
+                self._recent_signal_times[signal.symbol] = current_time
+
+            except Exception as check_error:
+                self.logger.error(f"❌ Ошибка проверки существующих позиций: {check_error}")
+                # Продолжаем, но с осторожностью
+
             # Применяем rate limiting перед любыми API вызовами
             try:
                 wait_time = await rate_limiter.acquire(signal.exchange, "get_positions")
@@ -1302,6 +1371,22 @@ class TradingEngine:
 
             # Используем RiskManager для расчета размера позиции
             if self.risk_manager:
+                # Получаем актуальный баланс USDT для этой биржи
+                current_balance = None
+                if self.balance_manager:
+                    try:
+                        balances = await self.balance_manager.get_all_balances(signal.exchange)
+                        if signal.exchange in balances and "USDT" in balances[signal.exchange]:
+                            usdt_balance = balances[signal.exchange]["USDT"]
+                            current_balance = Decimal(str(usdt_balance["effective_available"]))
+                            self.logger.debug(
+                                f"💰 Актуальный баланс USDT на {signal.exchange}: ${current_balance}"
+                            )
+                        else:
+                            self.logger.warning(f"⚠️ Баланс USDT не найден для {signal.exchange}")
+                    except Exception as e:
+                        self.logger.error(f"❌ Ошибка получения баланса: {e}")
+
                 # Преобразуем сигнал в словарь для RiskManager
                 signal_dict = {
                     "symbol": signal.symbol,
@@ -1311,7 +1396,9 @@ class TradingEngine:
                 }
 
                 # Рассчитываем размер позиции через RiskManager (в USDT)
-                position_size_usdt = self.risk_manager.calculate_position_size(signal_dict)
+                position_size_usdt = self.risk_manager.calculate_position_size(
+                    signal_dict, balance=current_balance
+                )
 
                 # Конвертируем USDT в количество монет
                 quantity = Decimal(str(position_size_usdt)) / Decimal(str(signal.suggested_price))
@@ -1409,9 +1496,15 @@ class TradingEngine:
             )
 
             # Создаем ордер
+            import uuid
+
             from database.models.base_models import Order, OrderStatus, OrderType
 
+            # Генерируем уникальный ID для ордера
+            order_id = f"order_{uuid.uuid4().hex[:12]}_{signal.symbol}"
+
             order = Order(
+                order_id=order_id,  # Добавляем ID ордера
                 symbol=signal.symbol,
                 exchange=signal.exchange,
                 side=side,
@@ -1426,6 +1519,9 @@ class TradingEngine:
                     "confidence": signal.confidence,
                     "created_by": "TradingEngine",
                     "signal_id": getattr(signal, "id", None),
+                    "balance_reservation_id": (
+                        reservation_id if "reservation_id" in locals() else None
+                    ),
                 },
             )
 

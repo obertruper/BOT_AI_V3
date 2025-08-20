@@ -1065,19 +1065,13 @@ class BybitClient(BaseExchangeInterface):
             if order_request.client_order_id:
                 params["orderLinkId"] = order_request.client_order_id
 
-            # SL/TP параметры с корректной логикой для разных направлений
+            # SL/TP параметры - НЕ корректируем, доверяем расчетам из ml_signal_processor
             if order_request.stop_loss is not None:
                 sl_price = float(order_request.stop_loss)
-                # Для SELL позиций StopLoss должен быть выше текущей цены
-                # Для BUY позиций StopLoss должен быть ниже текущей цены
-                if order_request.side == OrderSide.SELL:
-                    # Если StopLoss ниже цены входа для SELL - корректируем
-                    if order_request.price and sl_price < float(order_request.price):
-                        # Устанавливаем StopLoss выше цены входа на 1%
-                        sl_price = float(order_request.price) * 1.01
-                        self.logger.warning(
-                            f"Corrected SELL StopLoss from {order_request.stop_loss} to {sl_price}"
-                        )
+                # Логирование для отладки
+                self.logger.info(
+                    f"🛡️ Setting StopLoss for {order_request.side.value} order: {sl_price}"
+                )
                 try:
                     formatted_sl = format_price(sl_price, instrument_info.tick_size)
                     params["stopLoss"] = formatted_sl

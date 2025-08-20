@@ -62,9 +62,9 @@ logging:
   level: INFO
   format: structured
   files:
-    main: logs/system.log
-    trades: logs/trades.log
-    errors: logs/errors.log
+    main: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/system.log
+    trades: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/trades.log
+    errors: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/errors.log
   rotation:
     max_size_mb: 100
     backup_count: 10
@@ -128,7 +128,7 @@ backup:
   storage:
     local:
       enabled: true
-      path: backups/
+      path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/backups/
     cloud:
       enabled: false
       provider: aws
@@ -216,8 +216,8 @@ unified_system:
     restart_delay_seconds: 10
   logging:
     aggregate_logs: true
-    log_directory: logs
-    process_log_directory: logs/processes
+    log_directory: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs
+    process_log_directory: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/processes
 ml:
   enabled: true
   signal_generation:
@@ -236,8 +236,8 @@ ml:
   - LINKUSDT
   model:
     enabled: true
-    path: models/saved/best_model_20250728_215703.pth
-    scaler_path: models/saved/data_scaler.pkl
+    path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/models/saved/best_model_20250728_215703.pth
+    scaler_path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/models/saved/data_scaler.pkl
     device: cuda
   data:
     lookback_minutes: 3600

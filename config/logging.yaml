@@ -34,7 +34,7 @@ handlers:
     class: logging.handlers.RotatingFileHandler
     level: INFO
     formatter: detailed
-    filename: logs/system.log
+    filename: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/system.log
     maxBytes: 104857600  # 100MB
     backupCount: 10
     encoding: utf8
@@ -43,7 +43,7 @@ handlers:
     class: logging.handlers.RotatingFileHandler
     level: ERROR
     formatter: detailed
-    filename: logs/errors.log
+    filename: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/errors.log
     maxBytes: 52428800  # 50MB
     backupCount: 5
     encoding: utf8
@@ -52,7 +52,7 @@ handlers:
     class: logging.handlers.RotatingFileHandler
     level: INFO
     formatter: json
-    filename: logs/trades.log
+    filename: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/trades.log
     maxBytes: 104857600  # 100MB
     backupCount: 20
     encoding: utf8
@@ -61,7 +61,7 @@ handlers:
     class: logging.handlers.RotatingFileHandler
     level: INFO
     formatter: json
-    filename: logs/performance.log
+    filename: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/performance.log
     maxBytes: 52428800  # 50MB
     backupCount: 10
     encoding: utf8
@@ -70,7 +70,7 @@ handlers:
     class: logging.handlers.RotatingFileHandler
     level: DEBUG
     formatter: detailed
-    filename: logs/debug.log
+    filename: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/debug.log
     maxBytes: 52428800  # 50MB
     backupCount: 3
     encoding: utf8

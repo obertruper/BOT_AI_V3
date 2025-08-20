@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from production_features_config import PRODUCTION_FEATURES as REQUIRED_FEATURES_231
 from sqlalchemy import desc, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -18,7 +19,6 @@ from core.logger import setup_logger
 from database.connections import get_async_db
 from database.models.market_data import ProcessedMarketData, RawMarketData
 from ml.logic.feature_engineering_production import ProductionFeatureEngineer as FeatureEngineer
-from production_features_config import PRODUCTION_FEATURES as REQUIRED_FEATURES_231
 
 logger = setup_logger(__name__)
 

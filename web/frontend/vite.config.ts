@@ -16,14 +16,14 @@ export default defineConfig({
     proxy: {
       // Проксирование API запросов к FastAPI серверу
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8083',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '/api')
       },
       // WebSocket соединения
       '/ws': {
-        target: 'ws://localhost:8080',
+        target: 'ws://localhost:8085',
         ws: true,
         changeOrigin: true,
         secure: false

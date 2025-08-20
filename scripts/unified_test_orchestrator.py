@@ -213,6 +213,42 @@ class UnifiedTestOrchestrator:
                 "enabled": False,  # Отключен по умолчанию так как может быть медленным
                 "status": "pending",
             },
+            # === DYNAMIC SL/TP TEST SUITE ===
+            "dynamic_sltp_unit_tests": {
+                "name": "Dynamic SL/TP Unit Tests",
+                "icon": "📊",
+                "command": "pytest tests/unit/trading/orders/test_dynamic_sltp_calculator.py -v --tb=short -m sltp",
+                "enabled": True,
+                "status": "pending",
+            },
+            "dynamic_sltp_integration_tests": {
+                "name": "Dynamic SL/TP Integration",
+                "icon": "🔗",
+                "command": "pytest tests/integration/test_dynamic_sltp_integration.py -v --tb=short -m 'integration and sltp'",
+                "enabled": True,
+                "status": "pending",
+            },
+            "dynamic_sltp_e2e_tests": {
+                "name": "Dynamic SL/TP E2E Tests",
+                "icon": "🎯",
+                "command": "pytest tests/integration/test_dynamic_sltp_e2e.py -v --tb=short -m 'e2e and sltp'",
+                "enabled": True,
+                "status": "pending",
+            },
+            "dynamic_sltp_performance_tests": {
+                "name": "Dynamic SL/TP Performance",
+                "icon": "⚡",
+                "command": "pytest tests/performance/test_dynamic_sltp_performance.py -v --tb=short -m 'performance and sltp'",
+                "enabled": False,  # По умолчанию отключен - может быть медленным
+                "status": "pending",
+            },
+            "dynamic_sltp_comprehensive": {
+                "name": "Complete Dynamic SL/TP Suite",
+                "icon": "🎪",
+                "command": "pytest tests/unit/trading/orders/test_dynamic_sltp_calculator.py tests/integration/test_dynamic_sltp_integration.py tests/integration/test_dynamic_sltp_e2e.py -v --tb=short -m sltp",
+                "enabled": True,
+                "status": "pending",
+            },
         }
 
         # Статистика
@@ -268,6 +304,7 @@ class UnifiedTestOrchestrator:
         print("  [7] Full analysis (everything)")
         print("  [8] Visual dashboard")
         print("  [9] Code analysis suite")
+        print("  [D] Dynamic SL/TP test suite 📊")
         if ENHANCED_DASHBOARD_AVAILABLE:
             print("  [E] Enhanced interactive dashboard ✨")
         print("  [0] Exit")
@@ -390,6 +427,93 @@ class UnifiedTestOrchestrator:
             self.stats["passed_tests"] += current_passed
             self.stats["failed_tests"] += current_failed
             self.stats["total_tests"] = self.stats["passed_tests"] + self.stats["failed_tests"]
+
+    async def run_dynamic_sltp_suite(self):
+        """Специализированная функция для запуска Dynamic SL/TP test suite"""
+        print(f"\n{Colors.HEADER}📊 DYNAMIC SL/TP TEST SUITE{Colors.ENDC}")
+        print(f"{Colors.CYAN}{'='*50}{Colors.ENDC}")
+
+        # Определяем все компоненты Dynamic SL/TP
+        dynamic_sltp_components = [
+            "dynamic_sltp_unit_tests",
+            "dynamic_sltp_integration_tests",
+            "dynamic_sltp_e2e_tests",
+            "dynamic_sltp_performance_tests",
+            "dynamic_sltp_comprehensive",
+        ]
+
+        # Отключаем все остальные компоненты
+        for key in self.components:
+            if key in dynamic_sltp_components:
+                self.components[key]["enabled"] = True
+                print(f"{Colors.GREEN}✓{Colors.ENDC} Enabled: {self.components[key]['name']}")
+            else:
+                self.components[key]["enabled"] = False
+
+        print(f"\n{Colors.BLUE}🎯 Running Dynamic SL/TP comprehensive test suite...{Colors.ENDC}")
+
+        # Предлагаем варианты выполнения
+        print(f"\n{Colors.BOLD}Select test mode:{Colors.ENDC}")
+        print("  [1] Quick tests (unit + integration)")
+        print("  [2] Complete suite (unit + integration + e2e)")
+        print("  [3] Performance suite (all + performance)")
+        print("  [4] Comprehensive all-in-one test")
+        print("  [0] Cancel")
+
+        try:
+            mode_choice = input(f"\n{Colors.BOLD}Enter mode choice:{Colors.ENDC} ").strip()
+
+            if mode_choice == "0":
+                print(f"{Colors.WARNING}✗{Colors.ENDC} Cancelled")
+                return
+            elif mode_choice == "1":
+                # Quick tests
+                selected_components = ["dynamic_sltp_unit_tests", "dynamic_sltp_integration_tests"]
+            elif mode_choice == "2":
+                # Complete suite
+                selected_components = [
+                    "dynamic_sltp_unit_tests",
+                    "dynamic_sltp_integration_tests",
+                    "dynamic_sltp_e2e_tests",
+                ]
+            elif mode_choice == "3":
+                # Performance suite
+                selected_components = dynamic_sltp_components  # все включая performance
+            elif mode_choice == "4":
+                # Comprehensive all-in-one
+                selected_components = ["dynamic_sltp_comprehensive"]
+            else:
+                print(f"{Colors.WARNING}⚠️ Invalid mode, running quick tests{Colors.ENDC}")
+                selected_components = ["dynamic_sltp_unit_tests", "dynamic_sltp_integration_tests"]
+
+            # Отключаем неселектированные компоненты
+            for key in dynamic_sltp_components:
+                self.components[key]["enabled"] = key in selected_components
+
+            # Запускаем выбранные тесты
+            await self.run_all_enabled()
+
+            # Генерируем отчет
+            print(f"\n{Colors.GREEN}✨ Generating Dynamic SL/TP test report...{Colors.ENDC}")
+            self.generate_html_dashboard()
+
+            # Выводим краткую статистику
+            print(f"\n{Colors.HEADER}📊 Dynamic SL/TP Test Results Summary:{Colors.ENDC}")
+            print(f"  Total tests: {self.stats['total_tests']}")
+            print(f"  Passed: {Colors.GREEN}{self.stats['passed_tests']}{Colors.ENDC}")
+            print(f"  Failed: {Colors.FAIL}{self.stats['failed_tests']}{Colors.ENDC}")
+
+            if self.stats["failed_tests"] == 0:
+                print(f"\n{Colors.GREEN}🎉 All Dynamic SL/TP tests passed!{Colors.ENDC}")
+            else:
+                print(
+                    f"\n{Colors.WARNING}⚠️ Some tests failed, check the detailed report{Colors.ENDC}"
+                )
+
+        except KeyboardInterrupt:
+            print(f"\n{Colors.WARNING}✗{Colors.ENDC} Dynamic SL/TP test suite cancelled")
+        except Exception as e:
+            print(f"{Colors.FAIL}❌ Error in Dynamic SL/TP suite: {e}{Colors.ENDC}")
 
     def generate_enhanced_dashboard(self):
         """Генерирует улучшенный интерактивный дашборд"""
@@ -876,6 +1000,10 @@ class UnifiedTestOrchestrator:
                         ]
                     await self.run_all_enabled()
                     self.generate_html_dashboard()
+
+                elif choice.upper() == "D":
+                    # Dynamic SL/TP test suite
+                    await self.run_dynamic_sltp_suite()
 
                 elif choice.upper() == "E" and ENHANCED_DASHBOARD_AVAILABLE:
                     # Enhanced interactive dashboard

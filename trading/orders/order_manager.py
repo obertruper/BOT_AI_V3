@@ -19,6 +19,7 @@ from database.models.base_models import (
 )
 from database.models.signal import Signal
 
+from .partial_tp_manager import PartialTPManager
 from .sltp_integration import SLTPIntegration
 
 
@@ -45,6 +46,8 @@ class OrderManager:
         self._order_locks: dict[str, asyncio.Lock] = {}
         # Интеграция с SL/TP Manager
         self.sltp_integration = SLTPIntegration(sltp_manager) if sltp_manager else None
+        # Интеграция с Partial TP Manager
+        self.partial_tp_manager = PartialTPManager(exchange_registry, logger)
         # Защита от дублирования ордеров
         self._recent_orders: dict[str, float] = {}  # symbol -> last_order_time
         self._duplicate_check_interval = 60  # секунд между одинаковыми ордерами
@@ -177,28 +180,68 @@ class OrderManager:
                 await exchange.initialize()
                 self.logger.info(f"🔗 Подключение к бирже {order.exchange} успешно")
 
-                # ВАЖНО: Устанавливаем плечо перед открытием позиции (как в V2)
+                # ВАЖНО: Устанавливаем плечо ТОЛЬКО если нет открытых позиций
                 try:
-                    # Получаем плечо из конфигурации
-                    leverage = float(
-                        self.config.get("trading", {}).get("orders", {}).get("default_leverage", 5)
-                    )
+                    # Проверяем наличие открытых позиций
+                    positions = await exchange.get_positions()
+                    position_exists = False
 
-                    self.logger.info(f"⚙️ Устанавливаем плечо {leverage}x для {order.symbol}")
-                    leverage_set = await exchange.set_leverage(order.symbol, leverage)
+                    for pos in positions:
+                        if pos.get("symbol") == order.symbol and pos.get("quantity", 0) > 0:
+                            position_exists = True
+                            self.logger.info(
+                                f"📊 Позиция для {order.symbol} уже существует, "
+                                f"пропускаем установку leverage"
+                            )
+                            break
 
-                    if leverage_set:
-                        self.logger.info(
-                            f"✅ Плечо {leverage}x успешно установлено для {order.symbol}"
-                        )
+                    # Устанавливаем leverage только если позиции нет
+                    if not position_exists:
+                        # Получаем плечо из конфигурации
+                        try:
+                            from core.config import get_leverage
+
+                            leverage = get_leverage()
+                        except ImportError:
+                            # Fallback если core.config недоступен
+                            leverage = 5.0
+                            self.logger.warning("⚠️ Используем leverage по умолчанию: 5x")
+
+                        self.logger.info(f"⚙️ Устанавливаем плечо {leverage}x для {order.symbol}")
+
+                        # Кешируем текущий leverage чтобы не вызывать API лишний раз
+                        cache_key = f"leverage_{order.symbol}"
+                        cached_leverage = getattr(self, "_leverage_cache", {}).get(cache_key)
+
+                        if cached_leverage != leverage:
+                            leverage_set = await exchange.set_leverage(order.symbol, leverage)
+
+                            if leverage_set:
+                                self.logger.info(
+                                    f"✅ Плечо {leverage}x успешно установлено для {order.symbol}"
+                                )
+                                # Сохраняем в кеш
+                                if not hasattr(self, "_leverage_cache"):
+                                    self._leverage_cache = {}
+                                self._leverage_cache[cache_key] = leverage
+                            else:
+                                self.logger.warning(
+                                    f"⚠️ Не удалось установить плечо для {order.symbol}, "
+                                    f"возможно уже установлено или ошибка API"
+                                )
+                        else:
+                            self.logger.debug(
+                                f"ℹ️ Плечо {leverage}x уже установлено для {order.symbol}"
+                            )
+
+                except Exception as e:
+                    # Не критичная ошибка - продолжаем с текущим leverage
+                    if "leverage not modified" in str(e).lower():
+                        self.logger.debug(f"ℹ️ Плечо уже корректное для {order.symbol}")
                     else:
                         self.logger.warning(
-                            f"⚠️ Не удалось установить плечо для {order.symbol}, продолжаем с текущим"
+                            f"⚠️ Ошибка при работе с плечом: {e}, продолжаем с текущим"
                         )
-                except Exception as e:
-                    self.logger.warning(
-                        f"⚠️ Ошибка установки плеча: {e}, продолжаем с текущим плечом"
-                    )
 
                 # Отправляем ордер через place_order
                 # Создаем OrderRequest для Bybit
@@ -227,15 +270,62 @@ class OrderManager:
                 position_idx = 1 if order.side == OrderSide.BUY else 2  # Для hedge mode
                 # position_idx = 0  # Для one-way mode
 
+                # 🛡️ Валидация SL/TP перед отправкой (исправление для Bybit API)
+                validated_sl = order.stop_loss
+                validated_tp = order.take_profit
+                current_price = float(order.price) if order.price else None
+
+                if order.stop_loss and order.take_profit and current_price:
+                    # Проверяем корректность SL/TP для разных направлений
+                    if order.side == OrderSide.SELL:  # SHORT позиция
+                        # Для SELL (SHORT): SL должен быть ВЫШЕ цены, TP должен быть НИЖЕ цены
+                        if order.stop_loss <= current_price:
+                            self.logger.error(
+                                f"❌ НЕКОРРЕКТНЫЙ SL для SHORT: SL={order.stop_loss} <= Price={current_price}"
+                            )
+                            # Возможное исправление - но лучше отклонить ордер
+                            return False
+
+                        if order.take_profit >= current_price:
+                            self.logger.error(
+                                f"❌ НЕКОРРЕКТНЫЙ TP для SHORT: TP={order.take_profit} >= Price={current_price}"
+                            )
+                            return False
+
+                    elif order.side == OrderSide.BUY:  # LONG позиция
+                        # Для BUY (LONG): SL должен быть НИЖЕ цены, TP должен быть ВЫШЕ цены
+                        if order.stop_loss >= current_price:
+                            self.logger.error(
+                                f"❌ НЕКОРРЕКТНЫЙ SL для LONG: SL={order.stop_loss} >= Price={current_price}"
+                            )
+                            return False
+
+                        if order.take_profit <= current_price:
+                            self.logger.error(
+                                f"❌ НЕКОРРЕКТНЫЙ TP для LONG: TP={order.take_profit} <= Price={current_price}"
+                            )
+                            return False
+
+                    self.logger.info(
+                        f"✅ SL/TP валидация пройдена для {order.side.value}: "
+                        f"Price={current_price}, SL={validated_sl}, TP={validated_tp}"
+                    )
+
+                # 🛡️ Правильный маппинг order.side (может быть enum или string)
+                order_side_value = (
+                    order.side.value if hasattr(order.side, "value") else str(order.side)
+                )
+                exchange_side = order_side_map.get(order_side_value, ExchangeOrderSide.BUY)
+
                 order_request = OrderRequest(
                     symbol=order.symbol,
-                    side=order_side_map.get(order.side, ExchangeOrderSide.BUY),
+                    side=exchange_side,
                     order_type=order_type_map.get(order.order_type.value, ExchangeOrderType.LIMIT),
                     quantity=order.quantity,
                     price=order.price if order.order_type.value == "limit" else None,
-                    # ВАЖНО: Добавляем SL/TP из ордера
-                    stop_loss=order.stop_loss,
-                    take_profit=order.take_profit,
+                    # ВАЖНО: Используем валидированные SL/TP
+                    stop_loss=validated_sl,
+                    take_profit=validated_tp,
                     position_idx=position_idx,  # Для правильного режима позиций
                     # Дополнительные параметры для Bybit
                     exchange_params={
@@ -273,6 +363,40 @@ class OrderManager:
                     self.logger.info(
                         f"✅ Ордер {order.order_id} успешно отправлен на {order.exchange}"
                     )
+
+                    # Настраиваем частичное закрытие для новой позиции
+                    try:
+                        # Получаем конфигурацию partial TP из метаданных или используем по умолчанию
+                        partial_config = (
+                            order.metadata.get("partial_tp_config") if order.metadata else None
+                        )
+
+                        # Создаем данные позиции для partial TP manager
+                        position_data = {
+                            "symbol": order.symbol,
+                            "side": "long" if order.side == OrderSide.BUY else "short",
+                            "quantity": order.quantity,
+                            "entry_price": order.price or order.suggested_price,
+                        }
+
+                        # Настраиваем частичное закрытие
+                        partial_success = await self.partial_tp_manager.setup_partial_tp(
+                            position_data, partial_config
+                        )
+
+                        if partial_success:
+                            self.logger.info(f"✅ Частичное закрытие настроено для {order.symbol}")
+                        else:
+                            self.logger.warning(
+                                f"⚠️ Не удалось настроить частичное закрытие для {order.symbol}"
+                            )
+
+                    except Exception as partial_error:
+                        self.logger.error(
+                            f"❌ Ошибка настройки частичного закрытия: {partial_error}"
+                        )
+                        # Не прерываем основной процесс из-за ошибки partial TP
+
                     return True
                 else:
                     order.status = OrderStatus.REJECTED

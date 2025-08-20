@@ -19,6 +19,21 @@ ml:
     path: models/saved/best_model_20250728_215703.pth
     scaler_path: models/saved/data_scaler.pkl
     device: cuda
+    # Порог уверенности для классификации направлений
+    direction_confidence_threshold: 0.5  # Предсказания с уверенностью < 0.5 → FLAT
+  
+  # Параметры фильтрации сигналов  
+  min_confidence: 0.3       # Минимальная уверенность для генерации сигнала
+  min_signal_strength: 0.25  # Минимальная сила сигнала
+  risk_tolerance: MEDIUM     # LOW, MEDIUM, HIGH
+  
+  # Параметры кэширования предсказаний
+  cache:
+    enabled: true
+    ttl_seconds: 300        # 5 минут TTL для кэша
+    max_size: 1000          # Максимум записей в кэше
+    cleanup_interval: 60    # Проверка очистки каждую минуту
+    enable_stats: true      # Включить сбор статистики кэша
     
 backtesting:
   commission: 0.001

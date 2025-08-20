@@ -16,6 +16,18 @@ project_root = Path(__file__).parent.parent.absolute()
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+# Проверяем виртуальное окружение
+if not hasattr(sys, "real_prefix") and not (
+    hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+):
+    print("❌ Виртуальное окружение не активировано!")
+    print(f"   Current Python: {sys.executable}")
+    print(f"   Expected: {project_root}/venv/bin/python")
+    print("   Запустите: source venv/bin/activate")
+    sys.exit(1)
+
+print(f"✅ Используется Python из venv: {sys.executable}")
+
 # Импортируем после добавления пути
 from web.api.main import start_web_server
 

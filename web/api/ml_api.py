@@ -4,7 +4,7 @@ API endpoints для ML сигналов
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Union
+from typing import Any,Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -32,7 +32,7 @@ async def get_db():
 class MLSignalResponse(BaseModel):
     """Модель ответа для ML сигнала"""
 
-    id: int | None = None
+    id: Union[int, None] = None
     symbol: str
     exchange: str
     signal_type: str
@@ -40,9 +40,9 @@ class MLSignalResponse(BaseModel):
     strength: float
     timestamp: str
     strategy_name: str = "PatchTST_ML"
-    suggested_price: float | None = None
-    suggested_stop_loss: float | None = None
-    suggested_take_profit: float | None = None
+    suggested_price: Union[float, None] = None
+    suggested_stop_loss: Union[float, None] = None
+    suggested_take_profit: Union[float, None] = None
     extra_data: dict[str, Any] | None = None
 
 
@@ -54,14 +54,53 @@ class MLMetricsResponse(BaseModel):
     save_rate: float
     error_rate: float
     active_symbols: list[str]
-    last_signal_time: str | None = None
+    last_signal_time: Union[str, None] = None
+
+
+class MLCacheMetricsResponse(BaseModel):
+    """Метрики кэша ML системы"""
+
+    cache_hits: int
+    cache_misses: int
+    cache_hit_rate: float
+    cache_size: int
+    unique_symbols_processed: int
+    symbols_list: list[str]
+    cache_ttl_seconds: int
+    last_cleanup: str
+
+
+class MLDirectionStatsResponse(BaseModel):
+    """Статистика распределения направлений ML"""
+
+    total_predictions: int
+    long_count: int
+    short_count: int
+    flat_count: int
+    long_percentage: float
+    short_percentage: float
+    flat_percentage: float
+    last_hour_distribution: dict[str, int]
+    confidence_by_direction: dict[str, float]
+
+
+@router.get("/signals/recent", response_model=list[MLSignalResponse])
+async def get_recent_ml_signals(
+    limit: int = Query(10, description="Количество сигналов"),
+    symbol: str = Query(None, description="Фильтр по символу"),
+    db: AsyncSession = Depends(get_db),
+) -> list[MLSignalResponse]:
+    """
+    Получить последние ML сигналы (alias для latest для совместимости с фронтендом)
+    """
+    return await get_latest_ml_signals(limit=limit, symbol=symbol, db=db)
 
 
 @router.get("/signals/latest", response_model=list[MLSignalResponse])
 async def get_latest_ml_signals(
     limit: int = Query(default=10, ge=1, le=100),
-    symbol: str | None = Query(default=None),
-    exchange: str | None = Query(default="bybit"),
+    symbol: Union[str, None] = Query(default=None),
+    exchange: Union[str, None] = Query(default="bybit"),
     db: AsyncSession = Depends(get_db),
 ) -> list[MLSignalResponse]:
     """
@@ -120,8 +159,8 @@ async def get_latest_ml_signals(
 
 @router.get("/signals/active", response_model=list[MLSignalResponse])
 async def get_active_ml_signals(
-    symbol: str | None = Query(default=None),
-    exchange: str | None = Query(default="bybit"),
+    symbol: Union[str, None] = Query(default=None),
+    exchange: Union[str, None] = Query(default="bybit"),
     db: AsyncSession = Depends(get_db),
 ) -> list[MLSignalResponse]:
     """
@@ -308,3 +347,167 @@ async def stop_scheduler():
     except Exception as e:
         logger.error(f"Ошибка остановки scheduler: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/cache-stats", response_model=MLCacheMetricsResponse)
+async def get_ml_cache_stats() -> MLCacheMetricsResponse:
+    """
+    Получение статистики кэша ML системы
+    """
+    try:
+        # Получаем ML Signal Processor для доступа к кэшу
+        from ml.ml_signal_processor import MLSignalProcessor
+
+        processor = MLSignalProcessor()
+
+        # Получаем метрики кэша
+        cache_stats = processor.get_cache_stats()
+
+        # Вычисляем hit rate
+        total_requests = cache_stats.get("cache_hits", 0) + cache_stats.get("cache_misses", 0)
+        hit_rate = cache_stats.get("cache_hits", 0) / total_requests if total_requests > 0 else 0.0
+
+        # Получаем уникальные символы
+        symbols = list(cache_stats.get("symbols", set()))
+
+        return MLCacheMetricsResponse(
+            cache_hits=cache_stats.get("cache_hits", 0),
+            cache_misses=cache_stats.get("cache_misses", 0),
+            cache_hit_rate=hit_rate,
+            cache_size=cache_stats.get("cache_size", 0),
+            unique_symbols_processed=len(symbols),
+            symbols_list=symbols,
+            cache_ttl_seconds=cache_stats.get("ttl_seconds", 300),
+            last_cleanup=cache_stats.get("last_cleanup", datetime.utcnow().isoformat()),
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка получения статистики кэша: {e}")
+        # Возвращаем пустые данные вместо ошибки
+        return MLCacheMetricsResponse(
+            cache_hits=0,
+            cache_misses=0,
+            cache_hit_rate=0.0,
+            cache_size=0,
+            unique_symbols_processed=0,
+            symbols_list=[],
+            cache_ttl_seconds=300,
+            last_cleanup=datetime.utcnow().isoformat(),
+        )
+
+
+@router.get("/direction-stats", response_model=MLDirectionStatsResponse)
+async def get_ml_direction_stats(
+    hours: int = Query(default=24, ge=1, le=168),  # От 1 до 168 часов (неделя)
+    db: AsyncSession = Depends(get_db),
+) -> MLDirectionStatsResponse:
+    """
+    Получение статистики распределения направлений ML предсказаний
+    """
+    try:
+        # Временной диапазон
+        time_threshold = datetime.utcnow() - timedelta(hours=hours)
+        hour_threshold = datetime.utcnow() - timedelta(hours=1)
+
+        # Запрос всех ML сигналов за период
+        query = select(Signal).where(
+            and_(
+                Signal.strategy_name.in_(["PatchTST_ML", "PatchTST_RealTime"]),
+                Signal.created_at >= time_threshold,
+            )
+        )
+
+        result = await db.execute(query)
+        all_signals = result.scalars().all()
+
+        # Запрос сигналов за последний час
+        hour_query = select(Signal).where(
+            and_(
+                Signal.strategy_name.in_(["PatchTST_ML", "PatchTST_RealTime"]),
+                Signal.created_at >= hour_threshold,
+            )
+        )
+
+        hour_result = await db.execute(hour_query)
+        hour_signals = hour_result.scalars().all()
+
+        # Подсчет общих статистик
+        total_predictions = len(all_signals)
+
+        if total_predictions == 0:
+            return MLDirectionStatsResponse(
+                total_predictions=0,
+                long_count=0,
+                short_count=0,
+                flat_count=0,
+                long_percentage=0.0,
+                short_percentage=0.0,
+                flat_percentage=0.0,
+                last_hour_distribution={"LONG": 0, "SHORT": 0, "FLAT": 0},
+                confidence_by_direction={"LONG": 0.0, "SHORT": 0.0, "FLAT": 0.0},
+            )
+
+        # Подсчет по типам сигналов
+        long_signals = [s for s in all_signals if s.signal_type.value in ["LONG", "buy"]]
+        short_signals = [s for s in all_signals if s.signal_type.value in ["SHORT", "sell"]]
+        flat_signals = [
+            s for s in all_signals if s.signal_type.value in ["FLAT", "NEUTRAL", "hold"]
+        ]
+
+        long_count = len(long_signals)
+        short_count = len(short_signals)
+        flat_count = len(flat_signals)
+
+        # Проценты
+        long_percentage = (long_count / total_predictions) * 100
+        short_percentage = (short_count / total_predictions) * 100
+        flat_percentage = (flat_count / total_predictions) * 100
+
+        # Распределение за последний час
+        hour_long = len([s for s in hour_signals if s.signal_type.value in ["LONG", "buy"]])
+        hour_short = len([s for s in hour_signals if s.signal_type.value in ["SHORT", "sell"]])
+        hour_flat = len(
+            [s for s in hour_signals if s.signal_type.value in ["FLAT", "NEUTRAL", "hold"]]
+        )
+
+        # Средняя уверенность по направлениям
+        long_confidence = (
+            sum(s.confidence for s in long_signals) / len(long_signals) if long_signals else 0.0
+        )
+        short_confidence = (
+            sum(s.confidence for s in short_signals) / len(short_signals) if short_signals else 0.0
+        )
+        flat_confidence = (
+            sum(s.confidence for s in flat_signals) / len(flat_signals) if flat_signals else 0.0
+        )
+
+        return MLDirectionStatsResponse(
+            total_predictions=total_predictions,
+            long_count=long_count,
+            short_count=short_count,
+            flat_count=flat_count,
+            long_percentage=long_percentage,
+            short_percentage=short_percentage,
+            flat_percentage=flat_percentage,
+            last_hour_distribution={"LONG": hour_long, "SHORT": hour_short, "FLAT": hour_flat},
+            confidence_by_direction={
+                "LONG": long_confidence,
+                "SHORT": short_confidence,
+                "FLAT": flat_confidence,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка получения статистики направлений: {e}")
+        # Возвращаем пустые данные вместо ошибки
+        return MLDirectionStatsResponse(
+            total_predictions=0,
+            long_count=0,
+            short_count=0,
+            flat_count=0,
+            long_percentage=0.0,
+            short_percentage=0.0,
+            flat_percentage=0.0,
+            last_hour_distribution={"LONG": 0, "SHORT": 0, "FLAT": 0},
+            confidence_by_direction={"LONG": 0.0, "SHORT": 0.0, "FLAT": 0.0},
+        )

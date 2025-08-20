@@ -193,7 +193,7 @@ class UnifiedLauncher:
             },
             "frontend": {
                 "enabled": True,
-                "command": "npm run dev -- --host",
+                "command": "CHOKIDAR_USEPOLLING=true npm run dev -- --host",
                 "name": "Frontend",
                 "port": 5173,
                 "auto_restart": False,
@@ -523,10 +523,12 @@ class UnifiedLauncher:
 
     async def _collect_metrics(self) -> dict[str, float]:
         """Сбор системных метрик"""
+        # Используем SSD путь для мониторинга диска, так как данные теперь там
+        disk_path = "/mnt/SSD" if os.path.exists("/mnt/SSD") else "/"
         metrics = {
             "cpu_percent": psutil.cpu_percent(interval=1),
             "memory_percent": psutil.virtual_memory().percent,
-            "disk_usage": psutil.disk_usage("/").percent,
+            "disk_usage": psutil.disk_usage(disk_path).percent,
             "active_processes": len(self.process_manager.processes),
             "uptime_hours": (datetime.now() - self.startup_time).total_seconds() / 3600,
         }
@@ -542,9 +544,18 @@ class UnifiedLauncher:
         logger.info("\n🔧 Активные компоненты:")
         for comp_name, comp_config in self.components_config.items():
             if comp_config.get("enabled"):
-                status = (
-                    "✅ Запущен" if comp_name in self.process_manager.processes else "❌ Остановлен"
-                )
+                # 🛡️ ИСПРАВЛЕНО: ML система интегрирована в Core System
+                if comp_name == "ml":
+                    # ML система работает если Core System работает
+                    core_running = "core" in self.process_manager.processes
+                    status = "✅ Запущен" if core_running else "❌ Остановлен"
+                else:
+                    # Для остальных компонентов проверяем наличие отдельного процесса
+                    status = (
+                        "✅ Запущен"
+                        if comp_name in self.process_manager.processes
+                        else "❌ Остановлен"
+                    )
                 logger.info(f"  {comp_config['name']}: {status}")
 
         # URL-адреса

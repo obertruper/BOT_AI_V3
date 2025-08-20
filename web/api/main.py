@@ -12,7 +12,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Union
+from typing import Any,Union
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -52,11 +52,11 @@ except ImportError:
 
 
 # Глобальные переменные для интеграции
-_orchestrator: Any | None = None
-_trader_manager: Any | None = None
-_exchange_factory: Any | None = None
-_config_manager: ConfigManager | None = None
-_web_bridge: WebOrchestratorBridge | None = None
+_orchestrator: Union[Any, None] = None
+_trader_manager: Union[Any, None] = None
+_exchange_factory: Union[Any, None] = None
+_config_manager: Union[ConfigManager, None] = None
+_web_bridge: Union[WebOrchestratorBridge, None] = None
 
 
 @asynccontextmanager
@@ -134,6 +134,8 @@ from web.api.endpoints import (
     auth_router,
     exchanges_router,
     monitoring_router,
+    orders_router,
+    positions_router,
     strategies_router,
     traders_router,
 )
@@ -141,6 +143,8 @@ from web.api.ml_api import router as ml_router
 
 # Подключаем роутеры к приложению
 app.include_router(monitoring_router)
+app.include_router(orders_router)
+app.include_router(positions_router)
 app.include_router(traders_router)
 app.include_router(exchanges_router)
 app.include_router(strategies_router)
@@ -447,7 +451,7 @@ async def stop_trader(trader_id: str, bridge: WebOrchestratorBridge = Depends(ge
 
 @app.get("/api/positions")
 async def get_positions(
-    trader_id: str | None = None,
+    trader_id: Union[str, None] = None,
     bridge: WebOrchestratorBridge = Depends(get_web_bridge),
 ):
     """Получение списка позиций"""
@@ -469,7 +473,7 @@ async def get_positions(
 async def get_system_config_raw():
     """Безопасная выдача полной конфигурации (секреты редактируются)."""
     try:
-        cfg_manager: ConfigManager | None = _config_manager
+        cfg_manager: Union[ConfigManager, None] = _config_manager
         if not cfg_manager:
             cfg_manager = ConfigManager()
             await cfg_manager.initialize()
@@ -513,7 +517,7 @@ async def update_system_config(body: dict):
         if not isinstance(updates, dict):
             raise ValueError("updates must be a dict")
 
-        cfg_manager: ConfigManager | None = _config_manager
+        cfg_manager: Union[ConfigManager, None] = _config_manager
         if not cfg_manager:
             cfg_manager = ConfigManager()
             await cfg_manager.initialize()

@@ -370,14 +370,31 @@ class BalanceManager:
             for symbol, balance in self.balances[exch].items():
                 reserved = self._get_reserved_amount(exch, symbol)
 
-                result[exch][symbol] = {
-                    "total": float(balance.total),
-                    "available": float(balance.available),
-                    "locked": float(balance.locked),
-                    "reserved": float(reserved),
-                    "effective_available": float(balance.available - reserved),
-                    "last_updated": balance.last_updated.isoformat(),
-                }
+                # 🛡️ Защита от смешивания float и Decimal типов
+                try:
+                    # Убеждаемся что все значения Decimal
+                    balance_available = Decimal(str(balance.available))
+                    reserved_decimal = Decimal(str(reserved))
+
+                    result[exch][symbol] = {
+                        "total": float(balance.total),
+                        "available": float(balance.available),
+                        "locked": float(balance.locked),
+                        "reserved": float(reserved),
+                        "effective_available": float(balance_available - reserved_decimal),
+                        "last_updated": balance.last_updated.isoformat(),
+                    }
+                except Exception as e:
+                    logger.error(f"❌ Ошибка конвертации типов для {exch} {symbol}: {e}")
+                    # Fallback значения
+                    result[exch][symbol] = {
+                        "total": float(balance.total),
+                        "available": float(balance.available),
+                        "locked": float(balance.locked),
+                        "reserved": 0.0,
+                        "effective_available": float(balance.available),
+                        "last_updated": balance.last_updated.isoformat(),
+                    }
 
         return result
 
