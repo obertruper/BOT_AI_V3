@@ -12,6 +12,8 @@ API Endpoints для BOT_Trading v3.0 Web Interface
 from .auth import router as auth_router
 from .exchanges import router as exchanges_router
 from .monitoring import router as monitoring_router
+from .orders import router as orders_router
+from .positions import router as positions_router
 from .strategies import router as strategies_router
 from .traders import router as traders_router
 
@@ -19,6 +21,8 @@ __all__ = [
     "auth_router",
     "exchanges_router",
     "monitoring_router",
+    "orders_router",
+    "positions_router",
     "strategies_router",
     "traders_router",
 ]

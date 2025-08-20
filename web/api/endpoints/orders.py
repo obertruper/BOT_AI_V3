@@ -4,9 +4,8 @@ Orders API endpoints для BOT_Trading v3.0
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -17,7 +16,7 @@ router = APIRouter(
     responses={
         404: {"description": "Order not found"},
         403: {"description": "Access forbidden"},
-    }
+    },
 )
 
 
@@ -26,16 +25,16 @@ class CreateOrderRequest(BaseModel):
     side: str  # 'buy' or 'sell'
     type: str  # 'market' or 'limit'
     quantity: float
-    price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
 
 @router.get("/")
 async def get_orders(
     status: str = Query(None, description="Filter by status: pending, filled, cancelled"),
     symbol: str = Query(None, description="Filter by symbol"),
-    limit: int = Query(50, description="Number of orders to return")
+    limit: int = Query(50, description="Number of orders to return"),
 ) -> JSONResponse:
     """
     Получить все ордера с фильтрацией
@@ -55,10 +54,10 @@ async def get_orders(
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
                 "exchange": "bybit",
-                "fees": 0.02
+                "fees": 0.02,
             },
             {
-                "id": "order_2", 
+                "id": "order_2",
                 "symbol": "ETHUSDT",
                 "side": "sell",
                 "type": "limit",
@@ -69,25 +68,27 @@ async def get_orders(
                 "created_at": datetime.now().isoformat(),
                 "exchange": "bybit",
                 "stop_loss": 3100.0,
-                "take_profit": 3400.0
-            }
+                "take_profit": 3400.0,
+            },
         ]
-        
+
         # Apply filters
         if status:
             mock_orders = [order for order in mock_orders if order["status"] == status]
         if symbol:
             mock_orders = [order for order in mock_orders if order["symbol"] == symbol]
-            
-        return JSONResponse({
-            "success": True,
-            "data": mock_orders[:limit],
-            "total": len(mock_orders),
-            "timestamp": datetime.now().timestamp()
-        })
-        
+
+        return JSONResponse(
+            {
+                "success": True,
+                "data": mock_orders[:limit],
+                "total": len(mock_orders),
+                "timestamp": datetime.now().timestamp(),
+            }
+        )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch orders: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch orders: {e!s}")
 
 
 @router.get("/{order_id}")
@@ -110,17 +111,15 @@ async def get_order(order_id: str) -> JSONResponse:
             "updated_at": datetime.now().isoformat(),
             "exchange": "bybit",
             "fees": 0.02,
-            "average_price": 44000.0
+            "average_price": 44000.0,
         }
-        
-        return JSONResponse({
-            "success": True,
-            "data": mock_order,
-            "timestamp": datetime.now().timestamp()
-        })
-        
+
+        return JSONResponse(
+            {"success": True, "data": mock_order, "timestamp": datetime.now().timestamp()}
+        )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch order: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch order: {e!s}")
 
 
 @router.post("/")
@@ -141,18 +140,20 @@ async def create_order(order_request: CreateOrderRequest) -> JSONResponse:
             "created_at": datetime.now().isoformat(),
             "exchange": "bybit",
             "stop_loss": order_request.stop_loss,
-            "take_profit": order_request.take_profit
+            "take_profit": order_request.take_profit,
         }
-        
-        return JSONResponse({
-            "success": True,
-            "data": new_order,
-            "message": "Order created successfully",
-            "timestamp": datetime.now().timestamp()
-        })
-        
+
+        return JSONResponse(
+            {
+                "success": True,
+                "data": new_order,
+                "message": "Order created successfully",
+                "timestamp": datetime.now().timestamp(),
+            }
+        )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create order: {e!s}")
 
 
 @router.post("/{order_id}/cancel")
@@ -162,19 +163,21 @@ async def cancel_order(order_id: str) -> JSONResponse:
     """
     try:
         # Mock response - replace with actual order cancellation logic
-        return JSONResponse({
-            "success": True,
-            "data": {
-                "id": order_id,
-                "status": "cancelled",
-                "cancelled_at": datetime.now().isoformat()
-            },
-            "message": f"Order {order_id} cancelled successfully",
-            "timestamp": datetime.now().timestamp()
-        })
-        
+        return JSONResponse(
+            {
+                "success": True,
+                "data": {
+                    "id": order_id,
+                    "status": "cancelled",
+                    "cancelled_at": datetime.now().isoformat(),
+                },
+                "message": f"Order {order_id} cancelled successfully",
+                "timestamp": datetime.now().timestamp(),
+            }
+        )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to cancel order: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel order: {e!s}")
 
 
 @router.get("/active/count")
@@ -183,24 +186,22 @@ async def get_active_orders_count() -> JSONResponse:
     Получить количество активных ордеров
     """
     try:
-        return JSONResponse({
-            "success": True,
-            "data": {
-                "pending": 5,
-                "partially_filled": 2,
-                "total_active": 7
-            },
-            "timestamp": datetime.now().timestamp()
-        })
-        
+        return JSONResponse(
+            {
+                "success": True,
+                "data": {"pending": 5, "partially_filled": 2, "total_active": 7},
+                "timestamp": datetime.now().timestamp(),
+            }
+        )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get orders count: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get orders count: {e!s}")
 
 
 @router.get("/history")
 async def get_order_history(
     days: int = Query(7, description="Number of days to look back"),
-    limit: int = Query(100, description="Number of orders to return")
+    limit: int = Query(100, description="Number of orders to return"),
 ) -> JSONResponse:
     """
     Получить историю ордеров
@@ -218,17 +219,19 @@ async def get_order_history(
                 "created_at": (datetime.now()).isoformat(),
                 "filled_at": (datetime.now()).isoformat(),
                 "pnl": 5.0,
-                "fees": 0.87
+                "fees": 0.87,
             }
         ]
-        
-        return JSONResponse({
-            "success": True,
-            "data": mock_history,
-            "total": len(mock_history),
-            "period_days": days,
-            "timestamp": datetime.now().timestamp()
-        })
-        
+
+        return JSONResponse(
+            {
+                "success": True,
+                "data": mock_history,
+                "total": len(mock_history),
+                "period_days": days,
+                "timestamp": datetime.now().timestamp(),
+            }
+        )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch order history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch order history: {e!s}")

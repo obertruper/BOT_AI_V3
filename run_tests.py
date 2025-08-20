@@ -106,8 +106,17 @@ class TestRunner:
             "ci": ["smoke", "unit", "ml"],
             # Dynamic SL/TP chains
             "dynamic_sltp_quick": ["dynamic_sltp_unit", "dynamic_sltp_integration"],
-            "dynamic_sltp_complete": ["dynamic_sltp_unit", "dynamic_sltp_integration", "dynamic_sltp_e2e"],
-            "dynamic_sltp_full": ["dynamic_sltp_unit", "dynamic_sltp_integration", "dynamic_sltp_e2e", "dynamic_sltp_performance"],
+            "dynamic_sltp_complete": [
+                "dynamic_sltp_unit",
+                "dynamic_sltp_integration",
+                "dynamic_sltp_e2e",
+            ],
+            "dynamic_sltp_full": [
+                "dynamic_sltp_unit",
+                "dynamic_sltp_integration",
+                "dynamic_sltp_e2e",
+                "dynamic_sltp_performance",
+            ],
         }
 
     def print_header(self, text: str):

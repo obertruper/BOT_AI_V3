@@ -468,7 +468,14 @@ class TestMLManagerCore:
 
                 # Упрощенная проверка корректности
                 is_correct = False
-                if (predicted_class in ["buy", "strong_buy"] and actual_outcome == "profitable") or (predicted_class in ["sell", "strong_sell"] and actual_outcome == "profitable") or (predicted_class == "hold" and actual_outcome == "neutral"):
+                if (
+                    (predicted_class in ["buy", "strong_buy"] and actual_outcome == "profitable")
+                    or (
+                        predicted_class in ["sell", "strong_sell"]
+                        and actual_outcome == "profitable"
+                    )
+                    or (predicted_class == "hold" and actual_outcome == "neutral")
+                ):
                     is_correct = True
 
                 if is_correct:
@@ -961,7 +968,9 @@ class TestMLIntegrationWorkflows:
         test_inference_times = [25, 30, 45, 20, 35, 28, 150, 40]  # Включаем один выброс
         test_memory_usage = [800, 850, 820, 900, 880, 920, 950, 880]
 
-        for i, (inf_time, memory) in enumerate(zip(test_inference_times, test_memory_usage, strict=False)):
+        for i, (inf_time, memory) in enumerate(
+            zip(test_inference_times, test_memory_usage, strict=False)
+        ):
             success = i != 6  # Один неудачный запрос
             record_inference_metrics(inf_time, memory, success)
 

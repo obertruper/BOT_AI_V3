@@ -105,7 +105,7 @@ class ModelOutputAdapter:
 
         for i, tf in enumerate(self.timeframes):
             # 🛡️ ИСПРАВЛЕНО: Правильные индексы согласно обучающему проекту
-            long_prob = direction_probs[i][0]   # 0=LONG в обученной модели
+            long_prob = direction_probs[i][0]  # 0=LONG в обученной модели
             short_prob = direction_probs[i][1]  # 1=SHORT в обученной модели
 
             long_profit_probs.append(long_prob)
@@ -147,9 +147,9 @@ class ModelOutputAdapter:
                 },
                 "direction_probabilities": {
                     tf: {
-                        "long": float(probs[0]),   # 🛡️ ИСПРАВЛЕНО: 0=LONG
-                        "short": float(probs[1]),  # 🛡️ ИСПРАВЛЕНО: 1=SHORT  
-                        "flat": float(probs[2]),   # 🛡️ ИСПРАВЛЕНО: 2=FLAT
+                        "long": float(probs[0]),  # 🛡️ ИСПРАВЛЕНО: 0=LONG
+                        "short": float(probs[1]),  # 🛡️ ИСПРАВЛЕНО: 1=SHORT
+                        "flat": float(probs[2]),  # 🛡️ ИСПРАВЛЕНО: 2=FLAT
                     }
                     for tf, probs in zip(self.timeframes, direction_probs, strict=False)
                 },

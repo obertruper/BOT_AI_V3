@@ -86,7 +86,7 @@ class MLSignalProcessor:
         }
 
         logger.info("MLSignalProcessor initialized")
-        
+
         # Статистика кэша для мониторинга
         self.cache_stats = {
             "hits": 0,
@@ -117,15 +117,19 @@ class MLSignalProcessor:
         try:
             # ИСПРАВЛЕНО: Создаем абсолютно уникальный ключ кэша для каждого символа
             # Включаем секунды для точности и хеш данных для гарантии уникальности
-            from datetime import datetime
             import hashlib
+            from datetime import datetime
 
             current_time = datetime.utcnow().strftime("%Y%m%d%H%M%S")  # До секунд для точности
 
             # Создаем хеш последних данных для уникальности предсказаний
             if ohlcv_data is not None and len(ohlcv_data) > 0:
                 # Используем последние 3 цены закрытия для хеша данных
-                last_closes = ohlcv_data.tail(3)['close'].values if 'close' in ohlcv_data.columns else [0, 0, 0]
+                last_closes = (
+                    ohlcv_data.tail(3)["close"].values
+                    if "close" in ohlcv_data.columns
+                    else [0, 0, 0]
+                )
                 data_hash = hashlib.md5(str(last_closes).encode()).hexdigest()[:8]
             else:
                 data_hash = "no_data"
@@ -157,7 +161,7 @@ class MLSignalProcessor:
                     f"🎯 Новое предсказание для {symbol}: {signal_type} "
                     f"(уверенность: {confidence:.2%})"
                 )
-            
+
             # Кэшируем результат
             self._cache_prediction(cache_key, prediction)
 
@@ -409,7 +413,7 @@ class MLSignalProcessor:
         """
         current_time = datetime.now(UTC)
         keys_to_remove = []
-        
+
         cache_size_before = len(self.prediction_cache)
 
         for key, data in self.prediction_cache.items():
@@ -430,22 +434,22 @@ class MLSignalProcessor:
         # Удаляем устаревшие записи
         for key in keys_to_remove:
             del self.prediction_cache[key]
-            
+
         # Дополнительная очистка по размеру кэша (защита от переполнения)
         max_cache_size = 1000  # Максимум 1000 записей
         if len(self.prediction_cache) > max_cache_size:
             # Сортируем по времени и удаляем самые старые
             sorted_items = sorted(
                 self.prediction_cache.items(),
-                key=lambda x: x[1].get("timestamp", "1970-01-01T00:00:00")
+                key=lambda x: x[1].get("timestamp", "1970-01-01T00:00:00"),
             )
-            
+
             items_to_remove = len(self.prediction_cache) - max_cache_size
             for i in range(items_to_remove):
                 key_to_remove = sorted_items[i][0]
                 del self.prediction_cache[key_to_remove]
                 keys_to_remove.append(key_to_remove)
-        
+
         cache_size_after = len(self.prediction_cache)
         if keys_to_remove:
             self.cache_stats["last_cleanup"] = current_time
@@ -988,10 +992,10 @@ class MLSignalProcessor:
         """
         total_requests = self.cache_stats["hits"] + self.cache_stats["misses"]
         hit_rate = self.cache_stats["hits"] / total_requests if total_requests > 0 else 0
-        
+
         return {
             "cache_hits": self.cache_stats["hits"],
-            "cache_misses": self.cache_stats["misses"], 
+            "cache_misses": self.cache_stats["misses"],
             "cache_hit_rate": hit_rate,
             "cache_size": len(self.prediction_cache),
             "unique_symbols_processed": len(self.cache_stats["unique_symbols"]),
@@ -1305,7 +1309,7 @@ class MLSignalProcessor:
     def get_cache_stats(self) -> dict[str, Any]:
         """
         Получение статистики кэша для API эндпоинтов
-        
+
         Returns:
             Словарь с метриками кэша
         """
@@ -1316,12 +1320,12 @@ class MLSignalProcessor:
             parts = key.split(":")
             if len(parts) >= 2:
                 symbols_in_cache.add(parts[1])
-        
+
         return {
             "cache_hits": self.cache_stats.get("cache_hits", 0),
             "cache_misses": self.cache_stats.get("cache_misses", 0),
             "cache_size": len(self.prediction_cache),
             "symbols": symbols_in_cache,
             "ttl_seconds": 300,  # Из конфигурации
-            "last_cleanup": self.cache_stats.get("last_cleanup", datetime.now(UTC).isoformat())
+            "last_cleanup": self.cache_stats.get("last_cleanup", datetime.now(UTC).isoformat()),
         }

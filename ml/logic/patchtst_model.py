@@ -382,12 +382,14 @@ class UnifiedPatchTSTForTrading(nn.Module):
         # Получаем предсказанные классы из вероятностей (как в training проекте)
         direction_probs = torch.softmax(direction_logits_reshaped, dim=-1)  # (B, 4, 3)
         direction_classes = torch.argmax(direction_probs, dim=-1).float()  # (B, 4) - классы 0,1,2
-        
+
         # Применяем порог уверенности (как в training проекте)
-        confidence_threshold = self.config.get("model", {}).get("direction_confidence_threshold", 0.5)
+        confidence_threshold = self.config.get("model", {}).get(
+            "direction_confidence_threshold", 0.5
+        )
         max_probs, _ = torch.max(direction_probs, dim=-1)
         low_confidence_mask = max_probs < confidence_threshold
-        
+
         # Устанавливаем FLAT (класс 2) для низкоуверенных предсказаний
         if low_confidence_mask.any():
             direction_classes[low_confidence_mask] = 2.0  # FLAT = 2

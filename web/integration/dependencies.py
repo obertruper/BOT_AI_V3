@@ -12,7 +12,7 @@ Dependency Injection для Web API
 """
 
 from contextlib import asynccontextmanager
-from typing import Any, Union
+from typing import Any
 
 # Условные импорты для разработки
 try:
@@ -65,25 +65,25 @@ else:
     logger = logging.getLogger("web_dependencies")
 
 # Глобальные переменные для хранения компонентов системы
-_orchestrator: Union[SystemOrchestrator, None] = None
-_trader_manager: Union[TraderManager, None] = None
+_orchestrator: SystemOrchestrator | None = None
+_trader_manager: TraderManager | None = None
 
-_exchange_factory: Union[ExchangeFactory, None] = None
-_exchange_registry: Union[ExchangeRegistry, None] = None
-_config_manager: Union[ConfigManager, None] = None
-_metrics_collector: Union[MetricsCollector, None] = None
-_health_checker: Union[HealthChecker, None] = None
+_exchange_factory: ExchangeFactory | None = None
+_exchange_registry: ExchangeRegistry | None = None
+_config_manager: ConfigManager | None = None
+_metrics_collector: MetricsCollector | None = None
+_health_checker: HealthChecker | None = None
 
 # Дополнительные сервисы
-_user_manager: Union[Any, None] = None
-_session_manager: Union[Any, None] = None
-_stats_service: Union[Any, None] = None
-_alerts_service: Union[Any, None] = None
-_logs_service: Union[Any, None] = None
-_strategy_registry: Union[Any, None] = None
-_strategy_manager: Union[Any, None] = None
-_backtest_engine: Union[Any, None] = None
-_performance_service: Union[Any, None] = None
+_user_manager: Any | None = None
+_session_manager: Any | None = None
+_stats_service: Any | None = None
+_alerts_service: Any | None = None
+_logs_service: Any | None = None
+_strategy_registry: Any | None = None
+_strategy_manager: Any | None = None
+_backtest_engine: Any | None = None
+_performance_service: Any | None = None
 
 
 class DependencyContainer:
@@ -230,7 +230,7 @@ def get_config_manager_dependency() -> ConfigManager:
     return _config_manager
 
 
-def get_metrics_collector_dependency() -> Union[MetricsCollector, None]:
+def get_metrics_collector_dependency() -> MetricsCollector | None:
     """Получить metrics_collector"""
     return _metrics_collector
 

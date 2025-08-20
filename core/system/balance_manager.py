@@ -369,13 +369,13 @@ class BalanceManager:
             result[exch] = {}
             for symbol, balance in self.balances[exch].items():
                 reserved = self._get_reserved_amount(exch, symbol)
-                
+
                 # 🛡️ Защита от смешивания float и Decimal типов
                 try:
                     # Убеждаемся что все значения Decimal
                     balance_available = Decimal(str(balance.available))
                     reserved_decimal = Decimal(str(reserved))
-                    
+
                     result[exch][symbol] = {
                         "total": float(balance.total),
                         "available": float(balance.available),

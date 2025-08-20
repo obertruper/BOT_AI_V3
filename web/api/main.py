@@ -134,6 +134,8 @@ from web.api.endpoints import (
     auth_router,
     exchanges_router,
     monitoring_router,
+    orders_router,
+    positions_router,
     strategies_router,
     traders_router,
 )
@@ -141,6 +143,8 @@ from web.api.ml_api import router as ml_router
 
 # Подключаем роутеры к приложению
 app.include_router(monitoring_router)
+app.include_router(orders_router)
+app.include_router(positions_router)
 app.include_router(traders_router)
 app.include_router(exchanges_router)
 app.include_router(strategies_router)

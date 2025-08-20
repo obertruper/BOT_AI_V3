@@ -4,7 +4,7 @@
 
 Единая точка запуска всех тестовых компонентов:
 - Unit тесты
-- Integration тесты  
+- Integration тесты
 - Performance тесты
 - E2E тесты
 - Dynamic SL/TP тесты
@@ -44,8 +44,9 @@ except ImportError:
 
 class Colors:
     """ANSI цвета для терминала"""
+
     HEADER = "\033[95m"
-    BLUE = "\033[94m" 
+    BLUE = "\033[94m"
     CYAN = "\033[96m"
     GREEN = "\033[92m"
     WARNING = "\033[93m"
@@ -144,91 +145,104 @@ test_results/
 async def run_cli_mode(mode: str, args):
     """Запуск в CLI режиме"""
     print(f"{Colors.BLUE}🚀 Запуск в режиме: {mode}{Colors.ENDC}\n")
-    
+
     orchestrator = UnifiedTestOrchestrator()
-    
+
     if mode == "interactive":
         await orchestrator.run_interactive()
-        
+
     elif mode == "quick":
         # Быстрые тесты
         for key in orchestrator.components:
             orchestrator.components[key]["enabled"] = key in ["unit_tests", "smoke"]
         await orchestrator.run_cli("quick")
-        
-    elif mode == "standard": 
+
+    elif mode == "standard":
         # Стандартные тесты
         for key in orchestrator.components:
             orchestrator.components[key]["enabled"] = key in [
-                "unit_tests", "ml_tests", "database_tests"
+                "unit_tests",
+                "ml_tests",
+                "database_tests",
             ]
         await orchestrator.run_cli("standard")
-        
+
     elif mode == "full":
         # Полное тестирование
         await orchestrator.run_cli("full")
-        
+
     elif mode == "dynamic-sltp":
         # Только Dynamic SL/TP тесты
         await orchestrator.run_dynamic_sltp_suite()
-        
+
     elif mode == "performance":
         # Performance тесты
         for key in orchestrator.components:
             orchestrator.components[key]["enabled"] = key in [
-                "performance_tests", "dynamic_sltp_performance_tests"
+                "performance_tests",
+                "dynamic_sltp_performance_tests",
             ]
         await orchestrator.run_all_enabled()
-        
+
     elif mode == "integration":
-        # Integration тесты  
+        # Integration тесты
         for key in orchestrator.components:
             orchestrator.components[key]["enabled"] = key in [
-                "integration_tests", "dynamic_sltp_integration_tests", "dynamic_sltp_e2e_tests"
+                "integration_tests",
+                "dynamic_sltp_integration_tests",
+                "dynamic_sltp_e2e_tests",
             ]
         await orchestrator.run_all_enabled()
-        
+
     elif mode == "ci":
         # CI оптимизированные тесты
         for key in orchestrator.components:
             orchestrator.components[key]["enabled"] = key in [
-                "unit_tests", "ml_tests", "code_quality", "security_check"
+                "unit_tests",
+                "ml_tests",
+                "code_quality",
+                "security_check",
             ]
         await orchestrator.run_all_enabled()
-        
+
     elif mode == "visual":
         # Генерация отчетов
         orchestrator.generate_html_dashboard()
         print(f"{Colors.GREEN}✅ Visual dashboard generated{Colors.ENDC}")
         return
-        
+
     elif mode == "analysis":
         # Code analysis
         for key in orchestrator.components:
             orchestrator.components[key]["enabled"] = key in [
-                "code_quality", "type_check", "security_check",
-                "code_usage_analyzer_tests", "code_analyzer_validation_tests"
+                "code_quality",
+                "type_check",
+                "security_check",
+                "code_usage_analyzer_tests",
+                "code_analyzer_validation_tests",
             ]
         await orchestrator.run_all_enabled()
-        
+
     elif mode == "coverage":
         # Coverage анализ
         for key in orchestrator.components:
             orchestrator.components[key]["enabled"] = key in [
-                "coverage_report", "unit_tests", "integration_tests"
+                "coverage_report",
+                "unit_tests",
+                "integration_tests",
             ]
         await orchestrator.run_all_enabled()
-        
+
     else:
         print(f"{Colors.FAIL}❌ Неизвестный режим: {mode}{Colors.ENDC}")
         print(f"{Colors.CYAN}💡 Используйте --help для просмотра доступных режимов{Colors.ENDC}")
         return
-    
+
     # Генерация отчета если запрошено
     if args.generate_report:
         print(f"\n{Colors.GREEN}📊 Генерация HTML отчета...{Colors.ENDC}")
         orchestrator.generate_html_dashboard()
-        
+
     print(f"\n{Colors.GREEN}✅ Тестирование завершено!{Colors.ENDC}")
     print(f"{Colors.BLUE}📁 Результаты сохранены в: test_results/{Colors.ENDC}")
 
@@ -238,89 +252,80 @@ def main():
     parser = argparse.ArgumentParser(
         description="🎯 BOT_AI_V3 Unified Test Orchestrator",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Используйте интерактивный режим для полного контроля над тестированием"
+        epilog="Используйте интерактивный режим для полного контроля над тестированием",
     )
-    
+
     parser.add_argument(
-        "--mode", 
+        "--mode",
         choices=[
-            "interactive", "quick", "standard", "full", 
-            "dynamic-sltp", "performance", "integration", 
-            "ci", "visual", "analysis", "coverage"
+            "interactive",
+            "quick",
+            "standard",
+            "full",
+            "dynamic-sltp",
+            "performance",
+            "integration",
+            "ci",
+            "visual",
+            "analysis",
+            "coverage",
         ],
         default="interactive",
-        help="Режим работы оркестратора"
+        help="Режим работы оркестратора",
     )
-    
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Подробный вывод"
-    )
-    
-    parser.add_argument(
-        "--quiet", "-q", 
-        action="store_true",
-        help="Минимальный вывод"
-    )
-    
+
+    parser.add_argument("--verbose", "-v", action="store_true", help="Подробный вывод")
+
+    parser.add_argument("--quiet", "-q", action="store_true", help="Минимальный вывод")
+
     parser.add_argument(
         "--timeout",
         type=int,
         default=1800,
-        help="Таймаут для тестов в секундах (по умолчанию 1800)"
+        help="Таймаут для тестов в секундах (по умолчанию 1800)",
     )
-    
+
+    parser.add_argument("--parallel", action="store_true", help="Параллельное выполнение тестов")
+
     parser.add_argument(
-        "--parallel",
-        action="store_true", 
-        help="Параллельное выполнение тестов"
+        "--generate-report", action="store_true", help="Генерировать HTML отчет после завершения"
     )
-    
+
     parser.add_argument(
-        "--generate-report",
-        action="store_true",
-        help="Генерировать HTML отчет после завершения"
+        "--output-dir", default="test_results", help="Директория для сохранения отчетов"
     )
-    
-    parser.add_argument(
-        "--output-dir",
-        default="test_results",
-        help="Директория для сохранения отчетов"
-    )
-    
-    parser.add_argument(
-        "--help-detailed",
-        action="store_true",
-        help="Показать детальную справку"
-    )
-    
+
+    parser.add_argument("--help-detailed", action="store_true", help="Показать детальную справку")
+
     args = parser.parse_args()
-    
+
     # Детальная справка
     if args.help_detailed:
         print_help()
         return
-    
+
     # Проверяем конфликты параметров
     if args.verbose and args.quiet:
-        print(f"{Colors.WARNING}⚠️  Нельзя использовать --verbose и --quiet одновременно{Colors.ENDC}")
+        print(
+            f"{Colors.WARNING}⚠️  Нельзя использовать --verbose и --quiet одновременно{Colors.ENDC}"
+        )
         return
-    
+
     # Приветствие (если не quiet режим)
     if not args.quiet:
         print_welcome()
-    
+
     try:
         # Запуск в соответствующем режиме
         asyncio.run(run_cli_mode(args.mode, args))
-        
+
     except KeyboardInterrupt:
         print(f"\n{Colors.WARNING}🛑 Прервано пользователем{Colors.ENDC}")
     except Exception as e:
         print(f"{Colors.FAIL}❌ Ошибка: {e}{Colors.ENDC}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 

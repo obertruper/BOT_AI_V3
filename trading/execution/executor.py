@@ -120,9 +120,11 @@ class ExecutionEngine:
         # Отправляем на исполнение
         for attempt in range(self.max_retries):
             try:
-                self.logger.info(f"📤 Попытка {attempt + 1}/{self.max_retries} отправки ордера на биржу")
+                self.logger.info(
+                    f"📤 Попытка {attempt + 1}/{self.max_retries} отправки ордера на биржу"
+                )
                 success = await self.order_manager.submit_order(order)
-                
+
                 if success:
                     self.logger.info(f"✅ Ордер {order.order_id} успешно отправлен на биржу")
                     # Ждем исполнения
@@ -130,7 +132,9 @@ class ExecutionEngine:
                     if filled:
                         self.logger.info(f"✅ Ордер {order.order_id} успешно исполнен на бирже")
                     else:
-                        self.logger.warning(f"⚠️ Ордер {order.order_id} отправлен, но не исполнен в течение таймаута")
+                        self.logger.warning(
+                            f"⚠️ Ордер {order.order_id} отправлен, но не исполнен в течение таймаута"
+                        )
                     return success
                 else:
                     self.logger.error(f"❌ Не удалось отправить ордер {order.order_id} на биржу")
@@ -318,11 +322,15 @@ class ExecutionEngine:
     def _validate_order(self, order: Order) -> bool:
         """Валидация ордера перед исполнением"""
         if order.status != OrderStatus.PENDING:
-            self.logger.debug(f"Ордер {order.order_id} имеет статус {order.status}, требуется PENDING")
+            self.logger.debug(
+                f"Ордер {order.order_id} имеет статус {order.status}, требуется PENDING"
+            )
             return False
 
         if order.quantity <= 0:
-            self.logger.warning(f"Ордер {order.order_id} имеет некорректное количество: {order.quantity}")
+            self.logger.warning(
+                f"Ордер {order.order_id} имеет некорректное количество: {order.quantity}"
+            )
             return False
 
         if order.order_type == OrderType.LIMIT and not order.price:
@@ -332,7 +340,7 @@ class ExecutionEngine:
         # Временно отключаем проверку баланса до исправления exchange_registry
         # TODO: Восстановить после исправления получения баланса
         self.logger.debug(f"Ордер {order.order_id} прошел базовую валидацию")
-        
+
         return True
 
     def _update_statistics(self, success: bool, execution_time: float):
