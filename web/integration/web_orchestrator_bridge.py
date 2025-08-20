@@ -6,7 +6,7 @@
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Union
 
 from core.logging.logger_factory import get_global_logger_factory
 

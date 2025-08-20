@@ -14,7 +14,7 @@ Data Adapters для BOT_Trading v3.0
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Union
 
 from core.logging.logger_factory import get_global_logger_factory
 

@@ -9,7 +9,7 @@ REST API для управления стратегиями:
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Union
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel

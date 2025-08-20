@@ -9,7 +9,7 @@ REST API для аутентификации и авторизации:
 """
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Union
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status

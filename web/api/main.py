@@ -12,7 +12,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
+from typing import Any, Union
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status

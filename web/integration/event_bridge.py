@@ -17,7 +17,7 @@ import json
 from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Union
 
 from core.logging.logger_factory import get_global_logger_factory
 

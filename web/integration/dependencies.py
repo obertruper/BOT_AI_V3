@@ -12,7 +12,7 @@ Dependency Injection для Web API
 """
 
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Union
 
 # Условные импорты для разработки
 try:
