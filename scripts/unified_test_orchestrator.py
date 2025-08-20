@@ -213,6 +213,42 @@ class UnifiedTestOrchestrator:
                 "enabled": False,  # Отключен по умолчанию так как может быть медленным
                 "status": "pending",
             },
+            # === DYNAMIC SL/TP TEST SUITE ===
+            "dynamic_sltp_unit_tests": {
+                "name": "Dynamic SL/TP Unit Tests",
+                "icon": "📊",
+                "command": "pytest tests/unit/trading/orders/test_dynamic_sltp_calculator.py -v --tb=short -m sltp",
+                "enabled": True,
+                "status": "pending",
+            },
+            "dynamic_sltp_integration_tests": {
+                "name": "Dynamic SL/TP Integration",
+                "icon": "🔗",
+                "command": "pytest tests/integration/test_dynamic_sltp_integration.py -v --tb=short -m 'integration and sltp'",
+                "enabled": True,
+                "status": "pending",
+            },
+            "dynamic_sltp_e2e_tests": {
+                "name": "Dynamic SL/TP E2E Tests",
+                "icon": "🎯",
+                "command": "pytest tests/integration/test_dynamic_sltp_e2e.py -v --tb=short -m 'e2e and sltp'",
+                "enabled": True,
+                "status": "pending",
+            },
+            "dynamic_sltp_performance_tests": {
+                "name": "Dynamic SL/TP Performance",
+                "icon": "⚡",
+                "command": "pytest tests/performance/test_dynamic_sltp_performance.py -v --tb=short -m 'performance and sltp'",
+                "enabled": False,  # По умолчанию отключен - может быть медленным
+                "status": "pending",
+            },
+            "dynamic_sltp_comprehensive": {
+                "name": "Complete Dynamic SL/TP Suite",
+                "icon": "🎪",
+                "command": "pytest tests/unit/trading/orders/test_dynamic_sltp_calculator.py tests/integration/test_dynamic_sltp_integration.py tests/integration/test_dynamic_sltp_e2e.py -v --tb=short -m sltp",
+                "enabled": True,
+                "status": "pending",
+            },
         }
 
         # Статистика
@@ -268,6 +304,7 @@ class UnifiedTestOrchestrator:
         print("  [7] Full analysis (everything)")
         print("  [8] Visual dashboard")
         print("  [9] Code analysis suite")
+        print("  [D] Dynamic SL/TP test suite 📊")
         if ENHANCED_DASHBOARD_AVAILABLE:
             print("  [E] Enhanced interactive dashboard ✨")
         print("  [0] Exit")

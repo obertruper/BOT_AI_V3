@@ -5,6 +5,7 @@ import { ConfigFile, TradingConfig, SystemConfig, MLConfig, RiskConfig } from '@
 import SimpleExchangeSettings from '@/components/settings/SimpleExchangeSettings';
 import SimpleTradingSettings from '@/components/settings/SimpleTradingSettings';
 import SimpleMLSettings from '@/components/settings/SimpleMLSettings';
+import RiskManagementSettings from '@/components/settings/RiskManagementSettings';
 
 type ConfigSection = 'overview' | 'exchanges' | 'trading' | 'system' | 'ml' | 'risk';
 
@@ -236,14 +237,7 @@ const Settings: React.FC = () => {
       case 'ml':
         return <SimpleMLSettings onSave={() => handleConfigSave('ML Model')} />;
       case 'risk':
-        return (
-          <div className="card">
-            <div className="p-6">
-              <h3 className="text-xl font-semibold text-white mb-4">Risk Management Configuration</h3>
-              <p className="text-gray-400">Risk management configuration interface coming soon...</p>
-            </div>
-          </div>
-        );
+        return <RiskManagementSettings onSave={() => handleConfigSave('Risk Management')} />;
       default:
         return renderOverview();
     }

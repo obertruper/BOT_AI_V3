@@ -1,13 +1,13 @@
 ⚠️ ВНИМАНИЕ: Обнаружены ошибки в анализе!
-Проверьте лог: data/logs/background_analysis_20250819_180359.log
+Проверьте лог: data/logs/background_analysis_20250820_105008.log
 
-   ❌ Провалилось: 1 ошибок
-  ❌ ml_prediction_chain: 2/6 шагов, 0.921с
+   ❌ Провалилось: 2 ошибок
+  ❌ ml_prediction_chain: 5/6 шагов, 0.690с
 ==================================== ERRORS ====================================
 _________ ERROR collecting tests/integration/test_complete_trading.py __________
-_________ ERROR collecting tests/integration/test_enhanced_logging.py __________
-___________ ERROR collecting tests/integration/test_enhanced_sltp.py ___________
+_________ ERROR collecting tests/integration/test_dynamic_sltp_e2e.py __________
+_____ ERROR collecting tests/integration/test_dynamic_sltp_integration.py ______
 ERROR tests/integration/test_complete_trading.py
-ERROR tests/integration/test_enhanced_logging.py
-ERROR tests/integration/test_enhanced_sltp.py
+ERROR tests/integration/test_dynamic_sltp_e2e.py
+ERROR tests/integration/test_dynamic_sltp_integration.py
 ❌ Файл анализа не найден. Сначала запустите code_chain_analyzer.py

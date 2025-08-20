@@ -1301,3 +1301,27 @@ class MLSignalProcessor:
             await self.data_loader.cleanup()
 
         logger.info("MLSignalProcessor shutdown complete")
+
+    def get_cache_stats(self) -> dict[str, Any]:
+        """
+        Получение статистики кэша для API эндпоинтов
+        
+        Returns:
+            Словарь с метриками кэша
+        """
+        # Получаем уникальные символы из кэша
+        symbols_in_cache = set()
+        for key in self.prediction_cache.keys():
+            # Ключ кэша имеет формат: {exchange}:{symbol}:{time}:{data_hash}
+            parts = key.split(":")
+            if len(parts) >= 2:
+                symbols_in_cache.add(parts[1])
+        
+        return {
+            "cache_hits": self.cache_stats.get("cache_hits", 0),
+            "cache_misses": self.cache_stats.get("cache_misses", 0),
+            "cache_size": len(self.prediction_cache),
+            "symbols": symbols_in_cache,
+            "ttl_seconds": 300,  # Из конфигурации
+            "last_cleanup": self.cache_stats.get("last_cleanup", datetime.now(UTC).isoformat())
+        }
