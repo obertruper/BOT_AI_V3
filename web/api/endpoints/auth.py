@@ -74,10 +74,10 @@ class UserInfo(BaseModel):
 
     user_id: str
     username: str
-    email: str | None = None
+    email: Union[str, None] = None
     role: str
     permissions: list[str]
-    last_login: datetime | None = None
+    last_login: Union[datetime, None] = None
     created_at: datetime
 
 
@@ -91,7 +91,7 @@ class ChangePasswordRequest(BaseModel):
 # =================== UTILITY FUNCTIONS ===================
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
+def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None):
     """Создание access token"""
     to_encode = data.copy()
     if expires_delta:
@@ -104,7 +104,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
+def create_refresh_token(data: dict, expires_delta: Union[timedelta, None] = None):
     """Создание refresh token"""
     to_encode = data.copy()
     if expires_delta:

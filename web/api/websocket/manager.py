@@ -30,7 +30,7 @@ logger = logger_factory.get_logger("websocket_manager")
 class WebSocketConnection:
     """Класс для управления отдельным WebSocket соединением"""
 
-    def __init__(self, websocket: WebSocket, connection_id: str, user_id: str | None = None):
+    def __init__(self, websocket: WebSocket, connection_id: str, user_id: Union[str, None] = None):
         self.websocket = websocket
         self.connection_id = connection_id
         self.user_id = user_id
@@ -156,7 +156,7 @@ class WebSocketManager:
 
         logger.info("WebSocketManager остановлен")
 
-    async def connect(self, websocket: WebSocket, user_id: str | None = None) -> str:
+    async def connect(self, websocket: WebSocket, user_id: Union[str, None] = None) -> str:
         """
         Подключение нового WebSocket
 
@@ -265,7 +265,7 @@ class WebSocketManager:
             },
         )
 
-    async def handle_websocket(self, websocket: WebSocket, user_id: str | None = None):
+    async def handle_websocket(self, websocket: WebSocket, user_id: Union[str, None] = None):
         """
         Обработка WebSocket соединения
 

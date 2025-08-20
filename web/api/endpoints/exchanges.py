@@ -33,7 +33,7 @@ class ExchangeInfo(BaseModel):
     capabilities: dict[str, bool]
     supported_symbols: list[str]
     api_limits: dict[str, Any]
-    last_heartbeat: datetime | None = None
+    last_heartbeat: Union[datetime, None] = None
 
 
 class ExchangeConfig(BaseModel):
@@ -51,8 +51,8 @@ class ConnectionTest(BaseModel):
 
     exchange: str
     success: bool
-    latency_ms: float | None = None
-    error_message: str | None = None
+    latency_ms: Union[float, None] = None
+    error_message: Union[str, None] = None
     timestamp: datetime
 
 

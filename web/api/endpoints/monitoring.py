@@ -74,8 +74,8 @@ class ExchangeStatus(BaseModel):
 
     exchange: str
     status: str  # connected, disconnected, error
-    latency_ms: float | None = None
-    last_heartbeat: datetime | None = None
+    latency_ms: Union[float, None] = None
+    last_heartbeat: Union[datetime, None] = None
     api_calls_count: int = 0
     error_rate: float = 0.0
 
@@ -214,7 +214,7 @@ async def get_trading_statistics(
 
 @router.get("/alerts", response_model=list[Alert])
 async def get_alerts(
-    level: str | None = Query(None, description="Фильтр по уровню"),
+    level: Union[str, None] = Query(None, description="Фильтр по уровню"),
     unresolved_only: bool = Query(True, description="Только нерешенные алерты"),
     limit: int = Query(50, description="Количество алертов"),
 ):
@@ -350,10 +350,10 @@ async def get_performance_overview(
 
 @router.get("/logs", response_model=list[dict[str, Any]])
 async def get_system_logs(
-    component: str | None = Query(None, description="Фильтр по компоненту"),
-    level: str | None = Query(None, description="Уровень логирования"),
+    component: Union[str, None] = Query(None, description="Фильтр по компоненту"),
+    level: Union[str, None] = Query(None, description="Уровень логирования"),
     limit: int = Query(100, description="Количество записей"),
-    search: str | None = Query(None, description="Поиск по тексту"),
+    search: Union[str, None] = Query(None, description="Поиск по тексту"),
 ):
     """Получить системные логи"""
     try:

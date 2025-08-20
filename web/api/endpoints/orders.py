@@ -25,9 +25,9 @@ class CreateOrderRequest(BaseModel):
     side: str  # 'buy' or 'sell'
     type: str  # 'market' or 'limit'
     quantity: float
-    price: float | None = None
-    stop_loss: float | None = None
-    take_profit: float | None = None
+    price: Union[float, None] = None
+    stop_loss: Union[float, None] = None
+    take_profit: Union[float, None] = None
 
 
 @router.get("/")

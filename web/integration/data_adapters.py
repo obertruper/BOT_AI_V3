@@ -456,7 +456,7 @@ class DataAdapters:
         except (ValueError, TypeError):
             return 0.0
 
-    def _datetime_to_iso(self, dt: datetime | None) -> str | None:
+    def _datetime_to_iso(self, dt: Union[datetime, None]) -> str | None:
         """Преобразование datetime в ISO строку"""
         if dt is None:
             return None

@@ -95,7 +95,7 @@ class EventBridge:
         self.config_manager = config_manager
 
         # WebSocket менеджер (будет инициализирован позже)
-        self.websocket_manager: Any | None = None
+        self.websocket_manager: Union[Any, None] = None
 
         # Подписчики на события
         self.event_handlers: dict[EventType, list[Callable]] = {}

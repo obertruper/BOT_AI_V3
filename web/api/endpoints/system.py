@@ -315,7 +315,7 @@ async def get_system_metrics(
 
 
 @router.get("/logs")
-async def get_system_logs(lines: int = 100, level: str | None = None) -> dict[str, Any]:
+async def get_system_logs(lines: int = 100, level: Union[str, None] = None) -> dict[str, Any]:
     """
     Получить последние логи системы.
 

@@ -49,8 +49,8 @@ class WebIntegration:
         """
         self.orchestrator = orchestrator
         self.web_server: uvicorn.Optional[Server] = None
-        self.event_bridge: EventBridge | None = None
-        self.data_adapters: DataAdapters | None = None
+        self.event_bridge: Union[EventBridge, None] = None
+        self.data_adapters: Union[DataAdapters, None] = None
         self.is_running = False
 
         # Конфигурация веб-сервера
@@ -109,7 +109,7 @@ class WebIntegration:
                 f"Не удалось загрузить веб-конфигурацию, используем значения по умолчанию: {e}"
             )
 
-    async def start_web_server(self, host: str | None = None, port: int | None = None):
+    async def start_web_server(self, host: Union[str, None] = None, port: Union[int, None] = None):
         """
         Запуск веб-сервера
 
