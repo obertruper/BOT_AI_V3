@@ -17,7 +17,7 @@ import json
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any,Union
 
 from fastapi import WebSocket, WebSocketDisconnect
 

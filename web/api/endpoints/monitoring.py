@@ -9,7 +9,7 @@ REST API для мониторинга системы:
 """
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any,Union
 
 import psutil
 from fastapi import APIRouter, HTTPException, Query

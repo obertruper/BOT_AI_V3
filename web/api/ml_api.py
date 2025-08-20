@@ -4,7 +4,7 @@ API endpoints для ML сигналов
 """
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any,Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
