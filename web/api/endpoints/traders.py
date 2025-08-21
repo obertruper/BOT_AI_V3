@@ -9,7 +9,7 @@ REST API для управления трейдерами:
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -31,9 +31,9 @@ class TraderCreateRequest(BaseModel):
     exchange: str
     strategy: str
     symbol: str
-    leverage: float | None = None
-    risk_balance: float | None = None
-    config_overrides: dict[str, Any] | None = None
+    leverage: Optional[float] = None
+    risk_balance: Optional[float] = None
+    config_overrides: Optional[dict[str, Any]] = None
 
 
 class TraderResponse(BaseModel):
@@ -46,19 +46,19 @@ class TraderResponse(BaseModel):
     state: str
     is_trading: bool
     created_at: datetime
-    last_activity: datetime | None = None
-    performance: dict[str, Any] | None = None
-    current_position: dict[str, Any] | None = None
+    last_activity: Optional[datetime] = None
+    performance: Optional[dict[str, Any]] = None
+    current_position: Optional[dict[str, Any]] = None
 
 
 class TraderUpdateRequest(BaseModel):
     """Запрос на обновление трейдера"""
 
-    leverage: float | None = None
-    risk_balance: float | None = None
-    stop_loss: float | None = None
-    take_profit: float | None = None
-    config_updates: dict[str, Any] | None = None
+    leverage: Optional[float] = None
+    risk_balance: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    config_updates: Optional[dict[str, Any]] = None
 
 
 class TradingActionRequest(BaseModel):
@@ -74,8 +74,8 @@ class TradingActionRequest(BaseModel):
 @router.get("/", response_model=list[TraderResponse])
 async def get_traders(
     active_only: bool = Query(False, description="Только активные трейдеры"),
-    exchange: str | None = Query(None, description="Фильтр по бирже"),
-    strategy: str | None = Query(None, description="Фильтр по стратегии"),
+    exchange: Optional[str] = Query(None, description="Фильтр по бирже"),
+    strategy: Optional[str] = Query(None, description="Фильтр по стратегии"),
 ):
     """Получить список всех трейдеров"""
     try:
@@ -396,7 +396,7 @@ async def get_trader_performance(
 async def get_trader_logs(
     trader_id: str,
     limit: int = Query(100, description="Количество записей"),
-    level: str | None = Query(None, description="Уровень логирования"),
+    level: Optional[str] = Query(None, description="Уровень логирования"),
 ):
     """Получить логи трейдера"""
     try:

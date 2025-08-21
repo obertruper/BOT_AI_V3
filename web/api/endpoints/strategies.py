@@ -9,7 +9,7 @@ REST API для управления стратегиями:
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -34,7 +34,7 @@ class StrategyInfo(BaseModel):
     status: str  # active, inactive, testing
     version: str
     parameters: dict[str, Any]
-    performance_metrics: dict[str, float] | None = None
+    performance_metrics: Optional[dict[str, float]] = None
     supported_exchanges: list[str]
     risk_level: str  # low, medium, high
 
@@ -47,7 +47,7 @@ class StrategyConfig(BaseModel):
     exchange: str
     symbol: str
     parameters: dict[str, Any]
-    risk_settings: dict[str, Any] | None = None
+    risk_settings: Optional[dict[str, Any]] = None
     enabled: bool = True
 
 
@@ -59,8 +59,8 @@ class BacktestRequest(BaseModel):
     start_date: datetime
     end_date: datetime
     initial_balance: float = 10000.0
-    parameters: dict[str, Any] | None = None
-    exchanges: list[str] | None = None
+    parameters: Optional[dict[str, Any]] = None
+    exchanges: Optional[list[str]] = None
 
 
 class BacktestResult(BaseModel):
@@ -79,7 +79,7 @@ class BacktestResult(BaseModel):
     profit_factor: float
     status: str  # running, completed, failed
     created_at: datetime
-    completed_at: datetime | None = None
+    completed_at: Optional[datetime] = None
 
 
 class StrategyPerformance(BaseModel):
@@ -105,7 +105,7 @@ class StrategyPerformance(BaseModel):
 
 @router.get("/", response_model=list[StrategyInfo])
 async def get_strategies(
-    category: str | None = Query(None, description="Фильтр по категории"),
+    category: Optional[str] = Query(None, description="Фильтр по категории"),
     active_only: bool = Query(False, description="Только активные стратегии"),
 ):
     """Получить список всех доступных стратегий"""
@@ -431,7 +431,7 @@ async def get_strategy_categories():
 
 async def get_strategy_performance_summary(
     strategy_name: str,
-) -> dict[str, float] | None:
+) -> Optional[dict[str, float]]:
     """Получить краткую сводку производительности стратегии"""
     try:
         performance_service = get_performance_service()
@@ -444,7 +444,7 @@ async def get_strategy_performance_summary(
 
 async def get_strategy_detailed_performance(
     strategy_name: str,
-) -> dict[str, float] | None:
+) -> Optional[dict[str, float]]:
     """Получить детальную производительность стратегии"""
     try:
         performance_service = get_performance_service()

@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from production_features_config import PRODUCTION_FEATURES as REQUIRED_FEATURES_231
+from production_features_config import REAL_FEATURES_240 as REQUIRED_FEATURES_240
 from sqlalchemy import desc, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -106,25 +106,25 @@ class RealTimeIndicatorCalculator:
                 available_cols = features_result.columns.tolist()
                 selected_features = []
 
-                # Выбираем признаки в правильном порядке из REQUIRED_FEATURES_231
-                for feature in REQUIRED_FEATURES_231:
+                # Выбираем признаки в правильном порядке из REQUIRED_FEATURES_240
+                for feature in REQUIRED_FEATURES_240:
                     if feature in available_cols:
                         selected_features.append(feature)
                     else:
                         # Если признак отсутствует, логируем предупреждение
                         logger.warning(f"Признак {feature} отсутствует в результатах")
 
-                # Проверяем, что получили ровно 231 признаков
-                if len(selected_features) != 231:
-                    logger.error(f"Получено {len(selected_features)} признаков вместо 231!")
-                    # Дополняем нулями если меньше 231
-                    while len(selected_features) < 231:
+                # Проверяем, что получили ровно 240 признаков
+                if len(selected_features) != 240:
+                    logger.error(f"Получено {len(selected_features)} признаков вместо 240!")
+                    # Дополняем нулями если меньше 240
+                    while len(selected_features) < 240:
                         selected_features.append("padding_0")
                         features_result["padding_0"] = 0.0
 
                 # ИСПРАВЛЕНО: Фильтруем только числовые колонки перед созданием массива
                 numeric_features = []
-                for feature in selected_features[:231]:
+                for feature in selected_features[:240]:
                     if feature in features_result.columns:
                         # Проверяем что колонка содержит числовые данные
                         if pd.api.types.is_numeric_dtype(features_result[feature]):

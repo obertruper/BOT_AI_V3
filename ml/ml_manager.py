@@ -771,6 +771,16 @@ class MLManager:
         # ПРАВИЛЬНАЯ ИНТЕРПРЕТАЦИЯ DIRECTIONS (12 значений = 4 таймфрейма × 3 класса)
         direction_logits_reshaped = direction_logits.reshape(4, 3)  # 4 таймфрейма × 3 класса
 
+        # Проверка на подозрительные значения логитов
+        for i, logits in enumerate(direction_logits_reshaped):
+            timeframe_names = ["15m", "1h", "4h", "12h"]
+            # Проверяем на одинаковые логиты
+            if np.allclose(logits, logits[0], rtol=1e-5):
+                logger.warning(f"⚠️ ВНИМАНИЕ: Все логиты для {timeframe_names[i]} одинаковые: {logits}")
+                # Если все логиты одинаковые и близки к 2.0, это проблема
+                if np.allclose(logits, 2.0, atol=0.1):
+                    logger.error(f"🔴 КРИТИЧНО: Логиты {timeframe_names[i]} = 2.0, возможно модель возвращает классы вместо логитов!")
+
         # Применяем softmax к каждому таймфрейму
         directions = []
         direction_probs = []
@@ -899,9 +909,29 @@ class MLManager:
             signal_type = filter_result.signal_type
             metrics = filter_result.quality_metrics
 
-            # Используем метрики качества для финальных параметров
-            signal_strength = metrics.agreement_score
-            combined_confidence = metrics.confidence_score
+            # ВАЖНО: 4h таймфрейм имеет приоритет (но не блокирует полностью)
+            if directions[2] == 2:  # directions[2] это 4h, значение 2 = NEUTRAL
+                # Проверяем другие таймфреймы
+                other_directions = [directions[i] for i in [0, 1, 3]]  # 15m, 1h, 12h
+                long_count = sum(1 for d in other_directions if d == 0)
+                short_count = sum(1 for d in other_directions if d == 1)
+                
+                # Если 2+ других таймфрейма указывают направление с хорошей confidence
+                if long_count >= 2 and metrics.confidence_score > 0.42:
+                    logger.info(f"⚠️ 4h = NEUTRAL, но {long_count}/3 других ТФ = LONG, продолжаем с пониженной силой")
+                    signal_strength *= 0.7  # Снижаем силу сигнала
+                elif short_count >= 2 and metrics.confidence_score > 0.42:
+                    logger.info(f"⚠️ 4h = NEUTRAL, но {short_count}/3 других ТФ = SHORT, продолжаем с пониженной силой")
+                    signal_strength *= 0.7
+                else:
+                    logger.info("🛡️ 4h = NEUTRAL и нет сильного консенсуса → финальный сигнал NEUTRAL")
+                    signal_type = "NEUTRAL"
+                    signal_strength = 0.3
+                    combined_confidence = metrics.confidence_score * 0.5
+            else:
+                # Используем метрики качества для финальных параметров
+                signal_strength = metrics.agreement_score
+                combined_confidence = metrics.confidence_score
 
             # Расчет SL/TP на основе качества сигнала
             if signal_type in ["LONG", "SHORT"]:

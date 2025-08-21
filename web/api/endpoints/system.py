@@ -4,7 +4,7 @@
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
 from core.system.orchestrator import SystemOrchestrator
-from web.api.dependencies import get_config_manager, get_system_orchestrator
+from web.integration.dependencies import get_config_manager_dependency, get_orchestrator_dependency
 
 logger = setup_logger("api.system")
 
@@ -59,8 +59,8 @@ class SystemConfigUpdate(BaseModel):
 
 @router.get("/status", response_model=SystemStatus)
 async def get_system_status(
-    orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
-    config_manager: ConfigManager = Depends(get_config_manager),
+    orchestrator: SystemOrchestrator = Depends(get_orchestrator_dependency),
+    config_manager: ConfigManager = Depends(get_config_manager_dependency),
 ) -> SystemStatus:
     """
     Получить текущий статус системы.
@@ -93,8 +93,8 @@ async def get_system_status(
 
 @router.get("/health", response_model=HealthCheck)
 async def health_check(
-    orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
-    config_manager: ConfigManager = Depends(get_config_manager),
+    orchestrator: SystemOrchestrator = Depends(get_orchestrator_dependency),
+    config_manager: ConfigManager = Depends(get_config_manager_dependency),
 ) -> HealthCheck:
     """
     Проверка здоровья системы.
@@ -125,7 +125,7 @@ async def health_check(
 
 @router.get("/config", response_model=SystemConfig)
 async def get_system_config(
-    config_manager: ConfigManager = Depends(get_config_manager),
+    config_manager: ConfigManager = Depends(get_config_manager_dependency),
 ) -> SystemConfig:
     """
     Получить системную конфигурацию.
@@ -163,7 +163,7 @@ async def get_system_config(
 @router.post("/config/update")
 async def update_system_config(
     request: SystemConfigUpdate,
-    config_manager: ConfigManager = Depends(get_config_manager),
+    config_manager: ConfigManager = Depends(get_config_manager_dependency),
 ) -> dict[str, Any]:
     """
     Обновить часть системной конфигурации (раздел system) и сохранить изменения.
@@ -194,7 +194,7 @@ async def update_system_config(
 
 @router.get("/config/raw")
 async def get_full_config(
-    config_manager: ConfigManager = Depends(get_config_manager),
+    config_manager: ConfigManager = Depends(get_config_manager_dependency),
 ) -> dict[str, Any]:
     """Получить всю конфигурацию (без фильтрации), для админских нужд UI."""
     try:
@@ -230,7 +230,7 @@ async def get_full_config(
 
 @router.post("/restart")
 async def restart_system(
-    orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
+    orchestrator: SystemOrchestrator = Depends(get_orchestrator_dependency),
 ) -> dict[str, str]:
     """
     Перезапустить систему.
@@ -260,7 +260,7 @@ async def restart_system(
 
 @router.post("/shutdown")
 async def shutdown_system(
-    orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
+    orchestrator: SystemOrchestrator = Depends(get_orchestrator_dependency),
 ) -> dict[str, str]:
     """
     Остановить систему.
@@ -285,7 +285,7 @@ async def shutdown_system(
 
 @router.get("/metrics")
 async def get_system_metrics(
-    orchestrator: SystemOrchestrator = Depends(get_system_orchestrator),
+    orchestrator: SystemOrchestrator = Depends(get_orchestrator_dependency),
 ) -> dict[str, Any]:
     """
     Получить системные метрики.
@@ -315,7 +315,7 @@ async def get_system_metrics(
 
 
 @router.get("/logs")
-async def get_system_logs(lines: int = 100, level: str | None = None) -> dict[str, Any]:
+async def get_system_logs(lines: int = 100, level: Optional[str] = None) -> dict[str, Any]:
     """
     Получить последние логи системы.
 

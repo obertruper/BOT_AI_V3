@@ -6,7 +6,7 @@
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, Union
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -152,7 +152,7 @@ class WebOrchestratorBridge:
             self.logger.error(f"Ошибка получения трейдеров: {e}")
             raise
 
-    async def get_trader(self, trader_id: str) -> dict[str, Any] | None:
+    async def get_trader(self, trader_id: str) -> Optional[dict[str, Any]]:
         """Получение данных конкретного трейдера"""
         try:
             if self.use_mock:
@@ -229,7 +229,7 @@ class WebOrchestratorBridge:
 
     # =================== POSITIONS ===================
 
-    async def get_positions(self, trader_id: str | None = None) -> list[dict[str, Any]]:
+    async def get_positions(self, trader_id: Optional[str] = None) -> list[dict[str, Any]]:
         """Получение списка позиций"""
         try:
             if self.use_mock:
@@ -322,7 +322,7 @@ class WebOrchestratorBridge:
 
 
 # Глобальный экземпляр моста
-_bridge_instance: WebOrchestratorBridge | None = None
+_bridge_instance: Optional[WebOrchestratorBridge] = None
 
 
 def get_web_orchestrator_bridge() -> WebOrchestratorBridge:

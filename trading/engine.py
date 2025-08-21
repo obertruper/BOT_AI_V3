@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -24,6 +25,9 @@ from database.repositories.signal_repository_fixed import (
     SignalRepositoryFixed as SignalRepository,  # Исправленный
 )
 from database.repositories.trade_repository import TradeRepository
+
+# Импортируем модели для создания ордеров
+from database.models.base_models import Order, OrderSide, OrderStatus, OrderType, SignalType
 from exchanges.exchange_manager import ExchangeManager
 from risk_management.manager import RiskManager
 from strategies.manager import StrategyManager
@@ -31,6 +35,7 @@ from strategies.manager import StrategyManager
 from .execution.executor import ExecutionEngine
 from .orders.order_manager import OrderManager
 from .positions.position_manager import PositionManager
+from .position_tracker import EnhancedPositionTracker, get_position_tracker
 
 
 class TradingState(Enum):
@@ -94,6 +99,7 @@ class TradingEngine:
         # Основные компоненты
         self.signal_processor = None  # Пока не используется, заменен на ML сигналы через ml_manager
         self.position_manager: PositionManager | None = None
+        self.position_tracker: EnhancedPositionTracker | None = None  # Enhanced Position Tracker
         self.order_manager: OrderManager | None = None
         self.execution_engine: ExecutionEngine | None = None
         self.risk_manager: RiskManager | None = None
@@ -230,6 +236,16 @@ class TradingEngine:
         self.position_manager = PositionManager(
             exchange_registry=self.exchange_registry,
         )
+
+        # Enhanced Position Tracker - инициализируем после Exchange Manager
+        try:
+            self.position_tracker = await get_position_tracker()
+            self.position_tracker.exchange_manager = self.exchange_registry
+            await self.position_tracker.start_tracking()
+            self.logger.info("✅ Enhanced Position Tracker инициализирован и запущен")
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка инициализации Position Tracker: {e}")
+            self.position_tracker = None
 
         # Execution Engine
         self.execution_engine = ExecutionEngine(
@@ -1263,7 +1279,6 @@ class TradingEngine:
                 return False
 
             # Проверяем направление ордеров
-            from database.models.base_models import OrderSide, SignalType
 
             signal_long = signal_type in [SignalType.LONG, "LONG", "long", "buy", "BUY"]
             target_side = OrderSide.BUY if signal_long else OrderSide.SELL
@@ -1289,7 +1304,6 @@ class TradingEngine:
             orders = []
 
             # Определяем направление
-            from database.models.base_models import OrderSide
 
             # ИСПРАВЛЕНО: Правильная обработка NEUTRAL сигналов
             signal_type_lower = signal.signal_type.value.lower()
@@ -1496,9 +1510,6 @@ class TradingEngine:
             )
 
             # Создаем ордер
-            import uuid
-
-            from database.models.base_models import Order, OrderStatus, OrderType
 
             # Генерируем уникальный ID для ордера
             order_id = f"order_{uuid.uuid4().hex[:12]}_{signal.symbol}"
@@ -1514,7 +1525,7 @@ class TradingEngine:
                 stop_loss=signal.suggested_stop_loss,
                 take_profit=signal.suggested_take_profit,
                 status=OrderStatus.PENDING,
-                metadata={
+                order_metadata={
                     "strategy": signal.strategy_name,
                     "confidence": signal.confidence,
                     "created_by": "TradingEngine",
@@ -1611,3 +1622,70 @@ class TradingEngine:
             except Exception as e:
                 self.logger.error(f"Ошибка в heartbeat loop: {e}")
                 await asyncio.sleep(30)
+
+    async def on_position_opened(self, order: Order, fill_price: Decimal) -> None:
+        """
+        Callback при открытии новой позиции
+
+        Args:
+            order: Исполненный ордер
+            fill_price: Цена исполнения
+        """
+
+        if not self.position_tracker:
+            return
+
+        try:
+            # Определяем параметры позиции
+            position_id = f"{order.symbol}_{order.side.value}_{order.order_id}"
+            side = "long" if order.side.value.lower() in ["buy", "long"] else "short"
+
+            # Добавляем позицию в отслеживание
+            await self.position_tracker.track_position(
+                position_id=position_id,
+                symbol=order.symbol,
+                side=side,
+                size=order.quantity,
+                entry_price=fill_price,
+                exchange=getattr(order, "exchange", "bybit"),
+            )
+
+            self.logger.info(
+                f"📊 Позиция добавлена в отслеживание: {position_id} | "
+                f"{order.symbol} {side} {order.quantity} @ {fill_price}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка добавления позиции в отслеживание: {e}")
+
+    async def on_position_closed(self, position_id: str, reason: str = "closed") -> None:
+        """
+        Callback при закрытии позиции
+
+        Args:
+            position_id: ID позиции
+            reason: Причина закрытия
+        """
+
+        if not self.position_tracker:
+            return
+
+        try:
+            await self.position_tracker.remove_position(position_id, reason)
+
+            self.logger.info(f"📊 Позиция удалена из отслеживания: {position_id} ({reason})")
+
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка удаления позиции из отслеживания: {e}")
+
+    async def get_position_metrics(self) -> dict:
+        """Получить метрики отслеживания позиций"""
+
+        if not self.position_tracker:
+            return {}
+
+        try:
+            return await self.position_tracker.get_tracker_stats()
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка получения метрик позиций: {e}")
+            return {}

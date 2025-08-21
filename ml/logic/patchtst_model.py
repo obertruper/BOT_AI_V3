@@ -359,48 +359,19 @@ class UnifiedPatchTSTForTrading(nn.Module):
         if self.temperature is not None:
             direction_logits_reshaped = direction_logits_reshaped / self.temperature
 
-        # Получаем предсказанные классы
-        direction_probs = torch.softmax(direction_logits_reshaped, dim=-1)
-        directions = torch.argmax(direction_probs, dim=-1).float()  # (B, 4)
-
-        # Применяем порог уверенности
-        confidence_threshold = self.config.get("model", {}).get(
-            "direction_confidence_threshold", 0.5
-        )
-        max_probs, _ = torch.max(direction_probs, dim=-1)
-        low_confidence_mask = max_probs < confidence_threshold
-
-        if low_confidence_mask.any():
-            directions[low_confidence_mask] = 2.0  # FLAT = 2
-
-        # Остальные предсказания
-        long_levels = self.long_levels_head(x_projected)  # (B, 4)
-        short_levels = self.short_levels_head(x_projected)  # (B, 4)
+        # Риск-метрики
         risk_metrics = self.risk_metrics_head(x_projected)  # (B, 4)
 
-        # Объединяем все выходы - ИСПРАВЛЕНО: возвращаем классы как в обучающем проекте
-        # Получаем предсказанные классы из вероятностей (как в training проекте)
-        direction_probs = torch.softmax(direction_logits_reshaped, dim=-1)  # (B, 4, 3)
-        direction_classes = torch.argmax(direction_probs, dim=-1).float()  # (B, 4) - классы 0,1,2
-
-        # Применяем порог уверенности (как в training проекте)
-        confidence_threshold = self.config.get("model", {}).get(
-            "direction_confidence_threshold", 0.5
-        )
-        max_probs, _ = torch.max(direction_probs, dim=-1)
-        low_confidence_mask = max_probs < confidence_threshold
-
-        # Устанавливаем FLAT (класс 2) для низкоуверенных предсказаний
-        if low_confidence_mask.any():
-            direction_classes[low_confidence_mask] = 2.0  # FLAT = 2
-
+        # Объединяем все выходы - возвращаем ЛОГИТЫ для правильной интерпретации в ml_manager
+        # Reshape логитов для правильной структуры вывода
+        # direction_logits_reshaped имеет форму (B, 4, 3) - нужно развернуть в (B, 12)
+        direction_logits_flat = direction_logits_reshaped.reshape(batch_size, -1)  # (B, 12)
+        
         outputs = torch.cat(
             [
-                future_returns,  # 0-3: future returns
-                direction_classes,  # 4-7: direction classes (0=LONG, 1=SHORT, 2=FLAT)
-                long_levels,  # 8-11: long levels
-                short_levels,  # 12-15: short levels
-                risk_metrics,  # 16-19: risk metrics
+                future_returns,  # 0-3: future returns (4 значения)
+                direction_logits_flat,  # 4-15: direction logits (12 значений: 4 таймфрейма x 3 класса)
+                risk_metrics,  # 16-19: risk metrics (4 значения)
             ],
             dim=1,
         )
@@ -416,27 +387,25 @@ class UnifiedPatchTSTForTrading(nn.Module):
     def get_output_names(self) -> list[str]:
         """Возвращает имена всех выходов"""
         return [
-            # Future returns
+            # Future returns (0-3)
             "future_return_15m",
             "future_return_1h",
             "future_return_4h",
             "future_return_12h",
-            # Directions
-            "direction_15m",
-            "direction_1h",
-            "direction_4h",
-            "direction_12h",
-            # Long levels
-            "long_will_reach_1pct_4h",
-            "long_will_reach_2pct_4h",
-            "long_will_reach_3pct_12h",
-            "long_will_reach_5pct_12h",
-            # Short levels
-            "short_will_reach_1pct_4h",
-            "short_will_reach_2pct_4h",
-            "short_will_reach_3pct_12h",
-            "short_will_reach_5pct_12h",
-            # Risk metrics
+            # Direction logits (4-15: 4 таймфрейма x 3 логита)
+            "direction_15m_long_logit",
+            "direction_15m_short_logit",
+            "direction_15m_neutral_logit",
+            "direction_1h_long_logit",
+            "direction_1h_short_logit",
+            "direction_1h_neutral_logit",
+            "direction_4h_long_logit",
+            "direction_4h_short_logit",
+            "direction_4h_neutral_logit",
+            "direction_12h_long_logit",
+            "direction_12h_short_logit",
+            "direction_12h_neutral_logit",
+            # Risk metrics (16-19)
             "max_drawdown_1h",
             "max_rally_1h",
             "max_drawdown_4h",

@@ -17,7 +17,7 @@ import json
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -30,7 +30,7 @@ logger = logger_factory.get_logger("websocket_manager")
 class WebSocketConnection:
     """Класс для управления отдельным WebSocket соединением"""
 
-    def __init__(self, websocket: WebSocket, connection_id: str, user_id: str | None = None):
+    def __init__(self, websocket: WebSocket, connection_id: str, user_id: Optional[str] = None):
         self.websocket = websocket
         self.connection_id = connection_id
         self.user_id = user_id
@@ -116,7 +116,7 @@ class WebSocketManager:
 
         # Состояние
         self._running = False
-        self._heartbeat_task: asyncio.Optional[Task] = None
+        self._heartbeat_task: Optional[asyncio.Task] = None
 
         # Обработчики событий
         self.event_handlers: dict[str, list[Callable]] = {}
@@ -156,7 +156,7 @@ class WebSocketManager:
 
         logger.info("WebSocketManager остановлен")
 
-    async def connect(self, websocket: WebSocket, user_id: str | None = None) -> str:
+    async def connect(self, websocket: WebSocket, user_id: Optional[str] = None) -> str:
         """
         Подключение нового WebSocket
 
@@ -265,7 +265,7 @@ class WebSocketManager:
             },
         )
 
-    async def handle_websocket(self, websocket: WebSocket, user_id: str | None = None):
+    async def handle_websocket(self, websocket: WebSocket, user_id: Optional[str] = None):
         """
         Обработка WebSocket соединения
 

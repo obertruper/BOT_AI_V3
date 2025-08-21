@@ -14,7 +14,7 @@ Data Adapters для BOT_Trading v3.0
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional, Union
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -352,7 +352,7 @@ class DataAdapters:
             logger.error(f"Ошибка преобразования стратегии в response: {e}")
             return {"error": f"Failed to convert strategy: {e!s}"}
 
-    def _get_strategy_performance(self, strategy) -> dict[str, float] | None:
+    def _get_strategy_performance(self, strategy) -> Optional[dict[str, float]]:
         """Получение метрик производительности стратегии"""
         try:
             if hasattr(strategy, "get_performance_metrics"):
@@ -439,7 +439,7 @@ class DataAdapters:
 
     # =================== UTILITY METHODS ===================
 
-    def _decimal_to_float(self, value: Decimal | float | int | str | None) -> float:
+    def _decimal_to_float(self, value: Union[Decimal, float, int, str, None]) -> float:
         """Преобразование Decimal в float"""
         if value is None:
             return 0.0
@@ -456,7 +456,7 @@ class DataAdapters:
         except (ValueError, TypeError):
             return 0.0
 
-    def _datetime_to_iso(self, dt: datetime | None) -> str | None:
+    def _datetime_to_iso(self, dt: Optional[datetime]) -> Optional[str]:
         """Преобразование datetime в ISO строку"""
         if dt is None:
             return None

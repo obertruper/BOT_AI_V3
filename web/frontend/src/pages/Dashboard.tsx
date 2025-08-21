@@ -10,6 +10,7 @@ import TradingActivity from '@/components/dashboard/TradingActivity';
 import RealTimeChart from '@/components/dashboard/RealTimeChart';
 import MLCacheMetrics from '@/components/dashboard/MLCacheMetrics';
 import MLDirectionDistribution from '@/components/dashboard/MLDirectionDistribution';
+import { EnhancedPositionTracker } from '@/components/dashboard/EnhancedPositionTracker';
 
 const Dashboard: React.FC = () => {
   // Initialize store (WebSocket connection will handle updates)
@@ -92,6 +93,11 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <MLCacheMetrics />
         <MLDirectionDistribution />
+      </div>
+
+      {/* Enhanced Position Tracker */}
+      <div className="grid grid-cols-1 gap-6">
+        <EnhancedPositionTracker />
       </div>
 
       {/* Bottom Row - Trading Activity */}

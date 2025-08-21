@@ -20,7 +20,7 @@ import asyncio
 import hashlib
 import uuid
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -61,7 +61,7 @@ class MockUserManager:
         }
         logger.info("MockUserManager инициализирован с 3 пользователями")
 
-    async def authenticate_user(self, username: str, password: str) -> MockUser | None:
+    async def authenticate_user(self, username: str, password: str) -> Optional[MockUser]:
         """Аутентификация пользователя"""
         user = self.users.get(username)
         if user and user.password_hash == hashlib.sha256(password.encode()).hexdigest():
@@ -71,11 +71,11 @@ class MockUserManager:
         logger.warning(f"Неудачная попытка входа для пользователя {username}")
         return None
 
-    async def get_user_by_username(self, username: str) -> MockUser | None:
+    async def get_user_by_username(self, username: str) -> Optional[MockUser]:
         """Получить пользователя по имени"""
         return self.users.get(username)
 
-    async def get_user_by_id(self, user_id: str) -> MockUser | None:
+    async def get_user_by_id(self, user_id: str) -> Optional[MockUser]:
         """Получить пользователя по ID"""
         for user in self.users.values():
             if user.user_id == user_id:
@@ -131,7 +131,7 @@ class MockSessionManager:
         logger.info(f"Создана сессия {session_id} для пользователя {user_id}")
         return session_id
 
-    async def get_session(self, session_id: str) -> MockSession | None:
+    async def get_session(self, session_id: str) -> Optional[MockSession]:
         """Получить сессию"""
         return self.sessions.get(session_id)
 
@@ -315,7 +315,7 @@ class MockStrategyRegistry:
         """Получить список доступных стратегий"""
         return list(self.strategies.keys())
 
-    def get_strategy_class(self, strategy_name: str) -> MockStrategy | None:
+    def get_strategy_class(self, strategy_name: str) -> Optional[MockStrategy]:
         """Получить класс стратегии"""
         return self.strategies.get(strategy_name)
 
@@ -374,7 +374,7 @@ class MockBacktestEngine:
 
         return backtest_id
 
-    async def get_backtest_result(self, backtest_id: str) -> dict[str, Any] | None:
+    async def get_backtest_result(self, backtest_id: str) -> Optional[dict[str, Any]]:
         """Получить результат бэктеста"""
         return self.backtests.get(backtest_id)
 

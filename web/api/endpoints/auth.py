@@ -9,7 +9,7 @@ REST API для аутентификации и авторизации:
 """
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -74,10 +74,10 @@ class UserInfo(BaseModel):
 
     user_id: str
     username: str
-    email: str | None = None
+    email: Optional[str] = None
     role: str
     permissions: list[str]
-    last_login: datetime | None = None
+    last_login: Optional[datetime] = None
     created_at: datetime
 
 
@@ -91,7 +91,7 @@ class ChangePasswordRequest(BaseModel):
 # =================== UTILITY FUNCTIONS ===================
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Создание access token"""
     to_encode = data.copy()
     if expires_delta:
@@ -104,7 +104,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Создание refresh token"""
     to_encode = data.copy()
     if expires_delta:

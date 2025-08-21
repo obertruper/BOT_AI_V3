@@ -173,7 +173,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
         );
       })}
       
-      <style jsx>{`
+      <style>{`
         @keyframes slideInFromRight {
           from {
             transform: translateX(100%);

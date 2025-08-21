@@ -17,7 +17,7 @@ import json
 from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from core.logging.logger_factory import get_global_logger_factory
 
@@ -95,7 +95,7 @@ class EventBridge:
         self.config_manager = config_manager
 
         # WebSocket менеджер (будет инициализирован позже)
-        self.websocket_manager: Any | None = None
+        self.websocket_manager: Optional[Any] = None
 
         # Подписчики на события
         self.event_handlers: dict[EventType, list[Callable]] = {}

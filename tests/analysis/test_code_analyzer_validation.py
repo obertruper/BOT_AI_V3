@@ -12,7 +12,7 @@ import pytest
 # Добавляем корневую директорию в path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from scripts.run_code_usage_analysis import CodeUsageAnalyzer
+from scripts.code_chain_analyzer import CodeChainAnalyzer as CodeUsageAnalyzer
 
 
 class TestCodeAnalyzerValidation:

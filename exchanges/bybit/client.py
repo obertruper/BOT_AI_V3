@@ -135,35 +135,50 @@ def format_quantity(
     Raises:
         ValueError: Если количество не соответствует требованиям
     """
+    from decimal import Decimal, ROUND_DOWN
+    
     if quantity <= 0:
         raise ValueError(f"Quantity must be positive: {quantity}")
 
-    # Округляем до ближайшего значения кратного qty_step
+    # Используем Decimal для точного округления
     if qty_step > 0:
-        # Используем round() для корректного округления
-        rounded_qty = round(quantity / qty_step) * qty_step
+        qty_decimal = Decimal(str(quantity))
+        step_decimal = Decimal(str(qty_step))
+        
+        # Округляем ВНИЗ до ближайшего значения кратного qty_step (для избежания превышения баланса)
+        rounded_qty = (qty_decimal / step_decimal).quantize(Decimal('1'), rounding=ROUND_DOWN) * step_decimal
+        
+        # Конвертируем обратно в float для проверок
+        rounded_qty_float = float(rounded_qty)
     else:
-        rounded_qty = quantity
+        rounded_qty_float = quantity
+        rounded_qty = Decimal(str(quantity))
 
     # Проверяем границы
-    if rounded_qty < min_qty:
-        raise ValueError(f"Quantity {rounded_qty} is below minimum {min_qty}")
-    if rounded_qty > max_qty:
-        raise ValueError(f"Quantity {rounded_qty} is above maximum {max_qty}")
+    if rounded_qty_float < min_qty:
+        # Если после округления вниз мы оказались ниже минимума, используем минимум
+        rounded_qty = Decimal(str(min_qty))
+        rounded_qty_float = min_qty
+    if rounded_qty_float > max_qty:
+        raise ValueError(f"Quantity {rounded_qty_float} is above maximum {max_qty}")
 
     # Определяем количество знаков после запятой на основе qty_step
     if qty_step >= 1:
         decimal_places = 0
     else:
         # Считаем количество знаков после запятой в qty_step
-        step_str = f"{qty_step:.10f}".rstrip("0")
+        step_str = f"{qty_step:.10f}".rstrip('0')  # Форматируем с избытком и удаляем trailing zeros
         if "." in step_str:
             decimal_places = len(step_str.split(".")[1])
         else:
             decimal_places = 0
 
-    # Форматируем с нужным количеством знаков
-    formatted_qty = f"{rounded_qty:.{decimal_places}f}"
+    # Форматируем с нужным количеством знаков используя Decimal для точности
+    # Важно: убираем trailing zeros для целых чисел
+    if decimal_places == 0:
+        formatted_qty = str(int(rounded_qty))
+    else:
+        formatted_qty = format(rounded_qty, f'.{decimal_places}f')
 
     return formatted_qty
 
@@ -1021,9 +1036,17 @@ class BybitClient(BaseExchangeInterface):
                 )
             except Exception as e:
                 self.logger.warning(
-                    f"Failed to get instrument info for {symbol}, using basic formatting: {e}"
+                    f"Failed to get instrument info for {symbol}, using predefined settings: {e}"
                 )
-                formatted_qty = str(order_request.quantity)
+                # Используем предустановленные настройки из instrument_settings
+                from .instrument_settings import get_instrument_settings
+                settings = get_instrument_settings(symbol)
+                formatted_qty = format_quantity(
+                    quantity=order_request.quantity,
+                    qty_step=settings.get("qtyStep", 0.1),
+                    min_qty=settings.get("minOrderQty", 0.1),
+                    max_qty=settings.get("maxOrderQty", float("inf")),
+                )
 
             # Подготовка параметров
             params = {
@@ -1073,15 +1096,25 @@ class BybitClient(BaseExchangeInterface):
                     f"🛡️ Setting StopLoss for {order_request.side.value} order: {sl_price}"
                 )
                 try:
-                    formatted_sl = format_price(sl_price, instrument_info.tick_size)
+                    # Используем tick_size из instrument_info или settings
+                    if 'instrument_info' in locals():
+                        tick_size = instrument_info.tick_size
+                    else:
+                        tick_size = settings.get("tickSize", 0.0001)
+                    formatted_sl = format_price(sl_price, tick_size)
                     params["stopLoss"] = formatted_sl
                 except:
                     params["stopLoss"] = str(sl_price)
 
             if order_request.take_profit is not None:
                 try:
+                    # Используем tick_size из instrument_info или settings
+                    if 'instrument_info' in locals():
+                        tick_size = instrument_info.tick_size
+                    else:
+                        tick_size = settings.get("tickSize", 0.0001)
                     formatted_tp = format_price(
-                        order_request.take_profit, instrument_info.tick_size
+                        order_request.take_profit, tick_size
                     )
                     params["takeProfit"] = formatted_tp
                 except:

@@ -26,7 +26,7 @@ class MLPredictionLogger:
         """Инициализация логгера предсказаний"""
         self.model_version = "unified_patchtst_v1.0"
         self.batch_predictions = []
-        self.batch_size = 10  # Сохраняем в БД пачками
+        self.batch_size = 1  # Сохраняем сразу же для реального времени
 
     async def log_prediction(
         self,

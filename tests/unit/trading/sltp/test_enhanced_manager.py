@@ -46,6 +46,9 @@ class TestPositionAdapter:
         trading_position.side = "Sell"
         trading_position.quantity = 0.1
         trading_position.average_price = 3000
+        # Добавляем необходимые атрибуты для корректной работы
+        trading_position.size = None  # Чтобы проверка hasattr работала
+        trading_position.entry_price = None  # Чтобы проверка hasattr работала
 
         # Act
         adapter = PositionAdapter(trading_position)
@@ -65,6 +68,7 @@ class TestEnhancedSLTPManager:
     def mock_config_manager(self):
         """Mock для ConfigManager"""
         config_manager = Mock()
+        # Настройка основного конфига
         config_manager.get_sltp_config.return_value = {
             "default_stop_loss": 0.02,
             "default_take_profit": 0.04,
@@ -83,6 +87,22 @@ class TestEnhancedSLTPManager:
                 "activation_profit": 0.015,
                 "protection_level": 0.008,
             },
+        }
+        # Добавляем системный конфиг для trailing_stop
+        config_manager.get_system_config.return_value = {
+            "sltp": {
+                "trailing_stop": {
+                    "enabled": True,
+                    "type": "percentage",  # Возвращаем строку вместо Mock
+                    "step": 0.5,
+                    "min_profit": 0.3,
+                    "max_distance": 2.0,
+                },
+                "partial_take_profit": {
+                    "enabled": True,
+                    "levels": [],
+                },
+            }
         }
         return config_manager
 

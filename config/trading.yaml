@@ -15,8 +15,8 @@ trading:
   signals:
     process_interval: 5
     max_signal_age: 300
-    min_confidence: 0.45
-    min_strength: 0.2
+    min_confidence: 0.40  # ОПТИМАЛЬНО: требуем 3 из 4 таймфреймов с confidence > 0.38
+    min_strength: 0.40    # ОПТИМАЛЬНО: баланс между частотой и качеством
   execution:
     order_timeout: 30
     retry_attempts: 3
@@ -32,12 +32,12 @@ position_management:
   sync_interval: 60
   max_positions_per_symbol: 2
 signal_processing:
-  confidence_threshold: 0.6
+  confidence_threshold: 0.7  # ПОВЫШЕНО: высокий порог уверенности
   min_volume: 100000
 
   # Специфичные настройки для ML сигналов (из V2)
   ml_thresholds:
-    buy_profit: 0.65             # Минимальная вероятность прибыли для покупки
-    buy_loss: 0.35               # Максимальная вероятность убытка для покупки
-    sell_profit: 0.65            # Минимальная вероятность прибыли для продажи
-    sell_loss: 0.35              # Максимальная вероятность убытка для продажи
+    buy_profit: 0.55             # РЕАЛИСТИЧНО: умеренная вероятность прибыли
+    buy_loss: 0.45               # РЕАЛИСТИЧНО: допустимый риск убытка
+    sell_profit: 0.55            # РЕАЛИСТИЧНО: умеренная вероятность прибыли
+    sell_loss: 0.45              # РЕАЛИСТИЧНО: допустимый риск убытка

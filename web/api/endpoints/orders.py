@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from typing import Optional
 
 # Создаем роутер для ордеров
 router = APIRouter(
@@ -25,9 +26,9 @@ class CreateOrderRequest(BaseModel):
     side: str  # 'buy' or 'sell'
     type: str  # 'market' or 'limit'
     quantity: float
-    price: float | None = None
-    stop_loss: float | None = None
-    take_profit: float | None = None
+    price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
 
 
 @router.get("/")

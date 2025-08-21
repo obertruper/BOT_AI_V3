@@ -71,6 +71,9 @@ class PositionAdapter:
         """Получить ID позиции"""
         if hasattr(self._position, "id"):
             return str(self._position.id) if self._position.id else ""
+        # Если нет id, создаем из symbol и side
+        if hasattr(self._position, "symbol") and hasattr(self._position, "side"):
+            return f"{self._position.symbol}_{self._position.side}"
         return ""
 
     @property
@@ -90,13 +93,21 @@ class PositionAdapter:
         for attr in ["size", "quantity", "qty"]:
             if hasattr(self._position, attr):
                 val = getattr(self._position, attr)
-                return float(val) if val is not None else 0.0
+                # Проверяем что атрибут не None
+                if val is not None:
+                    return float(val)
         return 0.0
 
     @property
     def entry_price(self) -> float:
         """Получить цену входа"""
-        return float(getattr(self._position, "entry_price", 0.0))
+        # Пробуем разные атрибуты для цены входа
+        for attr in ["entry_price", "average_price", "avg_price"]:
+            if hasattr(self._position, attr):
+                val = getattr(self._position, attr)
+                if val is not None:
+                    return float(val)
+        return 0.0
 
     def __getattr__(self, name):
         """Прокси для доступа к другим атрибутам"""

@@ -74,30 +74,34 @@ class TestDynamicSLTPCalculator:
     @pytest.mark.asyncio
     async def test_calculate_atr_low_volatility(self, calculator, sample_candles_low_volatility):
         """Тест расчета ATR для низкой волатильности"""
-        candles = sample_candles_low_volatility
-        atr = calculator._calculate_atr(candles)
+        candles = sample_candles_low_volatility.to_dict('records')
+        current_price = 50000
+        atr, volatility_factor = calculator._calculate_atr_volatility(candles, current_price)
 
         # При низкой волатильности ATR должен быть маленьким
         assert atr > 0, "ATR должен быть положительным"
         assert atr < 300, "ATR должен быть меньше 300 для низкой волатильности"
+        assert 0 <= volatility_factor <= 1, "Volatility factor должен быть в диапазоне 0-1"
 
     @pytest.mark.asyncio
     async def test_calculate_atr_high_volatility(self, calculator, sample_candles_high_volatility):
         """Тест расчета ATR для высокой волатильности"""
-        candles = sample_candles_high_volatility
-        atr = calculator._calculate_atr(candles)
+        candles = sample_candles_high_volatility.to_dict('records')
+        current_price = 50000
+        atr, volatility_factor = calculator._calculate_atr_volatility(candles, current_price)
 
         # При высокой волатильности ATR должен быть большим
         assert atr > 1000, "ATR должен быть больше 1000 для высокой волатильности"
         assert atr < 3000, "ATR не должен быть слишком большим"
+        assert 0.5 <= volatility_factor <= 1, "Volatility factor должен быть высоким при высокой волатильности"
 
     @pytest.mark.asyncio
     async def test_determine_volatility_regime_low(self, calculator, sample_candles_low_volatility):
         """Тест определения режима низкой волатильности"""
-        candles = sample_candles_low_volatility
+        candles = sample_candles_low_volatility.to_dict('records')
         current_price = 50000
 
-        atr = calculator._calculate_atr(candles)
+        atr, volatility_factor = calculator._calculate_atr_volatility(candles, current_price)
         normalized_vol = calculator._normalize_volatility(atr, current_price)
         regime = calculator._determine_volatility_regime(normalized_vol)
 

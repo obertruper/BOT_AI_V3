@@ -41,6 +41,12 @@ try:
 except ImportError:
     TestRunner = None
 
+# Импортируем Position Tracker тесты
+try:
+    from tests.position_tracker_test_suite import PositionTrackerTestSuite
+except ImportError:
+    PositionTrackerTestSuite = None
+
 
 class Colors:
     """ANSI цвета для терминала"""
@@ -66,6 +72,35 @@ def print_welcome():
     print(f"{Colors.HEADER}{'='*80}{Colors.ENDC}\n")
 
 
+async def run_position_tracker_tests(args):
+    """Запуск Position Tracker тестов"""
+    if PositionTrackerTestSuite is None:
+        print(f"{Colors.FAIL}❌ Position Tracker Test Suite недоступен{Colors.ENDC}")
+        return
+
+    print(f"{Colors.BLUE}🎯 Запуск Position Tracker Test Suite...{Colors.ENDC}\n")
+    
+    suite = PositionTrackerTestSuite()
+    
+    try:
+        # Запускаем все тесты Position Tracker
+        await suite.run_all_tests(verbose=args.verbose)
+        
+        # Выводим отчет
+        suite.print_summary()
+        
+        # Генерируем HTML отчет если запрошено
+        if args.generate_report:
+            await suite.generate_html_report()
+            print(f"{Colors.GREEN}📄 HTML отчет сохранен в test_results/position_tracker_report.html{Colors.ENDC}")
+            
+    except Exception as e:
+        print(f"{Colors.FAIL}❌ Ошибка выполнения Position Tracker тестов: {e}{Colors.ENDC}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+
+
 def print_help():
     """Справочная информация"""
     help_text = f"""
@@ -85,6 +120,7 @@ def print_help():
   --mode standard       Unit + ML + Database тесты  
   --mode full           Полное тестирование всех компонентов
   --mode dynamic-sltp   Только Dynamic SL/TP тесты
+  --mode position-tracker Только Position Tracker тесты
   --mode performance    Только performance тесты
   --mode integration    Только integration тесты
   --mode ci             CI/CD оптимизированные тесты
@@ -116,6 +152,9 @@ python3 orchestrator_main.py --mode full --parallel --verbose
 # Только Dynamic SL/TP тесты
 python3 orchestrator_main.py --mode dynamic-sltp --verbose
 
+# Только Position Tracker тесты
+python3 orchestrator_main.py --mode position-tracker --verbose
+
 # CI/CD режим  
 python3 orchestrator_main.py --mode ci --quiet --timeout 600
 
@@ -127,6 +166,15 @@ python3 orchestrator_main.py --mode ci --quiet --timeout 600
 - Performance тесты скорости расчета
 - E2E тесты полного пайплайна
 - Stress тесты различных рыночных условий
+
+{Colors.BOLD}📍 POSITION TRACKER ТЕСТЫ:{Colors.ENDC}
+
+Комплексное тестирование Enhanced Position Tracker:
+- Unit тесты основной функциональности
+- Integration тесты с БД и биржами
+- Performance тесты производительности
+- API Integration тесты
+- Error handling и stress тесты
 
 {Colors.BOLD}📁 СТРУКТУРА ОТЧЕТОВ:{Colors.ENDC}
 
@@ -174,6 +222,10 @@ async def run_cli_mode(mode: str, args):
     elif mode == "dynamic-sltp":
         # Только Dynamic SL/TP тесты
         await orchestrator.run_dynamic_sltp_suite()
+
+    elif mode == "position-tracker":
+        # Только Position Tracker тесты
+        await run_position_tracker_tests(args)
 
     elif mode == "performance":
         # Performance тесты
@@ -263,6 +315,7 @@ def main():
             "standard",
             "full",
             "dynamic-sltp",
+            "position-tracker",
             "performance",
             "integration",
             "ci",

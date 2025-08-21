@@ -99,15 +99,15 @@ class SignalQualityAnalyzer:
             FilterStrategy.MODERATE: filter_config.get(
                 "moderate",
                 {
-                    "min_timeframe_agreement": 2,  # Повышено с 1 - нужно согласие минимум 2 таймфреймов
-                    "required_confidence_per_timeframe": 0.50,  # Повышено с 0.40
-                    "main_timeframe_required_confidence": 0.55,  # Повышено с 0.45
+                    "min_timeframe_agreement": 3,  # ОПТИМАЛЬНО: 3 из 4 таймфреймов (меньше ложных)
+                    "required_confidence_per_timeframe": 0.38,  # РЕАЛИСТИЧНО: чуть выше среднего
+                    "main_timeframe_required_confidence": 0.40,  # РЕАЛИСТИЧНО: 4h важен
                     "alternative_main_plus_one": True,
-                    "alternative_confidence_threshold": 0.65,  # Повышено с 0.55
-                    "min_expected_return_pct": 0.0015,  # Повышено с 0.001 - минимум 0.15%
-                    "min_signal_strength": 0.45,  # Повышено с 0.35
-                    "max_risk_level": "MEDIUM",  # Изменено с HIGH - только низкий и средний риск
-                    "min_quality_score": 0.50,  # Повышено с 0.35
+                    "alternative_confidence_threshold": 0.42,  # РЕАЛИСТИЧНО: альтернативный порог
+                    "min_expected_return_pct": 0.0010,  # РЕАЛИСТИЧНО: 0.10% достаточно для крипто
+                    "min_signal_strength": 0.40,  # УМЕРЕННО: фильтруем только очень слабые
+                    "max_risk_level": "MEDIUM",  # УМЕРЕННО: допускаем средний риск
+                    "min_quality_score": 0.45,  # УМЕРЕННО: баланс качества и частоты
                 },
             ),
             FilterStrategy.AGGRESSIVE: filter_config.get(

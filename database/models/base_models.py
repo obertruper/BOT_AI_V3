@@ -103,6 +103,7 @@ class Order(Base):
     strategy_name = Column(String(100))
     trader_id = Column(String(100))
     extra_data = Column(JSON)
+    order_metadata = Column(JSON)  # Добавляем поле для метаданных ордера
 
 
 class Trade(Base):

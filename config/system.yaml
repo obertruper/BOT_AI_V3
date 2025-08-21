@@ -221,7 +221,7 @@ unified_system:
 ml:
   enabled: true
   signal_generation:
-    interval_seconds: 180  # Изменено: ML предсказания раз в 3 минуты
+    interval_seconds: 60  # ML предсказания каждую минуту
     batch_size: 10
     parallel_workers: 4
   symbols:
@@ -243,8 +243,8 @@ ml:
     lookback_minutes: 3600
     min_candles: 240
   filters:
-    min_confidence: 0.45
-    min_signal_strength: 0.3
+    min_confidence: 0.40      # ОПТИМАЛЬНО: соответствует реальным выходам ML (0.35-0.48)
+    min_signal_strength: 0.40  # ОПТИМАЛЬНО: фильтруем только очень слабые
   risk:
     max_positions_per_symbol: 1
     position_size_percent: 2
@@ -308,7 +308,7 @@ traders:
   exchange: bybit
   strategy: ml_signal
   strategy_config:
-    signal_interval: 180  # Изменено: раз в 3 минуты
+    signal_interval: 60  # ML сигналы каждую минуту
     indicators:
     - type: RSI
       period: 14
