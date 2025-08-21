@@ -1187,13 +1187,13 @@ class TradingEngine:
                 # Если нет метода, используем значения по умолчанию
                 from exchanges.base.models import Instrument
 
-                # Значения по умолчанию для Bybit
+                # Значения по умолчанию для Bybit (из instrument_settings.py)
                 defaults = {
                     "BTCUSDT": {"min": 0.001, "step": 0.001},
                     "ETHUSDT": {"min": 0.01, "step": 0.01},
                     "BNBUSDT": {"min": 0.01, "step": 0.01},
                     "SOLUSDT": {"min": 0.1, "step": 0.1},
-                    "XRPUSDT": {"min": 0.44, "step": 0.001},
+                    "XRPUSDT": {"min": 0.1, "step": 0.1},  # ИСПРАВЛЕНО: qtyStep = 0.1
                     "ADAUSDT": {"min": 1.0, "step": 1.0},
                     "DOGEUSDT": {"min": 1.0, "step": 1.0},
                     "DOTUSDT": {"min": 0.1, "step": 0.1},
@@ -1319,7 +1319,11 @@ class TradingEngine:
             try:
                 # Проверяем активные позиции через position_manager
                 if self.position_manager:
-                    existing_position = await self.position_manager.get_position(signal.symbol)
+                    # ИСПРАВЛЕНО: добавлен параметр exchange
+                    existing_position = await self.position_manager.get_position(
+                        exchange=signal.exchange,
+                        symbol=signal.symbol
+                    )
                     if existing_position:
                         position_side = existing_position.get("side", "").lower()
                         position_size = existing_position.get("quantity", 0)
@@ -1539,7 +1543,7 @@ class TradingEngine:
             orders.append(order)
 
             self.logger.info(
-                f"📝 Создан ордер: {side} {quantity:.4f} {signal.symbol} @ {signal.suggested_price} "
+                f"📝 Создан ордер: {side} {float(quantity)} {signal.symbol} @ {signal.suggested_price} "
                 f"(SL: {signal.suggested_stop_loss}, TP: {signal.suggested_take_profit})"
             )
 

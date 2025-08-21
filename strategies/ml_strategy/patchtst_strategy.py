@@ -292,20 +292,44 @@ class PatchTSTStrategy(BaseStrategy):
         """
         Анализ предсказаний модели и генерация торгового сигнала
 
-        Структура predictions (20 выходов):
+        ИСПРАВЛЕННАЯ структура predictions (20 выходов):
         - 0-3: future returns для 15m, 1h, 4h, 12h
-        - 4-7: directions (0=LONG, 1=SHORT, 2=FLAT) для 15m, 1h, 4h, 12h
-        - 8-11: long level probabilities
-        - 12-15: short level probabilities
+        - 4-15: direction logits (12 значений = 4 таймфрейма × 3 класса)
         - 16-19: risk metrics (drawdown/rally)
         """
         try:
-            # Извлекаем компоненты предсказаний
+            # Извлекаем компоненты предсказаний - ИСПРАВЛЕНО
             future_returns = predictions[0:4]
-            directions = predictions[4:8]
-            long_probs = 1 / (1 + np.exp(-predictions[8:12]))  # Sigmoid для вероятностей
-            short_probs = 1 / (1 + np.exp(-predictions[12:16]))  # Sigmoid для вероятностей
+            direction_logits = predictions[4:16]  # 12 логитов вместо 4 направлений
             risk_metrics = predictions[16:20]
+            
+            # ПРАВИЛЬНАЯ интерпретация направлений через softmax
+            direction_logits_reshaped = direction_logits.reshape(4, 3)  # 4 таймфрейма × 3 класса
+            
+            # Применяем softmax для получения вероятностей и направлений
+            direction_probs_list = []
+            directions = []
+            confidence_scores = []
+            
+            for i, logits in enumerate(direction_logits_reshaped):
+                # Softmax с численной стабильностью
+                exp_logits = np.exp(logits - np.max(logits))
+                probs = exp_logits / exp_logits.sum()
+                direction_probs_list.append(probs)
+                
+                # Направление = argmax вероятностей (0=LONG, 1=SHORT, 2=NEUTRAL)
+                direction_class = np.argmax(probs)
+                directions.append(direction_class)
+                
+                # Уверенность = максимальная вероятность
+                confidence_scores.append(np.max(probs))
+            
+            directions = np.array(directions)
+            confidence_scores = np.array(confidence_scores)
+            
+            # Извлекаем вероятности для каждого класса
+            long_probs = np.array([probs[0] for probs in direction_probs_list])
+            short_probs = np.array([probs[1] for probs in direction_probs_list])
 
             # Взвешенное голосование по направлениям
             weights = np.array(

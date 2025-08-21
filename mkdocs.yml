@@ -1,0 +1,41 @@
+site_name: BOT_AI_V3 Documentation
+site_url: https://example.com/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+
+nav:
+  - 'Главная': 'README.md'
+  - 'Ядро системы':
+    - 'core/README.md'
+  - 'Торговая логика':
+    - 'trading/README.md'
+  - 'Машинное обучение':
+    - 'ml/README.md'
+  - 'Веб-интерфейс':
+    - 'web/README.md'
+  - 'База данных':
+    - 'database/README.md'
+  - 'Биржи':
+    - 'exchanges/README.md'
+  - 'Стратегии':
+    - 'strategies/README.md'

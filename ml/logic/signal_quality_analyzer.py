@@ -176,6 +176,15 @@ class SignalQualityAnalyzer:
         # Обновляем статистику
         self.strategy_stats[self.active_strategy]["analyzed"] += 1
         self.stats["total_analyzed"] += 1
+        
+        # ДИАГНОСТИКА: Логируем входные данные
+        logger.debug(f"""
+📊 Анализ качества сигнала:
+  Направления: {directions}
+  Взвешенное направление: {weighted_direction:.3f}
+  Future returns: {future_returns}
+  Активная стратегия: {self.active_strategy.value}
+""")
 
         # Получаем параметры активной стратегии
         params = self.strategy_params[self.active_strategy]

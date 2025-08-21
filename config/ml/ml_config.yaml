@@ -403,35 +403,35 @@ signal_filtering:
   
   # Консервативная стратегия - высочайшее качество сигналов
   conservative:
-    min_timeframe_agreement: 2  # Снижено с 3 до 2
-    required_confidence_per_timeframe: 0.45  # Снижено с 0.65 до 0.45
-    main_timeframe_required_confidence: 0.50  # Снижено с 0.70 до 0.50
-    min_expected_return_pct: 0.002  # Снижено с 0.008 до 0.002 (0.2%)
-    min_signal_strength: 0.35  # Снижено с 0.7 до 0.35
-    max_risk_level: "HIGH"  # Изменено с MEDIUM на HIGH
-    min_quality_score: 0.35  # Снижено с 0.75 до 0.35
+    min_timeframe_agreement: 3  # Минимум 3 из 4 таймфреймов
+    required_confidence_per_timeframe: 0.50  # Высокая уверенность
+    main_timeframe_required_confidence: 0.55  # 4h должен быть уверенным
+    min_expected_return_pct: 0.002  # 0.2% минимальная доходность
+    min_signal_strength: 0.45  # Высокая сила сигнала
+    max_risk_level: "MEDIUM"  # Средний риск максимум
+    min_quality_score: 0.60  # Высокое качество
     
   # Умеренная стратегия - сбалансированное качество
   moderate:
-    min_timeframe_agreement: 1  # Снижено с 2 до 1
-    required_confidence_per_timeframe: 0.25  # Снижено с 0.35 до 0.25
-    main_timeframe_required_confidence: 0.30  # Снижено с 0.40 до 0.30
+    min_timeframe_agreement: 2  # Минимум 2 из 4 таймфреймов должны согласиться
+    required_confidence_per_timeframe: 0.38  # Разумный порог уверенности
+    main_timeframe_required_confidence: 0.40  # 4h таймфрейм важен, но не блокирующий
     alternative_main_plus_one: true  # альтернатива: основной + 1 с высокой уверенностью
-    alternative_confidence_threshold: 0.40  # Снижено с 0.50 до 0.40
-    min_expected_return_pct: 0.0001  # Снижено с 0.001 до 0.0001 (0.01%)
-    min_signal_strength: 0.15  # Снижено с 0.25 до 0.15
-    max_risk_level: "HIGH"
-    min_quality_score: 0.15  # Снижено с 0.25 до 0.15
+    alternative_confidence_threshold: 0.42  # Порог для альтернативного условия
+    min_expected_return_pct: 0.0010  # 0.10% минимальная ожидаемая доходность
+    min_signal_strength: 0.40  # Умеренная сила сигнала
+    max_risk_level: "MEDIUM"
+    min_quality_score: 0.45  # Баланс между качеством и частотой сигналов
     
   # Агрессивная стратегия - максимальное покрытие
   aggressive:
     min_timeframe_agreement: 1  # достаточно основного таймфрейма
-    required_confidence_per_timeframe: 0.25  # Снижено с 0.45 до 0.25
-    main_timeframe_required_confidence: 0.30  # Снижено с 0.55 до 0.30
-    min_expected_return_pct: 0.0005  # Снижено с 0.003 до 0.0005 (0.05%)
-    min_signal_strength: 0.15  # Снижено с 0.4 до 0.15
+    required_confidence_per_timeframe: 0.30  # Низкий порог
+    main_timeframe_required_confidence: 0.35  # Основной таймфрейм с минимальной уверенностью
+    min_expected_return_pct: 0.0005  # 0.05% минимальная доходность
+    min_signal_strength: 0.25  # Низкая сила сигнала допустима
     max_risk_level: "HIGH"
-    min_quality_score: 0.15  # Снижено с 0.45 до 0.15
+    min_quality_score: 0.30  # Минимальное качество
     
   # Веса для расчета итогового качества сигнала
   quality_weights:
