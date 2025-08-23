@@ -187,7 +187,7 @@ class SignalQualityAnalyzer:
 """)
 
         # Получаем параметры активной стратегии
-        params = self.strategy_params[self.active_strategy]
+        params = self.strategy_params[self.active_strategy].copy()
 
         # Рассчитываем метрики качества
         quality_metrics = self._calculate_quality_metrics(
@@ -196,6 +196,18 @@ class SignalQualityAnalyzer:
 
         # Определяем доминирующий сигнал
         signal_type = self._determine_signal_type(directions, weighted_direction)
+
+        # Применяем отдельные параметры для SHORT сигналов
+        if signal_type == "SHORT":
+            # Используем специальные параметры для SHORT если они есть
+            if "short_confidence_threshold" in params:
+                params["required_confidence_per_timeframe"] = params["short_confidence_threshold"]
+            if "short_min_timeframe_agreement" in params:
+                params["min_timeframe_agreement"] = params["short_min_timeframe_agreement"]
+            if "short_expected_return_pct" in params:
+                params["min_expected_return_pct"] = params["short_expected_return_pct"]
+            if "short_min_quality_score" in params:
+                params["min_quality_score"] = params["short_min_quality_score"]
 
         # Проверяем критерии фильтрации
         rejection_reasons = []
@@ -370,16 +382,38 @@ class SignalQualityAnalyzer:
         dominant_direction = unique[dominant_idx]
         dominant_count = counts[dominant_idx]
 
-        # Если есть явное большинство
+        # Если есть явное большинство (3 из 4 таймфреймов)
         if dominant_count >= 3:
             return direction_map[dominant_direction]
 
-        # Если нет явного большинства, используем взвешенное направление
-        if weighted_direction < 0.8:  # Ближе к LONG (0)
-            return "LONG"
-        elif weighted_direction > 1.2:  # Ближе к SHORT (1)
+        # Если нет явного большинства, подсчитываем голоса более детально
+        long_count = np.sum(directions == 0)
+        short_count = np.sum(directions == 1)
+        neutral_count = np.sum(directions == 2)
+        
+        # Логируем для отладки
+        logger.debug(f"Signal votes: LONG={long_count}, SHORT={short_count}, NEUTRAL={neutral_count}")
+        
+        # Если SHORT имеет больше голосов чем LONG и хотя бы 2 голоса
+        if short_count > long_count and short_count >= 2:
+            logger.info(f"📉 SHORT signal determined: {short_count} votes vs LONG={long_count}")
             return "SHORT"
-        else:  # Между LONG и SHORT или близко к NEUTRAL (2)
+        # Если LONG имеет больше голосов чем SHORT и хотя бы 2 голоса
+        elif long_count > short_count and long_count >= 2:
+            logger.info(f"📈 LONG signal determined: {long_count} votes vs SHORT={short_count}")
+            return "LONG"
+        # Если равное количество LONG и SHORT
+        elif long_count == short_count and long_count > 0:
+            # Используем weighted_direction как tie-breaker
+            if weighted_direction < 1.0:
+                logger.info(f"⚖️ Tie-break: weighted_direction={weighted_direction:.2f} → LONG")
+                return "LONG"
+            else:
+                logger.info(f"⚖️ Tie-break: weighted_direction={weighted_direction:.2f} → SHORT")
+                return "SHORT"
+        else:
+            # В остальных случаях (преобладает NEUTRAL)
+            logger.info(f"⚪ NEUTRAL signal: no clear direction")
             return "NEUTRAL"
 
     def _check_filtering_criteria(

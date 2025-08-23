@@ -38,7 +38,7 @@ Host linux-home-cf
 cloudflared access tcp --hostname pre-looks-specially-gsm.trycloudflare.com --url tcp://localhost:2222 &
 
 # Шаг 2: Подключиться через локальный порт
-sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost
+sshpass -p "${PASSWORD:-your-password-here}" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost
 ```
 
 ### 4. Альтернативные способы подключения
@@ -46,19 +46,19 @@ sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@local
 #### Через SSH config (если туннель работает напрямую)
 
 ```bash
-sshpass -p "ilpnqw1234" ssh linux-home-cf
+sshpass -p "${PASSWORD:-your-password-here}" ssh linux-home-cf
 ```
 
 #### Через внешний IP (если порт 22 открыт)
 
 ```bash
-sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no obertruper@93.109.63.226
+sshpass -p "${PASSWORD:-your-password-here}" ssh -o StrictHostKeyChecking=no obertruper@93.109.63.226
 ```
 
 #### Через порт 2222 (если настроен на сервере)
 
 ```bash
-sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@93.109.63.226
+sshpass -p "${PASSWORD:-your-password-here}" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@93.109.63.226
 ```
 
 ## Проверка подключения
@@ -66,13 +66,13 @@ sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@93.10
 ### Проверить доступность сервера
 
 ```bash
-sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost "pwd && ls -la /mnt/SSD/PYCHARMPRODJECT/"
+sshpass -p "${PASSWORD:-your-password-here}" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost "pwd && ls -la /mnt/SSD/PYCHARMPRODJECT/"
 ```
 
 ### Проверить проекты на сервере
 
 ```bash
-sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost "ls -la '/mnt/SSD/PYCHARMPRODJECT/LLM TRANSFORM/'"
+sshpass -p "${PASSWORD:-your-password-here}" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost "ls -la '/mnt/SSD/PYCHARMPRODJECT/LLM TRANSFORM/'"
 ```
 
 ## Синхронизация проектов
@@ -81,10 +81,10 @@ sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@local
 
 ```bash
 # Создать директорию на сервере
-sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost "mkdir -p '/mnt/SSD/PYCHARMPRODJECT/BOT_Trading_v3'"
+sshpass -p "${PASSWORD:-your-password-here}" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost "mkdir -p '/mnt/SSD/PYCHARMPRODJECT/BOT_Trading_v3'"
 
 # Синхронизация (исключая большие файлы >50MB)
-sshpass -p "ilpnqw1234" rsync -avz --progress \
+sshpass -p "${PASSWORD:-your-password-here}" rsync -avz --progress \
   --max-size=50M \
   --exclude='*.pyc' \
   --exclude='__pycache__/' \
@@ -105,7 +105,7 @@ sshpass -p "ilpnqw1234" rsync -avz --progress \
 
 ```bash
 # Скопировать crypto_ai_trading модуль
-sshpass -p "ilpnqw1234" rsync -avz --progress \
+sshpass -p "${PASSWORD:-your-password-here}" rsync -avz --progress \
   --max-size=50M \
   -e "ssh -o StrictHostKeyChecking=no -p 2222" \
   obertruper@localhost:'/mnt/SSD/PYCHARMPRODJECT/LLM TRANSFORM/crypto_ai_trading/' \
@@ -143,7 +143,7 @@ sshpass -p "ilpnqw1234" rsync -avz --progress \
 ### Проверка портов на сервере
 
 ```bash
-sshpass -p "ilpnqw1234" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost "sudo ss -tlnp | grep -E ':(22|2222)'"
+sshpass -p "${PASSWORD:-your-password-here}" ssh -o StrictHostKeyChecking=no -p 2222 obertruper@localhost "sudo ss -tlnp | grep -E ':(22|2222)'"
 ```
 
 ---

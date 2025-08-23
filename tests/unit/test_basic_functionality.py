@@ -117,12 +117,12 @@ class TestTradingComponents:
 
     def test_position_manager_creation(self):
         """Тест создания менеджера позиций"""
-        from trading.positions.position_manager import PositionManager
+        from trading.position_tracker import EnhancedPositionTracker
 
-        mock_exchange = Mock()
-        position_manager = PositionManager(exchange=mock_exchange)
-        assert position_manager is not None
-        assert hasattr(position_manager, "get_positions")
+        # Обновлено с PositionManager на EnhancedPositionTracker
+        position_tracker = EnhancedPositionTracker()
+        assert position_tracker is not None
+        assert hasattr(position_tracker, "get_current_positions")  # Обновленный метод
 
 
 class TestRiskManagement:

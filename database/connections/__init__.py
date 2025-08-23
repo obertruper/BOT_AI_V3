@@ -11,7 +11,7 @@ from .postgres import (
     SessionLocal,
     async_engine,
     engine,
-    get_async_db,
+    get_async_db,  # DEPRECATED: Use get_db from database.db_manager instead
     get_db,
     init_async_db,
     init_db,

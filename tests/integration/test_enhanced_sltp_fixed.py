@@ -11,7 +11,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from exchanges.base.models import Position
-from trading.positions.position_manager import Position as TradingPosition
+# from trading.positions.position_manager import Position as TradingPosition  # Legacy класс удален
+from trading.position_tracker import TrackedPosition as TradingPosition  # Обновлено
 from trading.sltp.enhanced_manager import EnhancedSLTPManager, PositionAdapter
 from trading.sltp.models import SLTPConfig
 

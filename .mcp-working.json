@@ -13,7 +13,7 @@
       "env": {
         "PGPORT": "${PGPORT:-5555}",
         "PGUSER": "${PGUSER:-obertruper}",
-        "PGPASSWORD": "${PGPASSWORD:-ilpnqw1234}",
+        "PGPASSWORD": "${PGPASSWORD:-your-password-here}",
         "PGDATABASE": "${PGDATABASE:-bot_trading_v3}"
       }
     },

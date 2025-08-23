@@ -1,0 +1,503 @@
+ml:
+  enabled: true
+  use_adapters: true  # Использовать систему адаптеров
+  active_model: "patchtst"  # Активная модель
+  
+  signal_generation:
+    interval_seconds: 180  # 3 минуты между ML предсказаниями
+    batch_size: 10
+    parallel_workers: 4
+    
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  - ADAUSDT
+  - DOGEUSDT
+  - DOTUSDT
+  - LINKUSDT
+  
+  # Новый формат: поддержка множественных моделей
+  models:
+    patchtst:
+      type: "PatchTST"
+      enabled: true
+      adapter_class: "PatchTSTAdapter"
+      model_file: "models/saved/best_model_20250728_215703.pth"
+      scaler_file: "models/saved/data_scaler.pkl"
+      device: "cuda"
+      direction_confidence_threshold: 0.5
+      config:
+        context_length: 96
+        num_features: 240
+        patch_length: 16
+        stride: 8
+        hidden_dim: 512
+        n_heads: 8
+        n_layers: 6
+        num_outputs: 20
+    
+    # Готово для будущих моделей
+    # lstm:
+    #   type: "LSTM"
+    #   enabled: false
+    #   adapter_class: "LSTMAdapter"
+    #   model_file: "models/saved/lstm_model.pth"
+    #   device: "cuda"
+  
+  # Legacy формат (для обратной совместимости)
+  model:
+    enabled: true
+    path: models/saved/best_model_20250728_215703.pth
+    scaler_path: models/saved/data_scaler.pkl
+    device: cuda
+    direction_confidence_threshold: 0.5
+  
+  # Параметры фильтрации сигналов  
+  min_confidence: 0.3       # Минимальная уверенность для генерации сигнала
+  min_signal_strength: 0.25  # Минимальная сила сигнала
+  risk_tolerance: MEDIUM     # LOW, MEDIUM, HIGH
+  
+  # Параметры кэширования предсказаний
+  cache:
+    enabled: true
+    ttl_seconds: 300        # 5 минут TTL для кэша
+    max_size: 1000          # Максимум записей в кэше
+    cleanup_interval: 60    # Проверка очистки каждую минуту
+    enable_stats: true      # Включить сбор статистики кэша
+    
+backtesting:
+  commission: 0.001
+  initial_capital: 100000
+  metrics:
+  - total_return
+  - sharpe_ratio
+  - max_drawdown
+  - win_rate
+  - profit_factor
+  - expectancy
+  - calmar_ratio
+  slippage: 0.0005
+bybit:
+  fees:
+    funding_rate: 0.0001
+    maker: 0.0002
+    taker: 0.00055
+  slippage:
+    base: 0.0005
+    market_impact_threshold: 0.01
+data:
+  end_date: '2025-06-29'
+  interval_minutes: 15
+  max_symbols: null
+  start_date: '2020-03-25'
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  - AAVEUSDT
+  - ADAUSDT
+  - ALGOUSDT
+  - APEUSDT
+  - APTUSDT
+  - ARBUSDT
+  - ATOMUSDT
+  - AVAXUSDT
+  - AXSUSDT
+  - CAKEUSDT
+  - DOGEUSDT
+  - DOTUSDT
+  - DYDXUSDT
+  - ENAUSDT
+  - ENSUSDT
+  - FARTCOINUSDT
+  - GALAUSDT
+  - GMTUSDT
+  - GRIFFAINUSDT
+  - HBARUSDT
+  - ICPUSDT
+  - JTOUSDT
+  - LDOUSDT
+  - LINKUSDT
+  - LTCUSDT
+  - MELANIAUSDT
+  - NEARUSDT
+  - OMUSDT
+  - ONDOUSDT
+  - OPUSDT
+  - 1000PEPEUSDT
+  - PNUTUSDT
+  - POPCATUSDT
+  - SUIUSDT
+  - TAOUSDT
+  - TIAUSDT
+  - TONUSDT
+  - TRBUSDT
+  - TRUMPUSDT
+  - TRXUSDT
+  - TWTUSDT
+  - UNIUSDT
+  - WIFUSDT
+  - ZEREBROUSDT
+  - 1INCHUSDT
+  test_ratio: 0.2
+  test_stride: 4
+  train_ratio: 0.6
+  train_stride: 1
+  val_ratio: 0.2
+  val_stride: 1
+  walk_forward:
+    step_size: 7
+    test_window: 30
+    training_window: 180
+    validation_window: 30
+database:
+  database: bot_trading_v3
+  host: localhost
+  max_overflow: 20
+  password: ilpnqw1234
+  pool_size: 10
+  port: 5555
+  table: raw_market_data
+  user: obertruper
+ensemble:
+  enabled: true
+  models_count: 5
+  rebalance_frequency: weekly
+  voting_method: weighted_average
+  weight_metric: sharpe_ratio
+features:
+  cross_asset:
+  - btc_dominance_effect
+  - sector_correlation
+  - lead_lag_signals
+  microstructure:
+  - bid_ask_spread
+  - order_book_imbalance
+  - volume_weighted_price
+  - trade_flow_toxicity
+  technical:
+  - name: sma
+    periods:
+    - 10
+    - 20
+    - 50
+  - name: ema
+    periods:
+    - 12
+    - 26
+  - name: rsi
+    period: 14
+  - fast: 12
+    name: macd
+    signal: 9
+    slow: 26
+  - name: bollinger_bands
+    period: 20
+    std_dev: 2
+  - name: atr
+    period: 14
+  - bins: 20
+    name: volume_profile
+  temporal:
+  - hour_of_day
+  - day_of_week
+  - month_of_year
+  - is_weekend
+logging:
+  handlers:
+  - console
+  - file
+  level: INFO
+  log_dir: experiments/logs
+  tensorboard:
+    enabled: true
+    log_dir: experiments/tensorboard
+  wandb:
+    enabled: false
+    entity: your-entity
+    project: crypto-ai-trading
+loss:
+  adaptive_class_weights: true
+  auto_adjust_on_collapse: true
+  class_weights:
+  - 1.5
+  - 1.5
+  - 0.8
+  collapse_threshold: 0.5
+  direction_warmup: 1.0
+  entropy_min_weight: 0.1
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  large_move_threshold: 0.005
+  large_move_weight: 5.0
+  min_entropy: 0.8
+  name: directional_multitask
+  params:
+    reduction: mean
+  task_weights:
+    directions: 1.0
+    future_returns: 0.7
+    long_levels: 0.5
+    risk_metrics: 0.4
+    short_levels: 0.5
+  use_dynamic_class_weights: true
+  use_weighted_sampling: false
+  warmup_epochs: 10
+  wrong_direction_penalty: 2.0
+model:
+  activation: gelu
+  amp_dtype: float16
+  attention_dropout: 0.1
+  batch_norm: true
+  batch_size: 8192
+  compile_model: false
+  confidence_threshold: 0.3
+  context_window: 96
+  d_ff: 512
+  d_model: 256
+  direction_confidence_threshold: 0.4
+  direction_head_init:
+    bias_init: neutral
+    method: balanced
+    weight_scale: 0.1
+  dropout: 0.3
+  dropout_schedule: false
+  e_layers: 3
+  early_stopping_patience: 20
+  entropy_weight: 0.8
+  epochs: 200
+  feature_attention: true
+  gradient_clip: 1.0
+  individual: false
+  input_size: 240
+  l2_regularization: 0.001
+  label_smoothing: 0.2
+  learning_rate: 1.0e-05
+  lr_scheduler:
+    min_lr: 1e-7
+    type: cosine
+    warmup_epochs: 5
+  min_delta: 0.0001
+  min_entropy_threshold: 0.8
+  mixup_alpha: 0.0
+  multi_scale_patches: true
+  n_heads: 8
+  name: UnifiedPatchTST
+  output_size: 20
+  overfitting_threshold: 0.3
+  patch_len: 16
+  pred_len: 1
+  stride: 8
+  target_variables:
+  - future_return_15m
+  - future_return_1h
+  - future_return_4h
+  - future_return_12h
+  - direction_15m
+  - direction_1h
+  - direction_4h
+  - direction_12h
+  - long_will_reach_1pct_4h
+  - long_will_reach_2pct_4h
+  - long_will_reach_3pct_12h
+  - long_will_reach_5pct_12h
+  - short_will_reach_1pct_4h
+  - short_will_reach_2pct_4h
+  - short_will_reach_3pct_12h
+  - short_will_reach_5pct_12h
+  - max_drawdown_1h
+  - max_rally_1h
+  - max_drawdown_4h
+  - max_rally_4h
+  - best_action
+  - signal_strength
+  - risk_reward_ratio
+  - optimal_hold_time
+  target_window: 1
+  task_type: trading
+  temperature: 2.0
+  temperature_scaling: true
+  use_amp: true
+  use_dropout_schedule: false
+  use_ema: false
+  use_improvements: false
+  use_tf32: true
+  warmup_steps: 500
+  weight_decay: 0.01
+  weight_noise: 0.0
+optimizer:
+  name: AdamW
+  params:
+    amsgrad: true
+    betas:
+    - 0.9
+    - 0.999
+    eps: 1.0e-08
+    weight_decay: 0.001
+performance:
+  cache_dir: cache/
+  cache_features: true
+  data_parallel: true
+  dataloader_drop_last: true
+  dataloader_pin_memory: true
+  device: cuda
+  gpu_cache_clear_freq: 20
+  gradient_accumulation_steps: 2
+  mixed_precision: true
+  monitor_gpu_memory: true
+  num_workers: 4
+  persistent_workers: true
+  pin_memory: false
+  prefetch_factor: 2
+  shuffle_train: false
+  use_precomputed_dataset: true
+remote_server:
+  direct_connection:
+    host: ssh1.vast.ai
+    key_path: ~/.ssh/id_rsa
+    port: 30421
+    user: root
+  enabled: true
+  ports:
+    jupyter: 8888
+    tensorboard: 6006
+    web_ui: 8083
+  python_path: /opt/conda/bin/python
+  remote_path: /root/crypto_ai_trading
+  ssh_alias: vast-current
+  sync:
+    exclude:
+    - cache/
+    - '*.pyc'
+    - __pycache__/
+    - .git/
+    - logs/
+    - models_saved/
+    - experiments/runs/
+    - .DS_Store
+risk_management:
+  max_concurrent_positions: 50
+  max_positions_per_symbol: 1
+  partial_close_sizes:
+  - 40
+  - 40
+  - 20
+  position_sizing:
+    correlation_adjustment: true
+    max_position_pct: 10.0
+    max_risk_per_trade: 0.5
+    method: kelly_criterion
+  risk_reward_ratio: 2.5
+  stop_loss_pct: 1.5
+  take_profit_targets:
+  - 1.5
+  - 2.5
+  - 4.0
+  volatility_adjustment:
+    altcoin_risk_multiplier: 0.7
+    high_vol_multipliers:
+    - 1.8
+    - 3.0
+    - 5.0
+    high_vol_threshold: 3.0
+    low_vol_multipliers:
+    - 1.2
+    - 2.0
+    - 3.0
+    low_vol_threshold: 1.5
+    major_coins:
+    - BTCUSDT
+    - ETHUSDT
+    - BNBUSDT
+    major_risk_multiplier: 1.0
+    meme_coin_risk_multiplier: 0.5
+scheduler:
+  monitor: val_macro_f1
+  name: ReduceLROnPlateau
+  params:
+    cooldown: 2
+    factor: 0.5
+    min_lr: 1.0e-07
+    mode: max
+    patience: 4
+    threshold: 0.001
+signal_filtering:
+  # Активная стратегия фильтрации: conservative/moderate/aggressive
+  strategy: "moderate"  # Изменено на moderate для баланса
+  
+  # Веса таймфреймов [15m, 1h, 4h, 12h] - 4h основной
+  timeframe_weights: [0.25, 0.25, 0.35, 0.15]
+  main_timeframe_index: 2  # 4h - основной таймфрейм
+  
+  # Консервативная стратегия - высочайшее качество сигналов
+  conservative:
+    min_timeframe_agreement: 3  # Минимум 3 из 4 таймфреймов
+    required_confidence_per_timeframe: 0.50  # Высокая уверенность
+    main_timeframe_required_confidence: 0.55  # 4h должен быть уверенным
+    min_expected_return_pct: 0.002  # 0.2% минимальная доходность
+    min_signal_strength: 0.45  # Высокая сила сигнала
+    max_risk_level: "MEDIUM"  # Средний риск максимум
+    min_quality_score: 0.60  # Высокое качество
+    
+  # Умеренная стратегия - сбалансированное качество
+  moderate:
+    min_timeframe_agreement: 3  # Минимум 3 из 4 таймфреймов должны согласиться
+    required_confidence_per_timeframe: 0.42  # Повышенный порог уверенности
+    main_timeframe_required_confidence: 0.45  # 4h таймфрейм важен
+    alternative_main_plus_one: true  # альтернатива: основной + 1 с высокой уверенностью
+    alternative_confidence_threshold: 0.45  # Порог для альтернативного условия
+    min_expected_return_pct: 0.0015  # 0.15% минимальная ожидаемая доходность
+    min_signal_strength: 0.40  # Умеренная сила сигнала
+    max_risk_level: "MEDIUM"
+    min_quality_score: 0.50  # Повышенное качество сигналов
+    
+    # Отдельные параметры для SHORT сигналов
+    short_confidence_threshold: 0.35  # Немного ниже чем для LONG
+    short_min_timeframe_agreement: 3  # Требуем 3 из 4 таймфреймов
+    short_expected_return_pct: 0.0012  # 0.12% минимальная доходность для SHORT
+    short_min_quality_score: 0.45  # Чуть ниже требование к качеству
+    
+  # Агрессивная стратегия - максимальное покрытие
+  aggressive:
+    min_timeframe_agreement: 1  # достаточно основного таймфрейма
+    required_confidence_per_timeframe: 0.30  # Низкий порог
+    main_timeframe_required_confidence: 0.35  # Основной таймфрейм с минимальной уверенностью
+    min_expected_return_pct: 0.0005  # 0.05% минимальная доходность
+    min_signal_strength: 0.25  # Низкая сила сигнала допустима
+    max_risk_level: "HIGH"
+    min_quality_score: 0.30  # Минимальное качество
+    
+  # Веса для расчета итогового качества сигнала
+  quality_weights:
+    agreement: 0.35  # согласованность таймфреймов
+    confidence: 0.30  # уверенность модели
+    return_expectation: 0.20  # ожидаемая доходность
+    risk_adjustment: 0.15  # корректировка на риск
+    
+  # Настройки логирования качества
+  logging:
+    log_rejection_reasons: true  # детальное логирование отклонений
+    log_quality_metrics: true  # логирование всех метрик качества
+    log_strategy_stats: true  # статистика эффективности стратегии
+
+signal_generation:
+  interval_seconds: 30
+trading:
+  max_daily_trades: 100
+  max_positions: 10
+  min_confidence_threshold: 0.7
+  multiframe_confirmation: true
+  rebalance_interval: 1h
+validation:
+  max_drawdown: 0.2
+  min_sharpe_ratio: 1.5
+  min_win_rate: 0.25
+  statistical_tests:
+  - sharpe_ratio_test
+  - information_ratio
+  - monte_carlo_permutation

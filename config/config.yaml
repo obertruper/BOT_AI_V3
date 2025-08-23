@@ -1,0 +1,648 @@
+# BOT Trading v3 Unified Configuration
+# Объединенная конфигурация всех компонентов системы
+# Дата создания: 23 августа 2025
+
+# ===== SYSTEM CONFIGURATION =====
+system:
+  name: BOT_Trading_v3
+  version: 3.0.0
+  environment: development
+  limits:
+    max_traders: 10
+    max_concurrent_trades: 50
+    max_memory_usage_percent: 80
+    max_cpu_usage_percent: 80
+  performance:
+    worker_threads: 4
+    async_pool_size: 100
+    connection_pool_size: 20
+    cache_size_mb: 512
+  web_interface:
+    host: 0.0.0.0
+    port: 8083
+
+# ===== DATABASE CONFIGURATION =====
+database:
+  type: postgresql
+  host: 127.0.0.1
+  port: 5555
+  name: bot_trading_v3
+  user: obertruper
+  password: ${DB_PASSWORD}
+  pool:
+    min_connections: 5
+    max_connections: 25
+    connection_timeout: 30
+    idle_timeout: 300
+  migrations:
+    auto_migrate: true
+    backup_before_migration: true
+
+# ===== DATA MANAGEMENT =====
+data_management:
+  auto_update: true
+  update_interval: 900  # 15 минут между обновлениями (в секундах)
+  initial_load_days: 7  # дней исторических данных при первом запуске
+  min_candles_for_ml: 96  # минимум свечей для ML (24 часа при 15-мин интервале)
+  max_gap_hours: 2  # максимальный пропуск в часах
+  check_on_startup: true  # проверять и загружать при запуске
+  enabled_services:
+    - data_update_service
+    - data_maintenance_service
+
+# ===== MONITORING CONFIGURATION =====
+monitoring:
+  enabled: true
+  health_check_interval: 30
+  metrics_collection_interval: 10
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+  alerts:
+    enabled: true
+    telegram_enabled: false
+    email_enabled: false
+    thresholds:
+      memory_usage_percent: 85
+      cpu_usage_percent: 90
+      error_rate_percent: 5
+      latency_ms: 1000
+  # Из risk_management.yaml
+  accuracy_alert_threshold: 5.0
+  expected_buy_accuracy: 63.04
+  expected_sell_accuracy: 60.0
+  ml_buy_profit_threshold: 0.1
+  ml_buy_loss_threshold: 0.1
+  ml_sell_profit_threshold: 0.1
+  ml_sell_loss_threshold: 0.1
+  monitor_history_days: 14
+
+# ===== LOGGING CONFIGURATION =====
+logging:
+  level: INFO
+  format: structured
+  files:
+    main: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/system.log
+    trades: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/trades.log
+    errors: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/errors.log
+  rotation:
+    max_size_mb: 100
+    backup_count: 10
+  external:
+    sentry:
+      enabled: false
+      dsn: ${SENTRY_DSN}
+
+# ===== SECURITY CONFIGURATION =====
+security:
+  encryption:
+    enabled: true
+    key_rotation_days: 30
+  access:
+    max_login_attempts: 5
+    lockout_duration_minutes: 30
+  audit:
+    enabled: true
+    log_all_actions: true
+    retention_days: 90
+
+# ===== API CONFIGURATION =====
+api:
+  rest:
+    enabled: false
+    host: 0.0.0.0
+    port: 8084
+    cors_enabled: true
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 100
+  websocket:
+    enabled: true
+    port: 8085
+    max_connections: 100
+    heartbeat_interval: 30
+  webhook:
+    enabled: true
+    port: 8086
+    timeout_seconds: 30
+    retry_attempts: 3
+
+# ===== NOTIFICATIONS CONFIGURATION =====
+notifications:
+  telegram:
+    enabled: true
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    chat_id: ${TELEGRAM_CHAT_ID}
+  email:
+    enabled: false
+    smtp_server: smtp.gmail.com
+    smtp_port: 587
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}
+  discord:
+    enabled: false
+    webhook_url: ${DISCORD_WEBHOOK_URL}
+
+# ===== BACKUP CONFIGURATION =====
+backup:
+  enabled: true
+  interval_hours: 6
+  retention_days: 30
+  include:
+  - database
+  - configurations
+  - models
+  - logs
+  storage:
+    local:
+      enabled: true
+      path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/backups/
+    cloud:
+      enabled: false
+      provider: aws
+      bucket: ${BACKUP_BUCKET}
+
+# ===== DEVELOPMENT CONFIGURATION =====
+development:
+  debug_mode: true
+  hot_reload: true
+  mock_exchanges: false
+  test_mode: false
+  test_data:
+    enabled: false
+    mock_signals: false
+    paper_trading: false
+
+# ===== TRADING CONFIGURATION =====
+trading:
+  # Основные параметры
+  hedge_mode: true
+  category: linear
+  leverage: 5
+  max_positions_per_direction: 1
+  min_order_value_usdt: 5.0
+  
+  # Размеры позиций по умолчанию
+  default_position_sizes:
+    BTCUSDT: 0.001
+    ETHUSDT: 0.01
+    BNBUSDT: 0.02
+    SOLUSDT: 0.05
+    XRPUSDT: 10.0
+    ADAUSDT: 10.0
+    DOGEUSDT: 100.0
+    DOTUSDT: 1.3
+    LINKUSDT: 0.5
+    MATICUSDT: 10.0
+    AVAXUSDT: 0.2
+  
+  # Исполнение ордеров
+  order_execution:
+    use_limit_orders: false
+    default_order_type: MARKET
+  
+  # Из trading.yaml
+  orders:
+    default_leverage: 5           # 5x для production
+    min_order_size: 5    # Уменьшен минимальный размер ордера
+    max_slippage: 0.002
+  
+  signals:
+    process_interval: 5
+    max_signal_age: 300
+    min_confidence: 0.40  # Повышен порог для качественных сигналов
+    min_strength: 0.40    # Повышена минимальная сила сигнала
+  
+  execution:
+    order_timeout: 30
+    retry_attempts: 3
+    retry_delay: 2
+  
+  market_making:
+    enabled: false
+    spread: 0.001
+    depth: 3
+  
+  paper_trading:
+    enabled: false
+    initial_balance: 10000
+
+# ===== POSITION MANAGEMENT =====
+position_management:
+  sync_interval: 60
+  max_positions_per_symbol: 2
+
+# ===== SIGNAL PROCESSING =====
+signal_processing:
+  confidence_threshold: 0.7  # ПОВЫШЕНО: высокий порог уверенности
+  min_volume: 100000
+  
+  # Специфичные настройки для ML сигналов (из V2)
+  ml_thresholds:
+    buy_profit: 0.55             # РЕАЛИСТИЧНО: умеренная вероятность прибыли
+    buy_loss: 0.45               # РЕАЛИСТИЧНО: допустимый риск убытка
+    sell_profit: 0.55            # РЕАЛИСТИЧНО: умеренная вероятность прибыли
+    sell_loss: 0.45              # РЕАЛИСТИЧНО: допустимый риск убытка
+
+# ===== EXCHANGES CONFIGURATION =====
+exchanges:
+  bybit:
+    enabled: true
+    api_key: ${BYBIT_API_KEY}
+    api_secret: ${BYBIT_API_SECRET}
+    testnet: false
+    rate_limits:
+      orders_per_second: 5
+      requests_per_minute: 120
+    # Из ml_config.yaml
+    fees:
+      funding_rate: 0.0001
+      maker: 0.0002
+      taker: 0.00055
+    slippage:
+      base: 0.0005
+      market_impact_threshold: 0.01
+  binance:
+    enabled: false
+    api_key: ${BINANCE_API_KEY}
+    api_secret: ${BINANCE_API_SECRET}
+    testnet: false
+
+# ===== ML CONFIGURATION =====
+ml:
+  enabled: true
+  use_adapters: true  # Использовать систему адаптеров
+  active_model: "patchtst"  # Активная модель
+  
+  signal_generation:
+    interval_seconds: 60  # ML предсказания каждую минуту
+    batch_size: 10
+    parallel_workers: 4
+  
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  - ADAUSDT
+  - DOGEUSDT
+  - DOTUSDT
+  - LINKUSDT
+  
+  # Поддержка множественных моделей
+  models:
+    patchtst:
+      type: "PatchTST"
+      enabled: true
+      adapter_class: "PatchTSTAdapter"
+      model_file: "best_model_20250728_215703.pth"
+      scaler_file: "data_scaler.pkl"
+      model_directory: "models/saved"
+      device: "cuda"
+      direction_confidence_threshold: 0.5
+      config:
+        context_length: 96
+        num_features: 240
+        patch_length: 16
+        stride: 8
+        hidden_dim: 512
+        n_heads: 8
+        n_layers: 6
+        num_outputs: 20
+    xgboost:
+      enabled: false
+      model_path: models/saved/xgboost_model.pkl
+  
+  # Legacy формат (для обратной совместимости)
+  model:
+    enabled: true
+    path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/models/saved/best_model_20250728_215703.pth
+    scaler_path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/models/saved/data_scaler.pkl
+    device: cuda
+    direction_confidence_threshold: 0.5
+  
+  data:
+    lookback_minutes: 3600
+    min_candles: 240
+    interval_minutes: 15
+    start_date: '2020-03-25'
+    end_date: '2025-06-29'
+    max_symbols: null
+  
+  filters:
+    min_confidence: 0.40      # ОПТИМАЛЬНО: соответствует реальным выходам ML
+    min_signal_strength: 0.40  # ОПТИМАЛЬНО: фильтруем только очень слабые
+  
+  risk:
+    max_positions_per_symbol: 1
+    position_size_percent: 2
+    risk_tolerance: MEDIUM     # LOW, MEDIUM, HIGH
+  
+  # Параметры кэширования предсказаний
+  cache:
+    enabled: true
+    ttl_seconds: 300        # 5 минут TTL для кэша
+    max_size: 1000          # Максимум записей в кэше
+    cleanup_interval: 60    # Проверка очистки каждую минуту
+    enable_stats: true      # Включить сбор статистики кэша
+  
+  # ML-интеграция (из risk_management.yaml)
+  integration:
+    enabled: true
+    
+    # Пороги для ML-сигналов
+    thresholds:
+      buy_profit: 0.65
+      buy_loss: 0.35
+      sell_profit: 0.65
+      sell_loss: 0.35
+    
+    # Факторы корректировки
+    confidence_factor: 1.0
+    loss_probability_factor: 1.0
+    
+    # Модели покупки/продажи
+    buy_model:
+      standard:
+        profit_probability_min: 0.50
+        profit_probability_max: 0.80
+        loss_probability_min: 0.25
+        loss_probability_max: 0.60
+      conservative:
+        profit_probability_min: 0.52
+        profit_probability_max: 0.80
+        loss_probability_min: 0.25
+        loss_probability_max: 0.58
+      very_conservative:
+        profit_probability_min: 0.54
+        profit_probability_max: 0.80
+        loss_probability_min: 0.25
+        loss_probability_max: 0.55
+    
+    sell_model:
+      standard:
+        profit_probability_min: 0.53
+        profit_probability_max: 0.80
+        loss_probability_min: 0.25
+        loss_probability_max: 0.49
+      conservative:
+        profit_probability_min: 0.55
+        profit_probability_max: 0.80
+        loss_probability_min: 0.25
+        loss_probability_max: 0.47
+      very_conservative:
+        profit_probability_min: 0.55
+        profit_probability_max: 0.80
+        loss_probability_min: 0.25
+        loss_probability_max: 0.45
+
+# ===== BACKTESTING CONFIGURATION =====
+backtesting:
+  commission: 0.001
+  initial_capital: 100000
+  metrics:
+  - total_return
+  - sharpe_ratio
+  - max_drawdown
+  - win_rate
+  - profit_factor
+  - expectancy
+  - calmar_ratio
+  slippage: 0.0005
+
+# ===== RISK MANAGEMENT CONFIGURATION =====
+risk_management:
+  enabled: true
+  
+  # Основные параметры риска - ЕДИНАЯ ТОЧКА УПРАВЛЕНИЯ
+  risk_per_trade: 0.02  # 2% от баланса на сделку  
+  fixed_risk_balance: 500  # Фиксированный баланс для расчета риска
+  max_total_risk: 0.10  # Максимальный общий риск 10%
+  max_positions: 5  # Максимальное количество позиций
+  
+  # Параметры плеча
+  default_leverage: 5
+  max_leverage: 20
+  min_notional: 5.0
+  
+  # Глобальные параметры (из system.yaml)
+  global:
+    enabled: true
+    max_total_risk: 0.1
+    max_daily_loss: 0.05
+    max_open_positions: 10
+  
+  # Позиционные параметры
+  position:
+    default_stop_loss: 0.02
+    default_take_profit: 0.03
+    max_position_size: 0.1
+  
+  # Трейлинг-стоп
+  trailing_stop:
+    enabled: true
+    activation_profit: 0.01
+    trailing_distance: 0.005
+  
+  # Профили риска
+  risk_profiles:
+    standard:
+      risk_multiplier: 1.0
+      confidence_threshold: 0.6
+      max_position_size: 50  # $50 маржи = $250 полная позиция (5x плечо)
+    conservative:
+      risk_multiplier: 0.7
+      confidence_threshold: 0.7
+      max_position_size: 35  # $35 маржи = $175 полная позиция (5x плечо)
+    very_conservative:
+      risk_multiplier: 0.5
+      confidence_threshold: 0.8
+      max_position_size: 25  # $25 маржи = $125 полная позиция (5x плечо)
+  
+  # Категории активов (из V2)
+  asset_categories:
+    meme_coins:
+      symbols:
+        - DOGE
+        - SHIB
+        - PEPE
+        - BONK
+        - FLOKI
+        - MEME
+        - TRUMP
+        - POPCAT
+        - FARTCOIN
+        - 1000PEPE
+        - ZEREBRO
+        - PNUT
+      risk_multiplier: 0.8  # Сниженный риск для мемкоинов
+      max_leverage: 10
+    stable_coins:
+      symbols:
+        - BTC
+        - ETH
+        - SOL
+        - BNB
+        - XRP
+        - ADA
+        - DOT
+        - LINK
+      risk_multiplier: 1.0  # Стандартный риск
+      max_leverage: 20
+
+# ===== ENHANCED SL/TP CONFIGURATION =====
+enhanced_sltp:
+  enabled: true
+  
+  # Синхронизация с биржей
+  synchronization:
+    enabled: true
+    interval: 30  # секунды
+    max_attempts: 5
+    priority: "exchange"
+  
+  # Трейлинг-стоп
+  trailing_stop:
+    enabled: true
+    type: percentage
+    activation_percent: 1.0  # Активируется при 1% прибыли
+    step: 0.5  # Шаг трейлинга 0.5%
+    step_percent: 0.5  # Шаг трейлинга 0.5%
+    min_profit: 0.3
+    min_distance: 0.3  # Минимальное расстояние от цены
+    max_distance: 2.0
+    use_adaptive_step: true
+    volatility_factor: 1.0
+    max_updates: 15
+    
+    # Адаптивные настройки
+    adaptive:
+      enabled: true
+      max_step: 2.0
+      min_step: 0.3
+  
+  # Частичное закрытие
+  partial_take_profit:
+    enabled: true
+    update_sl_after_partial: true
+    move_sl_to_breakeven: true
+    levels:
+    - percent: 1.0
+      close_ratio: 0.25
+    - percent: 2.0
+      close_ratio: 0.25
+    - percent: 3.0
+      close_ratio: 0.5
+  
+  # Защита прибыли
+  profit_protection:
+    enabled: true
+    breakeven_percent: 1.0
+    breakeven_offset: 0.2
+    lock_percent:
+    - trigger: 2.0
+      lock: 1.0
+    - trigger: 3.0
+      lock: 2.0
+    - trigger: 4.0
+      lock: 3.0
+    max_updates: 5
+    
+    # Уровни фиксации прибыли
+    levels:
+      - trigger: 1.0  # При 1% прибыли
+        lock: 0.5     # Фиксируем 0.5% прибыли
+      - trigger: 2.0  # При 2% прибыли
+        lock: 1.0     # Фиксируем 1% прибыли
+      - trigger: 3.0  # При 3% прибыли
+        lock: 1.5     # Фиксируем 1.5% прибыли
+  
+  # Корректировка на основе волатильности
+  volatility_adjustment:
+    enabled: true
+    multiplier: 1.0
+    atr_period: 14
+    sl_multiplier: 1.5
+    tp_multiplier: 2.5
+  
+  # Временная корректировка
+  time_based_adjustment:
+    enabled: false  # Отключено для тестирования
+    time_thresholds:
+      - hours: 4
+        sl_tighten: 0.3
+        tp_extension: 0.0
+      - hours: 12
+        sl_tighten: 0.5
+        tp_extension: 0.0
+      - hours: 24
+        sl_tighten: 0.8
+        tp_extension: 0.0
+
+# ===== UNIFIED SYSTEM CONFIGURATION =====
+unified_system:
+  enabled: true
+  components:
+    core:
+      enabled: true
+      auto_restart: true
+      health_check_interval: 30
+      startup_delay: 0
+    ml:
+      enabled: true
+      auto_restart: true
+      integrated_with: core
+    api:
+      enabled: true
+      port: 8083
+      auto_restart: true
+      health_check_interval: 30
+      startup_delay: 3
+    frontend:
+      enabled: true
+      port: 5173
+      auto_restart: false
+      startup_delay: 5
+  monitoring:
+    interval_seconds: 30
+    auto_restart_on_failure: true
+    max_restart_attempts: 5
+    restart_delay_seconds: 10
+  logging:
+    aggregate_logs: true
+    log_directory: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs
+    process_log_directory: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/processes
+
+# ===== TRADERS CONFIGURATION =====
+traders:
+- id: multi_crypto_10
+  enabled: true
+  type: multi_crypto
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  exchange: bybit
+  strategy: ml_signal
+  strategy_config:
+    signal_interval: 60  # ML сигналы каждую минуту
+    indicators:
+    - type: RSI
+      period: 14
+      oversold: 30
+      overbought: 70
+    - type: EMA
+      short_period: 9
+      long_period: 21
+  capital:
+    initial: 10000
+    per_trade_percentage: 2
+    max_positions: 5
+  risk_management:
+    stop_loss_percentage: 2
+    take_profit_percentage: 5
+    max_drawdown_percentage: 10

@@ -85,7 +85,7 @@ class BotAIV3Application:
         if missing:
             raise ConfigurationError(
                 f"Отсутствуют обязательные переменные окружения: {', '.join(missing)}\n"
-                f"Создайте файл .env на основе config/.env.example"
+                f"Создайте файл .env на основе .env.example"
             )
 
         # Проверка наличия хотя бы одного API ключа биржи
@@ -211,11 +211,16 @@ async def main():
         await app.stop()
 
 
-if __name__ == "__main__":
+def cli():
+    """Точка входа для console_scripts в setup.py."""
     # Проверка версии Python
-    if sys.version_info < (3, 8):
-        print("❌ Требуется Python 3.8 или выше")
+    if sys.version_info < (3, 10):
+        print("❌ Требуется Python 3.10 или выше")
         sys.exit(1)
 
     # Запуск приложения
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    cli()

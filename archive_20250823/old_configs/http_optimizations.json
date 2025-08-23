@@ -1,0 +1,20 @@
+{
+  "http_client_config": {
+    "default_timeout": 30,
+    "connect_timeout": 10,
+    "read_timeout": 20,
+    "retry_attempts": 3,
+    "retry_delay": 1,
+    "max_retry_delay": 60
+  },
+  "rate_limiting": {
+    "requests_per_minute": 60,
+    "burst_limit": 10,
+    "backoff_factor": 2
+  },
+  "connection_pool": {
+    "max_connections": 100,
+    "max_connections_per_host": 10,
+    "keepalive_timeout": 30
+  }
+}

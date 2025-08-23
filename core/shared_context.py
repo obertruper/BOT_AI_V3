@@ -1,5 +1,9 @@
-"""
-Shared context для связи между main.py и web API
+"""Модуль SharedContext для связи между ядром системы и веб-API.
+
+Предоставляет потокобезопасный синглтон для хранения ссылок на ключевые
+компоненты системы, такие как оркестратор, менеджер трейдеров и т.д.
+Это позволяет веб-серверу получать доступ к состоянию и функциям
+основного приложения, не создавая прямых зависимостей.
 """
 
 import threading
@@ -7,7 +11,17 @@ from typing import Any
 
 
 class SharedContext:
-    """Синглтон для хранения глобальных компонентов системы"""
+    """Синглтон для хранения и предоставления глобальных компонентов системы.
+
+    Реализует потокобезопасный доступ к экземпляру, гарантируя, что в приложении
+    существует только один объект данного класса.
+
+    Attributes:
+        orchestrator: Экземпляр SystemOrchestrator.
+        trader_manager: Экземпляр TraderManager.
+        exchange_factory: Экземпляр ExchangeFactory.
+        config_manager: Экземпляр ConfigManager.
+    """
 
     _instance = None
     _lock = threading.Lock()
@@ -21,15 +35,20 @@ class SharedContext:
         return cls._instance
 
     def __init__(self):
+        """Инициализирует атрибуты контекста при первом создании."""
         if not self._initialized:
-            self.orchestrator = None
-            self.trader_manager = None
-            self.exchange_factory = None
-            self.config_manager = None
+            self.orchestrator: Any | None = None
+            self.trader_manager: Any | None = None
+            self.exchange_factory: Any | None = None
+            self.config_manager: Any | None = None
             self._initialized = True
 
     def set_orchestrator(self, orchestrator: Any):
-        """Установить orchestrator"""
+        """Устанавливает экземпляр оркестратора и связанные с ним компоненты.
+
+        Args:
+            orchestrator: Экземпляр SystemOrchestrator.
+        """
         self.orchestrator = orchestrator
         if orchestrator:
             self.trader_manager = getattr(orchestrator, "trader_manager", None)
@@ -37,13 +56,21 @@ class SharedContext:
             self.config_manager = getattr(orchestrator, "config_manager", None)
 
     def get_orchestrator(self) -> Any | None:
-        """Получить orchestrator"""
+        """Возвращает сохраненный экземпляр оркестратора.
+
+        Returns:
+            Экземпляр SystemOrchestrator или None, если он не установлен.
+        """
         return self.orchestrator
 
     def is_initialized(self) -> bool:
-        """Проверить инициализацию"""
+        """Проверяет, был ли инициализирован контекст (установлен ли оркестратор).
+
+        Returns:
+            True, если оркестратор установлен, иначе False.
+        """
         return self.orchestrator is not None
 
 
-# Глобальный экземпляр
+# Глобальный экземпляр для импорта в других частях приложения
 shared_context = SharedContext()

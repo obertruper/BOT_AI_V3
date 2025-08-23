@@ -59,6 +59,19 @@ from ..base.models import (
 )
 from ..base.order_types import OrderRequest, OrderResponse, OrderSide, OrderStatus, OrderType
 
+# Import InstrumentManager for proper quantity rounding
+from trading.instrument_manager import InstrumentManager
+
+# Global instance for instrument management
+_instrument_manager = None
+
+def get_instrument_manager():
+    """Get or create global InstrumentManager instance"""
+    global _instrument_manager
+    if _instrument_manager is None:
+        _instrument_manager = InstrumentManager()
+    return _instrument_manager
+
 
 def clean_symbol(symbol: str) -> str:
     """Очищает символ от суффиксов для корректной работы с Bybit API"""
@@ -118,16 +131,18 @@ def format_price(price: float, tick_size: float) -> str:
 
 
 def format_quantity(
-    quantity: float, qty_step: float, min_qty: float = 0.0, max_qty: float = float("inf")
+    quantity: float, qty_step: float, min_qty: float = 0.0, max_qty: float = float("inf"), symbol: str = None
 ) -> str:
     """
     Форматирует количество в соответствии с требованиями Bybit API
+    Использует InstrumentManager для точного округления
 
     Args:
         quantity: Исходное количество
         qty_step: Шаг количества из инструмента
         min_qty: Минимальное количество
         max_qty: Максимальное количество
+        symbol: Символ инструмента (для использования InstrumentManager)
 
     Returns:
         Отформатированное количество как строка
@@ -135,6 +150,24 @@ def format_quantity(
     Raises:
         ValueError: Если количество не соответствует требованиям
     """
+    # Если передан символ, используем InstrumentManager для точного округления
+    if symbol:
+        try:
+            instrument_manager = get_instrument_manager()
+            # Используем round_qty с ROUND_DOWN для избежания превышения баланса
+            rounded_qty = instrument_manager.round_qty(
+                symbol=symbol,
+                qty=quantity,
+                round_up=False,  # ROUND_DOWN
+                enforce_min=True
+            )
+            # Форматируем количество с правильным числом знаков после запятой
+            return instrument_manager.format_qty(symbol, rounded_qty)
+        except Exception as e:
+            # Если InstrumentManager не может обработать, используем fallback
+            pass
+    
+    # Fallback: оригинальная логика для обратной совместимости
     from decimal import Decimal, ROUND_DOWN
     
     if quantity <= 0:
@@ -1026,6 +1059,7 @@ class BybitClient(BaseExchangeInterface):
                     self.logger.warning(f"Failed to set leverage for {symbol}: {e}")
 
             # Получаем информацию об инструменте для правильного форматирования qty
+            # Сначала пробуем использовать InstrumentManager для точного округления
             try:
                 instrument_info = await self.get_instrument_info(symbol)
                 formatted_qty = format_quantity(
@@ -1033,6 +1067,7 @@ class BybitClient(BaseExchangeInterface):
                     qty_step=instrument_info.qty_step,
                     min_qty=instrument_info.min_order_qty,
                     max_qty=instrument_info.max_order_qty,
+                    symbol=symbol  # Передаем символ для InstrumentManager
                 )
             except Exception as e:
                 self.logger.warning(
@@ -1046,6 +1081,7 @@ class BybitClient(BaseExchangeInterface):
                     qty_step=settings.get("qtyStep", 0.1),
                     min_qty=settings.get("minOrderQty", 0.1),
                     max_qty=settings.get("maxOrderQty", float("inf")),
+                    symbol=symbol  # Передаем символ для InstrumentManager
                 )
 
             # Подготовка параметров

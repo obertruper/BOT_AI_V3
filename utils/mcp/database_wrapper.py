@@ -22,7 +22,7 @@ class MCPDatabaseWrapper:
         self.database = "bot_trading_v3"
         self.user = "obertruper"
         # Password должен быть в переменных окружения
-        self.password = os.getenv("PGPASSWORD", "ilpnqw1234")
+        self.password = os.getenv("PGPASSWORD", "your-password-here")  # Заменено для безопасности
 
     async def connect(self):
         """Подключение через MCP (вызывается автоматически)"""

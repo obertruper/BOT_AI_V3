@@ -18,7 +18,7 @@ if command -v gh &> /dev/null; then
     echo -e "${GREEN}✅${NC} GitHub CLI установлен"
 else
     echo -e "${YELLOW}⚠️${NC} GitHub CLI не установлен. Установка..."
-    echo "ilpnqw1234" | sudo -S apt-get update && sudo -S apt-get install -y gh
+    echo "${SUDO_PASSWORD:-your-password-here}" | sudo -S apt-get update && sudo -S apt-get install -y gh  # Используем переменную окружения
 fi
 
 # Git

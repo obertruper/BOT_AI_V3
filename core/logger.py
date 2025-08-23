@@ -108,7 +108,7 @@ def setup_risk_management_logger() -> logging.Logger:
         )
 
         # Файловый обработчик
-        file_handler = logging.FileHandler("logs/risk_management.log")
+        file_handler = logging.FileHandler("data/logs/risk_management.log")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
 

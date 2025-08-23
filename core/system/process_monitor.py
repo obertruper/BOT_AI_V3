@@ -13,7 +13,7 @@ from typing import Any
 import psutil
 import redis.asyncio as redis
 
-from database.connections.postgres import AsyncPGPool
+from database.db_manager import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ class ProcessMonitor:
 
     def __init__(self, redis_client: redis.Redis | None = None):
         self.redis_client = redis_client
+        self.db_manager = None
         self.components: dict[str, ComponentHealth] = {}
         self.system_metrics: deque = deque(maxlen=1000)  # Последние 1000 замеров
         self.alert_rules: dict[str, dict] = {}
@@ -147,6 +148,10 @@ class ProcessMonitor:
             return
 
         self._running = True
+        
+        # Инициализируем DBManager
+        self.db_manager = await get_db()
+        
         logger.info("🚀 Запуск ProcessMonitor")
 
         # Запуск задач мониторинга
@@ -515,7 +520,7 @@ class ProcessMonitor:
             # PostgreSQL подключения
             postgres_connections = 0
             try:
-                result = await AsyncPGPool.fetchrow(
+                result = await self.db_manager.fetch_one(
                     "SELECT count(*) as connections FROM pg_stat_activity"
                 )
                 if result:

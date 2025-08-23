@@ -1,0 +1,11 @@
+{
+  "postgres": {
+    "host": "localhost",
+    "port": 5555,
+    "user": "obertruper",
+    "password": "your-password-here",
+    "database": "bot_trading_v3"
+  },
+  "description": "MCP PostgreSQL configuration for BOT_AI_V3",
+  "auto_connect": true
+}

@@ -34,7 +34,7 @@ class SystemIssueFixer:
         print("🔧 Инициализация системы исправления проблем")
 
         try:
-            self.config_manager = ConfigManager("config/system.yaml")
+            self.config_manager = ConfigManager()
             await self.config_manager.initialize()
             print("✅ ConfigManager инициализирован")
         except Exception as e:

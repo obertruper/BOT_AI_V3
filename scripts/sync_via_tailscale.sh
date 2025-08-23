@@ -3,7 +3,7 @@
 # Синхронизация BOT_Trading_v3 через Tailscale
 # Использование: ./scripts/sync_via_tailscale.sh
 
-PASSWORD="ilpnqw1234"
+PASSWORD="${PASSWORD:-your-password-here}"  # Используем переменную окружения
 TAILSCALE_IP="100.118.184.106"
 REMOTE_USER="obertruper"
 REMOTE_PATH="/mnt/SSD/PYCHARMPRODJECT/BOT_Trading_v3"

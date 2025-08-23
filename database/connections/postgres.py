@@ -16,12 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 
+# Импорт TransactionManager для интеграции
+from database.connections.transaction_manager import TransactionManager
+
 # Загружаем переменные окружения
 load_dotenv()
 
 # Параметры подключения из .env
 DB_USER = os.getenv("PGUSER", "obertruper")
-DB_PASSWORD = os.getenv("PGPASSWORD", "ilpnqw1234")
+DB_PASSWORD = os.getenv("PGPASSWORD", "your-password-here")  # Заменено для безопасности
 DB_NAME = os.getenv("PGDATABASE", "bot_trading_v3")
 DB_PORT = os.getenv("PGPORT", "5555")
 
@@ -107,6 +110,7 @@ class AsyncPGPool:
     """Пул соединений для прямой работы с asyncpg (без SQLAlchemy)"""
 
     _pool: asyncpg.Pool | None = None
+    _transaction_manager: TransactionManager | None = None
 
     @classmethod
     async def init_pool(cls) -> asyncpg.Pool:
@@ -140,6 +144,15 @@ class AsyncPGPool:
         if cls._pool:
             await cls._pool.close()
             cls._pool = None
+            cls._transaction_manager = None
+
+    @classmethod
+    async def get_transaction_manager(cls) -> TransactionManager:
+        """Получить экземпляр TransactionManager"""
+        if cls._transaction_manager is None:
+            pool = await cls.get_pool()
+            cls._transaction_manager = TransactionManager(pool)
+        return cls._transaction_manager
 
     @classmethod
     async def execute(cls, query: str, *args):

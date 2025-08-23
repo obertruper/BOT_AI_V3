@@ -1,0 +1,152 @@
+# BOT_AI_V3 - Безопасная конфигурация для тестирования торговли
+# Минимальные риски и размеры позиций
+
+# Основные настройки теста
+test_mode:
+  enabled: true
+  dry_run: true  # Начинаем с dry-run режима
+  paper_trading: true  # Используем виртуальный баланс
+
+  # Виртуальный баланс для тестов
+  virtual_balance:
+    USDT: 1000  # $1000 виртуальных USDT
+
+# Ограничения для безопасности
+safety_limits:
+  max_position_size_usdt: 10  # Максимум $10 на позицию
+  max_total_exposure_usdt: 20  # Максимум $20 общая экспозиция
+  max_positions: 2  # Максимум 2 позиции одновременно
+  max_daily_trades: 10  # Максимум 10 сделок в день
+  max_daily_loss_usdt: 20  # Максимум $20 потерь в день
+
+# Торговые параметры
+trading:
+  # Символы для тестирования (только основные)
+  symbols:
+    - "BTCUSDT"
+    - "ETHUSDT"
+
+  # Минимальные размеры ордеров
+  min_order_sizes:
+    BTCUSDT: 0.0001  # Минимум для Bybit
+    ETHUSDT: 0.001
+
+  # Режим исполнения
+  execution:
+    mode: "passive"  # passive = лимитные ордера
+    slippage_tolerance: 0.001  # 0.1% допустимое проскальзывание
+
+# Risk Management для тестов
+risk_management:
+  # Глобальные параметры
+  global:
+    enabled: true
+    max_total_risk: 0.02  # 2% от капитала
+    max_daily_loss: 0.02  # 2% максимальная дневная потеря
+    max_open_positions: 2
+
+  # Параметры позиций
+  position:
+    default_stop_loss: 0.02  # 2% стоп-лосс
+    default_take_profit: 0.03  # 3% тейк-профит
+    max_position_size: 0.01  # 1% от капитала на позицию
+
+  # Трейлинг стоп
+  trailing_stop:
+    enabled: true
+    activation_profit: 0.01  # Активация при 1% прибыли
+    trailing_distance: 0.005  # 0.5% от цены
+
+# ML параметры для тестов
+ml:
+  # Строгие фильтры для качественных сигналов
+  filters:
+    min_confidence: 0.60  # Минимум 60% уверенность
+    min_signal_strength: 0.5  # Минимум 50% сила сигнала
+
+  # Интервал генерации
+  signal_generation:
+    interval_seconds: 60  # Каждую минуту
+
+  # Только основные символы
+  symbols:
+    - "BTCUSDT"
+    - "ETHUSDT"
+
+# Настройки уведомлений для тестов
+notifications:
+  # Логирование всех событий
+  log_all_events: true
+
+  # Уведомления о важных событиях
+  events:
+    - signal_generated
+    - order_created
+    - order_filled
+    - position_opened
+    - position_closed
+    - stop_loss_triggered
+    - take_profit_triggered
+
+# Мониторинг для тестов
+monitoring:
+  # Детальные метрики
+  metrics:
+    log_interval: 30  # Логировать метрики каждые 30 секунд
+    track_slippage: true
+    track_execution_time: true
+
+  # Алерты
+  alerts:
+    position_size_exceeded: true
+    daily_loss_exceeded: true
+    unusual_activity: true
+
+# Специальные настройки для Bybit
+exchanges:
+  bybit:
+    # Используем spot trading для начала
+    market_type: "spot"
+
+    # Лимиты API
+    rate_limits:
+      orders_per_second: 2  # Не более 2 ордеров в секунду
+      requests_per_minute: 60  # Не более 60 запросов в минуту
+
+    # Настройки ордеров
+    order_settings:
+      time_in_force: "GTC"  # Good Till Cancelled
+      post_only: true  # Только лимитные ордера (maker)
+      reduce_only: false  # Не используем для spot
+
+# Режим отладки
+debug:
+  enabled: true
+  log_level: "INFO"
+
+  # Детальное логирование
+  verbose_logging:
+    ml_predictions: true
+    order_creation: true
+    order_execution: true
+    position_updates: true
+    pnl_calculation: true
+
+  # Сохранение данных для анализа
+  save_data:
+    ml_signals: true
+    order_history: true
+    execution_logs: true
+
+# Автоматическая остановка при проблемах
+circuit_breakers:
+  # Остановка при превышении потерь
+  stop_on_daily_loss: true
+  daily_loss_limit_usdt: 20
+
+  # Остановка при аномалиях
+  stop_on_anomaly: true
+  anomaly_checks:
+    - consecutive_losses: 5  # 5 убытков подряд
+    - rapid_orders: 10  # 10 ордеров за минуту
+    - connection_errors: 3  # 3 ошибки подключения подряд

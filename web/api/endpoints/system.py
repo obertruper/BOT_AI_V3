@@ -69,18 +69,26 @@ async def get_system_status(
         SystemStatus: Полный статус системы
     """
     try:
-        status = await orchestrator.get_status()
+        # Используем get_system_status() для унифицированного формата
+        system_status = await orchestrator.get_system_status()
         system_config = config_manager.get_system_config()
 
+        # Получаем версию и окружение из system_config (теперь это SystemSettings объект)
+        version = system_status["system"]["version"]
+        environment = "production"  # По умолчанию
+        
+        if hasattr(system_config, 'environment'):
+            environment = system_config.environment
+
         return SystemStatus(
-            status="running" if status.get("running") else "stopped",
-            uptime_seconds=status.get("uptime", 0),
-            start_time=status.get("start_time", datetime.now()),
-            version=system_config.get("system", {}).get("version", "3.0.0"),
-            environment=system_config.get("system", {}).get("environment", "unknown"),
-            components=status.get("components", {}),
-            traders_count=status.get("traders_count", 0),
-            active_positions=status.get("active_positions", 0),
+            status="running" if system_status["system"]["is_running"] else "stopped",
+            uptime_seconds=system_status["system"]["uptime_seconds"] or 0,
+            start_time=datetime.fromisoformat(system_status["system"]["startup_time"]) if system_status["system"]["startup_time"] else datetime.now(),
+            version=version,
+            environment=environment,
+            components={name: True for name in system_status["components"]["active"]} | {name: False for name in system_status["components"]["failed"]},
+            traders_count=system_status["traders"]["active"],
+            active_positions=system_status["traders"]["active_positions"],
         )
 
     except Exception as e:
@@ -103,14 +111,33 @@ async def health_check(
         HealthCheck: Статус здоровья всех компонентов
     """
     try:
-        health_status = await orchestrator.health_check()
-        system_config = config_manager.get_system_config()
+        # Используем get_system_status() для унифицированного формата
+        system_status = await orchestrator.get_system_status()
+
+        # Извлекаем информацию о здоровье системы
+        health_info = system_status["health"]
+        components = {
+            "system": {
+                "status": "healthy" if health_info["is_healthy"] else "unhealthy",
+                "issues": health_info["issues"],
+                "warnings": health_info["warnings"]
+            }
+        }
+
+        # Добавляем информацию о ресурсах
+        if "resources" in system_status:
+            components["resources"] = {
+                "status": "healthy" if health_info["is_healthy"] else "warning",
+                "cpu_percent": system_status["resources"].get("cpu_percent", 0),
+                "memory_percent": system_status["resources"].get("memory_percent", 0),
+                "disk_percent": system_status["resources"].get("disk_percent", 0),
+            }
 
         return HealthCheck(
-            healthy=health_status.get("healthy", False),
-            components=health_status.get("components", {}),
-            timestamp=datetime.now(),
-            version=system_config.get("system", {}).get("version", "3.0.0"),
+            healthy=health_info["is_healthy"],
+            components=components,
+            timestamp=datetime.fromisoformat(health_info["last_check"]),
+            version=system_status["system"]["version"],
         )
 
     except Exception as e:
@@ -134,20 +161,29 @@ async def get_system_config(
         SystemConfig: Основные настройки системы
     """
     try:
-        config = config_manager.get_system_config()
+        # Получаем полную конфигурацию как словарь для удобства работы
+        full_config = config_manager.get_config()
+        
+        # Преобразуем Pydantic модель в словарь если нужно
+        if hasattr(full_config, 'model_dump'):
+            config_dict = full_config.model_dump()
+        elif hasattr(full_config, 'dict'):
+            config_dict = full_config.dict()
+        else:
+            config_dict = full_config
 
         # Фильтруем чувствительные данные
         safe_config = {
             "database": {
-                "type": config.get("database", {}).get("type"),
-                "host": config.get("database", {}).get("host"),
-                "port": config.get("database", {}).get("port"),
-                "name": config.get("database", {}).get("name"),
+                "type": config_dict.get("database", {}).get("type"),
+                "host": config_dict.get("database", {}).get("host"),
+                "port": config_dict.get("database", {}).get("port"),
+                "name": config_dict.get("database", {}).get("name"),
             },
-            "monitoring": config.get("monitoring", {}),
-            "logging": config.get("logging", {}),
-            "api": config.get("api", {}),
-            "risk_management": config.get("risk_management", {}),
+            "monitoring": config_dict.get("monitoring", {}),
+            "logging": config_dict.get("logging", {}),
+            "api": config_dict.get("api", {}),
+            "risk_management": config_dict.get("risk_management", {}),
         }
 
         return SystemConfig(**safe_config)
@@ -242,7 +278,7 @@ async def restart_system(
         logger.warning("Запрос на перезапуск системы")
 
         # Останавливаем систему
-        await orchestrator.stop()
+        await orchestrator.shutdown()
 
         # Запускаем заново
         await orchestrator.initialize()
@@ -271,7 +307,7 @@ async def shutdown_system(
     try:
         logger.warning("Запрос на остановку системы")
 
-        await orchestrator.stop()
+        await orchestrator.shutdown()
 
         return {"status": "success", "message": "Система остановлена"}
 

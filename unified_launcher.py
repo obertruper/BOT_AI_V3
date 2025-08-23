@@ -136,7 +136,7 @@ class UnifiedLauncher:
 
         # Загружаем конфигурацию
         self.config = self.config_manager.get_config()
-        self.unified_config = self.config.get("unified_system", {})
+        self.unified_config = self.config.unified_system
 
         # Состояние системы
         self.is_running = False
@@ -152,7 +152,7 @@ class UnifiedLauncher:
 
     def _get_components_config(self) -> dict[str, dict[str, Any]]:
         """Получение конфигурации компонентов в зависимости от режима"""
-        base_config = self.unified_config.get("components", {})
+        base_config = self.unified_config.components if self.unified_config.components else {}
 
         # Конфигурация по умолчанию
         default_config = {

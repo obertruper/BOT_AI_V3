@@ -1,0 +1,200 @@
+# Конфигурация управления рисками BOT Trading v3
+# Адаптировано из BOT_AI_V2
+
+risk_management:
+  enabled: true
+
+  # Основные параметры риска - ЕДИНАЯ ТОЧКА УПРАВЛЕНИЯ
+  risk_per_trade: 0.02  # 2% от баланса на сделку  
+  fixed_risk_balance: 500  # Фиксированный баланс для расчета риска ($500 -> $10 риск на сделку)
+  max_total_risk: 0.10  # Максимальный общий риск 10%
+  max_positions: 5  # Максимальное количество позиций
+
+  # Параметры плеча
+  default_leverage: 5
+  max_leverage: 20
+  min_notional: 5.0
+
+  # Профили риска
+  risk_profiles:
+    standard:
+      risk_multiplier: 1.0
+      confidence_threshold: 0.6
+      max_position_size: 50  # $50 маржи = $250 полная позиция (5x плечо)
+    conservative:
+      risk_multiplier: 0.7
+      confidence_threshold: 0.7
+      max_position_size: 35  # $35 маржи = $175 полная позиция (5x плечо)
+    very_conservative:
+      risk_multiplier: 0.5
+      confidence_threshold: 0.8
+      max_position_size: 25  # $25 маржи = $125 полная позиция (5x плечо)
+
+  # Категории активов (из V2)
+  asset_categories:
+    meme_coins:
+      symbols:
+        - DOGE
+        - SHIB
+        - PEPE
+        - BONK
+        - FLOKI
+        - MEME
+        - TRUMP
+        - POPCAT
+        - FARTCOIN
+        - 1000PEPE
+        - ZEREBRO
+        - PNUT
+      risk_multiplier: 0.8  # Сниженный риск для мемкоинов
+      max_leverage: 10
+    stable_coins:
+      symbols:
+        - BTC
+        - ETH
+        - SOL
+        - BNB
+        - XRP
+        - ADA
+        - DOT
+        - LINK
+      risk_multiplier: 1.0  # Стандартный риск
+      max_leverage: 20
+
+# Улучшенная система SL/TP (адаптировано из V2)
+enhanced_sltp:
+  enabled: true
+
+  # Синхронизация с биржей
+  synchronization:
+    enabled: true
+    interval: 30  # секунды
+    max_attempts: 5
+    priority: "exchange"
+
+  # Трейлинг-стоп
+  trailing_stop:
+    enabled: true
+    activation_percent: 1.0  # Активируется при 1% прибыли
+    step_percent: 0.5  # Шаг трейлинга 0.5%
+    min_distance: 0.3  # Минимальное расстояние от цены
+    use_adaptive_step: true
+    volatility_factor: 1.0
+    max_updates: 15
+
+    # Адаптивные настройки
+    adaptive:
+      enabled: true
+      max_step: 2.0
+      min_step: 0.3
+
+  # Защита прибыли
+  profit_protection:
+    enabled: true
+    breakeven_percent: 0.5  # Безубыток при 0.5% прибыли
+    breakeven_offset: 0.1  # Смещение от цены входа
+
+    # Уровни фиксации прибыли
+    levels:
+      - trigger: 1.0  # При 1% прибыли
+        lock: 0.5     # Фиксируем 0.5% прибыли
+      - trigger: 2.0  # При 2% прибыли
+        lock: 1.0     # Фиксируем 1% прибыли
+      - trigger: 3.0  # При 3% прибыли
+        lock: 1.5     # Фиксируем 1.5% прибыли
+    max_updates: 5
+
+  # Частичное закрытие
+  partial_take_profit:
+    enabled: true
+    levels:
+      - percent: 1.0  # При 1% прибыли
+        close_ratio: 0.3  # Закрываем 30% позиции
+      - percent: 2.0  # При 2% прибыли
+        close_ratio: 0.3  # Закрываем еще 30% позиции
+      - percent: 3.0  # При 3% прибыли
+        close_ratio: 0.4  # Закрываем оставшиеся 40% позиции
+    update_sl_after_partial: true
+    move_sl_to_breakeven: true
+
+  # Корректировка на основе волатильности
+  volatility_adjustment:
+    enabled: false  # Отключено для тестирования
+    atr_period: 14
+    sl_multiplier: 1.5
+    tp_multiplier: 2.5
+
+  # Временная корректировка
+  time_based_adjustment:
+    enabled: false  # Отключено для тестирования
+    time_thresholds:
+      - hours: 4
+        sl_tighten: 0.3
+        tp_extension: 0.0
+      - hours: 12
+        sl_tighten: 0.5
+        tp_extension: 0.0
+      - hours: 24
+        sl_tighten: 0.8
+        tp_extension: 0.0
+
+# ML-интеграция (из V2)
+ml_integration:
+  enabled: true
+
+  # Пороги для ML-сигналов
+  thresholds:
+    buy_profit: 0.65
+    buy_loss: 0.35
+    sell_profit: 0.65
+    sell_loss: 0.35
+
+  # Факторы корректировки
+  confidence_factor: 1.0
+  loss_probability_factor: 1.0
+
+  # Модели покупки/продажи
+  buy_model:
+    standard:
+      profit_probability_min: 0.50
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.60
+    conservative:
+      profit_probability_min: 0.52
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.58
+    very_conservative:
+      profit_probability_min: 0.54
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.55
+
+  sell_model:
+    standard:
+      profit_probability_min: 0.53
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.49
+    conservative:
+      profit_probability_min: 0.55
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.47
+    very_conservative:
+      profit_probability_min: 0.55
+      profit_probability_max: 0.80
+      loss_probability_min: 0.25
+      loss_probability_max: 0.45
+
+# Мониторинг и алерты
+monitoring:
+  accuracy_alert_threshold: 5.0
+  expected_buy_accuracy: 63.04
+  expected_sell_accuracy: 60.0
+  ml_buy_profit_threshold: 0.1
+  ml_buy_loss_threshold: 0.1
+  ml_sell_profit_threshold: 0.1
+  ml_sell_loss_threshold: 0.1
+  monitor_history_days: 14

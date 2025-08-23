@@ -1,6 +1,8 @@
 site_name: BOT_AI_V3 Documentation
 site_url: https://example.com/
 
+docs_dir: docs_v3/
+
 theme:
   name: material
   palette:
@@ -24,18 +26,11 @@ theme:
     - content.code.copy
 
 nav:
-  - 'Главная': 'README.md'
-  - 'Ядро системы':
-    - 'core/README.md'
-  - 'Торговая логика':
-    - 'trading/README.md'
-  - 'Машинное обучение':
-    - 'ml/README.md'
-  - 'Веб-интерфейс':
-    - 'web/README.md'
-  - 'База данных':
-    - 'database/README.md'
-  - 'Биржи':
-    - 'exchanges/README.md'
-  - 'Стратегии':
-    - 'strategies/README.md'
+  - 'Главная': 'index.md'
+  - 'Ядро системы': 'core.md'
+  - 'Торговая логика': 'trading.md'
+  - 'Машинное обучение': 'ml.md'
+  - 'Веб-интерфейс': 'web.md'
+  - 'База данных': 'database.md'
+  - 'Биржи': 'exchanges.md'
+  - 'Стратегии': 'strategies.md'

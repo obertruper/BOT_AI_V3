@@ -18,7 +18,7 @@ echo "✅ Виртуальное окружение активировано"
 # Проверяем .env файл
 if [ ! -f ".env" ]; then
     echo "❌ Файл .env не найден!"
-    echo "Создайте его на основе config/.env.example"
+    echo "Создайте его на основе .env.example"
     exit 1
 fi
 

@@ -11,7 +11,7 @@ from typing import Any
 
 import redis.asyncio as redis
 
-from database.connections.postgres import AsyncPGPool
+from database.db_manager import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class SignalDeduplicator:
     """
 
     def __init__(self, redis_client: redis.Redis | None = None):
+        self.db_manager = None
         self.redis_client = redis_client
         self.local_cache: dict[str, datetime] = {}  # Локальный кеш как fallback
         self.cache_ttl = timedelta(minutes=5)  # TTL для кеша
@@ -92,6 +93,9 @@ class SignalDeduplicator:
         self.stats["total_checks"] += 1
 
         try:
+            # Инициализируем DBManager если нужно
+            if not self.db_manager:
+                self.db_manager = await get_db()
             # Создаем отпечаток сигнала
             fingerprint = self._create_fingerprint(signal_data)
             signal_hash = fingerprint.to_hash()
@@ -160,7 +164,7 @@ class SignalDeduplicator:
 
             query += " ORDER BY created_at DESC LIMIT 1000"
 
-            rows = await AsyncPGPool.fetch(query, *params)
+            rows = await self.db_manager.fetch_all(query, *params)
 
             signals = []
             for row in rows:
@@ -195,7 +199,7 @@ class SignalDeduplicator:
 
             # Очистка базы данных
             query = "DELETE FROM signal_fingerprints WHERE created_at < $1"
-            result = await AsyncPGPool.execute(query, cutoff_time)
+            result = await self.db_manager.execute(query, cutoff_time)
 
             deleted_count = 0
             if result and result.startswith("DELETE"):
@@ -297,7 +301,7 @@ class SignalDeduplicator:
                 LIMIT 1
             """
 
-            result = await AsyncPGPool.fetchrow(query, fingerprint.to_hash(), since_time)
+            result = await self.db_manager.fetch_one(query, fingerprint.to_hash(), since_time)
             return result is not None
 
         except Exception as e:
@@ -339,7 +343,7 @@ class SignalDeduplicator:
                 ON CONFLICT (signal_hash) DO NOTHING
             """
 
-            await AsyncPGPool.execute(
+            await self.db_manager.execute(
                 query,
                 signal_hash,
                 fingerprint.symbol,

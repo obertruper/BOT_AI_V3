@@ -19,7 +19,7 @@ extend-exclude = '''
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py310"
 select = [
     "E",    # pycodestyle errors
     "W",    # pycodestyle warnings
@@ -73,7 +73,7 @@ known-first-party = ["core", "trading", "exchanges", "ml", "database", "web", "u
 combine-as-imports = true
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -97,30 +97,58 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-minversion = "6.0"
-addopts = """
-    -ra
-    -q
-    --strict-markers
-    --ignore=data
-    --ignore=logs
-    --ignore=venv
-    --ignore=.venv
-    --ignore=node_modules
-    --ignore=build
-    --ignore=dist
-"""
+minversion = "7.0"
+# Поддержка asyncio
+asyncio_mode = "auto"
+# Базовые настройки
 testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
+python_files = ["test_*.py", "*_test.py"] 
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# Опции запуска
+addopts = [
+    "-v",
+    "--tb=short", 
+    "--strict-markers",
+    "--maxfail=3",
+    "--ff",
+    # Игнорируемые директории
+    "--ignore=data",
+    "--ignore=logs", 
+    "--ignore=venv",
+    "--ignore=.venv",
+    "--ignore=node_modules",
+    "--ignore=build",
+    "--ignore=dist",
+    "--ignore=web/frontend/node_modules",
+]
+# Маркеры для группировки тестов
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
-    "requires_db: marks tests that require database",
-    "requires_redis: marks tests that require redis",
-    "requires_exchange: marks tests that require exchange connection",
+    "asyncio: mark test as async",
+    "unit: Unit tests for individual components",
+    "integration: Integration tests for multiple components", 
+    "performance: Performance and load tests",
+    "ml: Machine Learning specific tests",
+    "slow: Tests that take more than 5 seconds",
+    "requires_db: Tests requiring database connection",
+    "requires_gpu: Tests requiring GPU/CUDA",
+    "requires_exchange: Tests requiring exchange API",
+    "smoke: Quick smoke tests for CI",
+    "database: Database tests",
+    "requires_redis: Tests that require redis",
+    "sltp: Dynamic SL/TP (Stop Loss/Take Profit) tests",
+    "position_tracker: Enhanced Position Tracker tests", 
+    "e2e: End-to-end tests",
+]
+# Настройки вывода
+console_output_style = "progress"
+junit_family = "xunit2"
+# Фильтрация предупреждений
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning", 
+    "ignore::FutureWarning:torch.*",
+    "error::UserWarning:ml.*",
 ]
 
 [tool.coverage.run]
@@ -192,10 +220,10 @@ requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bot-ai-v3"
+name = "bot-trading-v3"
 version = "3.0.0"
 description = "High-performance algorithmic cryptocurrency trading platform"
-readme = "README.md"
+readme = "README_RU.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [

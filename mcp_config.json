@@ -3,7 +3,7 @@
     "postgres": {
       "command": "mcp-server-postgres",
       "args": [
-        "postgresql://obertruper:ilpnqw1234@localhost:5555/bot_trading_v3"
+        "postgresql://obertruper:${PGPASSWORD:-your-password-here}@localhost:5555/bot_trading_v3"
       ],
       "env": {
         "PGPORT": "5555"

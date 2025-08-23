@@ -1,12 +1,9 @@
-"""
-Comprehensive Exception System для BOT_Trading v3.0
+"""Модуль кастомных исключений для системы BOT_Trading v3.0.
 
-Расширенная система исключений с поддержкой:
-- Мульти-трейдер ошибок с контекстом
-- Специфических исключений для каждой биржи
-- ML и стратегических ошибок
-- Системных и конфигурационных ошибок
-- Подробного контекста для debugging
+Определяет иерархию классов исключений для стандартизированной обработки
+ошибок во всех компонентах системы. Каждое исключение содержит
+контекстную информацию, такую как категория, уровень серьезности и компонент,
+в котором произошла ошибка.
 """
 
 from datetime import datetime
@@ -15,7 +12,7 @@ from typing import Any
 
 
 class ErrorSeverity(Enum):
-    """Уровни серьезности ошибок"""
+    """Перечисление уровней серьезности ошибок."""
 
     LOW = "low"
     MEDIUM = "medium"
@@ -24,7 +21,7 @@ class ErrorSeverity(Enum):
 
 
 class ErrorCategory(Enum):
-    """Категории ошибок"""
+    """Перечисление категорий ошибок для их классификации."""
 
     CONFIGURATION = "configuration"
     TRADER = "trader"
@@ -39,22 +36,18 @@ class ErrorCategory(Enum):
     RISK_MANAGEMENT = "risk_management"
 
 
-class SignalProcessingError(Exception):
-    """Ошибка обработки торговых сигналов"""
-
-    pass
-
-
 class BaseTradingError(Exception):
-    """
-    Базовый класс для всех ошибок торговой системы
+    """Базовый класс для всех кастомных исключений в приложении.
 
-    Предоставляет единый интерфейс для всех исключений с:
-    - Контекстной информацией
-    - Уровнем серьезности
-    - Категорией ошибки
-    - Временными метками
-    - Дополнительными данными для debugging
+    Args:
+        message: Сообщение об ошибке.
+        severity: Уровень серьезности (из ErrorSeverity).
+        category: Категория ошибки (из ErrorCategory).
+        context: Словарь с дополнительным контекстом.
+        original_exception: Исходное исключение, если есть.
+        component: Название компонента, где произошла ошибка.
+        trader_id: ID трейдера, если применимо.
+        error_code: Уникальный код ошибки.
     """
 
     def __init__(
@@ -79,7 +72,6 @@ class BaseTradingError(Exception):
         self.error_code = error_code
         self.timestamp = datetime.now()
 
-        # Автоматически добавляем информацию об оригинальном исключении
         if original_exception:
             self.context["original_error"] = {
                 "type": type(original_exception).__name__,
@@ -88,7 +80,7 @@ class BaseTradingError(Exception):
             }
 
     def to_dict(self) -> dict[str, Any]:
-        """Преобразование исключения в словарь для логирования"""
+        """Преобразует исключение в словарь для удобного логирования."""
         return {
             "error_type": type(self).__name__,
             "message": self.message,
@@ -101,725 +93,413 @@ class BaseTradingError(Exception):
             "context": self.context,
         }
 
-    def __str__(self) -> str:
-        parts = [f"{type(self).__name__}: {self.message}"]
-
-        if self.trader_id:
-            parts.append(f"[Trader: {self.trader_id}]")
-
-        if self.component:
-            parts.append(f"[Component: {self.component}]")
-
-        if self.error_code:
-            parts.append(f"[Code: {self.error_code}]")
-
-        return " ".join(parts)
-
-
-# =================== CONFIGURATION ERRORS ===================
-
-
 class ConfigurationError(BaseTradingError):
-    """Базовая ошибка конфигурации"""
-
-    def __init__(self, message: str, config_path: str | None = None, **kwargs):
+    """Исключение для ошибок конфигурации системы."""
+    
+    def __init__(
+        self,
+        message: str,
+        config_key: str = None,
+        config_file: str = None,
+        **kwargs
+    ):
+        """Инициализирует исключение конфигурации.
+        
+        Args:
+            message: Описание ошибки
+            config_key: Ключ конфигурации с ошибкой
+            config_file: Файл конфигурации с ошибкой
+        """
+        context = kwargs.get("context", {})
+        if config_key:
+            context["config_key"] = config_key
+        if config_file:
+            context["config_file"] = config_file
+            
         super().__init__(
-            message,
+            message=message,
             severity=ErrorSeverity.HIGH,
             category=ErrorCategory.CONFIGURATION,
-            **kwargs,
+            context=context,
+            error_code="CONFIG_ERROR",
+            **kwargs
         )
-        if config_path:
-            self.context["config_path"] = config_path
 
 
 class DataLoadError(BaseTradingError):
-    """Ошибки загрузки данных"""
-
-    def __init__(self, message: str, symbol: str | None = None, **kwargs):
-        super().__init__(
-            message,
-            severity=ErrorSeverity.MEDIUM,
-            category=ErrorCategory.SYSTEM,
-            **kwargs,
-        )
-        if symbol:
-            self.context["symbol"] = symbol
-
-
-class ConfigValidationError(ConfigurationError):
-    """Ошибка валидации конфигурации"""
-
-    def __init__(self, field: str, expected: str, actual: Any, **kwargs):
-        message = f"Validation failed for field '{field}': expected {expected}, got {actual}"
-        super().__init__(message, **kwargs)
-        self.context.update({"field": field, "expected": expected, "actual": actual})
-
-
-class LoggingConfigurationError(ConfigurationError):
-    """Ошибка конфигурации логирования"""
-
+    """Ошибка загрузки данных."""
     pass
 
 
-# =================== TRADER ERRORS ===================
+class ComponentInitializationError(BaseTradingError):
+    """Ошибка инициализации компонента системы."""
+    pass
 
 
-class TraderError(BaseTradingError):
-    """Базовая ошибка трейдера"""
-
-    def __init__(self, message: str, trader_id: str, **kwargs):
-        super().__init__(
-            message,
-            severity=ErrorSeverity.MEDIUM,
-            category=ErrorCategory.TRADER,
-            trader_id=trader_id,
-            **kwargs,
-        )
-
-
-class TraderInitializationError(TraderError):
-    """Ошибка инициализации трейдера"""
+class UnsupportedExchangeError(BaseTradingError):
+    """Исключение для неподдерживаемой биржи."""
 
     def __init__(
         self,
         message: str,
-        trader_id: str,
-        failed_component: str | None = None,
+        exchange_name: str = None,
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         **kwargs,
     ):
-        super().__init__(message, trader_id, severity=ErrorSeverity.HIGH, **kwargs)
-        if failed_component:
-            self.context["failed_component"] = failed_component
-
-
-class TraderConfigurationError(TraderError):
-    """Ошибка конфигурации трейдера"""
-
-    def __init__(self, message: str, trader_id: str, config_field: str | None = None, **kwargs):
-        super().__init__(message, trader_id, **kwargs)
-        if config_field:
-            self.context["config_field"] = config_field
-
-
-class TraderFactoryError(BaseTradingError):
-    """Ошибка фабрики трейдеров"""
-
-    def __init__(self, message: str, **kwargs):
         super().__init__(
-            message,
-            severity=ErrorSeverity.HIGH,
-            category=ErrorCategory.TRADER,
-            component="trader_factory",
+            message=message,
+            category=ErrorCategory.EXCHANGE,
+            severity=severity,
+            component="Exchange",
+            context={"exchange_name": exchange_name} if exchange_name else {},
             **kwargs,
         )
 
 
-class TraderManagerError(BaseTradingError):
-    """Ошибка менеджера трейдеров"""
+class UnsupportedStrategyError(BaseTradingError):
+    """Исключение для неподдерживаемой стратегии."""
 
-    def __init__(self, message: str, affected_traders: list[str] | None = None, **kwargs):
+    def __init__(
+        self,
+        message: str,
+        strategy_name: str = None,
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
+        **kwargs,
+    ):
         super().__init__(
-            message,
-            severity=ErrorSeverity.HIGH,
-            category=ErrorCategory.TRADER,
-            component="trader_manager",
+            message=message,
+            category=ErrorCategory.STRATEGY,
+            severity=severity,
+            component="Strategy",
+            context={"strategy_name": strategy_name} if strategy_name else {},
             **kwargs,
         )
-        if affected_traders:
-            self.context["affected_traders"] = affected_traders
-
-
-class TraderNotFoundError(TraderError):
-    """Трейдер не найден"""
-
-    def __init__(self, trader_id: str, **kwargs):
-        super().__init__(f"Trader '{trader_id}' not found", trader_id, **kwargs)
-
-
-class TraderAlreadyExistsError(TraderError):
-    """Трейдер уже существует"""
-
-    def __init__(self, trader_id: str, **kwargs):
-        super().__init__(f"Trader '{trader_id}' already exists", trader_id, **kwargs)
-
-
-class TooManyTradersError(BaseTradingError):
-    """Превышен лимит трейдеров"""
-
-    def __init__(self, current_count: int, max_limit: int, **kwargs):
-        message = f"Too many traders: {current_count}/{max_limit}"
-        super().__init__(
-            message,
-            severity=ErrorSeverity.MEDIUM,
-            category=ErrorCategory.TRADER,
-            **kwargs,
-        )
-        self.context.update({"current_count": current_count, "max_limit": max_limit})
-
-
-# =================== EXCHANGE ERRORS ===================
 
 
 class ExchangeError(BaseTradingError):
-    """Базовая ошибка биржи"""
-
-    def __init__(self, message: str, exchange_name: str, **kwargs):
+    """Ошибка загрузки данных."""
+    
+    def __init__(self, message: str, **kwargs):
         super().__init__(
-            message,
+            message=message,
             severity=ErrorSeverity.MEDIUM,
-            category=ErrorCategory.EXCHANGE,
-            component=f"exchange_{exchange_name}",
-            **kwargs,
-        )
-        self.exchange_name = exchange_name
-        self.context["exchange_name"] = exchange_name
-
-
-class UnsupportedExchangeError(ExchangeError):
-    """Неподдерживаемая биржа"""
-
-    def __init__(
-        self,
-        exchange_name: str,
-        supported_exchanges: list[str] | None = None,
-        **kwargs,
-    ):
-        message = f"Unsupported exchange: {exchange_name}"
-        if supported_exchanges:
-            message += f". Supported: {', '.join(supported_exchanges)}"
-
-        super().__init__(message, exchange_name, **kwargs)
-        if supported_exchanges:
-            self.context["supported_exchanges"] = supported_exchanges
-
-
-class ExchangeConnectionError(ExchangeError):
-    """Ошибка подключения к бирже"""
-
-    def __init__(self, exchange_name: str, endpoint: str | None = None, **kwargs):
-        message = f"Connection failed to {exchange_name}"
-        if endpoint:
-            message += f" endpoint: {endpoint}"
-
-        super().__init__(message, exchange_name, severity=ErrorSeverity.HIGH, **kwargs)
-        if endpoint:
-            self.context["endpoint"] = endpoint
-
-
-class ExchangeAuthenticationError(ExchangeError):
-    """Ошибка аутентификации на бирже"""
-
-    def __init__(self, exchange_name: str, **kwargs):
-        super().__init__(
-            f"Authentication failed for {exchange_name}",
-            exchange_name,
-            severity=ErrorSeverity.HIGH,
-            category=ErrorCategory.AUTHENTICATION,
-            **kwargs,
+            category=ErrorCategory.SYSTEM,
+            error_code="DATA_LOAD_ERROR",
+            **kwargs
         )
 
 
-class ExchangeAPIError(ExchangeError):
-    """Ошибка API биржи"""
-
-    def __init__(
-        self,
-        exchange_name: str,
-        api_method: str,
-        status_code: int | None = None,
-        api_message: str | None = None,
-        **kwargs,
-    ):
-        message = f"API error in {exchange_name}.{api_method}"
-        if status_code:
-            message += f" (HTTP {status_code})"
-        if api_message:
-            message += f": {api_message}"
-
-        super().__init__(message, exchange_name, **kwargs)
-        self.context.update(
-            {
-                "api_method": api_method,
-                "status_code": status_code,
-                "api_message": api_message,
-            }
-        )
-
-
-class ExchangeRateLimitError(ExchangeError):
-    """Превышен rate limit биржи"""
-
-    def __init__(self, exchange_name: str, retry_after: int | None = None, **kwargs):
-        message = f"Rate limit exceeded for {exchange_name}"
-        if retry_after:
-            message += f", retry after {retry_after} seconds"
-
-        super().__init__(message, exchange_name, **kwargs)
-        if retry_after:
-            self.context["retry_after"] = retry_after
-
-
-class InsufficientBalanceError(ExchangeError):
-    """Недостаточный баланс"""
-
-    def __init__(
-        self,
-        exchange_name: str,
-        required_amount: float,
-        available_balance: float,
-        currency: str,
-        **kwargs,
-    ):
-        message = f"Insufficient balance on {exchange_name}: need {required_amount} {currency}, have {available_balance} {currency}"
-        super().__init__(message, exchange_name, **kwargs)
-        self.context.update(
-            {
-                "required_amount": required_amount,
-                "available_balance": available_balance,
-                "currency": currency,
-            }
-        )
-
-
-class LeverageError(ExchangeError):
-    """Ошибка настройки кредитного плеча"""
-
-    def __init__(
-        self,
-        exchange_name: str,
-        requested_leverage: int,
-        max_leverage: int | None = None,
-        **kwargs,
-    ):
-        message = f"Leverage error on {exchange_name}: requested {requested_leverage}x"
-        if max_leverage:
-            message += f", max allowed {max_leverage}x"
-
-        super().__init__(message, exchange_name, **kwargs)
-        self.context.update(
-            {
-                "requested_leverage": requested_leverage,
-                "max_leverage": max_leverage,
-            }
-        )
-
-
-# =================== STRATEGY ERRORS ===================
-
-
-class StrategyError(BaseTradingError):
-    """Базовая ошибка стратегии"""
+class TraderFactoryError(BaseTradingError):
+    """Исключение для ошибок в фабрике трейдеров."""
 
     def __init__(
         self,
         message: str,
-        strategy_name: str,
-        trader_id: str | None = None,
+        trader_type: str = None,
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         **kwargs,
     ):
         super().__init__(
-            message,
-            severity=ErrorSeverity.MEDIUM,
-            category=ErrorCategory.STRATEGY,
-            component=f"strategy_{strategy_name}",
+            message=message,
+            category=ErrorCategory.TRADER,
+            severity=severity,
+            component="TraderFactory",
+            context={"trader_type": trader_type} if trader_type else {},
+            **kwargs,
+        )
+
+
+class TraderInitializationError(BaseTradingError):
+    """Исключение для ошибок инициализации трейдера."""
+
+    def __init__(
+        self,
+        message: str,
+        trader_id: str = None,
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
+        **kwargs,
+    ):
+        super().__init__(
+            message=message,
+            category=ErrorCategory.TRADER,
+            severity=severity,
+            component="TraderInitialization",
             trader_id=trader_id,
             **kwargs,
         )
-        self.strategy_name = strategy_name
-        self.context["strategy_name"] = strategy_name
 
 
-class UnsupportedStrategyError(StrategyError):
-    """Неподдерживаемая стратегия"""
+class TraderConfigurationError(BaseTradingError):
+    """Исключение для ошибок конфигурации трейдера."""
 
     def __init__(
         self,
-        strategy_name: str,
-        supported_strategies: list[str] | None = None,
+        message: str,
+        trader_id: str = None,
+        config_key: str = None,
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         **kwargs,
     ):
-        message = f"Unsupported strategy: {strategy_name}"
-        if supported_strategies:
-            message += f". Supported: {', '.join(supported_strategies)}"
-
-        super().__init__(message, strategy_name, **kwargs)
-        if supported_strategies:
-            self.context["supported_strategies"] = supported_strategies
-
-
-class StrategyInitializationError(StrategyError):
-    """Ошибка инициализации стратегии"""
-
-    def __init__(self, strategy_name: str, reason: str, **kwargs):
         super().__init__(
-            f"Failed to initialize strategy {strategy_name}: {reason}",
-            strategy_name,
+            message=message,
+            category=ErrorCategory.TRADER,
+            severity=severity,
+            component="TraderConfiguration",
+            trader_id=trader_id,
+            context={"config_key": config_key} if config_key else {},
+            **kwargs,
+        )
+
+
+class TraderError(BaseTradingError):
+    """Ошибка работы трейдера."""
+    
+    def __init__(self, message: str, trader_id: str = None, **kwargs):
+        super().__init__(
+            message=message,
             severity=ErrorSeverity.HIGH,
-            **kwargs,
+            category=ErrorCategory.TRADER,
+            trader_id=trader_id,
+            error_code="TRADER_ERROR",
+            **kwargs
         )
 
 
-class SignalGenerationError(StrategyError):
-    """Ошибка генерации сигнала"""
-
-    def __init__(self, strategy_name: str, symbol: str, reason: str, **kwargs):
+class TooManyTradersError(TraderError):
+    """Исключение для превышения лимита количества трейдеров."""
+    
+    def __init__(self, message: str, max_traders: int = None, current_count: int = None, **kwargs):
         super().__init__(
-            f"Signal generation failed for {symbol} in {strategy_name}: {reason}",
-            strategy_name,
-            **kwargs,
+            message=message,
+            error_code="TOO_MANY_TRADERS",
+            **kwargs
         )
-        self.context.update({"symbol": symbol, "reason": reason})
+        self.max_traders = max_traders
+        self.current_count = current_count
 
 
-# =================== ML ERRORS ===================
-
-
-class MLError(BaseTradingError):
-    """Базовая ошибка ML системы"""
-
-    def __init__(self, message: str, model_name: str | None = None, **kwargs):
+class TraderAlreadyExistsError(TraderError):
+    """Исключение для дублирования трейдера."""
+    
+    def __init__(self, message: str, trader_id: str = None, **kwargs):
         super().__init__(
-            message,
-            severity=ErrorSeverity.MEDIUM,
-            category=ErrorCategory.ML,
-            component="ml_system",
-            **kwargs,
+            message=message,
+            trader_id=trader_id,
+            error_code="TRADER_ALREADY_EXISTS",
+            **kwargs
         )
+
+
+class TraderNotFoundError(TraderError):
+    """Исключение для отсутствующего трейдера."""
+    
+    def __init__(self, message: str, trader_id: str = None, **kwargs):
+        super().__init__(
+            message=message,
+            trader_id=trader_id,
+            error_code="TRADER_NOT_FOUND",
+            **kwargs
+        )
+
+
+class TraderManagerError(TraderError):
+    """Исключение для ошибок менеджера трейдеров."""
+    
+    def __init__(self, message: str, **kwargs):
+        super().__init__(
+            message=message,
+            error_code="TRADER_MANAGER_ERROR",
+            **kwargs
+        )
+
+
+class StrategyError(BaseTradingError):
+    """Ошибка торговой стратегии."""
+    
+    def __init__(self, message: str, strategy_name: str = None, **kwargs):
+        context = kwargs.get("context", {})
+        if strategy_name:
+            context["strategy_name"] = strategy_name
+        
+        super().__init__(
+            message=message,
+            severity=ErrorSeverity.HIGH,
+            category=ErrorCategory.STRATEGY,
+            context=context,
+            error_code="STRATEGY_ERROR",
+            **kwargs
+        )
+
+
+class MLModelError(BaseTradingError):
+    """Ошибка ML модели."""
+    
+    def __init__(self, message: str, model_name: str = None, **kwargs):
+        context = kwargs.get("context", {})
         if model_name:
-            self.context["model_name"] = model_name
-
-
-class ModelLoadError(MLError):
-    """Ошибка загрузки ML модели"""
-
-    def __init__(self, model_name: str, model_path: str, **kwargs):
+            context["model_name"] = model_name
+        
         super().__init__(
-            f"Failed to load model '{model_name}' from {model_path}",
-            model_name,
+            message=message,
             severity=ErrorSeverity.HIGH,
-            **kwargs,
+            category=ErrorCategory.ML,
+            context=context,
+            error_code="ML_MODEL_ERROR",
+            **kwargs
         )
-        self.context["model_path"] = model_path
-
-
-class PredictionError(MLError):
-    """Ошибка предсказания ML модели"""
-
-    def __init__(self, model_name: str, features_count: int | None = None, **kwargs):
-        message = f"Prediction failed for model '{model_name}'"
-        if features_count is not None:
-            message += f" with {features_count} features"
-
-        super().__init__(message, model_name, **kwargs)
-        if features_count is not None:
-            self.context["features_count"] = features_count
-
-
-class FeatureExtractionError(MLError):
-    """Ошибка извлечения признаков"""
-
-    def __init__(self, feature_name: str, data_source: str, **kwargs):
-        super().__init__(
-            f"Feature extraction failed for '{feature_name}' from {data_source}",
-            **kwargs,
-        )
-        self.context.update({"feature_name": feature_name, "data_source": data_source})
-
-
-# =================== DATABASE ERRORS ===================
-
-
-class DatabaseError(BaseTradingError):
-    """Базовая ошибка базы данных"""
-
-    def __init__(self, message: str, operation: str | None = None, **kwargs):
-        super().__init__(
-            message,
-            severity=ErrorSeverity.HIGH,
-            category=ErrorCategory.DATABASE,
-            component="database",
-            **kwargs,
-        )
-        if operation:
-            self.context["operation"] = operation
-
-
-class DatabaseConnectionError(DatabaseError):
-    """Ошибка подключения к базе данных"""
-
-    def __init__(self, database_url: str, **kwargs):
-        super().__init__(
-            f"Failed to connect to database: {database_url}",
-            severity=ErrorSeverity.CRITICAL,
-            **kwargs,
-        )
-        self.context["database_url"] = database_url
-
-
-class RepositoryError(DatabaseError):
-    """Ошибка репозитория"""
-
-    def __init__(self, repository_name: str, operation: str, **kwargs):
-        super().__init__(
-            f"Repository operation failed: {repository_name}.{operation}",
-            operation=operation,
-            **kwargs,
-        )
-        self.context["repository_name"] = repository_name
-
-
-# =================== NETWORK ERRORS ===================
 
 
 class NetworkError(BaseTradingError):
-    """Базовая сетевая ошибка"""
-
-    def __init__(self, message: str, endpoint: str | None = None, **kwargs):
+    """Ошибка сети."""
+    
+    def __init__(self, message: str, url: str = None, **kwargs):
+        context = kwargs.get("context", {})
+        if url:
+            context["url"] = url
+        
         super().__init__(
-            message,
+            message=message,
             severity=ErrorSeverity.MEDIUM,
             category=ErrorCategory.NETWORK,
-            **kwargs,
+            context=context,
+            error_code="NETWORK_ERROR",
+            **kwargs
         )
-        if endpoint:
-            self.context["endpoint"] = endpoint
-
-
-class ConnectionTimeoutError(NetworkError):
-    """Таймаут соединения"""
-
-    def __init__(self, endpoint: str, timeout_seconds: float, **kwargs):
-        super().__init__(
-            f"Connection timeout to {endpoint} after {timeout_seconds}s",
-            endpoint=endpoint,
-            **kwargs,
-        )
-        self.context["timeout_seconds"] = timeout_seconds
-
-
-class WebSocketError(NetworkError):
-    """Ошибка WebSocket соединения"""
-
-    def __init__(self, message: str, ws_url: str | None = None, **kwargs):
-        super().__init__(message, **kwargs)
-        if ws_url:
-            self.context["ws_url"] = ws_url
-
-
-# =================== RISK MANAGEMENT ERRORS ===================
-
-
-class RiskManagementError(BaseTradingError):
-    """Базовая ошибка управления рисками"""
-
-    def __init__(self, message: str, **kwargs):
-        super().__init__(
-            message,
-            severity=ErrorSeverity.HIGH,
-            category=ErrorCategory.RISK_MANAGEMENT,
-            component="risk_manager",
-            **kwargs,
-        )
-
-
-class RiskLimitExceededError(RiskManagementError):
-    """Превышен риск-лимит"""
-
-    def __init__(
-        self,
-        limit_type: str,
-        current_value: float,
-        max_allowed: float,
-        trader_id: str | None = None,
-        **kwargs,
-    ):
-        message = f"Risk limit exceeded: {limit_type} = {current_value}, max = {max_allowed}"
-        super().__init__(message, trader_id=trader_id, **kwargs)
-        self.context.update(
-            {
-                "limit_type": limit_type,
-                "current_value": current_value,
-                "max_allowed": max_allowed,
-            }
-        )
-
-
-class InvalidPositionSizeError(RiskManagementError):
-    """Некорректный размер позиции"""
-
-    def __init__(self, position_size: float, min_size: float, max_size: float, **kwargs):
-        message = f"Invalid position size: {position_size} (allowed: {min_size} - {max_size})"
-        super().__init__(message, **kwargs)
-        self.context.update(
-            {"position_size": position_size, "min_size": min_size, "max_size": max_size}
-        )
-
-
-# =================== VALIDATION ERRORS ===================
 
 
 class ValidationError(BaseTradingError):
-    """Базовая ошибка валидации"""
-
-    def __init__(self, message: str, field: str | None = None, value: Any = None, **kwargs):
+    """Ошибка валидации данных."""
+    
+    def __init__(self, message: str, field_name: str = None, **kwargs):
+        context = kwargs.get("context", {})
+        if field_name:
+            context["field_name"] = field_name
+        
         super().__init__(
-            message,
+            message=message,
             severity=ErrorSeverity.MEDIUM,
             category=ErrorCategory.VALIDATION,
-            **kwargs,
+            context=context,
+            error_code="VALIDATION_ERROR",
+            **kwargs
         )
-        if field:
-            self.context["field"] = field
-        if value is not None:
-            self.context["value"] = value
 
 
-class OrderValidationError(ValidationError):
-    """Ошибка валидации ордера"""
-
-    def __init__(self, reason: str, order_data: dict[str, Any] | None = None, **kwargs):
-        super().__init__(f"Order validation failed: {reason}", **kwargs)
-        if order_data:
-            self.context["order_data"] = order_data
-
-
-# =================== SYSTEM ERRORS ===================
+class AuthenticationError(BaseTradingError):
+    """Ошибка аутентификации."""
+    
+    def __init__(self, message: str, **kwargs):
+        super().__init__(
+            message=message,
+            severity=ErrorSeverity.HIGH,
+            category=ErrorCategory.AUTHENTICATION,
+            error_code="AUTH_ERROR",
+            **kwargs
+        )
 
 
 class SystemError(BaseTradingError):
-    """Базовая системная ошибка"""
+    """Исключение для системных ошибок."""
 
-    def __init__(self, message: str, **kwargs):
+    def __init__(
+        self,
+        message: str,
+        component: str = None,
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
+        **kwargs,
+    ):
         super().__init__(
-            message,
-            severity=ErrorSeverity.HIGH,
+            message=message,
             category=ErrorCategory.SYSTEM,
+            severity=severity,
+            component=component or "System",
             **kwargs,
         )
-
-
-class OrchestratorError(SystemError):
-    """Ошибка системного оркестратора"""
-
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, component="orchestrator", **kwargs)
-
-
-class ComponentInitializationError(SystemError):
-    """Ошибка инициализации компонента"""
-
-    def __init__(self, component_name: str, reason: str, **kwargs):
-        kwargs["component"] = component_name
-        # Не устанавливаем severity, так как он уже установлен в SystemError
-        super().__init__(
-            f"Failed to initialize component '{component_name}': {reason}",
-            **kwargs,
-        )
-
-
-class ResourceExhaustedError(SystemError):
-    """Исчерпание системных ресурсов"""
-
-    def __init__(self, resource_type: str, current_usage: float, limit: float, **kwargs):
-        message = (
-            f"Resource exhausted: {resource_type} usage {current_usage:.1f}% (limit: {limit:.1f}%)"
-        )
-        super().__init__(message, severity=ErrorSeverity.CRITICAL, **kwargs)
-        self.context.update(
-            {
-                "resource_type": resource_type,
-                "current_usage": current_usage,
-                "limit": limit,
-            }
-        )
-
-
-# =================== UTILITY FUNCTIONS ===================
-
-
-def create_error_context(**kwargs) -> dict[str, Any]:
-    """Создание контекста ошибки с дополнительной информацией"""
-    context = {}
-
-    # Добавляем только не-None значения
-    for key, value in kwargs.items():
-        if value is not None:
-            context[key] = value
-
-    return context
-
-
-def log_exception(logger, exception: BaseTradingError) -> None:
-    """Логирование исключения с полным контекстом"""
-    logger.error(
-        f"{exception.message}",
-        extra={
-            "error_dict": exception.to_dict(),
-            "trader_id": exception.trader_id,
-            "component": exception.component,
-            "severity": exception.severity.value,
-            "category": exception.category.value,
-        },
-    )
-
-
-def handle_and_log_error(
-    logger, error: Exception, context: dict[str, Any] | None = None
-) -> BaseTradingError:
-    """
-    Обработка и логирование произвольной ошибки
-
-    Преобразует обычное исключение в BaseTradingError и логирует его
-    """
-    if isinstance(error, BaseTradingError):
-        trading_error = error
-    else:
-        trading_error = BaseTradingError(
-            message=str(error), original_exception=error, context=context
-        )
-
-    log_exception(logger, trading_error)
-    return trading_error
-
-
-# =================== SYSTEM ERRORS ===================
 
 
 class SystemInitializationError(BaseTradingError):
-    """Ошибка инициализации системы"""
+    """Исключение для ошибок инициализации системы."""
 
-    def __init__(self, message: str, component: str | None = None, **kwargs):
+    def __init__(
+        self,
+        message: str,
+        component: str = None,
+        severity: ErrorSeverity = ErrorSeverity.CRITICAL,
+        **kwargs,
+    ):
         super().__init__(
             message=message,
-            component=component or "system",
-            severity=ErrorSeverity.CRITICAL,
             category=ErrorCategory.SYSTEM,
+            severity=severity,
+            component=component or "SystemInitialization",
             **kwargs,
         )
 
 
 class SystemShutdownError(BaseTradingError):
-    """Ошибка при остановке системы"""
+    """Исключение для ошибок завершения работы системы."""
 
-    def __init__(self, message: str, component: str | None = None, **kwargs):
+    def __init__(
+        self,
+        message: str,
+        component: str = None,
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
+        **kwargs,
+    ):
         super().__init__(
             message=message,
-            component=component or "system",
-            severity=ErrorSeverity.HIGH,
             category=ErrorCategory.SYSTEM,
+            severity=severity,
+            component=component or "SystemShutdown",
             **kwargs,
         )
 
 
 class HealthCheckError(BaseTradingError):
-    """Ошибка проверки здоровья системы"""
+    """Исключение для ошибок проверки здоровья системы."""
 
-    def __init__(self, message: str, component: str | None = None, **kwargs):
+    def __init__(
+        self,
+        message: str,
+        component: str = None,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        **kwargs,
+    ):
         super().__init__(
             message=message,
-            component=component or "health_checker",
-            severity=ErrorSeverity.MEDIUM,
             category=ErrorCategory.SYSTEM,
+            severity=severity,
+            component=component or "HealthCheck",
             **kwargs,
+        )
+
+
+class RiskManagementError(BaseTradingError):
+    """Ошибка управления рисками."""
+    
+    def __init__(self, message: str, risk_type: str = None, **kwargs):
+        context = kwargs.get("context", {})
+        if risk_type:
+            context["risk_type"] = risk_type
+        
+        super().__init__(
+            message=message,
+            severity=ErrorSeverity.CRITICAL,
+            category=ErrorCategory.RISK_MANAGEMENT,
+            context=context,
+            error_code="RISK_ERROR",
+            **kwargs
+        )
+
+
+class LeverageError(BaseTradingError):
+    """Ошибка работы с плечом."""
+    
+    def __init__(self, message: str, **kwargs):
+        super().__init__(
+            message=message,
+            severity=ErrorSeverity.HIGH,
+            category=ErrorCategory.RISK_MANAGEMENT,
+            error_code="LEVERAGE_ERROR",
+            **kwargs
         )

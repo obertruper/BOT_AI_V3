@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from core.config.config_manager import ConfigManager
-from core.exceptions import SignalGenerationError
 from core.logger import setup_logger
 from ml.ml_manager import MLManager
 from ml.ml_signal_processor import MLSignalProcessor
@@ -128,6 +127,20 @@ class SignalScheduler:
 
         logger.info("✅ Signal Scheduler остановлен")
 
+    def set_trading_engine(self, trading_engine):
+        """
+        Устанавливает ссылку на Trading Engine для отправки сигналов
+        
+        Args:
+            trading_engine: Экземпляр TradingEngine
+        """
+        self.trading_engine = trading_engine
+        logger.info("✅ Trading Engine подключен к Signal Scheduler")
+        
+        # Если у нас есть signal_processor, передаем ему тоже
+        if self.signal_processor:
+            self.signal_processor.trading_engine = trading_engine
+
     async def _signal_loop(self, symbol: str):
         """
         Основной цикл генерации сигналов для символа
@@ -212,11 +225,8 @@ class SignalScheduler:
 
         except Exception as e:
             logger.error(f"Ошибка при генерации сигнала для {symbol}: {e}")
-            raise SignalGenerationError(
-                strategy_name="PatchTST_ML",
-                symbol=symbol,
-                reason=f"Failed to generate signal: {e}",
-            )
+            # Просто перебрасываем исключение без кастомного класса
+            raise Exception(f"Failed to generate signal for {symbol}: {e}") from e
 
     async def _monitoring_loop(self):
         """Цикл мониторинга состояния"""

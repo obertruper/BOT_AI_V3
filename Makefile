@@ -143,11 +143,20 @@ docker-test: ## Запустить тесты в Docker
 
 # ==================== Документация ====================
 
-docs: ## Сгенерировать документацию
+docs: ## Сгенерировать документацию (Sphinx - устарело, используйте docs-mkdocs)
 	cd docs && sphinx-build -b html . _build/html
 
-docs-serve: ## Запустить сервер документации
+docs-serve: ## Запустить сервер документации (Sphinx - устарело, используйте docs-mkdocs-serve)
 	cd docs/_build/html && python -m http.server 8080
+
+docs-mkdocs: ## Сгенерировать MkDocs документацию (основная система)
+	mkdocs build
+
+docs-mkdocs-serve: ## Запустить MkDocs сервер документации на localhost:8000
+	mkdocs serve
+
+docs-mkdocs-deploy: ## Деплой MkDocs документации на GitHub Pages
+	mkdocs gh-deploy
 
 # ==================== Утилиты ====================
 

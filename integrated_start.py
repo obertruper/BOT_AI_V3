@@ -104,7 +104,7 @@ class IntegratedBotSystem:
         if missing:
             raise ConfigurationError(
                 f"Отсутствуют обязательные переменные окружения: {', '.join(missing)}\n"
-                f"Создайте файл .env на основе config/.env.example"
+                f"Создайте файл .env на основе .env.example"
             )
 
         # Проверка наличия хотя бы одного API ключа биржи

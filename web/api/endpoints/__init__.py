@@ -7,6 +7,7 @@ API Endpoints для BOT_Trading v3.0 Web Interface
 - exchanges: Управление биржами
 - strategies: Управление стратегиями
 - auth: Аутентификация и авторизация
+- system: Системные операции
 """
 
 from .auth import router as auth_router
@@ -15,6 +16,7 @@ from .monitoring import router as monitoring_router
 from .orders import router as orders_router
 from .positions import router as positions_router
 from .strategies import router as strategies_router
+from .system import router as system_router
 from .traders import router as traders_router
 
 __all__ = [
@@ -24,5 +26,6 @@ __all__ = [
     "orders_router",
     "positions_router",
     "strategies_router",
+    "system_router",
     "traders_router",
 ]

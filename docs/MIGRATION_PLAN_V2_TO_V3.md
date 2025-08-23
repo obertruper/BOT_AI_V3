@@ -127,7 +127,7 @@ psql -h localhost -p 5555 -U obertruper -d bot_trading_v3 -c "SELECT version();"
 
 ```bash
 # Copy and update environment variables
-cp config/.env.example .env
+cp .env.example .env
 nano .env
 
 # Essential variables to update:

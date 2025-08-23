@@ -23,7 +23,7 @@ export default defineConfig({
       },
       // WebSocket соединения
       '/ws': {
-        target: 'ws://localhost:8085',
+        target: 'ws://localhost:8083',
         ws: true,
         changeOrigin: true,
         secure: false

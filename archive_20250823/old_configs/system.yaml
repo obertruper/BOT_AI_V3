@@ -1,0 +1,327 @@
+system:
+  name: BOT_Trading_v3
+  version: 3.0.0
+  environment: development
+  limits:
+    max_traders: 10
+    max_concurrent_trades: 50
+    max_memory_usage_mb: 2048
+    max_cpu_usage_percent: 80
+  performance:
+    worker_threads: 4
+    async_pool_size: 100
+    connection_pool_size: 20
+    cache_size_mb: 512
+  web_interface:
+    host: 0.0.0.0
+    port: 8083
+database:
+  type: postgresql
+  host: 127.0.0.1
+  port: 5555
+  name: bot_trading_v3
+  user: obertruper
+  password: ${DB_PASSWORD}
+  pool:
+    min_connections: 5
+    max_connections: 25
+    connection_timeout: 30
+    idle_timeout: 300
+  migrations:
+    auto_migrate: true
+    backup_before_migration: true
+data_management:
+  auto_update: true
+  update_interval: 900  # 15 минут между обновлениями (в секундах)
+  initial_load_days: 7  # дней исторических данных при первом запуске
+  min_candles_for_ml: 96  # минимум свечей для ML (24 часа при 15-мин интервале)
+  max_gap_hours: 2  # максимальный пропуск в часах
+  check_on_startup: true  # проверять и загружать при запуске
+  enabled_services:
+    - data_update_service
+    - data_maintenance_service
+
+monitoring:
+  enabled: true
+  health_check_interval: 30
+  metrics_collection_interval: 10
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+  alerts:
+    enabled: true
+    telegram_enabled: false
+    email_enabled: false
+    thresholds:
+      memory_usage_percent: 85
+      cpu_usage_percent: 90
+      error_rate_percent: 5
+      latency_ms: 1000
+logging:
+  level: INFO
+  format: structured
+  files:
+    main: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/system.log
+    trades: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/trades.log
+    errors: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/errors.log
+  rotation:
+    max_size_mb: 100
+    backup_count: 10
+  external:
+    sentry:
+      enabled: false
+      dsn: ${SENTRY_DSN}
+security:
+  encryption:
+    enabled: true
+    key_rotation_days: 30
+  access:
+    max_login_attempts: 5
+    lockout_duration_minutes: 30
+  audit:
+    enabled: true
+    log_all_actions: true
+    retention_days: 90
+api:
+  rest:
+    enabled: false
+    host: 0.0.0.0
+    port: 8084
+    cors_enabled: true
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 100
+  websocket:
+    enabled: true
+    port: 8085
+    max_connections: 100
+    heartbeat_interval: 30
+  webhook:
+    enabled: true
+    port: 8086
+    timeout_seconds: 30
+    retry_attempts: 3
+notifications:
+  telegram:
+    enabled: true
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    chat_id: ${TELEGRAM_CHAT_ID}
+  email:
+    enabled: false
+    smtp_server: smtp.gmail.com
+    smtp_port: 587
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}
+  discord:
+    enabled: false
+    webhook_url: ${DISCORD_WEBHOOK_URL}
+backup:
+  enabled: true
+  interval_hours: 6
+  retention_days: 30
+  include:
+  - database
+  - configurations
+  - models
+  - logs
+  storage:
+    local:
+      enabled: true
+      path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/backups/
+    cloud:
+      enabled: false
+      provider: aws
+      bucket: ${BACKUP_BUCKET}
+development:
+  debug_mode: true
+  hot_reload: true
+  mock_exchanges: false
+  test_mode: false
+  test_data:
+    enabled: false
+    mock_signals: false
+    paper_trading: false
+trading:
+  hedge_mode: true
+  category: linear
+  leverage: 5
+  max_positions_per_direction: 1
+  min_order_value_usdt: 5.0
+  default_position_sizes:
+    BTCUSDT: 0.001
+    ETHUSDT: 0.01
+    BNBUSDT: 0.02
+    SOLUSDT: 0.05
+    XRPUSDT: 10.0
+    ADAUSDT: 10.0
+    DOGEUSDT: 100.0
+    DOTUSDT: 1.3
+    LINKUSDT: 0.5
+    MATICUSDT: 10.0
+    AVAXUSDT: 0.2
+  order_execution:
+    use_limit_orders: false
+    default_order_type: MARKET
+exchanges:
+  bybit:
+    enabled: true
+    api_key: ${BYBIT_API_KEY}
+    api_secret: ${BYBIT_API_SECRET}
+    testnet: false
+    rate_limits:
+      orders_per_second: 5
+      requests_per_minute: 120
+  binance:
+    enabled: false
+    api_key: ${BINANCE_API_KEY}
+    api_secret: ${BINANCE_API_SECRET}
+    testnet: false
+ml_models:
+  patchtst:
+    enabled: true
+    model_path: models/saved/best_model_20250728_215703.pth
+    config_path: config/ml/ml_config.yaml
+    scaler_path: models/saved/data_scaler.pkl
+  xgboost:
+    enabled: false
+    model_path: models/saved/xgboost_model.pkl
+unified_system:
+  enabled: true
+  components:
+    core:
+      enabled: true
+      auto_restart: true
+      health_check_interval: 30
+      startup_delay: 0
+    ml:
+      enabled: true
+      auto_restart: true
+      integrated_with: core
+    api:
+      enabled: true
+      port: 8083
+      auto_restart: true
+      health_check_interval: 30
+      startup_delay: 3
+    frontend:
+      enabled: true
+      port: 5173
+      auto_restart: false
+      startup_delay: 5
+  monitoring:
+    interval_seconds: 30
+    auto_restart_on_failure: true
+    max_restart_attempts: 5
+    restart_delay_seconds: 10
+  logging:
+    aggregate_logs: true
+    log_directory: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs
+    process_log_directory: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/processes
+ml:
+  enabled: true
+  signal_generation:
+    interval_seconds: 60  # ML предсказания каждую минуту
+    batch_size: 10
+    parallel_workers: 4
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  - ADAUSDT
+  - DOGEUSDT
+  - DOTUSDT
+  - LINKUSDT
+  model:
+    enabled: true
+    path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/models/saved/best_model_20250728_215703.pth
+    scaler_path: /mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/models/saved/data_scaler.pkl
+    device: cuda
+  data:
+    lookback_minutes: 3600
+    min_candles: 240
+  filters:
+    min_confidence: 0.40      # ОПТИМАЛЬНО: соответствует реальным выходам ML (0.35-0.48)
+    min_signal_strength: 0.40  # ОПТИМАЛЬНО: фильтруем только очень слабые
+  risk:
+    max_positions_per_symbol: 1
+    position_size_percent: 2
+risk_management:
+  global:
+    enabled: true
+    max_total_risk: 0.1
+    max_daily_loss: 0.05
+    max_open_positions: 10
+  position:
+    default_stop_loss: 0.02
+    default_take_profit: 0.03
+    max_position_size: 0.1
+  trailing_stop:
+    enabled: true
+    activation_profit: 0.01
+    trailing_distance: 0.005
+enhanced_sltp:
+  enabled: true
+  trailing_stop:
+    enabled: true
+    type: percentage
+    step: 0.5
+    min_profit: 0.3
+    max_distance: 2.0
+  partial_take_profit:
+    enabled: true
+    update_sl_after_partial: true
+    levels:
+    - percent: 1.0
+      close_ratio: 0.25
+    - percent: 2.0
+      close_ratio: 0.25
+    - percent: 3.0
+      close_ratio: 0.5
+  profit_protection:
+    enabled: true
+    breakeven_percent: 1.0
+    breakeven_offset: 0.2
+    lock_percent:
+    - trigger: 2.0
+      lock: 1.0
+    - trigger: 3.0
+      lock: 2.0
+    - trigger: 4.0
+      lock: 3.0
+    max_updates: 5
+  volatility_adjustment:
+    enabled: true
+    multiplier: 1.0
+traders:
+- id: multi_crypto_10
+  enabled: true
+  type: multi_crypto
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+  - SOLUSDT
+  - XRPUSDT
+  exchange: bybit
+  strategy: ml_signal
+  strategy_config:
+    signal_interval: 60  # ML сигналы каждую минуту
+    indicators:
+    - type: RSI
+      period: 14
+      oversold: 30
+      overbought: 70
+    - type: EMA
+      short_period: 9
+      long_period: 21
+  capital:
+    initial: 10000
+    per_trade_percentage: 2
+    max_positions: 5
+  risk_management:
+    stop_loss_percentage: 2
+    take_profit_percentage: 5
+    max_drawdown_percentage: 10

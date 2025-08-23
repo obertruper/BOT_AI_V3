@@ -39,7 +39,7 @@ class EnhancedSystemMonitor:
         print("🚀 Инициализация улучшенного мониторинга системы")
 
         # Инициализация ConfigManager
-        self.config_manager = ConfigManager("config/system.yaml")
+        self.config_manager = ConfigManager()
         await self.config_manager.initialize()
 
         # Инициализация RiskManager
@@ -267,10 +267,10 @@ class EnhancedSystemMonitor:
         print("\n📝 Детальная проверка логов...")
 
         log_files = [
-            "logs/core.log",
-            "logs/unified_launcher.log",
-            "logs/risk_management.log",
-            "logs/api.log",
+            "data/logs/core.log",
+            "data/logs/unified_launcher.log",
+            "data/logs/risk_management.log",
+            "data/logs/api.log",
         ]
 
         for log_file in log_files:

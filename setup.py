@@ -10,7 +10,7 @@ from setuptools import find_packages, setup
 
 # Получение версии из файла версии
 def get_version():
-    """Получение версии из файла VERSION"""
+    """Получение версии из файла VERSION или pyproject.toml"""
     version_file = os.path.join(os.path.dirname(__file__), "VERSION")
     if os.path.exists(version_file):
         with open(version_file) as f:
@@ -21,10 +21,12 @@ def get_version():
 # Чтение README файла
 def get_long_description():
     """Получение длинного описания из README"""
-    readme_file = os.path.join(os.path.dirname(__file__), "README.md")
-    if os.path.exists(readme_file):
-        with open(readme_file, encoding="utf-8") as f:
-            return f.read()
+    # Сначала пробуем README_RU.md, потом README.md
+    for readme_name in ["README_RU.md", "README.md"]:
+        readme_file = os.path.join(os.path.dirname(__file__), readme_name)
+        if os.path.exists(readme_file):
+            with open(readme_file, encoding="utf-8") as f:
+                return f.read()
     return "BOT_Trading v3.0 - Мульти-трейдер система автоматизированной торговли"
 
 
@@ -58,14 +60,13 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Topic :: Office/Business :: Financial :: Investment",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=get_requirements(),
     extras_require={
         "dev": [
@@ -73,7 +74,7 @@ setup(
             "pytest-asyncio>=0.21.0",
             "pytest-cov>=4.1.0",
             "black>=23.7.0",
-            "flake8>=6.0.0",
+            "ruff>=0.1.0",
             "mypy>=1.5.0",
             "pre-commit>=3.3.0",
         ],
@@ -93,8 +94,8 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "bot-trading=main:main",
-            "bot-trading-v3=main:main",
+            "bot-trading=main:cli",
+            "bot-trading-v3=main:cli",
         ],
     },
     include_package_data=True,

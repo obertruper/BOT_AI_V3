@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from core.logger import setup_logger
-from database.connections.postgres import AsyncPGPool
+from database.db_manager import get_db
 from exchanges.exchange_manager import ExchangeManager
 
 logger = setup_logger(__name__)
@@ -92,12 +92,11 @@ class EnhancedPositionTracker:
     def __init__(
         self,
         exchange_manager: ExchangeManager,
-        db_pool: Optional[AsyncPGPool] = None,
         update_interval: int = 30,
     ):
         self.exchange_manager = exchange_manager
-        self.db_pool = db_pool or AsyncPGPool()
         self.update_interval = update_interval
+        self.db_manager = None
 
         # Активные позиции
         self.tracked_positions: Dict[str, TrackedPosition] = {}
@@ -129,6 +128,9 @@ class EnhancedPositionTracker:
             return
 
         self.is_running = True
+        
+        # Инициализируем DBManager
+        self.db_manager = await get_db()
 
         # Загружаем активные позиции из БД
         await self._load_active_positions()
@@ -539,7 +541,7 @@ class EnhancedPositionTracker:
             WHERE status = 'active'
             """
 
-            rows = await AsyncPGPool.fetch(query)
+            rows = await self.db_manager.fetch_all(query)
 
             for row in rows:
                 position = TrackedPosition(
@@ -576,7 +578,7 @@ class EnhancedPositionTracker:
                 health = $10
             """
 
-            await AsyncPGPool.execute(
+            await self.db_manager.execute(
                 query,
                 position.position_id,
                 position.symbol,
@@ -615,7 +617,7 @@ class EnhancedPositionTracker:
             roi_percent = position.metrics.roi_percent if position.metrics else 0
             hold_time = position.metrics.hold_time_minutes if position.metrics else 0
 
-            await AsyncPGPool.execute(
+            await self.db_manager.execute(
                 query,
                 position.position_id,
                 float(position.current_price),

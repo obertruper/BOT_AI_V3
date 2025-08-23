@@ -142,6 +142,7 @@ ml/models/saved/
 # Documentation build
 docs/_build/
 docs/api/generated/
+site/
 
 # Package files
 *.tar.gz
@@ -170,3 +171,9 @@ mcp_servers.json
 BOT_AI_V2/
 # Локальные примеры и legacy код
 BOT_AI_V2/
+
+# Дополнительные файлы с потенциальными секретами
+.mcp_postgres_config.json
+mcp_config.json
+metabase_data/
+demonstrate_mcp_usage.py

@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 
 from core.logger import setup_logger
-from database.connections.postgres import AsyncPGPool
+from database.db_manager import get_db
+from database.repositories.ml_prediction_repository import MLPrediction
 
 logger = setup_logger("ml_prediction_logger")
 
@@ -27,6 +28,13 @@ class MLPredictionLogger:
         self.model_version = "unified_patchtst_v1.0"
         self.batch_predictions = []
         self.batch_size = 1  # Сохраняем сразу же для реального времени
+        self._db_manager = None
+
+    async def _get_db_manager(self):
+        """Получает менеджер БД (ленивая инициализация)"""
+        if self._db_manager is None:
+            self._db_manager = await get_db()
+        return self._db_manager
 
     async def log_prediction(
         self,
@@ -57,48 +65,48 @@ class MLPredictionLogger:
         # Вычисляем статистику признаков
         feature_stats = self._compute_feature_statistics(features)
 
-        # Подготавливаем данные для БД
-        prediction_record = {
-            "symbol": symbol,
-            "timestamp": int(time.time() * 1000),
-            "datetime": datetime.now(UTC),
+        # Создаём объект MLPrediction
+        prediction_record = MLPrediction(
+            symbol=symbol,
+            timestamp=int(time.time() * 1000),
+            predicted_at=datetime.now(UTC),
             # Input features summary
-            "features_count": len(features),
-            "features_hash": features_hash,
-            "lookback_periods": 96,  # Стандартное значение
+            features_count=len(features),
+            features_hash=features_hash,
+            lookback_periods=96,  # Стандартное значение
             # Key features
             **key_features,
-            # Feature statistics
+            # Feature statistics  
             **feature_stats,
             # Model outputs - raw predictions
-            "predicted_return_15m": float(predictions.get("returns_15m", 0)),
-            "predicted_return_1h": float(predictions.get("returns_1h", 0)),
-            "predicted_return_4h": float(predictions.get("returns_4h", 0)),
-            "predicted_return_12h": float(predictions.get("returns_12h", 0)),
+            predicted_return_15m=float(predictions.get("returns_15m", 0)),
+            predicted_return_1h=float(predictions.get("returns_1h", 0)),
+            predicted_return_4h=float(predictions.get("returns_4h", 0)),
+            predicted_return_12h=float(predictions.get("returns_12h", 0)),
             # Direction predictions
-            "direction_15m": predictions["direction_15m"],
-            "direction_15m_confidence": float(predictions["confidence_15m"]),
-            "direction_1h": predictions["direction_1h"],
-            "direction_1h_confidence": float(predictions["confidence_1h"]),
-            "direction_4h": predictions["direction_4h"],
-            "direction_4h_confidence": float(predictions["confidence_4h"]),
-            "direction_12h": predictions["direction_12h"],
-            "direction_12h_confidence": float(predictions["confidence_12h"]),
+            direction_15m=predictions["direction_15m"],
+            direction_15m_confidence=float(predictions["confidence_15m"]),
+            direction_1h=predictions["direction_1h"],
+            direction_1h_confidence=float(predictions["confidence_1h"]),
+            direction_4h=predictions["direction_4h"],
+            direction_4h_confidence=float(predictions["confidence_4h"]),
+            direction_12h=predictions["direction_12h"],
+            direction_12h_confidence=float(predictions["confidence_12h"]),
             # Risk metrics
-            "risk_score": float(predictions.get("risk_score", 0)),
-            "max_drawdown_predicted": float(predictions.get("max_drawdown", 0)),
-            "max_rally_predicted": float(predictions.get("max_rally", 0)),
+            risk_score=float(predictions.get("risk_score", 0)),
+            max_drawdown_predicted=float(predictions.get("max_drawdown", 0)),
+            max_rally_predicted=float(predictions.get("max_rally", 0)),
             # Final signal
-            "signal_type": predictions["signal_type"],
-            "signal_confidence": float(predictions["signal_confidence"]),
-            "signal_timeframe": predictions.get("primary_timeframe", "15m"),
+            signal_type=predictions["signal_type"],
+            signal_confidence=float(predictions["signal_confidence"]),
+            signal_timeframe=predictions.get("primary_timeframe", "15m"),
             # Model metadata
-            "model_version": self.model_version,
-            "inference_time_ms": (time.time() - start_time) * 1000,
+            model_version=self.model_version,
+            inference_time_ms=(time.time() - start_time) * 1000,
             # Full arrays for detailed analysis
-            "features_array": features.tolist() if features.size < 1000 else None,
-            "model_outputs_raw": model_outputs.tolist() if model_outputs is not None else None,
-        }
+            features_array=features.tolist() if features.size < 1000 else None,
+            model_outputs_raw=model_outputs.tolist() if model_outputs is not None else None,
+        )
 
         # Детальное логирование
         self._log_prediction_details(symbol, prediction_record, predictions)
@@ -179,7 +187,7 @@ class MLPredictionLogger:
         return stats
 
     def _log_prediction_details(
-        self, symbol: str, record: dict[str, Any], predictions: dict[str, Any]
+        self, symbol: str, record: MLPrediction, predictions: dict[str, Any]
     ) -> None:
         """Выводит детальные логи предсказания"""
 
@@ -206,16 +214,16 @@ class MLPredictionLogger:
             "║ 📊 INPUT FEATURES                                                     ║"
         )
         table_lines.append(
-            f"║   • Feature Count: {record['features_count']:<6} • Hash: {record['features_hash']:016x}     ║"
+            f"║   • Feature Count: {record.features_count:<6} • Hash: {record.features_hash:016x}     ║"
         )
         table_lines.append(
-            f"║   • NaN Count: {record['nan_count']:<6} • Zero Variance: {record['zero_variance_count']:<6}        ║"
+            f"║   • NaN Count: {record.nan_count:<6} • Zero Variance: {record.zero_variance_count:<6}        ║"
         )
         table_lines.append(
-            f"║   • Mean: {record['features_mean']:>8.4f}  • Std: {record['features_std']:>8.4f}            ║"
+            f"║   • Mean: {record.features_mean:>8.4f}  • Std: {record.features_std:>8.4f}            ║"
         )
         table_lines.append(
-            f"║   • Min:  {record['features_min']:>8.4f}  • Max: {record['features_max']:>8.4f}            ║"
+            f"║   • Min:  {record.features_min:>8.4f}  • Max: {record.features_max:>8.4f}            ║"
         )
         table_lines.append(
             "╟──────────────────────────────────────────────────────────────────────╢"
@@ -224,13 +232,13 @@ class MLPredictionLogger:
             "║ 🎯 KEY INDICATORS                                                     ║"
         )
         table_lines.append(
-            f"║   • Close: ${record.get('close_price', 0):>10.2f}  • Volume: {record.get('volume', 0):>12.0f}  ║"
+            f"║   • Close: ${getattr(record, 'close_price', 0):>10.2f}  • Volume: {getattr(record, 'volume', 0):>12.0f}  ║"
         )
         table_lines.append(
-            f"║   • RSI: {record.get('rsi', 0):>6.2f}  • MACD: {record.get('macd', 0):>8.4f}                  ║"
+            f"║   • RSI: {getattr(record, 'rsi', 0):>6.2f}  • MACD: {getattr(record, 'macd', 0):>8.4f}                  ║"
         )
         table_lines.append(
-            f"║   • BB Position: {record.get('bb_position', 0):>6.3f}  • ATR%: {record.get('atr_pct', 0):>6.3f}   ║"
+            f"║   • BB Position: {getattr(record, 'bb_position', 0):>6.3f}  • ATR%: {getattr(record, 'atr_pct', 0):>6.3f}   ║"
         )
         table_lines.append(
             "╟──────────────────────────────────────────────────────────────────────╢"
@@ -239,16 +247,16 @@ class MLPredictionLogger:
             "║ 📈 PREDICTED RETURNS                                                  ║"
         )
         table_lines.append(
-            f"║   • 15m: {record['predicted_return_15m']:>7.4f} ({record['direction_15m']:^7}) [{record['direction_15m_confidence']:>5.2%}]  ║"
+            f"║   • 15m: {record.predicted_return_15m:>7.4f} ({record.direction_15m:^7}) [{record.direction_15m_confidence:>5.2%}]  ║"
         )
         table_lines.append(
-            f"║   • 1h:  {record['predicted_return_1h']:>7.4f} ({record['direction_1h']:^7}) [{record['direction_1h_confidence']:>5.2%}]   ║"
+            f"║   • 1h:  {record.predicted_return_1h:>7.4f} ({record.direction_1h:^7}) [{record.direction_1h_confidence:>5.2%}]   ║"
         )
         table_lines.append(
-            f"║   • 4h:  {record['predicted_return_4h']:>7.4f} ({record['direction_4h']:^7}) [{record['direction_4h_confidence']:>5.2%}]   ║"
+            f"║   • 4h:  {record.predicted_return_4h:>7.4f} ({record.direction_4h:^7}) [{record.direction_4h_confidence:>5.2%}]   ║"
         )
         table_lines.append(
-            f"║   • 12h: {record['predicted_return_12h']:>7.4f} ({record['direction_12h']:^7}) [{record['direction_12h_confidence']:>5.2%}] ║"
+            f"║   • 12h: {record.predicted_return_12h:>7.4f} ({record.direction_12h:^7}) [{record.direction_12h_confidence:>5.2%}] ║"
         )
         table_lines.append(
             "╟──────────────────────────────────────────────────────────────────────╢"
@@ -257,13 +265,13 @@ class MLPredictionLogger:
             "║ ⚠️  RISK METRICS                                                      ║"
         )
         table_lines.append(
-            f"║   • Risk Score: {record.get('risk_score', 0):>6.3f}                                       ║"
+            f"║   • Risk Score: {getattr(record, 'risk_score', 0):>6.3f}                                       ║"
         )
         table_lines.append(
-            f"║   • Max Drawdown: {record.get('max_drawdown_predicted', 0):>6.2%}                           ║"
+            f"║   • Max Drawdown: {getattr(record, 'max_drawdown_predicted', 0):>6.2%}                           ║"
         )
         table_lines.append(
-            f"║   • Max Rally: {record.get('max_rally_predicted', 0):>6.2%}                              ║"
+            f"║   • Max Rally: {getattr(record, 'max_rally_predicted', 0):>6.2%}                              ║"
         )
         table_lines.append(
             "╟──────────────────────────────────────────────────────────────────────╢"
@@ -272,13 +280,13 @@ class MLPredictionLogger:
             "║ 🎯 FINAL SIGNAL                                                       ║"
         )
         table_lines.append(
-            f"║   • Type: {record['signal_type']:^10}  • Confidence: {record['signal_confidence']:>5.2%}       ║"
+            f"║   • Type: {record.signal_type:^10}  • Confidence: {record.signal_confidence:>5.2%}       ║"
         )
         table_lines.append(
-            f"║   • Primary Timeframe: {record.get('signal_timeframe', 'N/A'):^10}                      ║"
+            f"║   • Primary Timeframe: {getattr(record, 'signal_timeframe', 'N/A'):^10}                      ║"
         )
         table_lines.append(
-            f"║   • Inference Time: {record['inference_time_ms']:>6.1f} ms                            ║"
+            f"║   • Inference Time: {record.inference_time_ms:>6.1f} ms                            ║"
         )
         table_lines.append(
             "╚══════════════════════════════════════════════════════════════════════╝"
@@ -297,26 +305,17 @@ class MLPredictionLogger:
             return
 
         try:
-            # Подготавливаем SQL запрос для batch insert
-            columns = list(self.batch_predictions[0].keys())
-            placeholders = ", ".join([f"${i + 1}" for i in range(len(columns))])
+            # Получаем менеджер БД и репозиторий
+            db_manager = await self._get_db_manager()
+            ml_repo = db_manager.get_ml_prediction_repository()
 
-            # Формируем запрос
-            insert_query = f"""
-                INSERT INTO ml_predictions ({", ".join(columns)})
-                VALUES ({placeholders})
-                ON CONFLICT (symbol, timestamp) DO UPDATE SET
-                    signal_confidence = EXCLUDED.signal_confidence,
-                    updated_at = NOW()
-            """
-
-            # Выполняем batch insert
-            for record in self.batch_predictions:
-                values = [record[col] for col in columns]
-                # Конвертируем None в NULL для PostgreSQL
-                values = [json.dumps(v) if isinstance(v, (list, dict)) else v for v in values]
-
-                await AsyncPGPool.execute(insert_query, *values)
+            # Используем bulk_insert для высокой производительности
+            if len(self.batch_predictions) == 1:
+                # Одиночное сохранение
+                await ml_repo.create_prediction(self.batch_predictions[0])
+            else:
+                # Массовое сохранение
+                await ml_repo.bulk_insert(self.batch_predictions)
 
             logger.info(f"✅ Сохранено {len(self.batch_predictions)} предсказаний в БД")
 
@@ -338,29 +337,14 @@ class MLPredictionLogger:
             importance_scores: Оценки важности
         """
         try:
-            # Сортируем по важности
-            sorted_indices = np.argsort(importance_scores)[::-1]
+            # Получаем менеджер БД и репозиторий
+            db_manager = await self._get_db_manager()
+            ml_repo = db_manager.get_ml_prediction_repository()
 
-            # Подготавливаем данные для вставки
-            insert_query = """
-                INSERT INTO ml_feature_importance
-                (feature_name, feature_index, importance_score, importance_rank,
-                 model_version, calculated_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-            """
-
-            calculated_at = datetime.now(UTC)
-
-            for rank, idx in enumerate(sorted_indices[:100], 1):  # Топ-100 признаков
-                await AsyncPGPool.execute(
-                    insert_query,
-                    feature_names[idx],
-                    int(idx),
-                    float(importance_scores[idx]),
-                    rank,
-                    self.model_version,
-                    calculated_at,
-                )
+            # Сохраняем через репозиторий
+            await ml_repo.save_feature_importance(
+                feature_names, importance_scores, self.model_version
+            )
 
             logger.info("✅ Сохранена важность топ-100 признаков в БД")
 

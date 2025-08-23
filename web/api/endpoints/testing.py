@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from core.logger import setup_logger
 from database.models.base_models import SignalType
 from database.models.signal import Signal
-from database.repositories.signal_repository_fixed import SignalRepositoryFixed
+from database.repositories.signal_repository import SignalRepository
 
 logger = setup_logger(__name__)
 
@@ -63,7 +63,7 @@ async def generate_test_signal(request: TestSignalRequest = TestSignalRequest())
         # Сохраняем в БД
         from database.connections.postgres import get_async_db
         async with get_async_db() as db:
-            signal_repo = SignalRepositoryFixed(db)
+            signal_repo = SignalRepository(db)
             saved_signal = await signal_repo.save_signal(signal)
 
         if saved_signal:
@@ -218,7 +218,7 @@ async def get_system_health():
         try:
             from database.connections.postgres import get_async_db
             async with get_async_db() as db:
-                signal_repo = SignalRepositoryFixed(db)
+                signal_repo = SignalRepository(db)
                 # Простой запрос для проверки БД - получаем активные сигналы
                 active_signals = await signal_repo.get_active_signals()
                 health_status["components"]["database"] = {

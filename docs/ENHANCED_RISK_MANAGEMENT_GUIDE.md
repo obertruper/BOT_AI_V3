@@ -85,7 +85,7 @@ from core.config.config_manager import ConfigManager
 from risk_management.manager import RiskManager
 
 # Инициализация ConfigManager
-config_manager = ConfigManager("config/system.yaml")
+config_manager = ConfigManager()
 await config_manager.initialize()
 
 # Получение конфигурации риск-менеджмента

@@ -15,12 +15,19 @@ from sqlalchemy import and_, select
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
 from data.data_loader import DataLoader
-from database.connections import get_async_db
+from database.connections import get_async_db  # Uses ORM - correct pattern
 from database.models.base_models import SignalType
 from database.models.market_data import RawMarketData
 from database.models.signal import Signal
 from ml.ml_manager import MLManager
 from ml.realtime_indicator_calculator import RealTimeIndicatorCalculator
+
+# Импорт UnifiedPrediction для поддержки нового формата
+try:
+    from ml.adapters import UnifiedPrediction
+    UNIFIED_PREDICTION_AVAILABLE = True
+except ImportError:
+    UNIFIED_PREDICTION_AVAILABLE = False
 
 logger = setup_logger("ml_signal_processor")
 
@@ -49,20 +56,36 @@ class MLSignalProcessor:
         self.config = config
         self.config_manager = config_manager
 
-        # ИСПРАВЛЕНО: Пороги для принятия решений из конфигурации (соответствуют обучению)
-        ml_config = config.get("ml", {})
+        # Пороги для принятия решений из конфигурации
+        # Поддержка и Pydantic и dict конфигурации
+        if hasattr(config, 'ml'):
+            ml_config = config.ml
+            # Конвертируем Pydantic в dict
+            if hasattr(ml_config, 'model_dump'):
+                ml_config = ml_config.model_dump()
+            elif hasattr(ml_config, 'dict'):
+                ml_config = ml_config.dict()
+            else:
+                # Fallback на прямой доступ к атрибутам
+                ml_config = {
+                    "min_confidence": getattr(ml_config, 'min_confidence', 0.3),
+                    "min_signal_strength": getattr(ml_config, 'min_signal_strength', 0.25),
+                    "risk_tolerance": getattr(ml_config, 'risk_tolerance', 'MEDIUM')
+                }
+        else:
+            ml_config = config.get("ml", {})
         # Используем правильные пороги из ml_config.yaml
         self.min_confidence = ml_config.get(
             "min_confidence", 0.3
-        )  # ИСПРАВЛЕНО: из конфига confidence_threshold: 0.3
+        )  # Из конфига confidence_threshold: 0.3
         self.min_signal_strength = ml_config.get(
             "min_signal_strength", 0.25
-        )  # ИСПРАВЛЕНО: базовое значение как в обучении
+        )  # Базовое значение
         self.risk_tolerance = ml_config.get(
             "risk_tolerance", "MEDIUM"
-        )  # ИСПРАВЛЕНО: более консервативный подход
+        )  # Консервативный подход
 
-        # ИСПРАВЛЕНО: Кэш для предсказаний с коротким TTL для свежести
+        # Кэш для предсказаний с коротким TTL
         self.prediction_cache = {}
         self.cache_ttl = 60  # 60 секунд - более частые обновления для свежести сигналов
 
@@ -174,6 +197,111 @@ class MLSignalProcessor:
             logger.error(f"Error processing market data for {symbol}: {e}")
             return None
 
+    def _create_signal_from_unified(
+        self,
+        prediction: "UnifiedPrediction",
+        symbol: str,
+        exchange: str,
+        additional_data: dict[str, Any] | None = None,
+    ) -> Signal | None:
+        """
+        Создает торговый сигнал на основе UnifiedPrediction.
+
+        Args:
+            prediction: UnifiedPrediction от адаптера
+            symbol: Торговый символ
+            exchange: Название биржи
+            additional_data: Дополнительные данные
+
+        Returns:
+            Signal объект или None
+        """
+        # Проверяем уверенность модели
+        if prediction.confidence < self.min_confidence:
+            logger.debug(
+                f"Low confidence {prediction.confidence:.2f} < {self.min_confidence}, skipping signal"
+            )
+            return None
+
+        # Проверяем силу сигнала
+        if prediction.signal_strength < self.min_signal_strength:
+            logger.debug(
+                f"Weak signal {prediction.signal_strength:.2f} < {self.min_signal_strength}, skipping"
+            )
+            return None
+
+        # Проверяем уровень риска
+        risk_level = prediction.risk_metrics.risk_level if prediction.risk_metrics else "HIGH"
+        if not self._check_risk_tolerance(risk_level):
+            logger.debug(
+                f"Risk level {risk_level} exceeds tolerance {self.risk_tolerance}, skipping"
+            )
+            return None
+
+        # Определяем тип сигнала
+        ml_signal_type = prediction.signal_type
+
+        # Обработка NEUTRAL сигналов
+        if ml_signal_type == "NEUTRAL":
+            if prediction.confidence < 0.8:
+                logger.debug(
+                    f"🎯 NEUTRAL сигнал с уверенностью {prediction.confidence:.1%} < 80%, пропускаем"
+                )
+                return None
+
+        # Мапим ML сигнал на торговый SignalType
+        if ml_signal_type == "LONG":
+            signal_type = SignalType.LONG
+        elif ml_signal_type == "SHORT":
+            signal_type = SignalType.SHORT
+        elif ml_signal_type == "NEUTRAL":
+            signal_type = SignalType.NEUTRAL
+        else:
+            logger.warning(f"Unknown signal type: {ml_signal_type}")
+            return None
+
+        # Получаем текущую цену
+        entry_price = (
+            additional_data.get("current_price") if additional_data else None
+        ) or 0.0
+
+        # Создаем сигнал
+        signal = Signal(
+            strategy_name="UnifiedMLStrategy",
+            symbol=symbol,
+            signal_type=signal_type,
+            entry_price=entry_price,
+            stop_loss_pct=prediction.stop_loss_pct,
+            take_profit_pct=prediction.take_profit_pct,
+            confidence=prediction.confidence,
+            strength=prediction.signal_strength,
+            exchange=exchange,
+            metadata={
+                "risk_level": risk_level,
+                "quality_score": prediction.quality_score if hasattr(prediction, "quality_score") else None,
+                "timeframe_consensus": self._calculate_timeframe_consensus(prediction),
+                "source": "unified_adapter",
+            },
+        )
+
+        logger.info(
+            f"✅ Created UnifiedPrediction signal: {signal_type.value} for {symbol} "
+            f"(confidence: {prediction.confidence:.2%}, strength: {prediction.signal_strength:.2f})"
+        )
+
+        return signal
+
+    def _calculate_timeframe_consensus(self, prediction: "UnifiedPrediction") -> float:
+        """Рассчитывает консенсус между таймфреймами"""
+        if not prediction.timeframe_predictions:
+            return 0.0
+        
+        confidences = [
+            tf.confidence 
+            for tf in prediction.timeframe_predictions.values()
+        ]
+        return sum(confidences) / len(confidences) if confidences else 0.0
+
     def _create_signal_from_prediction(
         self,
         prediction: dict[str, Any],
@@ -193,6 +321,11 @@ class MLSignalProcessor:
         Returns:
             Signal объект или None
         """
+        # Проверяем, это UnifiedPrediction или dict
+        if UNIFIED_PREDICTION_AVAILABLE and isinstance(prediction, UnifiedPrediction):
+            return self._create_signal_from_unified(
+                prediction, symbol, exchange, additional_data
+            )
         # Логируем полное предсказание для отладки
         logger.info(f"🔍 Предсказание для {symbol}:")
         logger.info(f"   Сырое: {prediction}")
@@ -224,8 +357,8 @@ class MLSignalProcessor:
         # Определяем тип сигнала
         ml_signal_type = prediction.get("signal_type", "NEUTRAL")
 
-        # ИСПРАВЛЕНО: Правильная обработка NEUTRAL сигналов согласно обучению
-        # В обучении NEUTRAL (класс 2) означает отсутствие четкого направления
+        # Обработка NEUTRAL сигналов
+        # NEUTRAL (класс 2) означает отсутствие четкого направления
         if ml_signal_type == "NEUTRAL":
             # NEUTRAL сигналы обрабатываем только при очень высокой уверенности (>80%)
             # Это соответствует логике обучения где NEUTRAL = нет торговли
@@ -239,7 +372,7 @@ class MLSignalProcessor:
             )
 
         # Мапим ML сигнал на торговый SignalType
-        # ИСПРАВЛЕНО: Модель возвращает "LONG"/"SHORT"/"NEUTRAL"
+        # Модель возвращает "LONG"/"SHORT"/"NEUTRAL"
         if ml_signal_type == "LONG":
             signal_type = SignalType.LONG
         elif ml_signal_type == "SHORT":
@@ -466,17 +599,32 @@ class MLSignalProcessor:
         Returns:
             True если сигнал валиден
         """
+        # Специальное логирование для SHORT сигналов
+        if signal.signal_type == SignalType.SHORT:
+            logger.warning(f"🔴 Валидация SHORT сигнала {signal.symbol}: "
+                          f"conf={signal.confidence:.2f} (min={self.min_confidence}), "
+                          f"strength={signal.strength:.2f} (min={self.min_signal_strength})")
+        
         # Проверяем минимальную уверенность
         if signal.confidence < self.min_confidence:
+            if signal.signal_type == SignalType.SHORT:
+                logger.error(f"❌🔴 SHORT сигнал {signal.symbol} отклонен: низкая уверенность "
+                            f"{signal.confidence:.2f} < {self.min_confidence}")
             return False
 
         # Проверяем минимальную силу сигнала
         if signal.strength < self.min_signal_strength:
+            if signal.signal_type == SignalType.SHORT:
+                logger.error(f"❌🔴 SHORT сигнал {signal.symbol} отклонен: низкая сила "
+                            f"{signal.strength:.2f} < {self.min_signal_strength}")
             return False
 
         # Здесь можно добавить дополнительные проверки
         # Например, проверка на конфликт с другими сигналами,
         # проверка рыночных условий и т.д.
+        
+        if signal.signal_type == SignalType.SHORT:
+            logger.warning(f"✅🔴 SHORT сигнал {signal.symbol} прошел валидацию!")
 
         return True
 
@@ -636,7 +784,7 @@ class MLSignalProcessor:
             stop_loss_pct = pred_dict.get("stop_loss_pct")
             take_profit_pct = pred_dict.get("take_profit_pct")
 
-            # ИСПРАВЛЕНО: Рассчитываем абсолютные цены на основе процентов с правильной логикой
+            # Рассчитываем абсолютные цены на основе процентов
             if stop_loss_pct is not None and take_profit_pct is not None:
                 if signal_type == SignalType.LONG:
                     # LONG: SL ниже цены входа, TP выше цены входа
@@ -748,10 +896,17 @@ class MLSignalProcessor:
             },
         )
 
-        logger.info(
-            f"✅ Создан {signal_type.value} сигнал для {symbol}: "
-            f"confidence={confidence:.2f}, strength={strength:.2f}"
-        )
+        # Специальное логирование для SHORT сигналов
+        if signal_type == SignalType.SHORT:
+            logger.warning(
+                f"✅🔴 Создан SHORT сигнал для {symbol}: "
+                f"confidence={confidence:.2f}, strength={strength:.2f}"
+            )
+        else:
+            logger.info(
+                f"✅ Создан {signal_type.value} сигнал для {symbol}: "
+                f"confidence={confidence:.2f}, strength={strength:.2f}"
+            )
 
         return signal
 
@@ -885,6 +1040,11 @@ class MLSignalProcessor:
             True если успешно
         """
         try:
+            # Добавляем специальное логирование для SHORT сигналов
+            if signal.signal_type == SignalType.SHORT:
+                logger.warning(f"🔴 Попытка сохранить SHORT сигнал для {signal.symbol}: "
+                              f"strength={signal.strength:.2f}, confidence={signal.confidence:.2f}")
+            
             async with get_async_db() as db:
                 # Проверяем, существует ли уже такой сигнал
                 existing = await db.execute(
@@ -899,12 +1059,19 @@ class MLSignalProcessor:
                 )
                 if existing.scalar_one_or_none():
                     logger.debug(f"Signal already exists for {signal.symbol}, skipping")
+                    if signal.signal_type == SignalType.SHORT:
+                        logger.warning(f"🔴 SHORT сигнал для {signal.symbol} уже существует в БД!")
                     return False
 
                 db.add(signal)
                 await db.commit()
                 self._stats["signals_saved"] += 1
-                logger.info(f"✅ Signal saved for {signal.symbol}")
+                
+                # Особое логирование для SHORT сигналов
+                if signal.signal_type == SignalType.SHORT:
+                    logger.warning(f"✅🔴 SHORT сигнал УСПЕШНО сохранен для {signal.symbol}")
+                else:
+                    logger.info(f"✅ Signal saved for {signal.symbol}")
                 return True
         except Exception as e:
             logger.error(f"Error saving signal: {e}")
@@ -1151,7 +1318,17 @@ class MLSignalProcessor:
 
                     # Сохраняем в БД если нужно
                     if self.config.get("ml", {}).get("save_signals", True):
-                        await self.save_signal(signal)
+                        # Специальное логирование для SHORT
+                        if signal.signal_type == SignalType.SHORT:
+                            logger.warning(f"🔴 Вызываем save_signal для SHORT сигнала {symbol}")
+                        
+                        saved = await self.save_signal(signal)
+                        
+                        if not saved:
+                            if signal.signal_type == SignalType.SHORT:
+                                logger.error(f"❌🔴 SHORT сигнал для {symbol} НЕ БЫЛ сохранен!")
+                            else:
+                                logger.warning(f"❌ Сигнал для {symbol} не был сохранен")
 
                     logger.info(
                         f"✅ Сгенерирован {signal.signal_type.value} сигнал для {symbol} "
@@ -1221,7 +1398,7 @@ class MLSignalProcessor:
                     data = result.scalars().all()
 
                 if data:
-                    # ИСПРАВЛЕНО: Добавляем колонку symbol для правильной генерации признаков
+                    # Добавляем колонку symbol для правильной генерации признаков
                     df = pd.DataFrame(
                         [
                             {
@@ -1233,7 +1410,7 @@ class MLSignalProcessor:
                                 "close": float(d.close),
                                 "volume": float(d.volume),
                                 "turnover": float(d.turnover) if d.turnover else 0,
-                                "symbol": symbol,  # ИСПРАВЛЕНО: Добавляем symbol для уникальных признаков
+                                "symbol": symbol,  # Добавляем symbol для уникальных признаков
                             }
                             for d in data
                         ]

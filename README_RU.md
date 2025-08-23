@@ -125,7 +125,7 @@ pip install -r requirements.txt
 
 ```bash
 # Копирование и настройка .env файла
-cp config/.env.example .env
+cp .env.example .env
 
 # Настройка базы данных
 # Редактируем .env файл

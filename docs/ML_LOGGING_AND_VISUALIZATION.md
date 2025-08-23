@@ -69,7 +69,7 @@ chmod +x setup_metabase.sh
 #   Port: 5555
 #   Database: bot_trading_v3
 #   Username: obertruper
-#   Password: ilpnqw1234
+#   Password: your-password-here  # Укажите ваш реальный пароль
 ```
 
 ### 3. Create SQL Views

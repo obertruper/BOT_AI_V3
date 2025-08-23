@@ -23,6 +23,15 @@ from ml.logic.patchtst_model import create_unified_model
 from ml.logic.signal_quality_analyzer import SignalQualityAnalyzer
 from ml.ml_prediction_logger import ml_prediction_logger
 
+# Импорт системы адаптеров
+try:
+    from ml.adapters.factory import ModelAdapterFactory
+    from ml.adapters.base import BaseModelAdapter
+    ADAPTERS_AVAILABLE = True
+except ImportError:
+    ADAPTERS_AVAILABLE = False
+    logger.warning("ML adapters not available, using legacy mode")
+
 logger = setup_logger("ml_manager")
 
 # Глобальные оптимизации GPU при импорте модуля - ТОЧНАЯ КОПИЯ из рабочего проекта
@@ -33,15 +42,42 @@ if torch.cuda.is_available():
         torch.backends.cudnn.enabled = True
 
         # Установка float32 matmul precision для ускорения на новых GPU
-        # torch.set_float32_matmul_precision('high')  # Временно отключено из-за warning
+        # torch.set_float32_matmul_precision('high')
 
         # Дополнительные оптимизации для Ampere+ архитектуры (RTX 5090)
-        # torch.backends.cuda.matmul.allow_tf32 = True  # Deprecated
-        # torch.backends.cudnn.allow_tf32 = True  # Deprecated
+        # TF32 optimizations disabled (deprecated in newer PyTorch)
 
         logger.info("✅ Глобальные GPU оптимизации включены")
     except Exception as e:
         logger.warning(f"Не удалось включить GPU оптимизации: {e}")
+
+
+def _get_ml_config(config) -> dict[str, Any]:
+    """Получает ML конфигурацию из разных форматов"""
+    # Если это Pydantic модель
+    if hasattr(config, 'ml'):
+        ml_config = config.ml
+        # Конвертируем Pydantic модель в dict
+        if hasattr(ml_config, 'model_dump'):
+            return {"ml": ml_config.model_dump()}
+        elif hasattr(ml_config, 'dict'):
+            return {"ml": ml_config.dict()}
+        else:
+            # Fallback для прямого доступа к атрибутам
+            return {
+                "ml": {
+                    "enabled": getattr(ml_config, 'enabled', True),
+                    "use_adapters": getattr(ml_config, 'use_adapters', True),
+                    "active_model": getattr(ml_config, 'active_model', 'patchtst'),
+                    "models": getattr(ml_config, 'models', {}),
+                    "model": getattr(ml_config, 'model', {})
+                }
+            }
+    # Если это обычный dict
+    elif isinstance(config, dict):
+        return config
+    else:
+        return {"ml": {}}
 
 
 class MLManager:
@@ -55,14 +91,36 @@ class MLManager:
         Инициализация ML менеджера.
 
         Args:
-            config: Конфигурация системы
+            config: Конфигурация системы (dict или Pydantic модель)
         """
-        self.config = config
+        self.original_config = config
+        self.config = _get_ml_config(config)
         self.model = None
         self.scaler = None
         self.feature_engineer = None
+        
+        # Инициализация адаптера если доступен
+        self.adapter = None
+        self.use_adapter = False
+        
+        # Проверяем возможность использования адаптеров
+        if ADAPTERS_AVAILABLE and self.config.get("ml", {}).get("use_adapters", True):
+            try:
+                self.adapter = ModelAdapterFactory.create_from_config(self.config)
+                if self.adapter:
+                    self.use_adapter = True
+                    logger.info("✅ ML Manager инициализирован с системой адаптеров")
+                else:
+                    logger.info("ML адаптер отключен в конфигурации, используем legacy режим")
+                    self.use_adapter = False
+            except Exception as e:
+                logger.warning(f"Не удалось инициализировать адаптер: {e}, используем legacy режим")
+                self.use_adapter = False
+        else:
+            logger.info("Адаптеры недоступны или отключены, используем legacy режим")
+            self.use_adapter = False
         # Получаем device из конфигурации
-        device_config = config.get("ml", {}).get("model", {}).get("device", "auto")
+        device_config = self.config.get("ml", {}).get("model", {}).get("device", "auto")
 
         # Детальная инициализация GPU с проверкой совместимости
         if device_config == "auto":
@@ -186,12 +244,12 @@ class MLManager:
 
         # Кэш моделей (для MLManager совместимости с тестами)
         self._model_cache = {}
-        self._cache_size = config.get("ml", {}).get("model_cache_size", 3)
-        self._memory_limit = config.get("ml", {}).get("memory_limit_mb", 1024)
+        self._cache_size = self.config.get("ml", {}).get("model_cache_size", 3)
+        self._memory_limit = self.config.get("ml", {}).get("memory_limit_mb", 1024)
 
         # Пути к моделям - используем абсолютные пути
         base_dir = Path(__file__).parent.parent  # Корень проекта
-        model_dir = base_dir / config.get("ml", {}).get("model_directory", "models/saved")
+        model_dir = base_dir / self.config.get("ml", {}).get("model_directory", "models/saved")
         self.model_path = model_dir / "best_model_20250728_215703.pth"
         self.scaler_path = model_dir / "data_scaler.pkl"
 
@@ -201,13 +259,26 @@ class MLManager:
         self.num_targets = 20  # Модель выдает 20 выходов
 
         # Инициализируем анализатор качества сигналов
-        self.quality_analyzer = SignalQualityAnalyzer(config)
+        self.quality_analyzer = SignalQualityAnalyzer(self.config)
 
         logger.info(f"MLManager initialized, device: {self.device}")
 
     async def initialize(self):
         """Инициализация и загрузка моделей"""
         try:
+            # Если используем адаптер, делегируем инициализацию ему
+            if self.use_adapter and self.adapter:
+                await self.adapter.load()
+                success = True
+                if success:
+                    self._initialized = True
+                    logger.info("✅ ML components initialized via adapter")
+                    return
+                else:
+                    logger.error("Не удалось загрузить модель через адаптер, используем legacy режим")
+                    self.use_adapter = False
+            
+            # Обратная совместимость с классической инициализацией
             # Регистрируемся в координаторе воркеров с soft-fail режимом
             await worker_coordinator.start()
             self.worker_id = await worker_coordinator.register_worker(
@@ -365,6 +436,26 @@ class MLManager:
             Dict с предсказаниями и рекомендациями
         """
         try:
+            # Если используем адаптер, делегируем ему
+            if self.use_adapter and self.adapter:
+                # Передаем данные в адаптер как есть - он сам определит что делать
+                # DataFrame с OHLCV -> feature engineering внутри адаптера
+                # numpy array -> уже готовые признаки
+                
+                # Проверяем валидность входных данных
+                is_valid = self.adapter.validate_input(input_data)
+                if not is_valid:
+                    raise ValueError("Invalid input data for adapter prediction")
+                
+                # Делаем предсказание через адаптер
+                result = await self.adapter.predict(input_data)
+                
+                # Адаптер уже возвращает dict, но проверим на всякий случай
+                if hasattr(result, 'to_dict'):
+                    return result.to_dict()
+                return result
+            
+            # Обратная совместимость
             # ВАЛИДАЦИЯ: Проверяем что модель инициализирована
             if not self._initialized or self.model is None:
                 raise ValueError("ML model not initialized. Call initialize() first.")
@@ -403,7 +494,7 @@ class MLManager:
 
             # Если это DataFrame - обрабатываем как OHLCV данные
             else:
-                # ИСПРАВЛЕНО: Правильная обработка DataFrame с async/await логикой
+                # Обработка DataFrame
                 # Проверяем количество данных
                 if len(input_data) < self.context_length:
                     raise ValueError(
@@ -459,101 +550,103 @@ class MLManager:
                         f"Expected DataFrame or np.ndarray from create_features, got {type(features_result)}"
                     )
 
-                # Берем только последние context_length строк
+                # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ВХОДНЫХ ПРИЗНАКОВ (всегда показываем таблицы!)
+                if hasattr(self, "feature_engineer") and hasattr(
+                    self.feature_engineer, "feature_names"
+                ):
+                    feature_names = self.feature_engineer.feature_names
+                else:
+                    # Загружаем из конфигурации
+                    from ml.config.features_240 import get_required_features_list
+
+                    feature_names = get_required_features_list()
+
+                # Берем последние context_length строк или все если меньше
+                logger.info(f"🔍 Подготовка данных: features_array.shape={features_array.shape}, context_length={self.context_length}")
                 if len(features_array) >= self.context_length:
                     features = features_array[-self.context_length :]
-
-                    # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ВХОДНЫХ ПРИЗНАКОВ
-                    if hasattr(self, "feature_engineer") and hasattr(
-                        self.feature_engineer, "feature_names"
-                    ):
-                        feature_names = self.feature_engineer.feature_names
-                    else:
-                        # Загружаем из конфигурации
-                        from ml.config.features_240 import get_required_features_list
-
-                        feature_names = get_required_features_list()
-
-                    # Берем последнюю строку для логирования текущих значений
-                    current_features = features[-1] if len(features) > 0 else features[0]
-
-                    # Создаем красивую таблицу с входными признаками
-                    features_table = []
-                    features_table.append(
-                        "\n╔══════════════════════════════════════════════════════════════════════╗"
-                    )
-                    features_table.append(
-                        f"║            ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ - {len(current_features)} ПРИЗНАКОВ             ║"
-                    )
-                    features_table.append(
-                        "╠══════════════════════════════════════════════════════════════════════╣"
-                    )
-
-                    # Ключевые индикаторы для быстрого просмотра
-                    key_indicators = [
-                        ("returns", 0),
-                        ("rsi", 9),
-                        ("macd", 12),
-                        ("bb_position", 19),
-                        ("atr_pct", 24),
-                        ("stoch_k", 25),
-                        ("adx", 27),
-                        ("volume_ratio", 4),
-                        ("obv_trend", 71),
-                        ("momentum_1h", 115),
-                        ("trend_1h", 124),
-                        ("signal_strength", 139),
-                    ]
-
-                    features_table.append(
-                        "║ 🎯 КЛЮЧЕВЫЕ ИНДИКАТОРЫ:                                             ║"
-                    )
-                    for i in range(0, len(key_indicators), 2):
-                        if i < len(key_indicators):
-                            name1, idx1 = key_indicators[i]
-                            val1 = current_features[idx1] if idx1 < len(current_features) else 0
-
-                            if i + 1 < len(key_indicators):
-                                name2, idx2 = key_indicators[i + 1]
-                                val2 = current_features[idx2] if idx2 < len(current_features) else 0
-                                features_table.append(
-                                    f"║   • {name1:15s}: {val1:>8.4f}  │  {name2:15s}: {val2:>8.4f}  ║"
-                                )
-                            else:
-                                features_table.append(
-                                    f"║   • {name1:15s}: {val1:>8.4f}  │                                  ║"
-                                )
-
-                    # Статистика по признакам
-                    nan_count = np.sum(np.isnan(current_features))
-                    zero_count = np.sum(current_features == 0)
-                    mean_val = np.nanmean(current_features)
-                    std_val = np.nanstd(current_features)
-
-                    features_table.append(
-                        "╟──────────────────────────────────────────────────────────────────────╢"
-                    )
-                    features_table.append(
-                        "║ 📊 СТАТИСТИКА ПРИЗНАКОВ:                                            ║"
-                    )
-                    features_table.append(
-                        f"║   • Всего признаков: {len(current_features):<6} • NaN: {nan_count:<6} • Zeros: {zero_count:<6}         ║"
-                    )
-                    features_table.append(
-                        f"║   • Mean: {mean_val:>8.4f}  • Std: {std_val:>8.4f}                           ║"
-                    )
-                    features_table.append(
-                        "╚══════════════════════════════════════════════════════════════════════╝"
-                    )
-
-                    # Выводим таблицу одним блоком
-                    logger.info("\n".join(features_table))
-
+                    logger.info(f"✅ Использую последние {self.context_length} строк, features.shape={features.shape}")
                 else:
                     # Если данных меньше чем нужно - дополняем нулями (padding)
                     padding_size = self.context_length - len(features_array)
                     padding = np.zeros((padding_size, features_array.shape[1]))
                     features = np.vstack([padding, features_array])
+                    logger.info(f"✅ Добавил padding {padding_size} строк, features.shape={features.shape}")
+
+                # Берем последнюю строку для логирования текущих значений  
+                current_features = features[-1] if len(features) > 0 else features[0]
+
+                # Создаем красивую таблицу с входными признаками
+                features_table = []
+                features_table.append(
+                    "\n╔══════════════════════════════════════════════════════════════════════╗"
+                )
+                features_table.append(
+                    f"║            ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ - {len(current_features)} ПРИЗНАКОВ             ║"
+                )
+                features_table.append(
+                    "╠══════════════════════════════════════════════════════════════════════╣"
+                )
+
+                # Ключевые индикаторы для быстрого просмотра
+                key_indicators = [
+                    ("returns", 0),
+                    ("rsi", 9),
+                    ("macd", 12),
+                    ("bb_position", 19),
+                    ("atr_pct", 24),
+                    ("stoch_k", 25),
+                    ("adx", 27),
+                    ("volume_ratio", 4),
+                    ("obv_trend", 71),
+                    ("momentum_1h", 115),
+                    ("trend_1h", 124),
+                    ("signal_strength", 139),
+                ]
+
+                features_table.append(
+                    "║ 🎯 КЛЮЧЕВЫЕ ИНДИКАТОРЫ:                                             ║"
+                )
+                for i in range(0, len(key_indicators), 2):
+                    if i < len(key_indicators):
+                        name1, idx1 = key_indicators[i]
+                        val1 = current_features[idx1] if idx1 < len(current_features) else 0
+
+                        if i + 1 < len(key_indicators):
+                            name2, idx2 = key_indicators[i + 1]
+                            val2 = current_features[idx2] if idx2 < len(current_features) else 0
+                            features_table.append(
+                                f"║   • {name1:15s}: {val1:>8.4f}  │  {name2:15s}: {val2:>8.4f}  ║"
+                            )
+                        else:
+                            features_table.append(
+                                f"║   • {name1:15s}: {val1:>8.4f}  │                                  ║"
+                            )
+
+                # Статистика по признакам
+                nan_count = np.sum(np.isnan(current_features))
+                zero_count = np.sum(current_features == 0)
+                mean_val = np.nanmean(current_features)
+                std_val = np.nanstd(current_features)
+
+                features_table.append(
+                    "╟──────────────────────────────────────────────────────────────────────╢"
+                )
+                features_table.append(
+                    "║ 📊 СТАТИСТИКА ПРИЗНАКОВ:                                            ║"
+                )
+                features_table.append(
+                    f"║   • Всего признаков: {len(current_features):<6} • NaN: {nan_count:<6} • Zeros: {zero_count:<6}         ║"
+                )
+                features_table.append(
+                    f"║   • Mean: {mean_val:>8.4f}  • Std: {std_val:>8.4f}                           ║"
+                )
+                features_table.append(
+                    "╚══════════════════════════════════════════════════════════════════════╝"
+                )
+
+                # Выводим таблицу одним блоком
+                logger.info("\n".join(features_table))
 
                 # Нормализуем данные с помощью загруженного scaler
                 features_scaled = self.scaler.transform(features)
@@ -587,32 +680,7 @@ class MLManager:
             # Преобразуем в тензор
             x = torch.FloatTensor(features_scaled).unsqueeze(0).to(self.device)
 
-            # РАСШИРЕННАЯ ДИАГНОСТИКА ВХОДНЫХ ДАННЫХ
-            logger.warning(
-                f"""
-🔍 ML ВХОДНЫЕ ДАННЫЕ - ДЕТАЛЬНЫЙ АНАЛИЗ:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Feature Statistics:
-   Shape: {features_scaled.shape}
-   Min: {features_scaled.min():.6f}
-   Max: {features_scaled.max():.6f}
-   Mean: {features_scaled.mean():.6f}
-   Std: {features_scaled.std():.6f}
-
-📈 Первые 10 признаков (последняя временная точка):
-   {features_scaled[-1, :10]}
-
-🎯 Проверка данных:
-   NaN count: {np.isnan(features_scaled).sum()}
-   Inf count: {np.isinf(features_scaled).sum()}
-   Zero variance features: {(features_scaled.std(axis=0) < 1e-6).sum()}
-   🔍 Variance statistics:
-     Min std: {features_scaled.std(axis=0).min():.8f}
-     Max std: {features_scaled.std(axis=0).max():.8f}
-     Mean std: {features_scaled.std(axis=0).mean():.8f}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-            )
+            # Краткая техническая информация для отладки (красивые таблицы уже выше)
             logger.debug(f"Input tensor shape: {x.shape}")
 
             # Мониторинг GPU памяти перед inference
@@ -906,14 +974,17 @@ class MLManager:
         if not filter_result.passed:
             # Сигнал не прошел фильтры качества
             signal_type = "NEUTRAL"
-            signal_strength = 0.25  # Минимальное значение
-            combined_confidence = 0.25
+            # Используем реальные метрики даже для отклоненных сигналов
+            metrics = filter_result.quality_metrics
+            signal_strength = metrics.agreement_score if metrics else 0.25
+            combined_confidence = metrics.confidence_score if metrics else 0.25
             stop_loss_pct = None
             take_profit_pct = None
 
             logger.warning(
                 f"🚫 Сигнал отклонен анализатором качества. "
-                f"Причины: {'; '.join(filter_result.rejection_reasons)}"
+                f"Причины: {'; '.join(filter_result.rejection_reasons)} "
+                f"(real confidence: {combined_confidence:.3f})"
             )
         else:
             # Сигнал прошел фильтры - используем результат анализа

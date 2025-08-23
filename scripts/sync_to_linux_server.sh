@@ -4,7 +4,7 @@
 # Использование: ./scripts/sync_to_linux_server.sh
 
 # Конфигурация
-PASSWORD="ilpnqw1234"
+PASSWORD="${PASSWORD:-your-password-here}"  # Используем переменную окружения
 REMOTE_USER="obertruper"
 REMOTE_PATH="/mnt/SSD/PYCHARMPRODJECT/BOT_Trading_v3"
 LOCAL_PATH="."

@@ -16,7 +16,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.dialects.postgresql import insert
 
 from core.logger import setup_logger
-from database.connections import get_async_db
+from database.db_manager import get_db
 from database.models.market_data import ProcessedMarketData, RawMarketData
 from ml.logic.feature_engineering_production import ProductionFeatureEngineer as FeatureEngineer
 
@@ -100,7 +100,7 @@ class RealTimeIndicatorCalculator:
                 f"create_features returned type: {type(features_result)}, shape: {getattr(features_result, 'shape', 'no shape')}"
             )
 
-            # ИСПРАВЛЕНО: Используем точный список признаков из конфигурации
+            # Используем точный список признаков из конфигурации
             if isinstance(features_result, pd.DataFrame):
                 # Используем ТОЛЬКО признаки из REQUIRED_FEATURES_231
                 available_cols = features_result.columns.tolist()

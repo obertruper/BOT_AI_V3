@@ -1,0 +1,120 @@
+# Конфигурация мульти-крипто трейдера для 10 валют
+# Генерация сигналов каждую минуту
+
+trader:
+  id: "multi_crypto_trader_10"
+  name: "Multi Crypto Trader - 10 Symbols"
+  enabled: true
+  exchange: "bybit"
+
+  # 10 основных криптовалют для торговли
+  symbols:
+    - "BTCUSDT"   # Bitcoin
+    - "ETHUSDT"   # Ethereum
+    - "BNBUSDT"   # Binance Coin
+    - "SOLUSDT"   # Solana
+    - "XRPUSDT"   # Ripple
+    - "ADAUSDT"   # Cardano
+    - "DOGEUSDT"  # Dogecoin
+    - "DOTUSDT"   # Polkadot
+    - "LINKUSDT"  # Chainlink
+    - "MATICUSDT" # Polygon
+
+  # Стратегия с индикаторами
+  strategy: "IndicatorStrategy"
+
+  strategy_config:
+    # Генерация сигналов каждые 3 минуты
+    signal_interval: 180  # секунд (изменено: раз в 3 минуты)
+
+    # Индикаторы для генерации сигналов
+    indicators:
+      - type: "RSI"
+        period: 14
+        overbought: 70
+        oversold: 30
+
+      - type: "EMA"
+        short_period: 9
+        long_period: 21
+
+      - type: "MACD"
+        fast_period: 12
+        slow_period: 26
+        signal_period: 9
+
+      - type: "BB"  # Bollinger Bands
+        period: 20
+        std_dev: 2
+
+    # Условия для входа
+    entry_conditions:
+      buy:
+        - rsi_oversold: true
+        - ema_crossover: "bullish"
+        - price_below_bb_lower: true
+      sell:
+        - rsi_overbought: true
+        - ema_crossover: "bearish"
+        - price_above_bb_upper: true
+
+    # Минимальное время между сделками
+    min_time_between_trades: 300  # 5 минут
+
+  # Управление рисками (из BOT_AI_V2)
+  risk_management:
+    max_risk_per_trade: 0.02  # 2% от баланса
+    fixed_risk_balance: 500
+    max_positions: 10  # По одной позиции на каждую валюту
+    max_positions_per_symbol: 1
+
+    # Стоп-лосс и тейк-профит (из BOT_AI_V2)
+    stop_loss:
+      enabled: false  # Отключено как в V2
+      type: "percentage"
+      value: 0.02
+
+    take_profit:
+      enabled: true
+      type: "percentage"
+      buy_value: 0.058   # 5.8% как в V2 (1.058)
+      sell_value: -0.058 # -5.8% как в V2 (0.942)
+
+    # Трейлинг стоп (из enhanced_sltp в V2)
+    trailing_stop:
+      enabled: true
+      activation_percent: 0.045  # 4.5%
+      step_percent: 0.002       # 0.2%
+      min_distance: 0.003       # 0.3%
+
+    # Частичный тейк-профит (из V2)
+    partial_take_profit:
+      enabled: true
+      levels:
+        - percent: 1.2   # 1.2%
+          close_ratio: 0.20
+        - percent: 2.4   # 2.4%
+          close_ratio: 0.30
+        - percent: 3.5   # 3.5%
+          close_ratio: 0.30
+
+  # Параметры исполнения
+  execution:
+    leverage: 5  # Из BOT_AI_V2
+    order_type: "market"
+    time_in_force: "GTC"
+
+  # Мониторинг
+  monitoring:
+    enabled: true
+    telegram_notifications: true
+    log_trades: true
+    performance_tracking: true
+
+# Расписание работы
+schedule:
+  # Работает 24/7
+  active_hours: "all"
+
+  # Перезапуск каждые 24 часа для очистки памяти
+  restart_interval: 86400  # секунд

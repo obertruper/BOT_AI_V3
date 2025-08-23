@@ -112,9 +112,10 @@ class TestTradingOperations:
     @pytest.mark.asyncio
     async def test_position_management(self):
         """Тест управления позициями"""
-        from trading.positions.position_manager import PositionManager
+        from trading.position_tracker import EnhancedPositionTracker
 
-        manager = PositionManager()
+        # Обновлено с PositionManager на EnhancedPositionTracker
+        manager = EnhancedPositionTracker()
         assert manager is not None
         assert hasattr(manager, "get_positions")
 

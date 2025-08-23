@@ -59,6 +59,10 @@ class Signal(BaseModel):
         JSON, nullable=True, name="metadata"
     )
 
+    # Статус и обработка
+    status: Mapped[str | None] = mapped_column(String(20), nullable=True, default="active")
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Временные метки - created_at и updated_at наследуются от BaseModel
 
     def __repr__(self) -> str:
@@ -87,7 +91,13 @@ class Signal(BaseModel):
                 float(self.suggested_quantity) if self.suggested_quantity else None
             ),
             "strategy_name": self.strategy_name,
+            "timeframe": self.timeframe,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "indicators": self.indicators,
+            "extra_data": self.extra_data,
             "metadata": self.signal_metadata,
+            "status": self.status,
+            "processed_at": self.processed_at.isoformat() if self.processed_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

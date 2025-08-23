@@ -15,7 +15,7 @@ from typing import Any
 
 from core.exceptions import SignalProcessingError
 from core.logger import setup_logger
-from database.connections.postgres import AsyncPGPool
+from database.db_manager import get_db
 from database.models.base_models import Order, OrderSide, OrderType, SignalType
 
 logger = setup_logger("unified_signal_processor")
@@ -259,8 +259,8 @@ class UnifiedSignalProcessor:
             RETURNING id
             """
 
-            pool = await AsyncPGPool.get_pool()
-            signal_id = await pool.fetchval(
+            db_manager = await get_db()
+            signal_id = await db_manager.execute(
                 query,
                 signal["symbol"],
                 signal["exchange"],
@@ -363,8 +363,8 @@ class UnifiedSignalProcessor:
             RETURNING id
             """
 
-            pool = await AsyncPGPool.get_pool()
-            order_id = await pool.fetchval(
+            db_manager = await get_db()
+            order_id = await db_manager.execute(
                 query,
                 order.exchange,
                 order.symbol,
@@ -386,8 +386,8 @@ class UnifiedSignalProcessor:
     async def _get_today_trades_count(self) -> int:
         """Получает количество сделок за сегодня"""
         try:
-            pool = await AsyncPGPool.get_pool()
-            count = await pool.fetchval(
+            db_manager = await get_db()
+            count = await db_manager.execute(
                 """
                 SELECT COUNT(*) FROM orders
                 WHERE created_at > CURRENT_DATE
@@ -401,8 +401,8 @@ class UnifiedSignalProcessor:
     async def _get_open_positions(self, symbol: str) -> int:
         """Получает количество открытых позиций по символу"""
         try:
-            pool = await AsyncPGPool.get_pool()
-            count = await pool.fetchval(
+            db_manager = await get_db()
+            count = await db_manager.execute(
                 """
                 SELECT COUNT(*) FROM orders
                 WHERE symbol = $1

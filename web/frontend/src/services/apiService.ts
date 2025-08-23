@@ -151,7 +151,7 @@ export interface AlertRule {
 }
 
 class ApiService {
-  private baseURL = 'http://localhost:8083/api';
+  private baseURL = import.meta.env.VITE_API_URL || '/api';
 
   async getSystemStatus(): Promise<SystemStatus> {
     try {

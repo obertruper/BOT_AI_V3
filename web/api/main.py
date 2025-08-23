@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -57,12 +57,13 @@ _trader_manager: Any = None
 _exchange_factory: Any = None
 _config_manager: ConfigManager = None
 _web_bridge: WebOrchestratorBridge = None
+_websocket_manager: WebSocketManager = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом FastAPI приложения"""
-    global _web_bridge, _orchestrator
+    global _web_bridge, _orchestrator, _websocket_manager
 
     # Startup
     logger = logging.getLogger("web_api")
@@ -84,12 +85,18 @@ async def lifespan(app: FastAPI):
         # Продолжаем в mock режиме
         _web_bridge = await initialize_web_bridge(None)
 
+    # Инициализация WebSocket менеджера
+    _websocket_manager = WebSocketManager()
+    logger.info("WebSocket manager initialized")
+
     yield
 
     # Shutdown
     logger.info("Shutting down BOT_Trading v3.0 Web API...")
     if _web_bridge:
         await _web_bridge.shutdown()
+    if _websocket_manager:
+        await _websocket_manager.disconnect_all()
 
 
 # Создание FastAPI приложения
@@ -137,11 +144,14 @@ from web.api.endpoints import (
     orders_router,
     positions_router,
     strategies_router,
+    system_router,
     traders_router,
 )
 from web.api.endpoints.position_tracking import router as position_tracking_router
 from web.api.endpoints.testing import router as testing_router
+from web.api.endpoints.ml_visualization import router as ml_viz_router
 from web.api.ml_api import router as ml_router
+from web.api.websocket_manager import WebSocketManager
 
 # Подключаем роутеры к приложению
 app.include_router(monitoring_router)
@@ -152,8 +162,43 @@ app.include_router(testing_router)  # Testing endpoints
 app.include_router(traders_router)
 app.include_router(exchanges_router)
 app.include_router(strategies_router)
+app.include_router(system_router)  # System endpoints
 app.include_router(auth_router)
 app.include_router(ml_router)
+app.include_router(ml_viz_router)  # ML Visualization endpoints
+
+
+# =================== WEBSOCKET ЭНДПОИНТ ===================
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket эндпоинт для real-time коммуникации"""
+    global _websocket_manager
+    
+    if not _websocket_manager:
+        await websocket.close(code=1011, reason="WebSocket manager not initialized")
+        return
+        
+    await _websocket_manager.connect(websocket)
+    try:
+        while True:
+            # Получаем сообщение от клиента
+            data = await websocket.receive_text()
+            
+            # Обрабатываем сообщение и отправляем ответ
+            # Здесь можно добавить логику обработки разных типов сообщений
+            await _websocket_manager.send_personal_message(
+                f"Echo: {data}", 
+                websocket
+            )
+            
+            # Также можно отправлять broadcast сообщения всем клиентам
+            # await _websocket_manager.broadcast(f"Client said: {data}")
+            
+    except WebSocketDisconnect:
+        _websocket_manager.disconnect(websocket)
+        # Можно уведомить других клиентов об отключении
+        # await _websocket_manager.broadcast(f"Client disconnected")
 
 
 # =================== DEPENDENCY INJECTION ===================

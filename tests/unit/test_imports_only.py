@@ -48,9 +48,9 @@ class TestTradingImports:
         """Тест импортов торгового движка"""
         from trading.engine import TradingEngine
         from trading.orders.order_manager import OrderManager
-        from trading.positions.position_manager import PositionManager
+        from trading.position_tracker import EnhancedPositionTracker  # Обновлено с PositionManager
 
-        assert all([TradingEngine, OrderManager, PositionManager])
+        assert all([TradingEngine, OrderManager, EnhancedPositionTracker])
 
     def test_signal_imports(self):
         """Тест импортов обработки сигналов"""

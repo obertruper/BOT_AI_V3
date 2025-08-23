@@ -1,0 +1,1 @@
+scripts/deployment/start_all.sh

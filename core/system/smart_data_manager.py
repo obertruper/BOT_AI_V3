@@ -12,7 +12,7 @@ import pandas as pd
 from core.cache.market_data_cache import MarketDataCache
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
-from database.connections.postgres import AsyncPGPool
+from database.db_manager import get_db
 from exchanges.factory import ExchangeFactory
 
 logger = setup_logger(__name__)
@@ -44,6 +44,9 @@ class SmartDataManager:
             },
         )
 
+        # Инициализация компонентов
+        self.db_manager = None
+        
         # Инициализация кеша
         self.cache = MarketDataCache(
             cache_size=self.data_config.get("cache_size", 1000),
@@ -89,7 +92,10 @@ class SmartDataManager:
         logger.info("🚀 Запуск SmartDataManager...")
 
         try:
-            # 1. Инициализация бирж
+            # 1. Инициализация DBManager
+            self.db_manager = await get_db()
+            
+            # 2. Инициализация бирж
             await self._initialize_exchanges()
 
             # 2. Загрузка исторических данных из БД или API
@@ -234,7 +240,7 @@ class SmartDataManager:
     async def _load_from_database(self, symbol: str) -> pd.DataFrame | None:
         """Загрузка данных из БД"""
         try:
-            result = await AsyncPGPool.fetch(
+            result = await self.db_manager.fetch_all(
                 """
                 SELECT timestamp, datetime, open, high, low, close, volume, turnover
                 FROM raw_market_data
@@ -441,7 +447,7 @@ class SmartDataManager:
         try:
             timestamp = int(candle_data["timestamp"].timestamp() * 1000)
 
-            await AsyncPGPool.execute(
+            await self.db_manager.execute(
                 """
                 INSERT INTO raw_market_data
                 (symbol, timestamp, datetime, open, high, low, close, volume,
@@ -478,7 +484,7 @@ class SmartDataManager:
             try:
                 candle_data = None
                 if isinstance(candle, list) and len(candle) >= 6:
-                    # Старый формат - массив
+                    # Legacy format - array
                     candle_data = {
                         "timestamp": self._ensure_utc_timestamp(
                             pd.Timestamp(int(candle[0]), unit="ms")
@@ -512,7 +518,7 @@ class SmartDataManager:
         data = []
         for candle in candles:
             if isinstance(candle, list) and len(candle) >= 6:
-                # Старый формат - массив
+                # Legacy format - array
                 data.append(
                     {
                         "datetime": self._ensure_utc_timestamp(

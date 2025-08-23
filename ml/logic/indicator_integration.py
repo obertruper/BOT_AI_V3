@@ -3,7 +3,7 @@
 """
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -35,7 +35,7 @@ class FeatureEngineerWithIndicators(FeatureEngineer):
     Расширенный FeatureEngineer с интеграцией существующих индикаторов проекта
     """
 
-    def __init__(self, config=None, indicator_manager: IndicatorManager | None = None):
+    def __init__(self, config=None, indicator_manager: Optional["IndicatorManager"] = None):
         """
         Инициализация с поддержкой indicator manager
 

@@ -60,8 +60,8 @@ echo -e "${GREEN}✅${NC} Сервис файл создан: $SERVICE_FILE"
 echo ""
 echo "2️⃣ Установка systemd сервиса..."
 echo "Требуется пароль для sudo:"
-echo "ilpnqw1234" | sudo -S cp "$SERVICE_FILE" "/etc/systemd/system/${SERVICE_NAME}.service"
-echo "ilpnqw1234" | sudo -S systemctl daemon-reload
+echo "${SUDO_PASSWORD:-your-password-here}" | sudo -S cp "$SERVICE_FILE" "/etc/systemd/system/${SERVICE_NAME}.service"  # Используем переменную окружения
+echo "${SUDO_PASSWORD:-your-password-here}" | sudo -S systemctl daemon-reload
 
 echo -e "${GREEN}✅${NC} Сервис установлен"
 
@@ -114,7 +114,7 @@ echo -e "${GREEN}✅${NC} Скрипты управления созданы"
 # 4. Настройка автозапуска
 echo ""
 echo "4️⃣ Настройка автозапуска при загрузке системы..."
-echo "ilpnqw1234" | sudo -S systemctl enable "$SERVICE_NAME" 2>/dev/null
+echo "${SUDO_PASSWORD:-your-password-here}" | sudo -S systemctl enable "$SERVICE_NAME" 2>/dev/null
 echo -e "${GREEN}✅${NC} Автозапуск настроен"
 
 # 5. Создание локального деплой хука

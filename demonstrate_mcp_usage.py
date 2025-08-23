@@ -30,7 +30,7 @@ class MCPDatabaseManager:
             "port": 5555,
             "database": "bot_trading_v3",
             "user": "obertruper",
-            "password": "ilpnqw1234",
+            "password": "your-password-here",  # Заменено для безопасности
         }
         logger.info("✅ MCPDatabaseManager инициализирован")
 

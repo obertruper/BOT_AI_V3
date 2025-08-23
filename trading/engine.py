@@ -19,11 +19,10 @@ from core.system.rate_limiter import rate_limiter
 from core.system.signal_deduplicator import signal_deduplicator
 from core.system.worker_coordinator import worker_coordinator
 
-# Импортируем необходимые модели для работы с ордерами
-# from database.repositories.signal_repository import SignalRepository  # Старый репозиторий с дублированием
-from database.repositories.signal_repository_fixed import (
-    SignalRepositoryFixed as SignalRepository,  # Исправленный
-)
+# Импортируем новую архитектуру БД
+from database.db_manager import get_db
+from database.repositories.order_repository import OrderRepository
+from database.repositories.signal_repository import SignalRepository
 from database.repositories.trade_repository import TradeRepository
 
 # Импортируем модели для создания ордеров
@@ -34,7 +33,7 @@ from strategies.manager import StrategyManager
 
 from .execution.executor import ExecutionEngine
 from .orders.order_manager import OrderManager
-from .positions.position_manager import PositionManager
+# from .positions.position_manager import PositionManager  # Удален legacy класс
 from .position_tracker import EnhancedPositionTracker, get_position_tracker
 
 
@@ -98,7 +97,7 @@ class TradingEngine:
 
         # Основные компоненты
         self.signal_processor = None  # Пока не используется, заменен на ML сигналы через ml_manager
-        self.position_manager: PositionManager | None = None
+        # self.position_manager: PositionManager | None = None  # Legacy, заменен на position_tracker
         self.position_tracker: EnhancedPositionTracker | None = None  # Enhanced Position Tracker
         self.order_manager: OrderManager | None = None
         self.execution_engine: ExecutionEngine | None = None
@@ -107,9 +106,11 @@ class TradingEngine:
         self.exchange_registry: ExchangeManager | None = None
         self.enhanced_sltp_manager = None  # Будет инициализирован в initialize()
 
-        # Репозитории
+        # Менеджер БД и репозитории
+        self._db_manager = None
         self.trade_repository: TradeRepository | None = None
         self.signal_repository: SignalRepository | None = None
+        self.order_repository: OrderRepository | None = None
 
         # Очереди для обработки
         self.signal_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
@@ -120,7 +121,6 @@ class TradingEngine:
         self._instrument_cache: dict[str, Any] = {}  # Кеш информации об инструментах
         self._recent_signal_times: dict[str, float] = {}  # Защита от частых сигналов
         self._last_sync: datetime | None = None
-        self._db_session_factory: Any | None = None
 
     async def initialize(self) -> bool:
         """Инициализация торгового движка"""
@@ -232,10 +232,8 @@ class TradingEngine:
         # Закомментируем пока, так как UnifiedSignalProcessor не подходит для наших нужд
         self.signal_processor = None  # Будем обрабатывать сигналы напрямую
 
-        # Position Manager
-        self.position_manager = PositionManager(
-            exchange_registry=self.exchange_registry,
-        )
+        # Position Manager (обновлено на Enhanced Position Tracker)
+        # Используем position_tracker вместо старого position_manager
 
         # Enhanced Position Tracker - инициализируем после Exchange Manager
         try:
@@ -317,18 +315,23 @@ class TradingEngine:
     async def _initialize_repositories(self):
         """Инициализация репозиториев БД"""
         try:
-            # Импортируем фабрику сессий напрямую
-            from database.connections import get_async_db
+            # Инициализируем менеджер БД
+            self._db_manager = await get_db()
+            
+            # Получаем репозитории через менеджер
+            self.order_repository = self._db_manager.get_order_repository()
+            self.trade_repository = self._db_manager.get_trade_repository()
+            self.signal_repository = self._db_manager.get_signal_repository()
 
-            # Сохраняем фабрику сессий для использования в репозиториях
-            self._db_session_factory = get_async_db
-
-            self.logger.info("Фабрика сессий БД настроена для репозиториев")
+            self.logger.info("Репозитории БД инициализированы через DBManager")
 
         except Exception as e:
             self.logger.error(f"Ошибка инициализации репозиториев: {e}")
             # Не прерываем инициализацию - можем работать без БД
-            self._db_session_factory = None
+            self._db_manager = None
+            self.order_repository = None
+            self.trade_repository = None
+            self.signal_repository = None
             self.logger.warning("Trading Engine будет работать без БД")
 
     async def _health_check(self):
@@ -381,7 +384,6 @@ class TradingEngine:
 
             # Запуск компонентов
             await self.strategy_manager.start()
-            # await self.signal_processor.start()  # Отключен
             await self.position_manager.start()
             await self.order_manager.start()
             await self.execution_engine.start()
@@ -436,8 +438,6 @@ class TradingEngine:
                 await self.order_manager.stop()
             if self.position_manager:
                 await self.position_manager.stop()
-            # if self.signal_processor:
-            #     await self.signal_processor.stop()  # Отключен
             if self.strategy_manager:
                 await self.strategy_manager.stop()
 
@@ -534,7 +534,16 @@ class TradingEngine:
             #     self.logger.warning(f"Сигнал {signal_id} отклонен по риск-менеджменту")
             #     return
 
-            # КРИТИЧНО: Проверяем существующие позиции перед созданием новых ордеров
+            # КРИТИЧНО: Проверяем и закрываем противоположные позиции
+            opposite_position = await self._check_and_close_opposite_position(signal.symbol, signal.signal_type)
+            if opposite_position:
+                self.logger.info(
+                    f"🔄 Закрыта противоположная позиция для {signal.symbol} перед открытием {signal.signal_type}"
+                )
+                # Даем время на закрытие позиции
+                await asyncio.sleep(2)
+            
+            # Проверяем существующие позиции в том же направлении
             if await self._has_existing_position(signal.symbol, signal.signal_type):
                 self.logger.info(
                     f"⚠️ Уже есть позиция {signal.signal_type} для {signal.symbol}, пропускаем сигнал"
@@ -564,29 +573,13 @@ class TradingEngine:
                 self.logger.warning(f"⚠️ Не создано ни одного ордера для сигнала {signal.symbol}")
 
             # Сохранение в БД
-            if self._db_session_factory:
-                async with self._db_session_factory() as db:
-                    signal_repo = SignalRepository(db)
-                    # Конвертируем объект Signal в словарь для репозитория
-                    signal_dict = {
-                        "symbol": signal.symbol,
-                        "exchange": signal.exchange,
-                        "signal_type": (
-                            signal.signal_type.value.upper()
-                            if hasattr(signal.signal_type, "value")
-                            else str(signal.signal_type).upper()
-                        ),
-                        "strength": signal.strength,
-                        "confidence": signal.confidence,
-                        "suggested_price": signal.suggested_price,
-                        "suggested_quantity": getattr(signal, "suggested_position_size", None),
-                        "suggested_stop_loss": signal.suggested_stop_loss,
-                        "suggested_take_profit": signal.suggested_take_profit,
-                        "strategy_name": signal.strategy_name,
-                        "created_at": signal.created_at,
-                        "extra_data": getattr(signal, "signal_metadata", {}),
-                    }
-                    await signal_repo.save_signal(signal_dict)
+            if self.signal_repository:
+                try:
+                    # Используем новый репозиторий
+                    await self.signal_repository.save_signal(signal)
+                    self.logger.debug(f"Сигнал {signal.symbol} сохранён в БД")
+                except Exception as e:
+                    self.logger.error(f"Ошибка сохранения сигнала в БД: {e}")
 
             self.logger.info(f"✅ Сигнал {signal_id} полностью обработан")
 
@@ -762,14 +755,15 @@ class TradingEngine:
                 total_pnl = await self.position_manager.calculate_total_pnl()
                 self.metrics.total_pnl = total_pnl
 
-            if self._db_session_factory:
-                # Обновление статистики торговли
-                async with self._db_session_factory() as db:
-                    trade_repo = TradeRepository(db)
-                    trades_stats = await trade_repo.get_trading_stats()
+            if self.trade_repository:
+                try:
+                    # Обновление статистики торговли через новый репозиторий
+                    trades_stats = await self.trade_repository.get_trading_stats()
                     self.metrics.trades_completed = trades_stats.get("total_trades", 0)
                     self.metrics.win_rate = trades_stats.get("win_rate", 0.0)
                     self.metrics.total_volume = trades_stats.get("total_volume", Decimal("0"))
+                except Exception as e:
+                    self.logger.error(f"Ошибка получения статистики торговли: {e}")
 
             # Обновление времени работы
             if self.metrics.start_time:
@@ -869,8 +863,8 @@ class TradingEngine:
                     self.execution_engine.is_running() if self.execution_engine else False
                 ),
                 "risk_manager": (
-                    self.risk_manager.is_running() if self.risk_manager else None
-                ),  # TODO: включить после реализации
+                    self.risk_manager.is_running() if self.risk_manager else False
+                ),
                 "strategy_manager": (
                     self.strategy_manager.is_running() if self.strategy_manager else False
                 ),
@@ -1232,6 +1226,64 @@ class TradingEngine:
             return value
         return (value / step).quantize(Decimal("1"), rounding="ROUND_DOWN") * step
 
+    async def _check_and_close_opposite_position(self, symbol: str, signal_type) -> bool:
+        """Проверка и закрытие противоположной позиции"""
+        try:
+            # Получаем позицию с биржи
+            exchange = await self.exchange_registry.get_exchange("bybit")
+            if not exchange:
+                self.logger.warning("Биржа bybit недоступна для проверки позиций")
+                return False
+
+            position = await exchange.get_position(symbol)
+            if not position or position.size == 0:
+                return False
+
+            # Проверяем направление позиции
+            from database.models.base_models import SignalType
+            from ..base.order_types import OrderRequest, OrderSide, OrderType
+
+            position_long = position.size > 0
+            signal_long = signal_type in [SignalType.LONG, "LONG", "long", "buy", "BUY"]
+
+            # Если направления противоположны - закрываем текущую позицию
+            if position_long != signal_long:
+                self.logger.warning(
+                    f"⚠️ Обнаружена противоположная позиция {symbol}: "
+                    f"текущая={'LONG' if position_long else 'SHORT'}, "
+                    f"новый сигнал={signal_type}"
+                )
+                
+                # Создаем ордер на закрытие позиции
+                close_order = OrderRequest(
+                    symbol=symbol,
+                    side=OrderSide.SELL if position_long else OrderSide.BUY,
+                    order_type=OrderType.MARKET,
+                    quantity=abs(position.size),
+                    reduce_only=True  # Важно: только закрытие позиции
+                )
+                
+                # Исполняем ордер на закрытие
+                result = await exchange.place_order(close_order)
+                
+                if result.success:
+                    self.logger.info(
+                        f"✅ Успешно закрыта противоположная позиция {symbol}: "
+                        f"размер={abs(position.size)}, направление={'LONG' if position_long else 'SHORT'}"
+                    )
+                    return True
+                else:
+                    self.logger.error(
+                        f"❌ Не удалось закрыть противоположную позицию {symbol}: {result.error}"
+                    )
+                    return False
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при закрытии противоположной позиции {symbol}: {e}")
+            return False
+
     async def _has_existing_position(self, symbol: str, signal_type) -> bool:
         """Проверка существования позиции в том же направлении"""
         try:
@@ -1350,12 +1402,17 @@ class TradingEngine:
                 # Дополнительная проверка через недавние ордера (защита от частых сигналов)
                 last_order_time = self._recent_signal_times.get(signal.symbol, 0)
                 current_time = asyncio.get_event_loop().time()
+                # Увеличиваем минимальный интервал до 5 минут для предотвращения дублирования
+                min_signal_interval = self.config.get("trading", {}).get("min_signal_interval", 300)  # 5 минут по умолчанию
                 if (
-                    current_time - last_order_time < 60
-                ):  # Минимум 60 секунд между ордерами на один символ
+                    current_time - last_order_time < min_signal_interval
+                ):
+                    time_passed = current_time - last_order_time
+                    time_remaining = min_signal_interval - time_passed
                     self.logger.warning(
                         f"⚠️ Слишком частые сигналы для {signal.symbol}. "
-                        f"Последний был {current_time - last_order_time:.1f}с назад."
+                        f"Последний был {time_passed:.1f}с назад. "
+                        f"Ждите еще {time_remaining:.1f}с."
                     )
                     return []
 
