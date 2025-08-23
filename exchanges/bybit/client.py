@@ -24,6 +24,9 @@ import aiohttp
 from core.exceptions import LeverageError
 from core.logger import setup_logger
 
+# Import InstrumentManager for proper quantity rounding
+from trading.instrument_manager import InstrumentManager
+
 from ..base.api_key_manager import KeyType, get_key_manager
 
 # from ..base.rate_limiter import RequestPriority, get_rate_limiter  # Заменено на EnhancedRateLimiter
@@ -59,11 +62,9 @@ from ..base.models import (
 )
 from ..base.order_types import OrderRequest, OrderResponse, OrderSide, OrderStatus, OrderType
 
-# Import InstrumentManager for proper quantity rounding
-from trading.instrument_manager import InstrumentManager
-
 # Global instance for instrument management
 _instrument_manager = None
+
 
 def get_instrument_manager():
     """Get or create global InstrumentManager instance"""
@@ -131,7 +132,11 @@ def format_price(price: float, tick_size: float) -> str:
 
 
 def format_quantity(
-    quantity: float, qty_step: float, min_qty: float = 0.0, max_qty: float = float("inf"), symbol: str = None
+    quantity: float,
+    qty_step: float,
+    min_qty: float = 0.0,
+    max_qty: float = float("inf"),
+    symbol: str = None,
 ) -> str:
     """
     Форматирует количество в соответствии с требованиями Bybit API
@@ -156,20 +161,17 @@ def format_quantity(
             instrument_manager = get_instrument_manager()
             # Используем round_qty с ROUND_DOWN для избежания превышения баланса
             rounded_qty = instrument_manager.round_qty(
-                symbol=symbol,
-                qty=quantity,
-                round_up=False,  # ROUND_DOWN
-                enforce_min=True
+                symbol=symbol, qty=quantity, round_up=False, enforce_min=True  # ROUND_DOWN
             )
             # Форматируем количество с правильным числом знаков после запятой
             return instrument_manager.format_qty(symbol, rounded_qty)
-        except Exception as e:
+        except Exception:
             # Если InstrumentManager не может обработать, используем fallback
             pass
-    
+
     # Fallback: оригинальная логика для обратной совместимости
-    from decimal import Decimal, ROUND_DOWN
-    
+    from decimal import ROUND_DOWN, Decimal
+
     if quantity <= 0:
         raise ValueError(f"Quantity must be positive: {quantity}")
 
@@ -177,10 +179,12 @@ def format_quantity(
     if qty_step > 0:
         qty_decimal = Decimal(str(quantity))
         step_decimal = Decimal(str(qty_step))
-        
+
         # Округляем ВНИЗ до ближайшего значения кратного qty_step (для избежания превышения баланса)
-        rounded_qty = (qty_decimal / step_decimal).quantize(Decimal('1'), rounding=ROUND_DOWN) * step_decimal
-        
+        rounded_qty = (qty_decimal / step_decimal).quantize(
+            Decimal("1"), rounding=ROUND_DOWN
+        ) * step_decimal
+
         # Конвертируем обратно в float для проверок
         rounded_qty_float = float(rounded_qty)
     else:
@@ -200,7 +204,7 @@ def format_quantity(
         decimal_places = 0
     else:
         # Считаем количество знаков после запятой в qty_step
-        step_str = f"{qty_step:.10f}".rstrip('0')  # Форматируем с избытком и удаляем trailing zeros
+        step_str = f"{qty_step:.10f}".rstrip("0")  # Форматируем с избытком и удаляем trailing zeros
         if "." in step_str:
             decimal_places = len(step_str.split(".")[1])
         else:
@@ -211,7 +215,7 @@ def format_quantity(
     if decimal_places == 0:
         formatted_qty = str(int(rounded_qty))
     else:
-        formatted_qty = format(rounded_qty, f'.{decimal_places}f')
+        formatted_qty = format(rounded_qty, f".{decimal_places}f")
 
     return formatted_qty
 
@@ -1067,7 +1071,7 @@ class BybitClient(BaseExchangeInterface):
                     qty_step=instrument_info.qty_step,
                     min_qty=instrument_info.min_order_qty,
                     max_qty=instrument_info.max_order_qty,
-                    symbol=symbol  # Передаем символ для InstrumentManager
+                    symbol=symbol,  # Передаем символ для InstrumentManager
                 )
             except Exception as e:
                 self.logger.warning(
@@ -1075,13 +1079,14 @@ class BybitClient(BaseExchangeInterface):
                 )
                 # Используем предустановленные настройки из instrument_settings
                 from .instrument_settings import get_instrument_settings
+
                 settings = get_instrument_settings(symbol)
                 formatted_qty = format_quantity(
                     quantity=order_request.quantity,
                     qty_step=settings.get("qtyStep", 0.1),
                     min_qty=settings.get("minOrderQty", 0.1),
                     max_qty=settings.get("maxOrderQty", float("inf")),
-                    symbol=symbol  # Передаем символ для InstrumentManager
+                    symbol=symbol,  # Передаем символ для InstrumentManager
                 )
 
             # Подготовка параметров
@@ -1133,7 +1138,7 @@ class BybitClient(BaseExchangeInterface):
                 )
                 try:
                     # Используем tick_size из instrument_info или settings
-                    if 'instrument_info' in locals():
+                    if "instrument_info" in locals():
                         tick_size = instrument_info.tick_size
                     else:
                         tick_size = settings.get("tickSize", 0.0001)
@@ -1145,13 +1150,11 @@ class BybitClient(BaseExchangeInterface):
             if order_request.take_profit is not None:
                 try:
                     # Используем tick_size из instrument_info или settings
-                    if 'instrument_info' in locals():
+                    if "instrument_info" in locals():
                         tick_size = instrument_info.tick_size
                     else:
                         tick_size = settings.get("tickSize", 0.0001)
-                    formatted_tp = format_price(
-                        order_request.take_profit, tick_size
-                    )
+                    formatted_tp = format_price(order_request.take_profit, tick_size)
                     params["takeProfit"] = formatted_tp
                 except:
                     params["takeProfit"] = str(order_request.take_profit)

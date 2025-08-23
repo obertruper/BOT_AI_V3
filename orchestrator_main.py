@@ -79,25 +79,28 @@ async def run_position_tracker_tests(args):
         return
 
     print(f"{Colors.BLUE}🎯 Запуск Position Tracker Test Suite...{Colors.ENDC}\n")
-    
+
     suite = PositionTrackerTestSuite()
-    
+
     try:
         # Запускаем все тесты Position Tracker
         await suite.run_all_tests(verbose=args.verbose)
-        
+
         # Выводим отчет
         suite.print_summary()
-        
+
         # Генерируем HTML отчет если запрошено
         if args.generate_report:
             await suite.generate_html_report()
-            print(f"{Colors.GREEN}📄 HTML отчет сохранен в test_results/position_tracker_report.html{Colors.ENDC}")
-            
+            print(
+                f"{Colors.GREEN}📄 HTML отчет сохранен в test_results/position_tracker_report.html{Colors.ENDC}"
+            )
+
     except Exception as e:
         print(f"{Colors.FAIL}❌ Ошибка выполнения Position Tracker тестов: {e}{Colors.ENDC}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
 
 

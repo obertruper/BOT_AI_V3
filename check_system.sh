@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Переменные
 PROJECT_ROOT="/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3"
-LOG_DIR="$PROJECT_ROOT/logs"
+LOG_DIR="$PROJECT_ROOT/data/logs"
 
 print_header() {
     echo -e "${BLUE}╔══════════════════════════════════════════════════════════╗${NC}"

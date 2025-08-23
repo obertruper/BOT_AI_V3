@@ -3,7 +3,6 @@ ML Prediction Logger - детальное логирование и сохран
 """
 
 import hashlib
-import json
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -76,7 +75,7 @@ class MLPredictionLogger:
             lookback_periods=96,  # Стандартное значение
             # Key features
             **key_features,
-            # Feature statistics  
+            # Feature statistics
             **feature_stats,
             # Model outputs - raw predictions
             predicted_return_15m=float(predictions.get("returns_15m", 0)),

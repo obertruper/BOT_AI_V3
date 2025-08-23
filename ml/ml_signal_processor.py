@@ -15,7 +15,7 @@ from sqlalchemy import and_, select
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
 from data.data_loader import DataLoader
-from database.connections import get_async_db  # Uses ORM - correct pattern
+from database.db_manager import get_db
 from database.models.base_models import SignalType
 from database.models.market_data import RawMarketData
 from database.models.signal import Signal
@@ -25,6 +25,7 @@ from ml.realtime_indicator_calculator import RealTimeIndicatorCalculator
 # Импорт UnifiedPrediction для поддержки нового формата
 try:
     from ml.adapters import UnifiedPrediction
+
     UNIFIED_PREDICTION_AVAILABLE = True
 except ImportError:
     UNIFIED_PREDICTION_AVAILABLE = False
@@ -58,19 +59,19 @@ class MLSignalProcessor:
 
         # Пороги для принятия решений из конфигурации
         # Поддержка и Pydantic и dict конфигурации
-        if hasattr(config, 'ml'):
+        if hasattr(config, "ml"):
             ml_config = config.ml
             # Конвертируем Pydantic в dict
-            if hasattr(ml_config, 'model_dump'):
+            if hasattr(ml_config, "model_dump"):
                 ml_config = ml_config.model_dump()
-            elif hasattr(ml_config, 'dict'):
+            elif hasattr(ml_config, "dict"):
                 ml_config = ml_config.dict()
             else:
                 # Fallback на прямой доступ к атрибутам
                 ml_config = {
-                    "min_confidence": getattr(ml_config, 'min_confidence', 0.3),
-                    "min_signal_strength": getattr(ml_config, 'min_signal_strength', 0.25),
-                    "risk_tolerance": getattr(ml_config, 'risk_tolerance', 'MEDIUM')
+                    "min_confidence": getattr(ml_config, "min_confidence", 0.3),
+                    "min_signal_strength": getattr(ml_config, "min_signal_strength", 0.25),
+                    "risk_tolerance": getattr(ml_config, "risk_tolerance", "MEDIUM"),
                 }
         else:
             ml_config = config.get("ml", {})
@@ -78,12 +79,8 @@ class MLSignalProcessor:
         self.min_confidence = ml_config.get(
             "min_confidence", 0.3
         )  # Из конфига confidence_threshold: 0.3
-        self.min_signal_strength = ml_config.get(
-            "min_signal_strength", 0.25
-        )  # Базовое значение
-        self.risk_tolerance = ml_config.get(
-            "risk_tolerance", "MEDIUM"
-        )  # Консервативный подход
+        self.min_signal_strength = ml_config.get("min_signal_strength", 0.25)  # Базовое значение
+        self.risk_tolerance = ml_config.get("risk_tolerance", "MEDIUM")  # Консервативный подход
 
         # Кэш для предсказаний с коротким TTL
         self.prediction_cache = {}
@@ -148,7 +145,7 @@ class MLSignalProcessor:
                 last_candle = ohlcv_data.iloc[-1]
                 candle_str = f"{last_candle.get('open', 0):.8f}_{last_candle.get('high', 0):.8f}_{last_candle.get('low', 0):.8f}_{last_candle.get('close', 0):.8f}_{last_candle.get('volume', 0):.2f}"
                 data_hash = hashlib.md5(candle_str.encode()).hexdigest()[:12]
-                
+
                 # Временная метка с округлением до минуты для группировки близких запросов
                 time_bucket = datetime.utcnow().strftime("%Y%m%d%H%M")
             else:
@@ -261,9 +258,7 @@ class MLSignalProcessor:
             return None
 
         # Получаем текущую цену
-        entry_price = (
-            additional_data.get("current_price") if additional_data else None
-        ) or 0.0
+        entry_price = (additional_data.get("current_price") if additional_data else None) or 0.0
 
         # Создаем сигнал
         signal = Signal(
@@ -278,7 +273,9 @@ class MLSignalProcessor:
             exchange=exchange,
             metadata={
                 "risk_level": risk_level,
-                "quality_score": prediction.quality_score if hasattr(prediction, "quality_score") else None,
+                "quality_score": (
+                    prediction.quality_score if hasattr(prediction, "quality_score") else None
+                ),
                 "timeframe_consensus": self._calculate_timeframe_consensus(prediction),
                 "source": "unified_adapter",
             },
@@ -295,11 +292,8 @@ class MLSignalProcessor:
         """Рассчитывает консенсус между таймфреймами"""
         if not prediction.timeframe_predictions:
             return 0.0
-        
-        confidences = [
-            tf.confidence 
-            for tf in prediction.timeframe_predictions.values()
-        ]
+
+        confidences = [tf.confidence for tf in prediction.timeframe_predictions.values()]
         return sum(confidences) / len(confidences) if confidences else 0.0
 
     def _create_signal_from_prediction(
@@ -323,9 +317,7 @@ class MLSignalProcessor:
         """
         # Проверяем, это UnifiedPrediction или dict
         if UNIFIED_PREDICTION_AVAILABLE and isinstance(prediction, UnifiedPrediction):
-            return self._create_signal_from_unified(
-                prediction, symbol, exchange, additional_data
-            )
+            return self._create_signal_from_unified(prediction, symbol, exchange, additional_data)
         # Логируем полное предсказание для отладки
         logger.info(f"🔍 Предсказание для {symbol}:")
         logger.info(f"   Сырое: {prediction}")
@@ -601,28 +593,34 @@ class MLSignalProcessor:
         """
         # Специальное логирование для SHORT сигналов
         if signal.signal_type == SignalType.SHORT:
-            logger.warning(f"🔴 Валидация SHORT сигнала {signal.symbol}: "
-                          f"conf={signal.confidence:.2f} (min={self.min_confidence}), "
-                          f"strength={signal.strength:.2f} (min={self.min_signal_strength})")
-        
+            logger.warning(
+                f"🔴 Валидация SHORT сигнала {signal.symbol}: "
+                f"conf={signal.confidence:.2f} (min={self.min_confidence}), "
+                f"strength={signal.strength:.2f} (min={self.min_signal_strength})"
+            )
+
         # Проверяем минимальную уверенность
         if signal.confidence < self.min_confidence:
             if signal.signal_type == SignalType.SHORT:
-                logger.error(f"❌🔴 SHORT сигнал {signal.symbol} отклонен: низкая уверенность "
-                            f"{signal.confidence:.2f} < {self.min_confidence}")
+                logger.error(
+                    f"❌🔴 SHORT сигнал {signal.symbol} отклонен: низкая уверенность "
+                    f"{signal.confidence:.2f} < {self.min_confidence}"
+                )
             return False
 
         # Проверяем минимальную силу сигнала
         if signal.strength < self.min_signal_strength:
             if signal.signal_type == SignalType.SHORT:
-                logger.error(f"❌🔴 SHORT сигнал {signal.symbol} отклонен: низкая сила "
-                            f"{signal.strength:.2f} < {self.min_signal_strength}")
+                logger.error(
+                    f"❌🔴 SHORT сигнал {signal.symbol} отклонен: низкая сила "
+                    f"{signal.strength:.2f} < {self.min_signal_strength}"
+                )
             return False
 
         # Здесь можно добавить дополнительные проверки
         # Например, проверка на конфликт с другими сигналами,
         # проверка рыночных условий и т.д.
-        
+
         if signal.signal_type == SignalType.SHORT:
             logger.warning(f"✅🔴 SHORT сигнал {signal.symbol} прошел валидацию!")
 
@@ -1042,10 +1040,13 @@ class MLSignalProcessor:
         try:
             # Добавляем специальное логирование для SHORT сигналов
             if signal.signal_type == SignalType.SHORT:
-                logger.warning(f"🔴 Попытка сохранить SHORT сигнал для {signal.symbol}: "
-                              f"strength={signal.strength:.2f}, confidence={signal.confidence:.2f}")
-            
-            async with get_async_db() as db:
+                logger.warning(
+                    f"🔴 Попытка сохранить SHORT сигнал для {signal.symbol}: "
+                    f"strength={signal.strength:.2f}, confidence={signal.confidence:.2f}"
+                )
+
+            db_manager = await get_db()
+            async with db_manager.transaction() as db:
                 # Проверяем, существует ли уже такой сигнал
                 existing = await db.execute(
                     select(Signal).where(
@@ -1066,7 +1067,7 @@ class MLSignalProcessor:
                 db.add(signal)
                 await db.commit()
                 self._stats["signals_saved"] += 1
-                
+
                 # Особое логирование для SHORT сигналов
                 if signal.signal_type == SignalType.SHORT:
                     logger.warning(f"✅🔴 SHORT сигнал УСПЕШНО сохранен для {signal.symbol}")
@@ -1298,6 +1299,9 @@ class MLSignalProcessor:
             )  # Передаем symbol
             logger.info(f"📊 Получили предсказание: {type(prediction)}")
 
+            # 🎨 КРАСИВАЯ ВИЗУАЛИЗАЦИЯ ML ВХОДНЫХ ДАННЫХ И ПРЕДСКАЗАНИЙ
+            await self._display_ml_visualization(symbol, features_array, prediction)
+
             # 4. Конвертируем предсказание в сигнал
             signal = await self._convert_predictions_to_signal(
                 symbol=symbol,
@@ -1321,9 +1325,9 @@ class MLSignalProcessor:
                         # Специальное логирование для SHORT
                         if signal.signal_type == SignalType.SHORT:
                             logger.warning(f"🔴 Вызываем save_signal для SHORT сигнала {symbol}")
-                        
+
                         saved = await self.save_signal(signal)
-                        
+
                         if not saved:
                             if signal.signal_type == SignalType.SHORT:
                                 logger.error(f"❌🔴 SHORT сигнал для {symbol} НЕ БЫЛ сохранен!")
@@ -1367,7 +1371,8 @@ class MLSignalProcessor:
             end_date = datetime.utcnow()
             start_date = end_date - timedelta(minutes=lookback_minutes)
 
-            async with get_async_db() as session:
+            db_manager = await get_db()
+            async with db_manager.transaction() as session:
                 stmt = (
                     select(RawMarketData)
                     .where(
@@ -1504,3 +1509,139 @@ class MLSignalProcessor:
             "ttl_seconds": 300,  # Из конфигурации
             "last_cleanup": self.cache_stats.get("last_cleanup", datetime.now(UTC).isoformat()),
         }
+
+    async def _display_ml_visualization(
+        self, symbol: str, features_array: np.ndarray, prediction: np.ndarray | dict
+    ) -> None:
+        """
+        🎨 КРАСИВАЯ ВИЗУАЛИЗАЦИЯ ML ВХОДНЫХ ДАННЫХ И ПРЕДСКАЗАНИЙ
+        Отображает детальную информацию о входных признаках и предсказаниях модели
+        """
+        try:
+            if features_array is None or features_array.size == 0:
+                logger.debug("⚠️ Нет данных для визуализации")
+                return
+
+            # Получаем последнюю строку признаков для анализа (последние 96 свечей)
+            if len(features_array.shape) == 3:
+                # Формат (batch, sequence, features)
+                features_to_show = features_array[0, -1, :]  # Последняя свеча
+                context_data = features_array[0]  # Весь контекст
+            elif len(features_array.shape) == 2:
+                features_to_show = features_array[-1, :]  # Последняя строка
+                context_data = features_array
+            else:
+                logger.warning("⚠️ Неизвестный формат features_array")
+                return
+
+            # ════════════════════════════════════════════════════════════════════
+            # 🎯 ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ - КРАСИВАЯ ТАБЛИЦА
+            # ════════════════════════════════════════════════════════════════════
+            logger.info("")
+            logger.info("╔══════════════════════════════════════════════════════════════════════╗")
+            logger.info(
+                f"║            ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ - {features_array.shape[-1]} ПРИЗНАКОВ             ║"
+            )
+            logger.info("╠══════════════════════════════════════════════════════════════════════╣")
+            logger.info("║ 🎯 КЛЮЧЕВЫЕ ИНДИКАТОРЫ:                                             ║")
+
+            # Отображаем ключевые признаки в красивом формате
+            feature_names = [
+                "returns",
+                "macd",
+                "atr_pct",
+                "adx",
+                "obv_trend",
+                "trend_1h",
+                "rsi",
+                "bb_position",
+                "stoch_k",
+                "volume_ratio",
+                "momentum_1h",
+                "signal_strength",
+            ]
+
+            for i in range(0, len(feature_names), 2):
+                left_name = feature_names[i] if i < len(feature_names) else ""
+                right_name = feature_names[i + 1] if i + 1 < len(feature_names) else ""
+
+                left_val = features_to_show[i % len(features_to_show)] if left_name else 0
+                right_val = features_to_show[(i + 1) % len(features_to_show)] if right_name else 0
+
+                logger.info(
+                    f"║   • {left_name:<15}: {left_val:>10.4f}  │  {right_name:<15}: {right_val:>8.4f}  ║"
+                )
+
+            # Статистика признаков
+            nan_count = np.isnan(features_to_show).sum()
+            zero_count = (features_to_show == 0).sum()
+            mean_val = np.nanmean(features_to_show)
+            std_val = np.nanstd(features_to_show)
+
+            logger.info("╟──────────────────────────────────────────────────────────────────────╢")
+            logger.info("║ 📊 СТАТИСТИКА ПРИЗНАКОВ:                                            ║")
+            logger.info(
+                f"║   • Всего признаков: {len(features_to_show):<4}    • NaN: {nan_count:<6} • Zeros: {zero_count:<8}             ║"
+            )
+            logger.info(
+                f"║   • Mean: {mean_val:<12.4f}  • Std: {std_val:<12.4f}                           ║"
+            )
+            logger.info("╚══════════════════════════════════════════════════════════════════════╝")
+
+            # ════════════════════════════════════════════════════════════════════
+            # 🤖 ML MODEL PREDICTION ANALYSIS - КРАСИВАЯ ТАБЛИЦА
+            # ════════════════════════════════════════════════════════════════════
+            if prediction is not None:
+                logger.info("")
+                logger.info(
+                    "╔══════════════════════════════════════════════════════════════════════╗"
+                )
+                logger.info(
+                    "║                    🤖 ML MODEL PREDICTION ANALYSIS                   ║"
+                )
+                logger.info(
+                    "╠══════════════════════════════════════════════════════════════════════╣"
+                )
+
+                if isinstance(prediction, np.ndarray) and len(prediction) >= 20:
+                    logger.info(
+                        "║ 📊 RAW MODEL OUTPUTS (20 parameters):                                ║"
+                    )
+
+                    # Показываем в группах по 5
+                    for i in range(0, min(20, len(prediction)), 5):
+                        values = [
+                            f"{prediction[j]:.4f}" for j in range(i, min(i + 5, len(prediction)))
+                        ]
+                        range_str = f"[{i}-{min(i+4, len(prediction)-1)}]"
+                        logger.info(f"║  {range_str:>6}:  {', '.join(values):<50} ║")
+
+                    logger.info(
+                        "╠══════════════════════════════════════════════════════════════════════╣"
+                    )
+                    logger.info(
+                        "║ 🔮 ИНТЕРПРЕТАЦИЯ ПРЕДСКАЗАНИЙ:                                      ║"
+                    )
+
+                    # Показываем интерпретацию основных предсказаний
+                    interpretations = [
+                        ("15m return", prediction[0] if len(prediction) > 0 else 0),
+                        ("1h return", prediction[1] if len(prediction) > 1 else 0),
+                        ("4h return", prediction[2] if len(prediction) > 2 else 0),
+                        ("12h return", prediction[3] if len(prediction) > 3 else 0),
+                        ("Max Drawdown 1h", prediction[16] if len(prediction) > 16 else 0),
+                        ("Max Rally 1h", prediction[17] if len(prediction) > 17 else 0),
+                        ("Max Drawdown 4h", prediction[18] if len(prediction) > 18 else 0),
+                        ("Max Rally 4h", prediction[19] if len(prediction) > 19 else 0),
+                    ]
+
+                    for desc, value in interpretations:
+                        logger.info(f"║   • {desc:<20}: {value:>+8.6f}                         ║")
+
+                logger.info(
+                    "╚══════════════════════════════════════════════════════════════════════╝"
+                )
+
+        except Exception as e:
+            logger.error(f"Ошибка визуализации ML данных для {symbol}: {e}")
+            # Не прерываем основной процесс из-за ошибки визуализации

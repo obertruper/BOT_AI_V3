@@ -425,10 +425,10 @@ INSTRUMENT_SETTINGS = {
 def get_instrument_settings(symbol: str) -> dict:
     """
     Получить настройки инструмента по символу.
-    
+
     Args:
         symbol: Символ инструмента (например, 'BTCUSDT')
-        
+
     Returns:
         Словарь с настройками инструмента
     """

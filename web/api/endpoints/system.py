@@ -4,7 +4,7 @@
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -16,7 +16,7 @@ from web.integration.dependencies import get_config_manager_dependency, get_orch
 
 logger = setup_logger("api.system")
 
-router = APIRouter(prefix="/system", tags=["system"])
+router = APIRouter(prefix="/api/system", tags=["system"])
 
 
 class SystemStatus(BaseModel):
@@ -76,17 +76,22 @@ async def get_system_status(
         # Получаем версию и окружение из system_config (теперь это SystemSettings объект)
         version = system_status["system"]["version"]
         environment = "production"  # По умолчанию
-        
-        if hasattr(system_config, 'environment'):
+
+        if hasattr(system_config, "environment"):
             environment = system_config.environment
 
         return SystemStatus(
             status="running" if system_status["system"]["is_running"] else "stopped",
             uptime_seconds=system_status["system"]["uptime_seconds"] or 0,
-            start_time=datetime.fromisoformat(system_status["system"]["startup_time"]) if system_status["system"]["startup_time"] else datetime.now(),
+            start_time=(
+                datetime.fromisoformat(system_status["system"]["startup_time"])
+                if system_status["system"]["startup_time"]
+                else datetime.now()
+            ),
             version=version,
             environment=environment,
-            components={name: True for name in system_status["components"]["active"]} | {name: False for name in system_status["components"]["failed"]},
+            components=dict.fromkeys(system_status["components"]["active"], True)
+            | dict.fromkeys(system_status["components"]["failed"], False),
             traders_count=system_status["traders"]["active"],
             active_positions=system_status["traders"]["active_positions"],
         )
@@ -120,7 +125,7 @@ async def health_check(
             "system": {
                 "status": "healthy" if health_info["is_healthy"] else "unhealthy",
                 "issues": health_info["issues"],
-                "warnings": health_info["warnings"]
+                "warnings": health_info["warnings"],
             }
         }
 
@@ -163,11 +168,11 @@ async def get_system_config(
     try:
         # Получаем полную конфигурацию как словарь для удобства работы
         full_config = config_manager.get_config()
-        
+
         # Преобразуем Pydantic модель в словарь если нужно
-        if hasattr(full_config, 'model_dump'):
+        if hasattr(full_config, "model_dump"):
             config_dict = full_config.model_dump()
-        elif hasattr(full_config, 'dict'):
+        elif hasattr(full_config, "dict"):
             config_dict = full_config.dict()
         else:
             config_dict = full_config
@@ -351,7 +356,7 @@ async def get_system_metrics(
 
 
 @router.get("/logs")
-async def get_system_logs(lines: int = 100, level: Optional[str] = None) -> dict[str, Any]:
+async def get_system_logs(lines: int = 100, level: str | None = None) -> dict[str, Any]:
     """
     Получить последние логи системы.
 

@@ -155,7 +155,15 @@ class EnhancedSLTPManager:
     def _load_config(self) -> SLTPConfig:
         """Загружает конфигурацию из файла"""
         system_config = self.config_manager.get_system_config()
-        sltp_settings = system_config.get("enhanced_sltp", {})
+        # Конвертируем Pydantic объект в dict для доступа через .get()
+        if hasattr(system_config, "model_dump"):
+            system_config_dict = system_config.model_dump()
+        elif hasattr(system_config, "dict"):
+            system_config_dict = system_config.dict()
+        else:
+            system_config_dict = dict(system_config) if system_config else {}
+
+        sltp_settings = system_config_dict.get("enhanced_sltp", {})
 
         # Создаем SLTPConfig из настроек
         config = SLTPConfig()
@@ -1183,7 +1191,15 @@ class EnhancedSLTPManager:
         """Определяет правильный positionIdx для hedge/one-way режима"""
         try:
             system_config = self.config_manager.get_system_config()
-            trading_config = system_config.get("trading", {})
+            # Конвертируем Pydantic объект в dict
+            if hasattr(system_config, "model_dump"):
+                system_config_dict = system_config.model_dump()
+            elif hasattr(system_config, "dict"):
+                system_config_dict = system_config.dict()
+            else:
+                system_config_dict = dict(system_config) if system_config else {}
+
+            trading_config = system_config_dict.get("trading", {})
             hedge_mode = trading_config.get("hedge_mode", True)
 
             if hedge_mode:

@@ -1626,9 +1626,23 @@ class ProductionFeatureEngineer:
                         for indicator in ["sma", "ema", "rsi", "macd", "bb_", "adx"]
                     ):
                         symbol_data[col] = symbol_data[col].ffill()
-                    # Для остальных используем 0
+                    # Для остальных используем forward fill + backward fill, затем небольшие случайные значения
                     else:
-                        symbol_data[col] = symbol_data[col].fillna(0)
+                        # Сначала пробуем forward fill и backward fill
+                        symbol_data[col] = symbol_data[col].ffill().bfill()
+
+                        # Если все еще есть NaN, используем медиану или небольшие случайные значения
+                        if symbol_data[col].isna().any():
+                            median_val = (
+                                symbol_data[col].median()
+                                if not symbol_data[col].isna().all()
+                                else 0
+                            )
+                            # Добавляем небольшой шум для предотвращения zero-variance
+                            noise_std = abs(median_val) * 0.001 if median_val != 0 else 0.001
+                            noise = np.random.normal(0, noise_std, symbol_data[col].isna().sum())
+                            fill_values = median_val + noise
+                            symbol_data.loc[symbol_data[col].isna(), col] = fill_values
 
             # Удаляем первые строки где могут быть NaN из-за расчета индикаторов
             # Находим максимальный период среди всех индикаторов
@@ -1655,9 +1669,18 @@ class ProductionFeatureEngineer:
                             mode = result_df[col].mode()
                             if len(mode) > 0:
                                 result_df[col] = result_df[col].fillna(mode.iloc[0])
-                    # Для числовых колонок
+                    # Для числовых колонок используем медиану + шум
                     elif pd.api.types.is_numeric_dtype(result_df[col]):
-                        result_df[col] = result_df[col].fillna(0)
+                        median_val = (
+                            result_df[col].median() if not result_df[col].isna().all() else 0
+                        )
+                        # Добавляем небольшой шум для предотвращения zero-variance
+                        noise_std = abs(median_val) * 0.001 if median_val != 0 else 0.001
+                        nan_mask = result_df[col].isna()
+                        if nan_mask.any():
+                            noise = np.random.normal(0, noise_std, nan_mask.sum())
+                            fill_values = median_val + noise
+                            result_df.loc[nan_mask, col] = fill_values
 
         # Проверка на бесконечные значения
         numeric_cols = result_df.select_dtypes(include=[np.number]).columns

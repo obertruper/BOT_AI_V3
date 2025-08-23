@@ -46,7 +46,7 @@ class SmartDataManager:
 
         # Инициализация компонентов
         self.db_manager = None
-        
+
         # Инициализация кеша
         self.cache = MarketDataCache(
             cache_size=self.data_config.get("cache_size", 1000),
@@ -94,7 +94,7 @@ class SmartDataManager:
         try:
             # 1. Инициализация DBManager
             self.db_manager = await get_db()
-            
+
             # 2. Инициализация бирж
             await self._initialize_exchanges()
 

@@ -8,7 +8,6 @@ import pytest
 
 # TODO: Проверить импорт
 # Обновлен импорт на новый класс ExecutionEngine
-from trading.execution.executor import ExecutionEngine
 
 
 class TestExecutionEngine__init__:

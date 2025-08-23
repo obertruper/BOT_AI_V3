@@ -5,10 +5,8 @@ API эндпоинты для отслеживания позиций
 """
 
 from datetime import datetime, timedelta
-from decimal import Decimal
-from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from core.logger import setup_logger
@@ -28,8 +26,8 @@ class PositionResponse(BaseModel):
     size: float
     entry_price: float
     current_price: float
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     status: str
     health: str
     unrealized_pnl: float
@@ -61,14 +59,14 @@ class TrackerStatsResponse(BaseModel):
     active_positions: int
     updates_count: int
     sync_errors: int
-    last_update: Optional[datetime]
-    health_distribution: Dict[str, int]
+    last_update: datetime | None
+    health_distribution: dict[str, int]
     total_unrealized_pnl: float
     avg_hold_time: float
     is_running: bool
 
 
-@router.get("/active", response_model=List[PositionResponse])
+@router.get("/active", response_model=list[PositionResponse])
 async def get_active_positions():
     """Получить все активные позиции"""
 
@@ -107,7 +105,7 @@ async def get_active_positions():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/by-symbol/{symbol}", response_model=List[PositionResponse])
+@router.get("/by-symbol/{symbol}", response_model=list[PositionResponse])
 async def get_positions_by_symbol(symbol: str):
     """Получить позиции по символу"""
 
@@ -276,7 +274,7 @@ async def get_tracker_stats():
 
 @router.get("/stats/pnl")
 async def get_pnl_stats(
-    symbol: Optional[str] = Query(None, description="Фильтр по символу"),
+    symbol: str | None = Query(None, description="Фильтр по символу"),
     hours: int = Query(24, description="Период в часах"),
 ):
     """Получить статистику PnL"""

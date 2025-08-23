@@ -6,9 +6,9 @@ Create Date: 2025-08-20 11:45:00.000000
 
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers
 revision = "add_position_tracking_tables"

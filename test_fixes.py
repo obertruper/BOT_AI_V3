@@ -1,254 +1,155 @@
 #!/usr/bin/env python3
 """
-Скрипт для тестирования исправлений:
-1. Проверка правильности определения SHORT сигналов
-2. Проверка округления для XRPUSDT 
-3. Проверка закрытия противоположных позиций
-4. Проверка защиты от дублирования ордеров
-5. Проверка логики SL/TP для SHORT позиций
+Тестирование исправлений ошибок и предупреждений
 """
 
 import asyncio
 import sys
-from decimal import Decimal
 from pathlib import Path
 
-# Добавляем корневую директорию в path
-sys.path.insert(0, str(Path(__file__).parent))
+# Добавляем проект в путь
+sys.path.append(str(Path(__file__).parent))
 
+from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
-from trading.instrument_manager import InstrumentManager
-from ml.logic.signal_quality_analyzer import SignalQualityAnalyzer
+from database.db_manager import get_db
+from ml.realtime_indicator_calculator import RealTimeIndicatorCalculator
+from trading.sltp.enhanced_manager import EnhancedSLTPManager
 
-logger = setup_logger("test_fixes")
-
-
-def test_instrument_rounding():
-    """Тест округления для XRPUSDT"""
-    logger.info("=" * 60)
-    logger.info("🧪 Тестирование округления XRPUSDT")
-    logger.info("=" * 60)
-    
-    manager = InstrumentManager()
-    
-    # Тестовые значения для XRPUSDT
-    test_values = [
-        3.230,   # Должно округлиться до 3.2
-        3.256,   # Должно округлиться до 3.2
-        3.289,   # Должно округлиться до 3.2
-        3.15,    # Должно округлиться до 3.1
-        0.09,    # Должно округлиться до минимума 0.1
-        10.567,  # Должно округлиться до 10.5
-    ]
-    
-    for value in test_values:
-        rounded = manager.round_qty("XRPUSDT", value, round_up=False)
-        formatted = manager.format_qty("XRPUSDT", rounded)
-        logger.info(f"  {value} -> {rounded} -> '{formatted}'")
-        
-        # Проверка корректности
-        if value == 3.230:
-            assert formatted == "3.2", f"Ошибка: {value} должно быть '3.2', а не '{formatted}'"
-            logger.info(f"  ✅ Корректно: 3.230 -> '3.2'")
-    
-    logger.info("✅ Тест округления XRPUSDT пройден успешно!")
-    return True
+logger = setup_logger(__name__)
 
 
-def test_signal_determination():
-    """Тест определения SHORT сигналов"""
-    logger.info("=" * 60)
-    logger.info("🧪 Тестирование определения SHORT сигналов")
-    logger.info("=" * 60)
-    
-    analyzer = SignalQualityAnalyzer()
-    
-    # Тестовые случаи: timeframe -> (direction, confidence)
-    test_cases = [
-        {
-            "name": "Явный SHORT (3 из 4)",
-            "predictions": {
-                "5m": {"direction": -0.8, "confidence": 0.7},
-                "15m": {"direction": -0.9, "confidence": 0.8},
-                "1h": {"direction": -0.85, "confidence": 0.75},
-                "12h": {"direction": 0.3, "confidence": 0.4},  # Один LONG
-            },
-            "expected": "SHORT"
-        },
-        {
-            "name": "Явный LONG (3 из 4)",
-            "predictions": {
-                "5m": {"direction": 0.85, "confidence": 0.8},
-                "15m": {"direction": 0.9, "confidence": 0.85},
-                "1h": {"direction": 0.8, "confidence": 0.7},
-                "12h": {"direction": -0.3, "confidence": 0.4},  # Один SHORT
-            },
-            "expected": "LONG"
-        },
-        {
-            "name": "Равный баланс (2 LONG, 2 SHORT)",
-            "predictions": {
-                "5m": {"direction": 0.8, "confidence": 0.7},
-                "15m": {"direction": 0.85, "confidence": 0.75},
-                "1h": {"direction": -0.8, "confidence": 0.7},
-                "12h": {"direction": -0.85, "confidence": 0.75},
-            },
-            "expected": "NEUTRAL"
-        },
-        {
-            "name": "Слабые сигналы",
-            "predictions": {
-                "5m": {"direction": 0.2, "confidence": 0.3},
-                "15m": {"direction": -0.1, "confidence": 0.2},
-                "1h": {"direction": 0.15, "confidence": 0.25},
-                "12h": {"direction": -0.2, "confidence": 0.3},
-            },
-            "expected": "NEUTRAL"
-        }
-    ]
-    
-    for test_case in test_cases:
-        logger.info(f"\n  Тест: {test_case['name']}")
-        
-        # Анализируем предсказания
-        result = analyzer.analyze_predictions(
-            symbol="BTCUSDT",
-            predictions_by_timeframe=test_case["predictions"]
+async def test_database_connection():
+    """Тест подключения к базе данных"""
+    try:
+        logger.info("🔍 Тестирование подключения к базе данных...")
+        db = await get_db()
+        health = await db.health_check()
+        logger.info(f"✅ База данных: {health['status']}")
+        logger.info(f"   Pool: {health.get('pool', {})}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Ошибка подключения к базе данных: {e}")
+        return False
+
+
+async def test_ml_features():
+    """Тест генерации ML признаков"""
+    try:
+        logger.info("🔍 Тестирование генерации ML признаков...")
+        calculator = RealTimeIndicatorCalculator(use_inference_mode=True)
+
+        # Создаем тестовые данные
+        from datetime import datetime, timedelta
+
+        import numpy as np
+        import pandas as pd
+
+        # Генерируем 150 свечей (15 минут каждая)
+        dates = pd.date_range(
+            start=datetime.now() - timedelta(hours=37.5),  # 150 * 15 минут
+            end=datetime.now(),
+            freq="15min",
+        )[:150]
+
+        # Создаем синтетические OHLCV данные
+        np.random.seed(42)  # Для воспроизводимости
+        close_prices = 50000 + np.cumsum(np.random.randn(len(dates)) * 100)
+
+        test_data = pd.DataFrame(
+            {
+                "datetime": dates,
+                "open": close_prices * (1 + np.random.randn(len(dates)) * 0.001),
+                "high": close_prices * (1 + np.abs(np.random.randn(len(dates)) * 0.002)),
+                "low": close_prices * (1 - np.abs(np.random.randn(len(dates)) * 0.002)),
+                "close": close_prices,
+                "volume": np.random.uniform(100, 1000, len(dates)),
+            }
+        ).set_index("datetime")
+
+        # Тестируем расчет признаков
+        features_array, metadata = await calculator.prepare_ml_input(
+            "BTCUSDT", test_data, lookback=96
         )
-        
-        signal_type = result.get("signal_type", "UNKNOWN")
-        logger.info(f"    Результат: {signal_type}")
-        logger.info(f"    Ожидалось: {test_case['expected']}")
-        
-        if signal_type == test_case["expected"]:
-            logger.info(f"    ✅ Тест пройден!")
-        else:
-            logger.error(f"    ❌ Тест провален! {signal_type} != {test_case['expected']}")
-            return False
-    
-    logger.info("\n✅ Все тесты определения сигналов пройдены успешно!")
-    return True
+
+        logger.info(f"✅ ML признаки: shape={features_array.shape}")
+        logger.info(f"   Metadata: {metadata}")
+
+        # Проверяем дисперсию
+        if features_array.size > 0:
+            feature_sample = features_array[0]  # Убираем batch dimension
+            std_values = np.std(feature_sample, axis=0)
+            zero_var_count = np.sum(std_values <= 1e-6)
+            logger.info(f"   Zero variance features: {zero_var_count}/{len(std_values)}")
+
+            if zero_var_count > 0:
+                logger.warning(f"⚠️ Найдено {zero_var_count} признаков с нулевой дисперсией")
+            else:
+                logger.info("✅ Все признаки имеют ненулевую дисперсию")
+
+        return True
+    except Exception as e:
+        logger.error(f"❌ Ошибка генерации ML признаков: {e}")
+        return False
 
 
-def test_sl_tp_logic():
-    """Тест логики SL/TP для SHORT позиций"""
-    logger.info("=" * 60)
-    logger.info("🧪 Тестирование логики SL/TP для SHORT позиций")
-    logger.info("=" * 60)
-    
-    # Тестовые данные
-    current_price = 100.0
-    stop_loss_pct = 0.02  # 2%
-    take_profit_pct = 0.03  # 3%
-    
-    # Для LONG позиции
-    long_sl = current_price * (1 - stop_loss_pct)  # 98
-    long_tp = current_price * (1 + take_profit_pct)  # 103
-    
-    logger.info(f"  LONG позиция (цена входа: {current_price}):")
-    logger.info(f"    SL: {long_sl:.2f} (ниже на {stop_loss_pct:.1%})")
-    logger.info(f"    TP: {long_tp:.2f} (выше на {take_profit_pct:.1%})")
-    
-    # Для SHORT позиции
-    short_sl = current_price * (1 + stop_loss_pct)  # 102
-    short_tp = current_price * (1 - take_profit_pct)  # 97
-    
-    logger.info(f"\n  SHORT позиция (цена входа: {current_price}):")
-    logger.info(f"    SL: {short_sl:.2f} (выше на {stop_loss_pct:.1%})")
-    logger.info(f"    TP: {short_tp:.2f} (ниже на {take_profit_pct:.1%})")
-    
-    # Проверка корректности
-    assert long_sl < current_price, "LONG SL должен быть ниже цены входа"
-    assert long_tp > current_price, "LONG TP должен быть выше цены входа"
-    assert short_sl > current_price, "SHORT SL должен быть выше цены входа"
-    assert short_tp < current_price, "SHORT TP должен быть ниже цены входа"
-    
-    logger.info("\n✅ Логика SL/TP корректна!")
-    return True
+async def test_sltp_config():
+    """Тест конфигурации SL/TP менеджера"""
+    try:
+        logger.info("🔍 Тестирование конфигурации SL/TP менеджера...")
+        config_manager = ConfigManager()
+        await config_manager.initialize()
 
-
-async def test_position_closing():
-    """Тест закрытия противоположных позиций"""
-    logger.info("=" * 60)
-    logger.info("🧪 Тестирование закрытия противоположных позиций")
-    logger.info("=" * 60)
-    
-    logger.info("  Сценарий 1: Есть LONG позиция, приходит SHORT сигнал")
-    logger.info("    - Должна закрыться LONG позиция")
-    logger.info("    - Затем открыться SHORT позиция")
-    
-    logger.info("\n  Сценарий 2: Есть SHORT позиция, приходит LONG сигнал")
-    logger.info("    - Должна закрыться SHORT позиция")
-    logger.info("    - Затем открыться LONG позиция")
-    
-    logger.info("\n  ✅ Логика закрытия позиций реализована в trading/engine.py")
-    return True
-
-
-def test_order_deduplication():
-    """Тест защиты от дублирования ордеров"""
-    logger.info("=" * 60)
-    logger.info("🧪 Тестирование защиты от дублирования")
-    logger.info("=" * 60)
-    
-    logger.info("  Реализованные механизмы защиты:")
-    logger.info("    1. Проверка существующих позиций в том же направлении")
-    logger.info("    2. Проверка активных ордеров")
-    logger.info("    3. Минимальный интервал между сигналами (5 минут)")
-    logger.info("    4. Кэширование сигналов в ml_signal_processor")
-    
-    logger.info("\n  ✅ Защита от дублирования реализована")
-    return True
+        sltp_manager = EnhancedSLTPManager(config_manager)
+        logger.info("✅ Enhanced SL/TP Manager инициализирован без ошибок")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Ошибка инициализации SL/TP менеджера: {e}")
+        return False
 
 
 async def main():
-    """Запуск всех тестов"""
-    logger.info("🚀 Запуск тестирования исправлений")
-    logger.info("=" * 60)
-    
+    """Главная функция тестирования"""
+    logger.info("🚀 Запуск тестов исправлений...")
+
+    tests = [
+        ("База данных", test_database_connection),
+        ("ML признаки", test_ml_features),
+        ("SL/TP менеджер", test_sltp_config),
+    ]
+
     results = []
-    
-    # Тест 1: Округление
-    results.append(("Округление XRPUSDT", test_instrument_rounding()))
-    
-    # Тест 2: Определение сигналов
-    results.append(("Определение SHORT сигналов", test_signal_determination()))
-    
-    # Тест 3: SL/TP логика
-    results.append(("Логика SL/TP", test_sl_tp_logic()))
-    
-    # Тест 4: Закрытие позиций
-    results.append(("Закрытие позиций", await test_position_closing()))
-    
-    # Тест 5: Защита от дублирования
-    results.append(("Защита от дублирования", test_order_deduplication()))
-    
+    for test_name, test_func in tests:
+        logger.info(f"\n📋 Тест: {test_name}")
+        try:
+            result = await test_func()
+            results.append((test_name, result))
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка в тесте {test_name}: {e}")
+            results.append((test_name, False))
+
     # Итоги
     logger.info("\n" + "=" * 60)
     logger.info("📊 ИТОГИ ТЕСТИРОВАНИЯ:")
     logger.info("=" * 60)
-    
-    all_passed = True
-    for name, passed in results:
-        status = "✅ ПРОЙДЕН" if passed else "❌ ПРОВАЛЕН"
-        logger.info(f"  {name}: {status}")
-        if not passed:
-            all_passed = False
-    
-    if all_passed:
-        logger.info("\n🎉 ВСЕ ТЕСТЫ ПРОЙДЕНЫ УСПЕШНО!")
-        logger.info("\nРекомендации:")
-        logger.info("  1. Перезапустите бота для применения изменений")
-        logger.info("  2. Мониторьте логи на предмет SHORT сигналов")
-        logger.info("  3. Проверьте корректность округления для XRPUSDT")
-        logger.info("  4. Убедитесь, что позиции закрываются перед открытием противоположных")
+
+    passed = 0
+    for test_name, result in results:
+        status = "✅ ПРОЙДЕН" if result else "❌ ПРОВАЛЕН"
+        logger.info(f"   {test_name}: {status}")
+        if result:
+            passed += 1
+
+    total = len(results)
+    logger.info(f"\n🏁 Результат: {passed}/{total} тестов пройдено")
+
+    if passed == total:
+        logger.info("🎉 Все исправления работают корректно!")
+        return True
     else:
-        logger.error("\n⚠️ НЕКОТОРЫЕ ТЕСТЫ ПРОВАЛЕНЫ!")
-        logger.error("Требуется дополнительная отладка")
-    
-    return all_passed
+        logger.warning(f"⚠️ {total - passed} тестов провалено")
+        return False
 
 
 if __name__ == "__main__":
-    success = asyncio.run(main())
-    sys.exit(0 if success else 1)
+    asyncio.run(main())

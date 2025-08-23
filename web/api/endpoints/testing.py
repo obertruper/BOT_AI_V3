@@ -2,10 +2,8 @@
 API эндпоинты для тестирования системы
 """
 
-import asyncio
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -36,8 +34,8 @@ class TestPositionRequest(BaseModel):
     side: str = "long"
     size: float = 0.001
     entry_price: float = 50000.0
-    stop_loss: Optional[float] = 49000.0
-    take_profit: Optional[float] = 52000.0
+    stop_loss: float | None = 49000.0
+    take_profit: float | None = 52000.0
 
 
 @router.post("/generate-test-signal")
@@ -62,6 +60,7 @@ async def generate_test_signal(request: TestSignalRequest = TestSignalRequest())
 
         # Сохраняем в БД
         from database.connections.postgres import get_async_db
+
         async with get_async_db() as db:
             signal_repo = SignalRepository(db)
             saved_signal = await signal_repo.save_signal(signal)
@@ -217,6 +216,7 @@ async def get_system_health():
         # Проверяем базу данных
         try:
             from database.connections.postgres import get_async_db
+
             async with get_async_db() as db:
                 signal_repo = SignalRepository(db)
                 # Простой запрос для проверки БД - получаем активные сигналы
@@ -251,8 +251,8 @@ async def test_ml_pipeline():
         ml_status = {"timestamp": datetime.now().isoformat(), "ml_components": {}}
 
         try:
-            from ml.ml_manager import MLManager
             from core.config.config_manager import ConfigManager
+            from ml.ml_manager import MLManager
 
             config_manager = ConfigManager()
             ml_manager = MLManager(config_manager)

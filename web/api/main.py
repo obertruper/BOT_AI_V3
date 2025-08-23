@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, HTTPException, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -26,6 +26,7 @@ try:
     from core.config.config_manager import ConfigManager
     from core.logging.logger_factory import get_global_logger_factory
     from core.shared_context import shared_context
+    from web.api.websocket.manager import WebSocketManager
     from web.integration.web_orchestrator_bridge import (
         WebOrchestratorBridge,
         get_web_orchestrator_bridge,
@@ -45,6 +46,7 @@ except ImportError:
     from core.config.config_manager import ConfigManager
     from core.logging.logger_factory import get_global_logger_factory
     from core.shared_context import shared_context
+    from web.api.websocket.manager import WebSocketManager
     from web.integration.web_orchestrator_bridge import (
         WebOrchestratorBridge,
         initialize_web_bridge,
@@ -96,7 +98,7 @@ async def lifespan(app: FastAPI):
     if _web_bridge:
         await _web_bridge.shutdown()
     if _websocket_manager:
-        await _websocket_manager.disconnect_all()
+        await _websocket_manager.stop()
 
 
 # Создание FastAPI приложения
@@ -147,11 +149,11 @@ from web.api.endpoints import (
     system_router,
     traders_router,
 )
+from web.api.endpoints.ml_visualization import router as ml_viz_router
 from web.api.endpoints.position_tracking import router as position_tracking_router
 from web.api.endpoints.testing import router as testing_router
-from web.api.endpoints.ml_visualization import router as ml_viz_router
 from web.api.ml_api import router as ml_router
-from web.api.websocket_manager import WebSocketManager
+from web.api.websocket.manager import WebSocketManager
 
 # Подключаем роутеры к приложению
 app.include_router(monitoring_router)
@@ -170,35 +172,19 @@ app.include_router(ml_viz_router)  # ML Visualization endpoints
 
 # =================== WEBSOCKET ЭНДПОИНТ ===================
 
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket эндпоинт для real-time коммуникации"""
     global _websocket_manager
-    
+
     if not _websocket_manager:
         await websocket.close(code=1011, reason="WebSocket manager not initialized")
         return
-        
-    await _websocket_manager.connect(websocket)
-    try:
-        while True:
-            # Получаем сообщение от клиента
-            data = await websocket.receive_text()
-            
-            # Обрабатываем сообщение и отправляем ответ
-            # Здесь можно добавить логику обработки разных типов сообщений
-            await _websocket_manager.send_personal_message(
-                f"Echo: {data}", 
-                websocket
-            )
-            
-            # Также можно отправлять broadcast сообщения всем клиентам
-            # await _websocket_manager.broadcast(f"Client said: {data}")
-            
-    except WebSocketDisconnect:
-        _websocket_manager.disconnect(websocket)
-        # Можно уведомить других клиентов об отключении
-        # await _websocket_manager.broadcast(f"Client disconnected")
+
+    # Делегируем всю обработку менеджеру
+    # Менеджер сам вызовет connect(), обработает сообщения и disconnect()
+    await _websocket_manager.handle_websocket(websocket)
 
 
 # =================== DEPENDENCY INJECTION ===================
@@ -400,192 +386,9 @@ async def health_check():
         }
 
 
-@app.get("/api/system/status")
-async def get_system_status(bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
-    """Получение статуса системы"""
-    try:
-        status_data = await bridge.get_system_status()
-        return {
-            "success": True,
-            "data": status_data,
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get system status: {e!s}",
-        )
-
-
-# =================== TRADERS API ===================
-
-
-@app.get("/api/traders")
-async def get_traders(bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
-    """Получение списка всех трейдеров"""
-    try:
-        traders = await bridge.get_traders()
-        return {
-            "success": True,
-            "data": traders,
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get traders: {e!s}",
-        )
-
-
-@app.get("/api/traders/{trader_id}")
-async def get_trader(trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
-    """Получение данных конкретного трейдера"""
-    try:
-        trader = await bridge.get_trader(trader_id)
-        if trader is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Trader {trader_id} not found",
-            )
-        return {
-            "success": True,
-            "data": trader,
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get trader: {e!s}",
-        )
-
-
-@app.post("/api/traders/{trader_id}/start")
-async def start_trader(trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
-    """Запуск трейдера"""
-    try:
-        result = await bridge.start_trader(trader_id)
-        return {
-            "success": result,
-            "message": f"Trader {trader_id} {'started' if result else 'failed to start'}",
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start trader: {e!s}",
-        )
-
-
-@app.post("/api/traders/{trader_id}/stop")
-async def stop_trader(trader_id: str, bridge: WebOrchestratorBridge = Depends(get_web_bridge)):
-    """Остановка трейдера"""
-    try:
-        result = await bridge.stop_trader(trader_id)
-        return {
-            "success": result,
-            "message": f"Trader {trader_id} {'stopped' if result else 'failed to stop'}",
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to stop trader: {e!s}",
-        )
-
-
-# =================== POSITIONS API ===================
-
-
-@app.get("/api/positions")
-async def get_positions(
-    trader_id: str = None,
-    bridge: WebOrchestratorBridge = Depends(get_web_bridge),
-):
-    """Получение списка позиций"""
-    try:
-        positions = await bridge.get_positions(trader_id)
-        return {
-            "success": True,
-            "data": positions,
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get positions: {e!s}",
-        )
-
-
-@app.get("/api/system/config/raw")
-async def get_system_config_raw():
-    """Безопасная выдача полной конфигурации (секреты редактируются)."""
-    try:
-        cfg_manager: ConfigManager = _config_manager
-        if not cfg_manager:
-            cfg_manager = ConfigManager()
-            await cfg_manager.initialize()
-        raw_cfg = cfg_manager.get_config()
-
-        def _sanitize(d: Any):
-            if isinstance(d, dict):
-                red = {}
-                for k, v in d.items():
-                    lk = k.lower()
-                    if any(s in lk for s in ["secret", "api_key", "password", "token"]):
-                        red[k] = "***"
-                    else:
-                        red[k] = _sanitize(v)
-                return red
-            elif isinstance(d, list):
-                return [_sanitize(x) for x in d]
-            return d
-
-        safe_cfg = _sanitize(raw_cfg if isinstance(raw_cfg, dict) else {})
-        return {
-            "success": True,
-            "data": safe_cfg,
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-    except Exception as e:
-        logger = logging.getLogger("web_api")
-        logger.error(f"Failed to get system config: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-
-
-@app.post("/api/system/config/update")
-async def update_system_config(body: dict):
-    """Обновление раздела system в конфигурации. Ожидает {"updates": {...}}"""
-    try:
-        updates = body.get("updates", {})
-        if not isinstance(updates, dict):
-            raise ValueError("updates must be a dict")
-
-        cfg_manager: ConfigManager = _config_manager
-        if not cfg_manager:
-            cfg_manager = ConfigManager()
-            await cfg_manager.initialize()
-
-        # Обновляем и сохраняем конфигурацию
-        new_cfg = cfg_manager.update_system_config(updates)
-        return {
-            "success": True,
-            "data": new_cfg,
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-    except Exception as e:
-        logger = logging.getLogger("web_api")
-        logger.error(f"Failed to update system config: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "timestamp": asyncio.get_event_loop().time(),
-        }
+# =================== API ЭНДПОИНТЫ ОБРАБАТЫВАЮТСЯ ЧЕРЕЗ РОУТЕРЫ ===================
+# Все эндпоинты для traders, positions и других ресурсов
+# определены в соответствующих роутерах (web/api/endpoints/*)
 
 
 # =================== ОБРАБОТКА ОШИБОК ===================

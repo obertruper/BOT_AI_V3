@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from database.connections import get_async_db
+from database.db_manager import get_db
 from database.models.base_models import (
     Order,
     OrderSide,
@@ -104,7 +104,8 @@ class OrderManager:
             )
 
             # Сохраняем в БД
-            async with get_async_db() as db:
+            db_manager = await get_db()
+            async with db_manager.transaction() as db:
                 db.add(order)
                 await db.commit()
                 await db.refresh(order)
@@ -577,7 +578,8 @@ class OrderManager:
     async def _update_order_in_db(self, order: Order):
         """Обновление ордера в БД"""
         try:
-            async with get_async_db() as db:
+            db_manager = await get_db()
+            async with db_manager.transaction() as db:
                 await db.merge(order)
                 await db.commit()
         except Exception as e:

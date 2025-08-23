@@ -25,8 +25,9 @@ from ml.ml_prediction_logger import ml_prediction_logger
 
 # Импорт системы адаптеров
 try:
-    from ml.adapters.factory import ModelAdapterFactory
     from ml.adapters.base import BaseModelAdapter
+    from ml.adapters.factory import ModelAdapterFactory
+
     ADAPTERS_AVAILABLE = True
 except ImportError:
     ADAPTERS_AVAILABLE = False
@@ -55,22 +56,22 @@ if torch.cuda.is_available():
 def _get_ml_config(config) -> dict[str, Any]:
     """Получает ML конфигурацию из разных форматов"""
     # Если это Pydantic модель
-    if hasattr(config, 'ml'):
+    if hasattr(config, "ml"):
         ml_config = config.ml
         # Конвертируем Pydantic модель в dict
-        if hasattr(ml_config, 'model_dump'):
+        if hasattr(ml_config, "model_dump"):
             return {"ml": ml_config.model_dump()}
-        elif hasattr(ml_config, 'dict'):
+        elif hasattr(ml_config, "dict"):
             return {"ml": ml_config.dict()}
         else:
             # Fallback для прямого доступа к атрибутам
             return {
                 "ml": {
-                    "enabled": getattr(ml_config, 'enabled', True),
-                    "use_adapters": getattr(ml_config, 'use_adapters', True),
-                    "active_model": getattr(ml_config, 'active_model', 'patchtst'),
-                    "models": getattr(ml_config, 'models', {}),
-                    "model": getattr(ml_config, 'model', {})
+                    "enabled": getattr(ml_config, "enabled", True),
+                    "use_adapters": getattr(ml_config, "use_adapters", True),
+                    "active_model": getattr(ml_config, "active_model", "patchtst"),
+                    "models": getattr(ml_config, "models", {}),
+                    "model": getattr(ml_config, "model", {}),
                 }
             }
     # Если это обычный dict
@@ -98,11 +99,11 @@ class MLManager:
         self.model = None
         self.scaler = None
         self.feature_engineer = None
-        
+
         # Инициализация адаптера если доступен
         self.adapter = None
         self.use_adapter = False
-        
+
         # Проверяем возможность использования адаптеров
         if ADAPTERS_AVAILABLE and self.config.get("ml", {}).get("use_adapters", True):
             try:
@@ -268,16 +269,18 @@ class MLManager:
         try:
             # Если используем адаптер, делегируем инициализацию ему
             if self.use_adapter and self.adapter:
-                await self.adapter.load()
+                await self.adapter.initialize()
                 success = True
                 if success:
                     self._initialized = True
                     logger.info("✅ ML components initialized via adapter")
                     return
                 else:
-                    logger.error("Не удалось загрузить модель через адаптер, используем legacy режим")
+                    logger.error(
+                        "Не удалось загрузить модель через адаптер, используем legacy режим"
+                    )
                     self.use_adapter = False
-            
+
             # Обратная совместимость с классической инициализацией
             # Регистрируемся в координаторе воркеров с soft-fail режимом
             await worker_coordinator.start()
@@ -441,20 +444,20 @@ class MLManager:
                 # Передаем данные в адаптер как есть - он сам определит что делать
                 # DataFrame с OHLCV -> feature engineering внутри адаптера
                 # numpy array -> уже готовые признаки
-                
+
                 # Проверяем валидность входных данных
                 is_valid = self.adapter.validate_input(input_data)
                 if not is_valid:
                     raise ValueError("Invalid input data for adapter prediction")
-                
+
                 # Делаем предсказание через адаптер
                 result = await self.adapter.predict(input_data)
-                
+
                 # Адаптер уже возвращает dict, но проверим на всякий случай
-                if hasattr(result, 'to_dict'):
+                if hasattr(result, "to_dict"):
                     return result.to_dict()
                 return result
-            
+
             # Обратная совместимость
             # ВАЛИДАЦИЯ: Проверяем что модель инициализирована
             if not self._initialized or self.model is None:
@@ -562,18 +565,24 @@ class MLManager:
                     feature_names = get_required_features_list()
 
                 # Берем последние context_length строк или все если меньше
-                logger.info(f"🔍 Подготовка данных: features_array.shape={features_array.shape}, context_length={self.context_length}")
+                logger.info(
+                    f"🔍 Подготовка данных: features_array.shape={features_array.shape}, context_length={self.context_length}"
+                )
                 if len(features_array) >= self.context_length:
                     features = features_array[-self.context_length :]
-                    logger.info(f"✅ Использую последние {self.context_length} строк, features.shape={features.shape}")
+                    logger.info(
+                        f"✅ Использую последние {self.context_length} строк, features.shape={features.shape}"
+                    )
                 else:
                     # Если данных меньше чем нужно - дополняем нулями (padding)
                     padding_size = self.context_length - len(features_array)
                     padding = np.zeros((padding_size, features_array.shape[1]))
                     features = np.vstack([padding, features_array])
-                    logger.info(f"✅ Добавил padding {padding_size} строк, features.shape={features.shape}")
+                    logger.info(
+                        f"✅ Добавил padding {padding_size} строк, features.shape={features.shape}"
+                    )
 
-                # Берем последнюю строку для логирования текущих значений  
+                # Берем последнюю строку для логирования текущих значений
                 current_features = features[-1] if len(features) > 0 else features[0]
 
                 # Создаем красивую таблицу с входными признаками
@@ -826,9 +835,10 @@ class MLManager:
 
         # Этап 1: Извлечение и валидация данных модели
         outputs_np = outputs.cpu().numpy()[0]
-        
+
         # ДИАГНОСТИКА: Логируем сырые выходы модели
-        logger.info(f"""
+        logger.info(
+            f"""
 🔬 ДИАГНОСТИКА ВЫХОДОВ МОДЕЛИ:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Размерность: {outputs_np.shape}
@@ -836,7 +846,8 @@ class MLManager:
 Максимум: {outputs_np.max():.6f}
 Среднее: {outputs_np.mean():.6f}
 Первые 5 значений: {outputs_np[:5]}
-""")
+"""
+        )
 
         # Структура выходов (20 значений):
         # 0-3: future returns (15m, 1h, 4h, 12h)
@@ -855,10 +866,14 @@ class MLManager:
             timeframe_names = ["15m", "1h", "4h", "12h"]
             # Проверяем на одинаковые логиты
             if np.allclose(logits, logits[0], rtol=1e-5):
-                logger.warning(f"⚠️ ВНИМАНИЕ: Все логиты для {timeframe_names[i]} одинаковые: {logits}")
+                logger.warning(
+                    f"⚠️ ВНИМАНИЕ: Все логиты для {timeframe_names[i]} одинаковые: {logits}"
+                )
                 # Если все логиты одинаковые и близки к 2.0, это проблема
                 if np.allclose(logits, 2.0, atol=0.1):
-                    logger.error(f"🔴 КРИТИЧНО: Логиты {timeframe_names[i]} = 2.0, возможно модель возвращает классы вместо логитов!")
+                    logger.error(
+                        f"🔴 КРИТИЧНО: Логиты {timeframe_names[i]} = 2.0, возможно модель возвращает классы вместо логитов!"
+                    )
 
         # Применяем softmax к каждому таймфрейму
         directions = []
@@ -994,13 +1009,13 @@ class MLManager:
             # Используем метрики качества от анализатора
             signal_strength = metrics.agreement_score
             combined_confidence = metrics.confidence_score
-            
+
             # Дополнительная корректировка силы сигнала если 4h = NEUTRAL (мягкая проверка)
             if directions[2] == 2:  # directions[2] это 4h, значение 2 = NEUTRAL
                 # Снижаем силу, но не блокируем сигнал полностью
-                logger.info(f"📊 4h = NEUTRAL, применяем корректировку силы сигнала (×0.8)")
+                logger.info("📊 4h = NEUTRAL, применяем корректировку силы сигнала (×0.8)")
                 signal_strength *= 0.8  # Мягкое снижение силы
-                
+
                 # Логируем для диагностики
                 other_directions = [directions[i] for i in [0, 1, 3]]  # 15m, 1h, 12h
                 long_count = sum(1 for d in other_directions if d == 0)

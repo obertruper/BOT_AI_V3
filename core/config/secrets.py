@@ -10,7 +10,6 @@ import os
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
 
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
@@ -22,7 +21,7 @@ class SecretBackend(ABC):
     """Абстрактный класс для бэкендов хранения секретов."""
 
     @abstractmethod
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         """Получает секрет по ключу."""
         pass
 
@@ -37,7 +36,7 @@ class SecretBackend(ABC):
         pass
 
     @abstractmethod
-    def list_secrets(self) -> List[str]:
+    def list_secrets(self) -> list[str]:
         """Возвращает список всех ключей секретов."""
         pass
 
@@ -45,7 +44,7 @@ class SecretBackend(ABC):
 class EnvFileBackend(SecretBackend):
     """Бэкенд для хранения секретов в .env файле."""
 
-    def __init__(self, env_file: Optional[Path] = None):
+    def __init__(self, env_file: Path | None = None):
         """Инициализирует бэкенд.
 
         Args:
@@ -64,7 +63,7 @@ class EnvFileBackend(SecretBackend):
         if self.env_file.exists():
             load_dotenv(self.env_file, override=True)
 
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         """Получает секрет из переменной окружения."""
         return os.getenv(key)
 
@@ -79,7 +78,7 @@ class EnvFileBackend(SecretBackend):
             del os.environ[key]
         self._remove_from_env_file(key)
 
-    def list_secrets(self) -> List[str]:
+    def list_secrets(self) -> list[str]:
         """Возвращает список всех секретных ключей."""
         # Определяем паттерны секретных ключей
         secret_patterns = [
@@ -108,7 +107,7 @@ class EnvFileBackend(SecretBackend):
         key_found = False
 
         if self.env_file.exists():
-            with open(self.env_file, "r") as f:
+            with open(self.env_file) as f:
                 for line in f:
                     if line.startswith(f"{key}="):
                         lines.append(f"{key}={value}\n")
@@ -128,7 +127,7 @@ class EnvFileBackend(SecretBackend):
             return
 
         lines = []
-        with open(self.env_file, "r") as f:
+        with open(self.env_file) as f:
             for line in f:
                 if not line.startswith(f"{key}="):
                     lines.append(line)
@@ -140,7 +139,7 @@ class EnvFileBackend(SecretBackend):
 class EncryptedFileBackend(SecretBackend):
     """Бэкенд для хранения зашифрованных секретов в файле."""
 
-    def __init__(self, secrets_file: Optional[Path] = None, key_file: Optional[Path] = None):
+    def __init__(self, secrets_file: Path | None = None, key_file: Path | None = None):
         """Инициализирует бэкенд.
 
         Args:
@@ -158,7 +157,7 @@ class EncryptedFileBackend(SecretBackend):
         self.secrets_file = secrets_file
         self.key_file = key_file
         self._cipher = self._get_or_create_cipher()
-        self._secrets: Dict[str, str] = self._load_secrets()
+        self._secrets: dict[str, str] = self._load_secrets()
 
     def _get_or_create_cipher(self) -> Fernet:
         """Получает или создает ключ шифрования."""
@@ -175,7 +174,7 @@ class EncryptedFileBackend(SecretBackend):
 
         return Fernet(key)
 
-    def _load_secrets(self) -> Dict[str, str]:
+    def _load_secrets(self) -> dict[str, str]:
         """Загружает и расшифровывает секреты из файла."""
         if not self.secrets_file.exists():
             return {}
@@ -202,7 +201,7 @@ class EncryptedFileBackend(SecretBackend):
         # Устанавливаем права доступа только для владельца
         self.secrets_file.chmod(0o600)
 
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         """Получает расшифрованный секрет."""
         return self._secrets.get(key)
 
@@ -217,7 +216,7 @@ class EncryptedFileBackend(SecretBackend):
             del self._secrets[key]
             self._save_secrets()
 
-    def list_secrets(self) -> List[str]:
+    def list_secrets(self) -> list[str]:
         """Возвращает список всех ключей секретов."""
         return sorted(self._secrets.keys())
 
@@ -225,7 +224,7 @@ class EncryptedFileBackend(SecretBackend):
 class SecretsManager:
     """Централизованный менеджер для управления секретами."""
 
-    def __init__(self, backend: Optional[SecretBackend] = None):
+    def __init__(self, backend: SecretBackend | None = None):
         """Инициализирует менеджер секретов.
 
         Args:
@@ -233,11 +232,11 @@ class SecretsManager:
                     По умолчанию используется EnvFileBackend.
         """
         self.backend = backend or EnvFileBackend()
-        self._masked_patterns: Set[re.Pattern] = self._create_mask_patterns()
-        self._cache: Dict[str, Optional[str]] = {}
-        self._required_secrets: Dict[str, str] = self._define_required_secrets()
+        self._masked_patterns: set[re.Pattern] = self._create_mask_patterns()
+        self._cache: dict[str, str | None] = {}
+        self._required_secrets: dict[str, str] = self._define_required_secrets()
 
-    def _create_mask_patterns(self) -> Set[re.Pattern]:
+    def _create_mask_patterns(self) -> set[re.Pattern]:
         """Создает паттерны для маскирования секретов в логах."""
         patterns = [
             # API ключи и токены
@@ -252,7 +251,7 @@ class SecretsManager:
         ]
         return {re.compile(pattern, re.IGNORECASE) for pattern in patterns}
 
-    def _define_required_secrets(self) -> Dict[str, str]:
+    def _define_required_secrets(self) -> dict[str, str]:
         """Определяет обязательные секреты и их описания."""
         return {
             # Биржи
@@ -269,7 +268,7 @@ class SecretsManager:
             "SENTRY_DSN": "DSN для Sentry",
         }
 
-    def get(self, key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
+    def get(self, key: str, default: str | None = None, required: bool = False) -> str | None:
         """Получает секрет по ключу.
 
         Args:
@@ -324,11 +323,11 @@ class SecretsManager:
             del self._cache[key]
         print(f"🗑️ Секрет '{key}' удален")
 
-    def list(self) -> List[str]:
+    def list(self) -> list[str]:
         """Возвращает список всех секретов."""
         return self.backend.list_secrets()
 
-    def validate_required(self) -> Dict[str, bool]:
+    def validate_required(self) -> dict[str, bool]:
         """Проверяет наличие всех обязательных секретов.
 
         Returns:
@@ -410,11 +409,9 @@ class SecretsManager:
         for category, prefixes in categories.items():
             category_secrets = []
             for key, description in self._required_secrets.items():
-                if any(key.startswith(prefix) for prefix in prefixes):
-                    category_secrets.append((key, description))
-                elif category == "Общие" and not any(
+                if any(key.startswith(prefix) for prefix in prefixes) or (category == "Общие" and not any(
                     key.startswith(p) for cat_prefixes in categories.values() for p in cat_prefixes
-                ):
+                )):
                     category_secrets.append((key, description))
 
             if category_secrets:
@@ -439,17 +436,17 @@ class SecretsManager:
 
         # Проверяем обязательные секреты
         validation_results = self.validate_required()
-        
+
         configured = sum(1 for v in validation_results.values() if v)
         total = len(validation_results)
-        
-        lines.append(f"\n📊 Статистика:")
+
+        lines.append("\n📊 Статистика:")
         lines.append(f"  - Настроено: {configured}/{total}")
         lines.append(f"  - Отсутствует: {total - configured}")
 
         # Детали по категориям
         lines.append("\n📋 Детали по категориям:")
-        
+
         categories = {
             "Биржи": ["BYBIT", "BINANCE"],
             "База данных": ["DB"],
@@ -458,7 +455,8 @@ class SecretsManager:
 
         for category, prefixes in categories.items():
             category_results = {
-                k: v for k, v in validation_results.items()
+                k: v
+                for k, v in validation_results.items()
                 if any(k.startswith(p) for p in prefixes)
             }
             if category_results:
@@ -484,7 +482,7 @@ class SecretsManager:
 
 
 # Глобальный экземпляр менеджера секретов
-_secrets_manager: Optional[SecretsManager] = None
+_secrets_manager: SecretsManager | None = None
 
 
 def get_secrets_manager() -> SecretsManager:
@@ -496,7 +494,7 @@ def get_secrets_manager() -> SecretsManager:
 
 
 # Удобные функции для быстрого доступа
-def get_secret(key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
+def get_secret(key: str, default: str | None = None, required: bool = False) -> str | None:
     """Получает секрет по ключу."""
     return get_secrets_manager().get(key, default, required)
 

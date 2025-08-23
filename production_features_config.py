@@ -257,5 +257,5 @@ CRITICAL_FORMULAS = {
     "macd": "ta.trend.MACD(close, window_fast, window_slow, window_sign)",
     "volume_ratio": "volume / volume.rolling(20).mean()",
     "high_low_ratio": "high / low",
-    "atr": "ta.volatility.AverageTrueRange(high, low, close, window).average_true_range()"
+    "atr": "ta.volatility.AverageTrueRange(high, low, close, window).average_true_range()",
 }

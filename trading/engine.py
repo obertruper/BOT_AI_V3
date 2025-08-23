@@ -21,18 +21,19 @@ from core.system.worker_coordinator import worker_coordinator
 
 # Импортируем новую архитектуру БД
 from database.db_manager import get_db
-from database.repositories.order_repository import OrderRepository
-from database.repositories.signal_repository import SignalRepository
-from database.repositories.trade_repository import TradeRepository
 
 # Импортируем модели для создания ордеров
 from database.models.base_models import Order, OrderSide, OrderStatus, OrderType, SignalType
+from database.repositories.order_repository import OrderRepository
+from database.repositories.signal_repository import SignalRepository
+from database.repositories.trade_repository import TradeRepository
 from exchanges.exchange_manager import ExchangeManager
 from risk_management.manager import RiskManager
 from strategies.manager import StrategyManager
 
 from .execution.executor import ExecutionEngine
 from .orders.order_manager import OrderManager
+
 # from .positions.position_manager import PositionManager  # Удален legacy класс
 from .position_tracker import EnhancedPositionTracker, get_position_tracker
 
@@ -241,9 +242,12 @@ class TradingEngine:
             self.position_tracker.exchange_manager = self.exchange_registry
             await self.position_tracker.start_tracking()
             self.logger.info("✅ Enhanced Position Tracker инициализирован и запущен")
+            # Создаем alias для обратной совместимости
+            self.position_manager = self.position_tracker
         except Exception as e:
             self.logger.error(f"❌ Ошибка инициализации Position Tracker: {e}")
             self.position_tracker = None
+            self.position_manager = None
 
         # Execution Engine
         self.execution_engine = ExecutionEngine(
@@ -317,7 +321,7 @@ class TradingEngine:
         try:
             # Инициализируем менеджер БД
             self._db_manager = await get_db()
-            
+
             # Получаем репозитории через менеджер
             self.order_repository = self._db_manager.get_order_repository()
             self.trade_repository = self._db_manager.get_trade_repository()
@@ -535,14 +539,16 @@ class TradingEngine:
             #     return
 
             # КРИТИЧНО: Проверяем и закрываем противоположные позиции
-            opposite_position = await self._check_and_close_opposite_position(signal.symbol, signal.signal_type)
+            opposite_position = await self._check_and_close_opposite_position(
+                signal.symbol, signal.signal_type
+            )
             if opposite_position:
                 self.logger.info(
                     f"🔄 Закрыта противоположная позиция для {signal.symbol} перед открытием {signal.signal_type}"
                 )
                 # Даем время на закрытие позиции
                 await asyncio.sleep(2)
-            
+
             # Проверяем существующие позиции в том же направлении
             if await self._has_existing_position(signal.symbol, signal.signal_type):
                 self.logger.info(
@@ -862,9 +868,7 @@ class TradingEngine:
                 "execution_engine": (
                     self.execution_engine.is_running() if self.execution_engine else False
                 ),
-                "risk_manager": (
-                    self.risk_manager.is_running() if self.risk_manager else False
-                ),
+                "risk_manager": (self.risk_manager.is_running() if self.risk_manager else False),
                 "strategy_manager": (
                     self.strategy_manager.is_running() if self.strategy_manager else False
                 ),
@@ -1241,6 +1245,7 @@ class TradingEngine:
 
             # Проверяем направление позиции
             from database.models.base_models import SignalType
+
             from ..base.order_types import OrderRequest, OrderSide, OrderType
 
             position_long = position.size > 0
@@ -1253,19 +1258,19 @@ class TradingEngine:
                     f"текущая={'LONG' if position_long else 'SHORT'}, "
                     f"новый сигнал={signal_type}"
                 )
-                
+
                 # Создаем ордер на закрытие позиции
                 close_order = OrderRequest(
                     symbol=symbol,
                     side=OrderSide.SELL if position_long else OrderSide.BUY,
                     order_type=OrderType.MARKET,
                     quantity=abs(position.size),
-                    reduce_only=True  # Важно: только закрытие позиции
+                    reduce_only=True,  # Важно: только закрытие позиции
                 )
-                
+
                 # Исполняем ордер на закрытие
                 result = await exchange.place_order(close_order)
-                
+
                 if result.success:
                     self.logger.info(
                         f"✅ Успешно закрыта противоположная позиция {symbol}: "
@@ -1373,8 +1378,7 @@ class TradingEngine:
                 if self.position_manager:
                     # ИСПРАВЛЕНО: добавлен параметр exchange
                     existing_position = await self.position_manager.get_position(
-                        exchange=signal.exchange,
-                        symbol=signal.symbol
+                        exchange=signal.exchange, symbol=signal.symbol
                     )
                     if existing_position:
                         position_side = existing_position.get("side", "").lower()
@@ -1403,10 +1407,10 @@ class TradingEngine:
                 last_order_time = self._recent_signal_times.get(signal.symbol, 0)
                 current_time = asyncio.get_event_loop().time()
                 # Увеличиваем минимальный интервал до 5 минут для предотвращения дублирования
-                min_signal_interval = self.config.get("trading", {}).get("min_signal_interval", 300)  # 5 минут по умолчанию
-                if (
-                    current_time - last_order_time < min_signal_interval
-                ):
+                min_signal_interval = self.config.get("trading", {}).get(
+                    "min_signal_interval", 300
+                )  # 5 минут по умолчанию
+                if current_time - last_order_time < min_signal_interval:
                     time_passed = current_time - last_order_time
                     time_remaining = min_signal_interval - time_passed
                     self.logger.warning(

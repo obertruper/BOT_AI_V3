@@ -9,12 +9,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.config.config_manager import ConfigManager
-from core.config.validation import ConfigValidator, ValidationLevel
+from core.config.validation import ConfigValidator
 from core.exceptions import (
     TraderFactoryError,
-    TraderInitializationError,
-    UnsupportedExchangeError,
-    UnsupportedStrategyError,
 )
 from core.traders.trader_context import TraderContext
 
@@ -82,46 +79,54 @@ class TraderFactory:
 
     def _validate_trader_config(self, config: dict) -> None:
         """Валидация конфигурации трейдера."""
-        required_fields = ['id', 'type', 'exchange', 'strategy']
-        
+        required_fields = ["id", "type", "exchange", "strategy"]
+
         for field in required_fields:
             if field not in config:
-                raise ConfigurationError(f"Отсутствует обязательное поле '{field}' в конфигурации трейдера")
-    
+                raise ConfigurationError(
+                    f"Отсутствует обязательное поле '{field}' в конфигурации трейдера"
+                )
+
     def _create_trader_instance(self, config: dict):
         """Создает экземпляр трейдера на основе типа."""
-        trader_type = config.get('type', 'basic')
-        
+        trader_type = config.get("type", "basic")
+
         # Здесь можно добавить различные типы трейдеров
-        if trader_type == 'multi_crypto':
+        if trader_type == "multi_crypto":
             from trading.traders.multi_crypto_trader import MultiCryptoTrader
+
             return MultiCryptoTrader(config)
         else:
             # Базовый трейдер по умолчанию
             from trading.traders.base_trader import BaseTrader
+
             return BaseTrader(config)
-    
+
     def register_trader_type(self, trader_type: str, trader_class):
         """Регистрирует новый тип трейдера."""
         self.trader_types[trader_type] = trader_class
         self.logger.info(f"Зарегистрирован новый тип трейдера: {trader_type}")
-    
+
     def get_registered_types(self) -> list[str]:
         """Возвращает список зарегистрированных типов трейдеров."""
         return list(self.trader_types.keys())
-    
+
     def _register_default_components(self) -> None:
         """Регистрирует компоненты по умолчанию."""
         try:
             # Регистрируем основные типы трейдеров
-            self.trader_types.update({
-                "base": None,  # Базовый трейдер
-                "crypto": None,  # Криптовалютный трейдер
-                "scalping": None,  # Скальпинговый трейдер
-            })
-            
-            self.logger.info(f"✅ Зарегистрировано {len(self.trader_types)} типов трейдеров по умолчанию")
-            
+            self.trader_types.update(
+                {
+                    "base": None,  # Базовый трейдер
+                    "crypto": None,  # Криптовалютный трейдер
+                    "scalping": None,  # Скальпинговый трейдер
+                }
+            )
+
+            self.logger.info(
+                f"✅ Зарегистрировано {len(self.trader_types)} типов трейдеров по умолчанию"
+            )
+
         except Exception as e:
             self.logger.error(f"❌ Ошибка регистрации компонентов по умолчанию: {e}")
             # Не критическая ошибка, продолжаем работу
@@ -136,6 +141,7 @@ def get_global_trader_factory() -> TraderFactory:
     global _global_trader_factory
     if _global_trader_factory is None:
         from core.config.config_manager import get_global_config_manager
+
         config_manager = get_global_config_manager()
         _global_trader_factory = TraderFactory(config_manager)
     return _global_trader_factory

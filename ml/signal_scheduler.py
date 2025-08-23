@@ -24,13 +24,19 @@ class SignalScheduler:
     с использованием ML модели
     """
 
-    def __init__(self, config_manager: ConfigManager | None = None):
+    def __init__(self, config_or_manager: ConfigManager | dict | None = None):
         """
         Args:
-            config_manager: Менеджер конфигурации
+            config_or_manager: Менеджер конфигурации или dict конфигурации
         """
-        self.config_manager = config_manager or ConfigManager()
-        self.config = self.config_manager.get_config()
+        if isinstance(config_or_manager, dict):
+            # Если передан dict конфигурации напрямую
+            self.config = config_or_manager
+            self.config_manager = None
+        else:
+            # Если передан ConfigManager или None
+            self.config_manager = config_or_manager or ConfigManager()
+            self.config = self.config_manager.get_config()
 
         # ML компоненты
         self.ml_manager = None
@@ -67,11 +73,23 @@ class SignalScheduler:
             await self.ml_manager.initialize()
 
             # Инициализируем Signal Processor
-            self.signal_processor = MLSignalProcessor(
-                ml_manager=self.ml_manager,
-                config=self.config,
-                config_manager=self.config_manager,
-            )
+            # Если у нас нет config_manager, создаем временный для signal_processor
+            if self.config_manager:
+                self.signal_processor = MLSignalProcessor(
+                    ml_manager=self.ml_manager,
+                    config=self.config,
+                    config_manager=self.config_manager,
+                )
+            else:
+                # Создаем временный ConfigManager для signal_processor
+                from core.config.config_manager import ConfigManager
+
+                temp_manager = ConfigManager()
+                self.signal_processor = MLSignalProcessor(
+                    ml_manager=self.ml_manager,
+                    config=self.config,
+                    config_manager=temp_manager,
+                )
             await self.signal_processor.initialize()
 
             logger.info("✅ Signal Scheduler готов к работе")
@@ -130,13 +148,13 @@ class SignalScheduler:
     def set_trading_engine(self, trading_engine):
         """
         Устанавливает ссылку на Trading Engine для отправки сигналов
-        
+
         Args:
             trading_engine: Экземпляр TradingEngine
         """
         self.trading_engine = trading_engine
         logger.info("✅ Trading Engine подключен к Signal Scheduler")
-        
+
         # Если у нас есть signal_processor, передаем ему тоже
         if self.signal_processor:
             self.signal_processor.trading_engine = trading_engine

@@ -366,7 +366,7 @@ class UnifiedPatchTSTForTrading(nn.Module):
         # Reshape логитов для правильной структуры вывода
         # direction_logits_reshaped имеет форму (B, 4, 3) - нужно развернуть в (B, 12)
         direction_logits_flat = direction_logits_reshaped.reshape(batch_size, -1)  # (B, 12)
-        
+
         outputs = torch.cat(
             [
                 future_returns,  # 0-3: future returns (4 значения)

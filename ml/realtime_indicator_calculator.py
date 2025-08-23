@@ -6,19 +6,15 @@ Real-time расчет технических индикаторов для ML �
 
 import asyncio
 from datetime import UTC, datetime
-from decimal import Decimal
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from production_features_config import REAL_FEATURES_240 as REQUIRED_FEATURES_240
-from sqlalchemy import desc, select
-from sqlalchemy.dialects.postgresql import insert
 
 from core.logger import setup_logger
 from database.db_manager import get_db
-from database.models.market_data import ProcessedMarketData, RawMarketData
 from ml.logic.feature_engineering_production import ProductionFeatureEngineer as FeatureEngineer
+from production_features_config import REAL_FEATURES_240 as REQUIRED_FEATURES_240
 
 logger = setup_logger(__name__)
 
@@ -324,59 +320,68 @@ class RealTimeIndicatorCalculator:
         Сохраняет рассчитанные индикаторы в базу данных
         """
         try:
-            async with get_async_db() as session:
-                # Получаем последнюю запись из raw_market_data
-                stmt = (
-                    select(RawMarketData)
-                    .where(RawMarketData.symbol == symbol)
-                    .order_by(desc(RawMarketData.timestamp))
-                    .limit(1)
-                )
+            # Используем простой execute вместо transaction для более стабильной работы
+            db = await get_db()
 
-                result = await session.execute(stmt)
-                raw_data = result.scalar_one_or_none()
+            # Получаем последнюю запись из raw_market_data - используем упрощенный подход
+            query = """
+                SELECT id, timestamp, datetime, open, high, low, close, volume
+                FROM raw_market_data 
+                WHERE symbol = $1 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+            """
+            raw_data_row = await db.fetch_one(query, symbol)
 
-                if not raw_data:
-                    logger.warning(f"Не найдены raw данные для {symbol}")
-                    return
+            if not raw_data_row:
+                logger.warning(f"Не найдены raw данные для {symbol}")
+                return
 
-                # Подготавливаем данные для сохранения
-                metadata = indicators.get("metadata", {})
-                ohlcv = indicators.get("ohlcv", {})
+            # Подготавливаем данные для сохранения
+            metadata = indicators.get("metadata", {})
+            ohlcv = indicators.get("ohlcv", {})
 
-                processed_data = {
-                    "raw_data_id": raw_data.id,
-                    "symbol": symbol,
-                    "timestamp": metadata.get("timestamp", raw_data.timestamp),
-                    "datetime": metadata.get("datetime", raw_data.datetime),
-                    "open": Decimal(str(ohlcv.get("open", raw_data.open))),
-                    "high": Decimal(str(ohlcv.get("high", raw_data.high))),
-                    "low": Decimal(str(ohlcv.get("low", raw_data.low))),
-                    "close": Decimal(str(ohlcv.get("close", raw_data.close))),
-                    "volume": Decimal(str(ohlcv.get("volume", raw_data.volume))),
-                    "technical_indicators": indicators.get("technical_indicators", {}),
-                    "microstructure_features": indicators.get("microstructure_features", {}),
-                    "ml_features": indicators.get("ml_features", {}),
-                    "processing_version": "2.0",  # Real-time версия
-                    "model_version": "patchtst_v1",
-                }
+            # Используем простой INSERT или UPDATE вместо upsert для надежности
+            insert_query = """
+                INSERT INTO processed_market_data (
+                    raw_data_id, symbol, timestamp, datetime, 
+                    open, high, low, close, volume,
+                    technical_indicators, microstructure_features, ml_features,
+                    processing_version, model_version, created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                ON CONFLICT (symbol, timestamp) 
+                DO UPDATE SET
+                    technical_indicators = EXCLUDED.technical_indicators,
+                    microstructure_features = EXCLUDED.microstructure_features,
+                    ml_features = EXCLUDED.ml_features,
+                    updated_at = EXCLUDED.updated_at
+            """
 
-                # Используем upsert
-                stmt = insert(ProcessedMarketData).values(**processed_data)
-                stmt = stmt.on_conflict_do_update(
-                    constraint="_symbol_timestamp_processed_uc",
-                    set_={
-                        "technical_indicators": stmt.excluded.technical_indicators,
-                        "microstructure_features": stmt.excluded.microstructure_features,
-                        "ml_features": stmt.excluded.ml_features,
-                        "updated_at": datetime.now(UTC),
-                    },
-                )
+            import json
 
-                await session.execute(stmt)
-                await session.commit()
+            now = datetime.now(UTC)
 
-                logger.debug(f"Сохранены индикаторы для {symbol} в БД")
+            await db.execute(
+                insert_query,
+                raw_data_row["id"],
+                symbol,
+                metadata.get("timestamp", raw_data_row["timestamp"]),
+                metadata.get("datetime", raw_data_row["datetime"]),
+                str(ohlcv.get("open", raw_data_row["open"])),
+                str(ohlcv.get("high", raw_data_row["high"])),
+                str(ohlcv.get("low", raw_data_row["low"])),
+                str(ohlcv.get("close", raw_data_row["close"])),
+                str(ohlcv.get("volume", raw_data_row["volume"])),
+                json.dumps(indicators.get("technical_indicators", {})),
+                json.dumps(indicators.get("microstructure_features", {})),
+                json.dumps(indicators.get("ml_features", {})),
+                "2.0",  # processing_version
+                "patchtst_v1",  # model_version
+                now,
+                now,
+            )
+
+            logger.debug(f"Сохранены индикаторы для {symbol} в БД")
 
         except Exception as e:
             logger.error(f"Ошибка сохранения в БД для {symbol}: {e}")
@@ -468,11 +473,11 @@ class RealTimeIndicatorCalculator:
                     f"🔧 get_features_for_ml: DataFrame shape {features_result.shape}, columns: {len(features_result.columns)}"
                 )
 
-                # Используем ТОЛЬКО признаки из REQUIRED_FEATURES_231
+                # Используем ТОЛЬКО признаки из REQUIRED_FEATURES_240
                 available_cols = features_result.columns.tolist()
                 selected_features = []
 
-                for feature in REQUIRED_FEATURES_231:
+                for feature in REQUIRED_FEATURES_240:
                     if feature in available_cols:
                         selected_features.append(feature)
                     else:
@@ -481,13 +486,13 @@ class RealTimeIndicatorCalculator:
                         features_result[feature] = 0.0
                         logger.debug(f"Добавлен нулевой признак: {feature}")
 
-                # Гарантируем ровно 231 признаков
+                # Гарантируем ровно 240 признаков
                 logger.info(
-                    f"🔧 get_features_for_ml: selected_features={len(selected_features)}, required={len(REQUIRED_FEATURES_231)}"
+                    f"🔧 get_features_for_ml: selected_features={len(selected_features)}, required={len(REQUIRED_FEATURES_240)}"
                 )
                 assert (
-                    len(selected_features) == 231
-                ), f"Должно быть 231 признаков, получено {len(selected_features)}"
+                    len(selected_features) == 240
+                ), f"Должно быть 240 признаков, получено {len(selected_features)}"
                 features_array = features_result[selected_features].values
                 logger.info(
                     f"🔧 get_features_for_ml: final features_array shape: {features_array.shape}"
@@ -507,8 +512,8 @@ class RealTimeIndicatorCalculator:
                     f"✅ get_features_for_ml: Extracted {len(last_features)} features for {symbol}"
                 )
                 assert (
-                    len(last_features) == 231
-                ), f"Ожидалось 231 признаков, получено {len(last_features)}"
+                    len(last_features) == 240
+                ), f"Ожидалось 240 признаков, получено {len(last_features)}"
                 return last_features
             else:
                 logger.error(f"Неожиданная форма features_array: {features_array.shape}")
@@ -648,6 +653,9 @@ class RealTimeIndicatorCalculator:
             else:
                 feature_std = np.std(features_sample, axis=0)
                 non_zero_std = np.sum(feature_std > 1e-6)
+                logger.debug(
+                    f"🔧 Расчет дисперсии для {symbol}: feature_std shape={feature_std.shape}, non_zero={non_zero_std}"
+                )
         except (TypeError, ValueError) as e:
             logger.warning(f"Ошибка вычисления дисперсии признаков: {e}")
             # Fallback - простая проверка без std
@@ -660,7 +668,30 @@ class RealTimeIndicatorCalculator:
         logger.info(
             f"   Признаков с ненулевой дисперсией: {non_zero_std}/{features_array.shape[2]}"
         )
+
+        # Детальное логирование zero variance признаков
         if feature_std is not None:
+            zero_variance_mask = feature_std <= 1e-6
+            zero_count = np.sum(zero_variance_mask)
+
+            if zero_count > 0:
+                logger.warning(
+                    f"🔴 Найдено {zero_count} признаков с нулевой дисперсией для {symbol}:"
+                )
+                zero_indices = np.where(zero_variance_mask)[0]
+
+                # Показываем первые 10 проблемных признаков
+                for i, idx in enumerate(zero_indices[:10]):
+                    feature_name = (
+                        REQUIRED_FEATURES_240[idx]
+                        if idx < len(REQUIRED_FEATURES_240)
+                        else f"feature_{idx}"
+                    )
+                    logger.warning(f"   [{idx:3d}] {feature_name}: std={feature_std[idx]:.8f}")
+
+                if len(zero_indices) > 10:
+                    logger.warning(f"   ... и еще {len(zero_indices) - 10} признаков")
+
             logger.debug(
                 f"   Дисперсия: min={feature_std.min():.6f}, max={feature_std.max():.6f}, mean={feature_std.mean():.6f}"
             )

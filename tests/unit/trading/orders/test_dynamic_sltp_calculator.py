@@ -74,7 +74,7 @@ class TestDynamicSLTPCalculator:
     @pytest.mark.asyncio
     async def test_calculate_atr_low_volatility(self, calculator, sample_candles_low_volatility):
         """Тест расчета ATR для низкой волатильности"""
-        candles = sample_candles_low_volatility.to_dict('records')
+        candles = sample_candles_low_volatility.to_dict("records")
         current_price = 50000
         atr, volatility_factor = calculator._calculate_atr_volatility(candles, current_price)
 
@@ -86,19 +86,21 @@ class TestDynamicSLTPCalculator:
     @pytest.mark.asyncio
     async def test_calculate_atr_high_volatility(self, calculator, sample_candles_high_volatility):
         """Тест расчета ATR для высокой волатильности"""
-        candles = sample_candles_high_volatility.to_dict('records')
+        candles = sample_candles_high_volatility.to_dict("records")
         current_price = 50000
         atr, volatility_factor = calculator._calculate_atr_volatility(candles, current_price)
 
         # При высокой волатильности ATR должен быть большим
         assert atr > 1000, "ATR должен быть больше 1000 для высокой волатильности"
         assert atr < 3500, "ATR не должен быть слишком большим (увеличен порог до 3500)"
-        assert 0.5 <= volatility_factor <= 1, "Volatility factor должен быть высоким при высокой волатильности"
+        assert (
+            0.5 <= volatility_factor <= 1
+        ), "Volatility factor должен быть высоким при высокой волатильности"
 
     @pytest.mark.asyncio
     async def test_determine_volatility_regime_low(self, calculator, sample_candles_low_volatility):
         """Тест определения режима низкой волатильности"""
-        candles = sample_candles_low_volatility.to_dict('records')
+        candles = sample_candles_low_volatility.to_dict("records")
         current_price = 50000
 
         atr, volatility_factor = calculator._calculate_atr_volatility(candles, current_price)
@@ -118,7 +120,7 @@ class TestDynamicSLTPCalculator:
         self, calculator, sample_candles_high_volatility
     ):
         """Тест определения режима высокой волатильности"""
-        candles = sample_candles_high_volatility.to_dict('records')
+        candles = sample_candles_high_volatility.to_dict("records")
         current_price = 50000
 
         atr, volatility_factor = calculator._calculate_atr_volatility(candles, current_price)
@@ -146,7 +148,7 @@ class TestDynamicSLTPCalculator:
         result = calculator.calculate_dynamic_levels(
             symbol="BTCUSDT",
             current_price=current_price,
-            candles=candles.to_dict('records'),
+            candles=candles.to_dict("records"),
             confidence=confidence,
             signal_type=signal_type,
         )
@@ -182,7 +184,7 @@ class TestDynamicSLTPCalculator:
         result = calculator.calculate_dynamic_levels(
             symbol="BTCUSDT",
             current_price=current_price,
-            candles=candles.to_dict('records'),
+            candles=candles.to_dict("records"),
             confidence=confidence,
             signal_type=signal_type,
         )
@@ -205,9 +207,9 @@ class TestDynamicSLTPCalculator:
         result = calculator.calculate_dynamic_levels(
             symbol="BTCUSDT",
             current_price=current_price,
-            candles=candles.to_dict('records'),
+            candles=candles.to_dict("records"),
             confidence=0.8,
-            signal_type="LONG"
+            signal_type="LONG",
         )
 
         partial_levels = result["partial_tp_levels"]
@@ -235,18 +237,18 @@ class TestDynamicSLTPCalculator:
         low_conf_result = calculator.calculate_dynamic_levels(
             symbol="BTCUSDT",
             current_price=current_price,
-            candles=candles.to_dict('records'),
+            candles=candles.to_dict("records"),
             confidence=0.45,
-            signal_type="LONG"
+            signal_type="LONG",
         )
 
         # Высокая уверенность
         high_conf_result = calculator.calculate_dynamic_levels(
             symbol="BTCUSDT",
             current_price=current_price,
-            candles=candles.to_dict('records'),
+            candles=candles.to_dict("records"),
             confidence=0.95,
-            signal_type="LONG"
+            signal_type="LONG",
         )
 
         # Проверяем, что алгоритм учитывает уверенность
@@ -267,14 +269,14 @@ class TestDynamicSLTPCalculator:
         result = calculator.calculate_dynamic_levels(
             symbol="BTCUSDT",
             current_price=current_price,
-            candles=candles.to_dict('records'),
+            candles=candles.to_dict("records"),
             confidence=0.75,
-            signal_type="LONG"
+            signal_type="LONG",
         )
 
         # expected_value - это число, а не словарь
         ev = result["expected_value"]
-        
+
         # EV должно быть положительным числом
         assert isinstance(ev, (int, float))
         assert ev > 0
@@ -282,10 +284,10 @@ class TestDynamicSLTPCalculator:
         # Проверяем другие ключевые метрики
         assert "risk_reward_ratio" in result
         assert "breakeven_win_rate" in result
-        
+
         # Risk/Reward должен быть больше 1:2.4 (минимум для профитной торговли)
         assert result["risk_reward_ratio"] >= 2.4
-        
+
         # Точка безубыточности должна быть разумной
         assert 0.20 <= result["breakeven_win_rate"] <= 0.35
 

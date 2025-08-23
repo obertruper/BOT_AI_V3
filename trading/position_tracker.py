@@ -6,10 +6,10 @@ Enhanced Position Tracker для BOT_AI_V3
 import asyncio
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.logger import setup_logger
 from database.db_manager import get_db
@@ -63,13 +63,13 @@ class TrackedPosition:
     size: Decimal
     entry_price: Decimal
     current_price: Decimal = field(default_factory=lambda: Decimal("0"))
-    stop_loss: Optional[Decimal] = None
-    take_profit: Optional[Decimal] = None
+    stop_loss: Decimal | None = None
+    take_profit: Decimal | None = None
     status: PositionStatus = PositionStatus.ACTIVE
     health: PositionHealth = PositionHealth.UNKNOWN
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
-    metrics: Optional[PositionMetrics] = None
+    metrics: PositionMetrics | None = None
     exchange: str = "bybit"
 
     def __post_init__(self):
@@ -99,7 +99,7 @@ class EnhancedPositionTracker:
         self.db_manager = None
 
         # Активные позиции
-        self.tracked_positions: Dict[str, TrackedPosition] = {}
+        self.tracked_positions: dict[str, TrackedPosition] = {}
 
         # Настройки
         self.max_health_check_interval = 300  # 5 минут
@@ -117,7 +117,7 @@ class EnhancedPositionTracker:
 
         # Флаги
         self.is_running = False
-        self.monitoring_task: Optional[asyncio.Task] = None
+        self.monitoring_task: asyncio.Task | None = None
 
         logger.info("✅ Enhanced Position Tracker инициализирован")
 
@@ -128,7 +128,7 @@ class EnhancedPositionTracker:
             return
 
         self.is_running = True
-        
+
         # Инициализируем DBManager
         self.db_manager = await get_db()
 
@@ -162,8 +162,8 @@ class EnhancedPositionTracker:
         side: str,
         size: Decimal,
         entry_price: Decimal,
-        stop_loss: Optional[Decimal] = None,
-        take_profit: Optional[Decimal] = None,
+        stop_loss: Decimal | None = None,
+        take_profit: Decimal | None = None,
         exchange: str = "bybit",
     ) -> TrackedPosition:
         """
@@ -288,21 +288,21 @@ class EnhancedPositionTracker:
             logger.error(f"❌ Ошибка обновления метрик позиции {position_id}: {e}")
             return False
 
-    async def get_position(self, position_id: str) -> Optional[TrackedPosition]:
+    async def get_position(self, position_id: str) -> TrackedPosition | None:
         """Получить позицию по ID"""
         return self.tracked_positions.get(position_id)
 
-    async def get_active_positions(self) -> List[TrackedPosition]:
+    async def get_active_positions(self) -> list[TrackedPosition]:
         """Получить все активные позиции"""
         return [
             pos for pos in self.tracked_positions.values() if pos.status == PositionStatus.ACTIVE
         ]
 
-    async def get_positions_by_symbol(self, symbol: str) -> List[TrackedPosition]:
+    async def get_positions_by_symbol(self, symbol: str) -> list[TrackedPosition]:
         """Получить позиции по символу"""
         return [pos for pos in self.tracked_positions.values() if pos.symbol == symbol]
 
-    async def calculate_unrealized_pnl(self, position_id: str) -> Optional[Decimal]:
+    async def calculate_unrealized_pnl(self, position_id: str) -> Decimal | None:
         """
         Рассчитать нереализованный PnL позиции
 
@@ -374,7 +374,7 @@ class EnhancedPositionTracker:
             self.stats["sync_errors"] += 1
             return False
 
-    async def get_tracker_stats(self) -> Dict[str, Any]:
+    async def get_tracker_stats(self) -> dict[str, Any]:
         """Получить статистику трекера"""
 
         healthy_count = sum(
@@ -510,7 +510,7 @@ class EnhancedPositionTracker:
             logger.error(f"❌ Ошибка получения цены {symbol}: {e}")
             return Decimal("0")
 
-    async def _fetch_position_from_exchange(self, position: TrackedPosition) -> Optional[Dict]:
+    async def _fetch_position_from_exchange(self, position: TrackedPosition) -> dict | None:
         """Получить данные позиции с биржи"""
 
         try:
@@ -650,7 +650,7 @@ class EnhancedPositionTracker:
 
 
 # Глобальный экземпляр для использования в системе
-position_tracker: Optional[EnhancedPositionTracker] = None
+position_tracker: EnhancedPositionTracker | None = None
 
 
 async def get_position_tracker() -> EnhancedPositionTracker:
@@ -658,8 +658,8 @@ async def get_position_tracker() -> EnhancedPositionTracker:
     global position_tracker
 
     if position_tracker is None:
-        from exchanges.exchange_manager import ExchangeManager
         from core.config.config_manager import get_global_config_manager
+        from exchanges.exchange_manager import ExchangeManager
 
         # Получаем конфигурацию для ExchangeManager
         try:
@@ -670,12 +670,7 @@ async def get_position_tracker() -> EnhancedPositionTracker:
             # Минимальная конфигурация для инициализации ExchangeManager
             config = {
                 "exchanges": {
-                    "bybit": {
-                        "enabled": True,
-                        "api_key": "",
-                        "api_secret": "",
-                        "testnet": False
-                    }
+                    "bybit": {"enabled": True, "api_key": "", "api_secret": "", "testnet": False}
                 }
             }
 

@@ -7,23 +7,14 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 import yaml
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from core.config.models import (
-    DatabaseSettings,
-    Environment,
-    ExchangesSettings,
-    LoggingSettings,
-    MLSettings,
-    MonitoringSettings,
-    RiskManagementSettings,
     RootConfig,
-    SystemSettings,
-    TradingSettings,
 )
 from core.exceptions import ConfigurationError
 
@@ -31,7 +22,7 @@ from core.exceptions import ConfigurationError
 class ConfigLoader:
     """Загружает и объединяет конфигурацию из различных источников."""
 
-    def __init__(self, config_dir: Optional[Path] = None):
+    def __init__(self, config_dir: Path | None = None):
         """Инициализирует загрузчик конфигурации.
 
         Args:
@@ -44,10 +35,10 @@ class ConfigLoader:
             config_dir = project_root / "config"
 
         self.config_dir = config_dir
-        self._raw_config: Dict[str, Any] = {}
-        self._validated_config: Optional[RootConfig] = None
-        self._loaded_files: Set[Path] = set()
-        self._validation_warnings: List[str] = []
+        self._raw_config: dict[str, Any] = {}
+        self._validated_config: RootConfig | None = None
+        self._loaded_files: set[Path] = set()
+        self._validation_warnings: list[str] = []
 
         # Загружаем переменные окружения из .env
         self._load_env_variables()
@@ -67,8 +58,8 @@ class ConfigLoader:
 
     def load(
         self,
-        profile: Optional[str] = None,
-        additional_files: Optional[List[Path]] = None,
+        profile: str | None = None,
+        additional_files: list[Path] | None = None,
     ) -> RootConfig:
         """Загружает и валидирует конфигурацию.
 
@@ -127,13 +118,13 @@ class ConfigLoader:
     def _load_base_config(self) -> None:
         """Загружает единый конфигурационный файл config.yaml."""
         config_file = self.config_dir / "config.yaml"
-        
+
         if not config_file.exists():
             raise ConfigurationError(
                 f"Единый конфигурационный файл {config_file} не найден. "
                 "Убедитесь, что config/config.yaml существует."
             )
-        
+
         self._load_yaml_file(config_file)
 
     def _load_domain_configs(self) -> None:
@@ -170,7 +161,7 @@ class ConfigLoader:
             return  # Избегаем повторной загрузки
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
                 # Заменяем переменные окружения
@@ -208,7 +199,7 @@ class ConfigLoader:
 
         return re.sub(pattern, replacer, content)
 
-    def _merge_configs(self, base: Dict[str, Any], update: Dict[str, Any]) -> None:
+    def _merge_configs(self, base: dict[str, Any], update: dict[str, Any]) -> None:
         """Рекурсивно объединяет две конфигурации.
 
         Args:
@@ -238,9 +229,7 @@ class ConfigLoader:
             # Применяем значение
             self._set_nested_value(self._raw_config, config_path, value)
 
-    def _set_nested_value(
-        self, config: Dict[str, Any], path: List[str], value: str
-    ) -> None:
+    def _set_nested_value(self, config: dict[str, Any], path: list[str], value: str) -> None:
         """Устанавливает значение по вложенному пути.
 
         Args:
@@ -300,9 +289,7 @@ class ConfigLoader:
                 msg = error["msg"]
                 errors.append(f"{location}: {msg}")
 
-            raise ConfigurationError(
-                f"Ошибки валидации конфигурации:\n" + "\n".join(errors)
-            ) from e
+            raise ConfigurationError("Ошибки валидации конфигурации:\n" + "\n".join(errors)) from e
 
     def _check_consistency(self) -> None:
         """Проверяет консистентность загруженной конфигурации."""
@@ -336,9 +323,7 @@ class ConfigLoader:
                 required_secrets.append("DB_PASSWORD")
 
         if required_secrets:
-            self._validation_warnings.append(
-                f"Отсутствуют секреты: {', '.join(required_secrets)}"
-            )
+            self._validation_warnings.append(f"Отсутствуют секреты: {', '.join(required_secrets)}")
 
     def _check_paths_exist(self) -> None:
         """Проверяет существование указанных путей."""
@@ -348,13 +333,9 @@ class ConfigLoader:
         ml_config = self._validated_config.ml
         if ml_config.enabled:
             if not ml_config.model.path.exists():
-                self._validation_warnings.append(
-                    f"ML модель не найдена: {ml_config.model.path}"
-                )
+                self._validation_warnings.append(f"ML модель не найдена: {ml_config.model.path}")
             if not ml_config.model.scaler_path.exists():
-                self._validation_warnings.append(
-                    f"Scaler не найден: {ml_config.model.scaler_path}"
-                )
+                self._validation_warnings.append(f"Scaler не найден: {ml_config.model.scaler_path}")
 
     def get_validation_report(self) -> str:
         """Возвращает отчет о валидации конфигурации.
@@ -375,16 +356,12 @@ class ConfigLoader:
             lines.append(f"  - Окружение: {self._validated_config.system.environment}")
             lines.append(f"  - Версия: {self._validated_config.system.version}")
             lines.append(f"  - БД порт: {self._validated_config.database.port}")
-            lines.append(
-                f"  - Leverage: {self._validated_config.trading.orders.default_leverage}x"
-            )
+            lines.append(f"  - Leverage: {self._validated_config.trading.orders.default_leverage}x")
             lines.append(f"  - ML включен: {self._validated_config.ml.enabled}")
 
             # Активные биржи
             exchanges = self._validated_config.exchanges.model_dump()
-            active_exchanges = [
-                name for name, config in exchanges.items() if config.get("enabled")
-            ]
+            active_exchanges = [name for name, config in exchanges.items() if config.get("enabled")]
             if active_exchanges:
                 lines.append(f"  - Активные биржи: {', '.join(active_exchanges)}")
 

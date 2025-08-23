@@ -25,7 +25,7 @@ from core.exceptions import (
     TraderManagerError,
     TraderNotFoundError,
 )
-from core.traders.trader_context import TraderContext, TraderState
+from core.traders.trader_context import TraderContext
 from core.traders.trader_factory import TraderFactory
 
 
@@ -300,52 +300,53 @@ class TraderManager:
         trader_context = self.traders.get(trader_id)
         if not trader_context:
             return {}
-        
+
         return {
-            'id': trader_id,
-            'status': trader_context.status,
-            'created_at': trader_context.created_at,
-            'last_activity': trader_context.last_activity,
-            'trades_count': getattr(trader_context, 'trades_count', 0),
-            'performance_metrics': getattr(trader_context, 'performance_metrics', {})
+            "id": trader_id,
+            "status": trader_context.status,
+            "created_at": trader_context.created_at,
+            "last_activity": trader_context.last_activity,
+            "trades_count": getattr(trader_context, "trades_count", 0),
+            "performance_metrics": getattr(trader_context, "performance_metrics", {}),
         }
-    
+
     def _cleanup_inactive_traders(self) -> None:
         """Очищает неактивные трейдеры."""
         current_time = datetime.now()
         inactive_threshold = timedelta(hours=1)  # 1 час неактивности
-        
+
         traders_to_remove = []
         for trader_id, trader_context in self.traders.items():
             if (current_time - trader_context.last_activity) > inactive_threshold:
-                if trader_context.status == 'stopped':
+                if trader_context.status == "stopped":
                     traders_to_remove.append(trader_id)
-        
+
         for trader_id in traders_to_remove:
             self.remove_trader(trader_id)
             self.logger.info(f"Удален неактивный трейдер: {trader_id}")
-    
+
     def _validate_trader_config(self, config: dict) -> None:
         """Валидация конфигурации трейдера перед созданием."""
-        required_fields = ['id', 'type', 'exchange', 'strategy']
-        
+        required_fields = ["id", "type", "exchange", "strategy"]
+
         for field in required_fields:
             if field not in config:
-                raise ConfigurationError(f"Отсутствует обязательное поле '{field}' в конфигурации трейдера")
-        
+                raise ConfigurationError(
+                    f"Отсутствует обязательное поле '{field}' в конфигурации трейдера"
+                )
+
         # Проверяем уникальность ID
-        if config['id'] in self.traders:
+        if config["id"] in self.traders:
             raise ConfigurationError(f"Трейдер с ID '{config['id']}' уже существует")
-    
+
     def get_active_traders_count(self) -> int:
         """Возвращает количество активных трейдеров."""
-        return len([t for t in self.traders.values() if t.status == 'running'])
-    
+        return len([t for t in self.traders.values() if t.status == "running"])
+
     def get_all_traders_info(self) -> dict[str, dict]:
         """Возвращает информацию о всех трейдерах."""
         return {
-            trader_id: self.get_trader_statistics(trader_id) 
-            for trader_id in self.traders.keys()
+            trader_id: self.get_trader_statistics(trader_id) for trader_id in self.traders.keys()
         }
 
 
@@ -357,9 +358,9 @@ def get_global_trader_manager() -> TraderManager:
     """Получает глобальный экземпляр TraderManager (singleton)"""
     global _global_trader_manager
     if _global_trader_manager is None:
-        from core.traders.trader_factory import get_global_trader_factory
         from core.config.config_manager import get_global_config_manager
-        
+        from core.traders.trader_factory import get_global_trader_factory
+
         config_manager = get_global_config_manager()
         trader_factory = get_global_trader_factory()
         _global_trader_manager = TraderManager(config_manager, trader_factory)

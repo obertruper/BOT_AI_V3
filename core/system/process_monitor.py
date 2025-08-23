@@ -148,10 +148,10 @@ class ProcessMonitor:
             return
 
         self._running = True
-        
+
         # Инициализируем DBManager
         self.db_manager = await get_db()
-        
+
         logger.info("🚀 Запуск ProcessMonitor")
 
         # Запуск задач мониторинга

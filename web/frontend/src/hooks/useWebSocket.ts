@@ -22,8 +22,12 @@ export const useWebSocketConnection = () => {
   
   const lastJsonMessage = useRef<WebSocketMessage | null>(null);
 
+  // Динамически определяем WebSocket URL
+  const wsUrl = import.meta.env.VITE_WS_URL || 
+    `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+
   const { sendMessage, lastMessage, readyState } = useWebSocket(
-    'ws://localhost:8083/ws', 
+    wsUrl,
     {
       onOpen: () => {
         console.log('WebSocket connection established');

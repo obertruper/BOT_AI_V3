@@ -5,65 +5,75 @@ This repository handles all database operations for trading signals,
 with optimized performance and bulk processing capabilities.
 """
 
-from typing import List, Dict, Any, Optional
+import json
 from datetime import datetime
 from decimal import Decimal
-import asyncpg
-import json
-from loguru import logger
-from enum import Enum
+from typing import Any
 
-from database.repositories.base_repository import BaseRepository
+import asyncpg
+from loguru import logger
+
 from database.connections.transaction_manager import TransactionManager
-from database.models.signal import Signal
 from database.models.base_models import SignalType
+from database.models.signal import Signal
+from database.repositories.base_repository import BaseRepository
 
 
 class SignalRepository(BaseRepository[Signal]):
     """
     Repository for signal database operations.
-    
+
     Features:
     - High-performance signal recording
     - Bulk signal processing
     - Signal status management
     - Historical signal analytics
     """
-    
+
     def __init__(self, pool: asyncpg.Pool, transaction_manager: TransactionManager = None):
         """
         Initialize Signal Repository.
-        
+
         Args:
-            pool: AsyncPG connection pool  
+            pool: AsyncPG connection pool
             transaction_manager: Transaction manager for atomic operations
         """
         super().__init__(pool, "signals", Signal, transaction_manager)
 
-    def _to_dict(self, model: Signal) -> Dict[str, Any]:
+    def _to_dict(self, model: Signal) -> dict[str, Any]:
         """Convert Signal to dictionary for database."""
         return {
             "symbol": model.symbol,
             "exchange": model.exchange,
-            "signal_type": model.signal_type.value if isinstance(model.signal_type, SignalType) else model.signal_type,
+            "signal_type": (
+                model.signal_type.value
+                if isinstance(model.signal_type, SignalType)
+                else model.signal_type
+            ),
             "strength": float(model.strength) if model.strength else None,
             "confidence": float(model.confidence) if model.confidence else None,
             "suggested_price": float(model.suggested_price) if model.suggested_price else None,
-            "suggested_stop_loss": float(model.suggested_stop_loss) if model.suggested_stop_loss else None,
-            "suggested_take_profit": float(model.suggested_take_profit) if model.suggested_take_profit else None,
-            "suggested_quantity": float(model.suggested_quantity) if model.suggested_quantity else None,
+            "suggested_stop_loss": (
+                float(model.suggested_stop_loss) if model.suggested_stop_loss else None
+            ),
+            "suggested_take_profit": (
+                float(model.suggested_take_profit) if model.suggested_take_profit else None
+            ),
+            "suggested_quantity": (
+                float(model.suggested_quantity) if model.suggested_quantity else None
+            ),
             "strategy_name": model.strategy_name,
             "timeframe": model.timeframe,
             "expires_at": model.expires_at,
             "indicators": json.dumps(model.indicators) if model.indicators else None,
             "extra_data": json.dumps(model.extra_data) if model.extra_data else None,
             "metadata": json.dumps(model.signal_metadata) if model.signal_metadata else None,
-            "status": getattr(model, 'status', 'active'),
-            "processed_at": getattr(model, 'processed_at', None),
+            "status": getattr(model, "status", "active"),
+            "processed_at": getattr(model, "processed_at", None),
             "created_at": model.created_at,
-            "updated_at": model.updated_at
+            "updated_at": model.updated_at,
         }
-    
+
     def _from_record(self, record: asyncpg.Record) -> Signal:
         """Convert database record to SQLAlchemy Signal model."""
         signal = Signal()
@@ -73,10 +83,20 @@ class SignalRepository(BaseRepository[Signal]):
         signal.signal_type = record["signal_type"]
         signal.strength = float(record["strength"]) if record["strength"] else None
         signal.confidence = float(record["confidence"]) if record["confidence"] else None
-        signal.suggested_price = Decimal(str(record["suggested_price"])) if record["suggested_price"] else None
-        signal.suggested_stop_loss = Decimal(str(record["suggested_stop_loss"])) if record["suggested_stop_loss"] else None
-        signal.suggested_take_profit = Decimal(str(record["suggested_take_profit"])) if record["suggested_take_profit"] else None
-        signal.suggested_quantity = Decimal(str(record["suggested_quantity"])) if record["suggested_quantity"] else None
+        signal.suggested_price = (
+            Decimal(str(record["suggested_price"])) if record["suggested_price"] else None
+        )
+        signal.suggested_stop_loss = (
+            Decimal(str(record["suggested_stop_loss"])) if record["suggested_stop_loss"] else None
+        )
+        signal.suggested_take_profit = (
+            Decimal(str(record["suggested_take_profit"]))
+            if record["suggested_take_profit"]
+            else None
+        )
+        signal.suggested_quantity = (
+            Decimal(str(record["suggested_quantity"])) if record["suggested_quantity"] else None
+        )
         signal.strategy_name = record["strategy_name"]
         signal.timeframe = record["timeframe"]
         signal.expires_at = record["expires_at"]
@@ -88,35 +108,39 @@ class SignalRepository(BaseRepository[Signal]):
         signal.created_at = record["created_at"]
         signal.updated_at = record["updated_at"]
         return signal
-    
-    async def get_active_signals(self, exchange: Optional[str] = None) -> List[Signal]:
+
+    async def get_active_signals(self, exchange: str | None = None) -> list[Signal]:
         """Get active signals with optional exchange filter."""
         where_conditions = ["status = 'active'"]
         args = []
         param_counter = 1
-        
+
         if exchange:
             where_conditions.append(f"exchange = ${param_counter}")
             args.append(exchange)
             param_counter += 1
-        
+
         # Also check expiration
         where_conditions.append("(expires_at IS NULL OR expires_at > NOW())")
-        
+
         where_clause = " AND ".join(where_conditions)
         query = f"SELECT * FROM signals WHERE {where_clause} ORDER BY created_at DESC"
-        
-        async with (self.transaction_manager.transaction() if self.transaction_manager else self.pool.acquire()) as conn:
+
+        async with (
+            self.transaction_manager.transaction()
+            if self.transaction_manager
+            else self.pool.acquire()
+        ) as conn:
             records = await conn.fetch(query, *args)
             return [self._from_record(record) for record in records]
 
     async def create_signal(self, signal: Signal) -> int:
         """
         Create a new signal record.
-        
+
         Args:
             signal: Signal to create
-        
+
         Returns:
             Signal ID
         """
@@ -129,10 +153,14 @@ class SignalRepository(BaseRepository[Signal]):
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING id
         """
-        
+
         data = self._to_dict(signal)
-        
-        async with (self.transaction_manager.transaction() if self.transaction_manager else self.pool.acquire()) as conn:
+
+        async with (
+            self.transaction_manager.transaction()
+            if self.transaction_manager
+            else self.pool.acquire()
+        ) as conn:
             signal_id = await conn.fetchval(
                 query,
                 data["symbol"],
@@ -153,37 +181,45 @@ class SignalRepository(BaseRepository[Signal]):
                 data["status"],
                 data["processed_at"],
                 data["created_at"],
-                data["updated_at"]
+                data["updated_at"],
             )
-        
+
         signal.id = signal_id
-        logger.info(f"Created signal {signal_id} for {signal.symbol} {signal.signal_type} strength={signal.strength}")
+        logger.info(
+            f"Created signal {signal_id} for {signal.symbol} {signal.signal_type} strength={signal.strength}"
+        )
         return signal_id
 
-    async def mark_signal_processed(self, signal_id: int, processed_at: Optional[datetime] = None) -> bool:
+    async def mark_signal_processed(
+        self, signal_id: int, processed_at: datetime | None = None
+    ) -> bool:
         """
         Mark signal as processed.
-        
+
         Args:
             signal_id: Signal ID to mark as processed
             processed_at: Processing timestamp (defaults to now)
-        
+
         Returns:
             True if signal was updated, False if not found
         """
         if processed_at is None:
             processed_at = datetime.now()
-        
+
         query = """
         UPDATE signals 
         SET status = 'processed', processed_at = $2, updated_at = $3
         WHERE id = $1 AND status != 'processed'
         """
-        
-        async with (self.transaction_manager.transaction() if self.transaction_manager else self.pool.acquire()) as conn:
+
+        async with (
+            self.transaction_manager.transaction()
+            if self.transaction_manager
+            else self.pool.acquire()
+        ) as conn:
             result = await conn.execute(query, signal_id, processed_at, datetime.now())
             updated_count = int(result.split()[-1])
-        
+
         if updated_count > 0:
             logger.info(f"Marked signal {signal_id} as processed")
             return True
@@ -213,78 +249,80 @@ class SignalRepository(BaseRepository[Signal]):
             await self.create_signal(signal_obj)
         else:
             raise ValueError(f"Unsupported signal type: {type(signal)}")
-    
+
     async def get_recent_signals(
         self,
         limit: int = 50,
-        exchange: Optional[str] = None,
-        symbol: Optional[str] = None,
-        status: Optional[str] = None
-    ) -> List[Signal]:
+        exchange: str | None = None,
+        symbol: str | None = None,
+        status: str | None = None,
+    ) -> list[Signal]:
         """
         Get recent signals with filtering.
-        
+
         Args:
             limit: Maximum number of signals
             exchange: Filter by exchange
             symbol: Filter by symbol
             status: Filter by status
-        
+
         Returns:
             List of recent signals
         """
         where_conditions = []
         args = []
         param_counter = 1
-        
+
         if exchange:
             where_conditions.append(f"exchange = ${param_counter}")
             args.append(exchange)
             param_counter += 1
-        
+
         if symbol:
             where_conditions.append(f"symbol = ${param_counter}")
             args.append(symbol)
             param_counter += 1
-        
+
         if status:
             where_conditions.append(f"status = ${param_counter}")
             args.append(status)
             param_counter += 1
-        
+
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
         query = f"SELECT * FROM signals WHERE {where_clause} ORDER BY created_at DESC LIMIT {limit}"
-        
-        async with (self.transaction_manager.transaction() if self.transaction_manager else self.pool.acquire()) as conn:
+
+        async with (
+            self.transaction_manager.transaction()
+            if self.transaction_manager
+            else self.pool.acquire()
+        ) as conn:
             records = await conn.fetch(query, *args)
             return [self._from_record(record) for record in records]
-    
+
     async def get_signal_stats(
-        self,
-        exchange: Optional[str] = None,
-        days: int = 7
-    ) -> Dict[str, Any]:
+        self, exchange: str | None = None, days: int = 7
+    ) -> dict[str, Any]:
         """
         Get signal statistics.
-        
+
         Args:
             exchange: Filter by exchange
             days: Days to analyze
-        
+
         Returns:
             Signal statistics dictionary
         """
         where_conditions = [f"created_at >= NOW() - INTERVAL '{days} days'"]
         args = []
         param_counter = 1
-        
+
         if exchange:
             where_conditions.append(f"exchange = ${param_counter}")
             args.append(exchange)
             param_counter += 1
-        
+
         where_clause = " AND ".join(where_conditions)
-        
+
         query = f"""
         SELECT 
             COUNT(*) as total_signals,
@@ -298,15 +336,19 @@ class SignalRepository(BaseRepository[Signal]):
         FROM signals
         WHERE {where_clause}
         """
-        
-        async with (self.transaction_manager.transaction() if self.transaction_manager else self.pool.acquire()) as conn:
+
+        async with (
+            self.transaction_manager.transaction()
+            if self.transaction_manager
+            else self.pool.acquire()
+        ) as conn:
             record = await conn.fetchrow(query, *args)
-            
+
             total_signals = record["total_signals"] or 0
             processed_signals = record["processed_signals"] or 0
-            
+
             processing_rate = (processed_signals / total_signals * 100) if total_signals > 0 else 0
-            
+
             return {
                 "total_signals": total_signals,
                 "processed_signals": processed_signals,
@@ -315,14 +357,16 @@ class SignalRepository(BaseRepository[Signal]):
                 "long_signals": record["long_signals"] or 0,
                 "short_signals": record["short_signals"] or 0,
                 "avg_strength": float(record["avg_strength"]) if record["avg_strength"] else 0,
-                "avg_confidence": float(record["avg_confidence"]) if record["avg_confidence"] else 0,
-                "unique_symbols": record["unique_symbols"] or 0
+                "avg_confidence": (
+                    float(record["avg_confidence"]) if record["avg_confidence"] else 0
+                ),
+                "unique_symbols": record["unique_symbols"] or 0,
             }
-    
+
     async def cleanup_expired_signals(self) -> int:
         """
         Clean up expired signals.
-        
+
         Returns:
             Number of cleaned up signals
         """
@@ -331,12 +375,16 @@ class SignalRepository(BaseRepository[Signal]):
         SET status = 'expired', updated_at = NOW()
         WHERE expires_at < NOW() AND status = 'active'
         """
-        
-        async with (self.transaction_manager.transaction() if self.transaction_manager else self.pool.acquire()) as conn:
+
+        async with (
+            self.transaction_manager.transaction()
+            if self.transaction_manager
+            else self.pool.acquire()
+        ) as conn:
             result = await conn.execute(query)
             expired_count = int(result.split()[-1])
-        
+
         if expired_count > 0:
             logger.info(f"Cleaned up {expired_count} expired signals")
-        
+
         return expired_count

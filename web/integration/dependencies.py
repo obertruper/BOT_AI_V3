@@ -12,7 +12,7 @@ Dependency Injection для Web API
 """
 
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 
 # Условные импорты для разработки
 try:
@@ -230,7 +230,7 @@ def get_config_manager_dependency() -> ConfigManager:
     return _config_manager
 
 
-def get_metrics_collector_dependency() -> Optional[MetricsCollector]:
+def get_metrics_collector_dependency() -> MetricsCollector | None:
     """Получить metrics_collector"""
     return _metrics_collector
 

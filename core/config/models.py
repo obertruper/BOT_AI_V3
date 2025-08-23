@@ -8,7 +8,7 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -127,7 +127,7 @@ class DatabaseSettings(BaseModel):
     port: int = Field(default=5555, ge=1024, le=65535)
     name: str = Field(default="bot_trading_v3")
     user: str = Field(default="obertruper")
-    password: Optional[str] = Field(default=None)  # Загружается из .env
+    password: str | None = Field(default=None)  # Загружается из .env
     pool: DatabasePool = Field(default_factory=DatabasePool)
     migrations: DatabaseMigrations = Field(default_factory=DatabaseMigrations)
 
@@ -272,7 +272,7 @@ class PartialTakeProfit(BaseModel):
 
     enabled: bool = Field(default=True)
     update_sl_after_partial: bool = Field(default=True)
-    levels: List[PartialTakeProfitLevel] = Field(default_factory=list)
+    levels: list[PartialTakeProfitLevel] = Field(default_factory=list)
 
 
 class ProfitLockLevel(BaseModel):
@@ -295,7 +295,7 @@ class ProfitProtection(BaseModel):
     enabled: bool = Field(default=True)
     breakeven_percent: float = Field(default=1.0, ge=0.1, le=5.0)
     breakeven_offset: float = Field(default=0.2, ge=0.0, le=1.0)
-    lock_percent: List[ProfitLockLevel] = Field(default_factory=list)
+    lock_percent: list[ProfitLockLevel] = Field(default_factory=list)
     max_updates: int = Field(default=5, ge=1, le=20)
 
 
@@ -375,12 +375,12 @@ class MLSettings(BaseModel):
     signal_generation_interval: int = Field(default=60, ge=10, le=3600)
     batch_size: int = Field(default=10, ge=1, le=100)
     parallel_workers: int = Field(default=4, ge=1, le=16)
-    symbols: List[str] = Field(default_factory=list)
+    symbols: list[str] = Field(default_factory=list)
     model: MLModel = Field(default_factory=MLModel)
     data: MLData = Field(default_factory=MLData)
     filters: MLFilters = Field(default_factory=MLFilters)
     risk: MLRisk = Field(default_factory=MLRisk)
-    models: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    models: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 # ============= Биржи =============
@@ -397,8 +397,8 @@ class ExchangeConfig(BaseModel):
     """Конфигурация биржи."""
 
     enabled: bool = Field(default=False)
-    api_key: Optional[str] = Field(default=None)
-    api_secret: Optional[str] = Field(default=None)
+    api_key: str | None = Field(default=None)
+    api_secret: str | None = Field(default=None)
     testnet: bool = Field(default=False)
     rate_limits: RateLimits = Field(default_factory=RateLimits)
 
@@ -477,16 +477,18 @@ class LoggingSettings(BaseModel):
 
 class IndicatorSettings(BaseModel):
     """Настройки индикатора."""
+
     type: str
-    period: Optional[int] = None
-    oversold: Optional[int] = None
-    overbought: Optional[int] = None
-    short_period: Optional[int] = None
-    long_period: Optional[int] = None
+    period: int | None = None
+    oversold: int | None = None
+    overbought: int | None = None
+    short_period: int | None = None
+    long_period: int | None = None
 
 
 class TraderCapitalSettings(BaseModel):
     """Настройки капитала трейдера."""
+
     initial: float = Field(default=10000, ge=0)
     per_trade_percentage: float = Field(default=2, ge=0.1, le=100)
     max_positions: int = Field(default=5, ge=1, le=50)
@@ -494,6 +496,7 @@ class TraderCapitalSettings(BaseModel):
 
 class TraderRiskSettings(BaseModel):
     """Настройки риска трейдера."""
+
     stop_loss_percentage: float = Field(default=2, ge=0.1, le=50)
     take_profit_percentage: float = Field(default=5, ge=0.1, le=100)
     max_drawdown_percentage: float = Field(default=10, ge=1, le=50)
@@ -501,16 +504,18 @@ class TraderRiskSettings(BaseModel):
 
 class TraderStrategyConfig(BaseModel):
     """Конфигурация стратегии трейдера."""
+
     signal_interval: int = Field(default=60, ge=1)
-    indicators: List[IndicatorSettings] = Field(default_factory=list)
+    indicators: list[IndicatorSettings] = Field(default_factory=list)
 
 
 class TraderSettings(BaseModel):
     """Настройки трейдера."""
+
     id: str
     enabled: bool = Field(default=True)
     type: str = Field(default="basic")
-    symbols: List[str] = Field(default_factory=list)
+    symbols: list[str] = Field(default_factory=list)
     exchange: str
     strategy: str
     strategy_config: TraderStrategyConfig = Field(default_factory=TraderStrategyConfig)
@@ -528,11 +533,15 @@ class UnifiedSystemComponentSettings(BaseModel):
     auto_restart: bool = Field(default=True, description="Автоматический перезапуск")
     health_check_interval: int = Field(default=30, description="Интервал проверки здоровья")
     startup_delay: int = Field(default=0, description="Задержка запуска в секундах")
-    port: Optional[int] = Field(default=None, description="Порт компонента")
-    integrated_with: Optional[str] = Field(default=None, description="Интегрирован с другим компонентом")
-    health_check_endpoint: Optional[str] = Field(default=None, description="Эндпоинт для проверки здоровья")
-    cwd: Optional[str] = Field(default=None, description="Рабочая директория")
-    env: Dict[str, str] = Field(default_factory=dict, description="Переменные окружения")
+    port: int | None = Field(default=None, description="Порт компонента")
+    integrated_with: str | None = Field(
+        default=None, description="Интегрирован с другим компонентом"
+    )
+    health_check_endpoint: str | None = Field(
+        default=None, description="Эндпоинт для проверки здоровья"
+    )
+    cwd: str | None = Field(default=None, description="Рабочая директория")
+    env: dict[str, str] = Field(default_factory=dict, description="Переменные окружения")
 
 
 class UnifiedSystemMonitoringSettings(BaseModel):
@@ -540,7 +549,9 @@ class UnifiedSystemMonitoringSettings(BaseModel):
 
     interval_seconds: int = Field(default=30, description="Интервал мониторинга")
     auto_restart_on_failure: bool = Field(default=True, description="Автоперезапуск при сбое")
-    max_restart_attempts: int = Field(default=5, description="Максимальное количество попыток перезапуска")
+    max_restart_attempts: int = Field(
+        default=5, description="Максимальное количество попыток перезапуска"
+    )
     restart_delay_seconds: int = Field(default=10, description="Задержка между перезапусками")
 
 
@@ -548,16 +559,25 @@ class UnifiedSystemLoggingSettings(BaseModel):
     """Настройки логирования unified системы."""
 
     aggregate_logs: bool = Field(default=True, description="Агрегировать логи")
-    log_directory: str = Field(default="/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs", description="Директория логов")
-    process_log_directory: str = Field(default="/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/processes", description="Директория логов процессов")
+    log_directory: str = Field(
+        default="/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs", description="Директория логов"
+    )
+    process_log_directory: str = Field(
+        default="/mnt/SSD/PYCHARMPRODJECT/BOT_AI_V3/data/logs/processes",
+        description="Директория логов процессов",
+    )
 
 
 class UnifiedSystemSettings(BaseModel):
     """Настройки unified системы запуска."""
 
     enabled: bool = Field(default=True, description="Включена ли unified система")
-    components: Dict[str, Dict[str, Any]] = Field(default_factory=dict, description="Настройки компонентов")
-    monitoring: UnifiedSystemMonitoringSettings = Field(default_factory=UnifiedSystemMonitoringSettings)
+    components: dict[str, dict[str, Any]] = Field(
+        default_factory=dict, description="Настройки компонентов"
+    )
+    monitoring: UnifiedSystemMonitoringSettings = Field(
+        default_factory=UnifiedSystemMonitoringSettings
+    )
     logging: UnifiedSystemLoggingSettings = Field(default_factory=UnifiedSystemLoggingSettings)
 
 
@@ -579,7 +599,7 @@ class RootConfig(BaseModel):
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     unified_system: UnifiedSystemSettings = Field(default_factory=UnifiedSystemSettings)
-    traders: List[TraderSettings] = Field(default_factory=list)
+    traders: list[TraderSettings] = Field(default_factory=list)
 
     class Config:
         """Настройки Pydantic модели."""
@@ -592,7 +612,7 @@ class RootConfig(BaseModel):
             datetime: lambda v: v.isoformat(),
         }
 
-    def validate_consistency(self) -> List[str]:
+    def validate_consistency(self) -> list[str]:
         """Проверяет консистентность конфигурации между разделами.
 
         Returns:
@@ -625,7 +645,7 @@ class RootConfig(BaseModel):
 
         return warnings
 
-    def get_frontend_safe_config(self) -> Dict[str, Any]:
+    def get_frontend_safe_config(self) -> dict[str, Any]:
         """Возвращает конфигурацию, безопасную для передачи в frontend.
 
         Исключает все секретные данные и чувствительную информацию.

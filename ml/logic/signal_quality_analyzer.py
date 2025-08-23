@@ -176,15 +176,17 @@ class SignalQualityAnalyzer:
         # Обновляем статистику
         self.strategy_stats[self.active_strategy]["analyzed"] += 1
         self.stats["total_analyzed"] += 1
-        
+
         # ДИАГНОСТИКА: Логируем входные данные
-        logger.debug(f"""
+        logger.debug(
+            f"""
 📊 Анализ качества сигнала:
   Направления: {directions}
   Взвешенное направление: {weighted_direction:.3f}
   Future returns: {future_returns}
   Активная стратегия: {self.active_strategy.value}
-""")
+"""
+        )
 
         # Получаем параметры активной стратегии
         params = self.strategy_params[self.active_strategy].copy()
@@ -196,6 +198,9 @@ class SignalQualityAnalyzer:
 
         # Определяем доминирующий сигнал
         signal_type = self._determine_signal_type(directions, weighted_direction)
+
+        # 🚨 КРИТИЧЕСКАЯ ПРОВЕРКА: Соответствие направления сделки и ожидаемой доходности
+        signal_type = self._validate_direction_vs_returns(signal_type, future_returns)
 
         # Применяем отдельные параметры для SHORT сигналов
         if signal_type == "SHORT":
@@ -390,10 +395,12 @@ class SignalQualityAnalyzer:
         long_count = np.sum(directions == 0)
         short_count = np.sum(directions == 1)
         neutral_count = np.sum(directions == 2)
-        
+
         # Логируем для отладки
-        logger.debug(f"Signal votes: LONG={long_count}, SHORT={short_count}, NEUTRAL={neutral_count}")
-        
+        logger.debug(
+            f"Signal votes: LONG={long_count}, SHORT={short_count}, NEUTRAL={neutral_count}"
+        )
+
         # Если SHORT имеет больше голосов чем LONG и хотя бы 2 голоса
         if short_count > long_count and short_count >= 2:
             logger.info(f"📉 SHORT signal determined: {short_count} votes vs LONG={long_count}")
@@ -413,7 +420,7 @@ class SignalQualityAnalyzer:
                 return "SHORT"
         else:
             # В остальных случаях (преобладает NEUTRAL)
-            logger.info(f"⚪ NEUTRAL signal: no clear direction")
+            logger.info("⚪ NEUTRAL signal: no clear direction")
             return "NEUTRAL"
 
     def _check_filtering_criteria(
@@ -922,3 +929,76 @@ class SignalQualityAnalyzer:
             "rejected": 0,
         }
         logger.info("📊 Статистика анализатора качества сброшена")
+
+    def _validate_direction_vs_returns(self, signal_type: str, future_returns: np.ndarray) -> str:
+        """
+        🚨 КРИТИЧЕСКАЯ ВАЛИДАЦИЯ: Проверяет соответствие направления торговли ожидаемой доходности
+
+        Логика:
+        - LONG сигнал должен иметь ПОЛОЖИТЕЛЬНЫЕ ожидаемые доходности
+        - SHORT сигнал должен иметь ОТРИЦАТЕЛЬНЫЕ ожидаемые доходности
+        - При несоответствии либо блокируем сигнал, либо исправляем направление
+
+        Args:
+            signal_type: Определенный тип сигнала ('LONG', 'SHORT', 'NEUTRAL')
+            future_returns: Массив ожидаемых доходностей [15m, 1h, 4h, 12h]
+
+        Returns:
+            Скорректированный тип сигнала
+        """
+        if signal_type == "NEUTRAL":
+            return signal_type
+
+        # Анализируем знаки доходностей с весами таймфреймов
+        weights = np.array([0.4, 0.3, 0.2, 0.1])  # 15m, 1h, 4h, 12h
+        weighted_return = np.sum(future_returns * weights)
+
+        # Считаем сколько ТФ поддерживают каждое направление
+        positive_returns_count = np.sum(future_returns > 0)
+        negative_returns_count = np.sum(future_returns < 0)
+        zero_returns_count = np.sum(np.abs(future_returns) < 0.0001)
+
+        logger.info(
+            f"""
+🔍 ВАЛИДАЦИЯ НАПРАВЛЕНИЕ vs ДОХОДНОСТЬ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Сигнал: {signal_type}
+📈 Future Returns: {future_returns}
+⚖️ Взвешенная доходность: {weighted_return:+.6f} ({weighted_return*100:+.3f}%)
+➕ Положительные ТФ: {positive_returns_count}/4
+➖ Отрицательные ТФ: {negative_returns_count}/4  
+🟡 Нулевые ТФ: {zero_returns_count}/4
+"""
+        )
+
+        # Минимальный порог значимости доходности (0.1% = 0.001)
+        min_significant_return = 0.001
+
+        # Проверяем соответствие
+        if signal_type == "LONG":
+            if weighted_return > min_significant_return and positive_returns_count >= 2:
+                logger.info("✅ LONG сигнал соответствует значимым положительным доходностям")
+                return "LONG"
+            elif weighted_return < -min_significant_return and negative_returns_count >= 2:
+                logger.warning(
+                    "⚠️ LONG сигнал противоречит отрицательным доходностям → корректируем на SHORT"
+                )
+                return "SHORT"
+            else:
+                logger.warning("⚠️ LONG сигнал имеет незначимые/смешанные доходности → блокируем")
+                return "NEUTRAL"
+
+        elif signal_type == "SHORT":
+            if weighted_return < -min_significant_return and negative_returns_count >= 2:
+                logger.info("✅ SHORT сигнал соответствует значимым отрицательным доходностям")
+                return "SHORT"
+            elif weighted_return > min_significant_return and positive_returns_count >= 2:
+                logger.warning(
+                    "⚠️ SHORT сигнал противоречит положительным доходностям → корректируем на LONG"
+                )
+                return "LONG"
+            else:
+                logger.warning("⚠️ SHORT сигнал имеет незначимые/смешанные доходности → блокируем")
+                return "NEUTRAL"
+
+        return signal_type

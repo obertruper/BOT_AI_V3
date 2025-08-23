@@ -302,31 +302,31 @@ class PatchTSTStrategy(BaseStrategy):
             future_returns = predictions[0:4]
             direction_logits = predictions[4:16]  # 12 логитов вместо 4 направлений
             risk_metrics = predictions[16:20]
-            
+
             # ПРАВИЛЬНАЯ интерпретация направлений через softmax
             direction_logits_reshaped = direction_logits.reshape(4, 3)  # 4 таймфрейма × 3 класса
-            
+
             # Применяем softmax для получения вероятностей и направлений
             direction_probs_list = []
             directions = []
             confidence_scores = []
-            
+
             for i, logits in enumerate(direction_logits_reshaped):
                 # Softmax с численной стабильностью
                 exp_logits = np.exp(logits - np.max(logits))
                 probs = exp_logits / exp_logits.sum()
                 direction_probs_list.append(probs)
-                
+
                 # Направление = argmax вероятностей (0=LONG, 1=SHORT, 2=NEUTRAL)
                 direction_class = np.argmax(probs)
                 directions.append(direction_class)
-                
+
                 # Уверенность = максимальная вероятность
                 confidence_scores.append(np.max(probs))
-            
+
             directions = np.array(directions)
             confidence_scores = np.array(confidence_scores)
-            
+
             # Извлекаем вероятности для каждого класса
             long_probs = np.array([probs[0] for probs in direction_probs_list])
             short_probs = np.array([probs[1] for probs in direction_probs_list])

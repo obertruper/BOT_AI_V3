@@ -9,13 +9,13 @@ from unittest.mock import Mock
 import pytest
 
 # Обновлен импорт на новый класс ExecutionEngine
-from trading.execution.executor import ExecutionEngine
 
 
 def test_execution_engine_imports():
     """Test that ExecutionEngine module can be imported without errors"""
     try:
         from trading.execution.executor import ExecutionEngine
+
         assert ExecutionEngine is not None
     except ImportError as e:
         pytest.fail(f"Failed to import ExecutionEngine: {e}")
