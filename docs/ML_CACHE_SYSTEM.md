@@ -7,17 +7,20 @@ The ML prediction cache system ensures efficient and unique predictions for each
 ## 🔑 Cache Key Generation
 
 ### Enhanced Cache Key Format
+
 ```python
 cache_key = f"{exchange}:{symbol}:{timestamp}:{data_hash}"
 ```
 
-### Components:
+### Components
+
 - **exchange**: Trading exchange (e.g., "bybit")
 - **symbol**: Trading pair (e.g., "BTCUSDT")
 - **timestamp**: Current time with second precision (YYYYMMDDHHmmss)
 - **data_hash**: MD5 hash of last 3 closing prices (8 chars)
 
-### Example:
+### Example
+
 ```python
 "bybit:BTCUSDT:20250820143052:a3f2b8c1"
 ```
@@ -25,16 +28,20 @@ cache_key = f"{exchange}:{symbol}:{timestamp}:{data_hash}"
 ## 🎯 Key Features
 
 ### 1. Unique Predictions per Symbol
+
 Each symbol receives unique ML predictions even when processed simultaneously:
+
 ```python
 # Different symbols = different cache keys = different predictions
 BTCUSDT → unique prediction
-ETHUSDT → unique prediction  
+ETHUSDT → unique prediction
 SOLUSDT → unique prediction
 ```
 
 ### 2. Data-Aware Caching
+
 The cache key includes a data hash to ensure predictions update when market data changes:
+
 ```python
 # Hash calculation
 last_closes = ohlcv_data.tail(3)['close'].values
@@ -42,6 +49,7 @@ data_hash = hashlib.md5(str(last_closes).encode()).hexdigest()[:8]
 ```
 
 ### 3. TTL Management
+
 - **Default TTL**: 300 seconds (5 minutes)
 - Aligns with ML model update frequency
 - Automatic cleanup of expired entries
@@ -49,6 +57,7 @@ data_hash = hashlib.md5(str(last_closes).encode()).hexdigest()[:8]
 ## 📈 Cache Statistics
 
 ### Metrics Tracked
+
 ```python
 cache_stats = {
     "hits": 150,              # Cache hits count
@@ -63,6 +72,7 @@ cache_stats = {
 ```
 
 ### Accessing Metrics
+
 ```python
 processor = MLSignalProcessor(...)
 metrics = processor.get_cache_metrics()
@@ -72,18 +82,20 @@ print(f"Cache hit rate: {metrics['cache_hit_rate']:.1%}")
 ## 🧹 Cache Cleanup
 
 ### Automatic Cleanup Triggers
+
 1. **TTL Expiration**: Entries older than 300 seconds
 2. **Size Limit**: When cache exceeds 1000 entries
 3. **Invalid Data**: Entries without valid timestamps
 
 ### Cleanup Process
+
 ```python
 def _cleanup_cache(self):
     # 1. Remove expired entries
     for key, data in self.prediction_cache.items():
         if is_expired(data):
             del self.prediction_cache[key]
-    
+
     # 2. Enforce size limit (keep newest 1000)
     if len(self.prediction_cache) > 1000:
         sorted_items = sorted_by_timestamp(...)
@@ -105,6 +117,7 @@ graph TD
 ## ⚙️ Configuration
 
 ### Recommended Settings
+
 ```yaml
 # config/ml/ml_config.yaml
 ml:
@@ -117,6 +130,7 @@ ml:
 ```
 
 ### Performance Tuning
+
 | Parameter | Default | Range | Impact |
 |-----------|---------|-------|--------|
 | TTL | 300s | 60-600s | Freshness vs Performance |
@@ -126,12 +140,14 @@ ml:
 ## 📊 Monitoring
 
 ### Key Metrics to Watch
+
 1. **Hit Rate**: Should be > 60% for efficiency
 2. **Cache Size**: Should stay below max_size
 3. **Unique Symbols**: Should match active trading pairs
 4. **Cleanup Frequency**: Should not exceed 1/minute
 
 ### Warning Signs
+
 - ⚠️ Hit rate < 40%: TTL might be too short
 - ⚠️ Cache size at max: Consider increasing limit
 - ⚠️ Frequent cleanups: Possible memory pressure
@@ -140,21 +156,27 @@ ml:
 ## 🐛 Troubleshooting
 
 ### Issue: All symbols getting same predictions
+
 **Solution**: Verify cache key includes symbol and data hash
+
 ```python
 # Check cache keys are unique
 assert cache_key_btc != cache_key_eth
 ```
 
 ### Issue: Low cache hit rate
+
 **Solution**: Increase TTL or check prediction frequency
+
 ```yaml
 cache:
   ttl_seconds: 600  # Increase to 10 minutes
 ```
 
 ### Issue: Memory usage growing
+
 **Solution**: Reduce max_size or decrease TTL
+
 ```yaml
 cache:
   max_size: 500     # Reduce cache size
@@ -164,6 +186,7 @@ cache:
 ## 📝 API Endpoints
 
 ### Get Cache Statistics
+
 ```http
 GET /api/ml/cache-stats
 
@@ -180,6 +203,7 @@ Response:
 ```
 
 ### Clear Cache
+
 ```http
 POST /api/ml/cache/clear
 
@@ -193,6 +217,7 @@ Response:
 ## 🔍 Cache Key Examples
 
 ### Different Symbols (Unique Predictions)
+
 ```
 bybit:BTCUSDT:20250820143052:a3f2b8c1 → Prediction A
 bybit:ETHUSDT:20250820143052:b4g3d9e2 → Prediction B
@@ -200,6 +225,7 @@ bybit:SOLUSDT:20250820143052:c5h4e0f3 → Prediction C
 ```
 
 ### Same Symbol, Different Times
+
 ```
 bybit:BTCUSDT:20250820143052:a3f2b8c1 → Prediction A
 bybit:BTCUSDT:20250820143152:a3f2b8c1 → Cache Hit (within TTL)
@@ -207,6 +233,7 @@ bybit:BTCUSDT:20250820143652:d6i5f1g4 → New Prediction (TTL expired)
 ```
 
 ### Same Symbol, Different Data
+
 ```
 bybit:BTCUSDT:20250820143052:a3f2b8c1 → Prediction A (price: 45000)
 bybit:BTCUSDT:20250820143053:e7j6g2h5 → Prediction B (price: 45100)

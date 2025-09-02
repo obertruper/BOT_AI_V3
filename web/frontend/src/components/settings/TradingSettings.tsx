@@ -54,22 +54,22 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
 
   const updateConfig = (path: string, value: any) => {
     if (!config) return;
-    
+
     const keys = path.split('.');
     const newConfig = { ...config };
     let current: any = newConfig;
-    
+
     for (let i = 0; i < keys.length - 1; i++) {
       current = current[keys[i]];
     }
     current[keys[keys.length - 1]] = value;
-    
+
     setConfig(newConfig);
   };
 
   const validateConfig = async () => {
     if (!config) return;
-    
+
     try {
       const result = await apiService.validateConfig('trading', config);
       setValidation(result);
@@ -82,10 +82,10 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
 
   const saveConfig = async () => {
     if (!config) return;
-    
+
     const isValid = await validateConfig();
     if (!isValid) return;
-    
+
     setLoading(true);
     try {
       const success = await apiService.updateConfig('trading', config);
@@ -147,7 +147,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
                 <p className="text-sm text-gray-400">Enable or disable automated trading</p>
               </div>
             </div>
-            
+
             <label className="flex items-center space-x-3">
               <input
                 type="checkbox"
@@ -175,7 +175,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
               <p className="text-sm text-gray-400">Configure risk parameters and limits</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
@@ -187,7 +187,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Max Daily Loss (USD)</label>
                 <input
@@ -197,7 +197,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Max Drawdown (%)</label>
                 <input
@@ -209,7 +209,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Stop Loss (%)</label>
@@ -221,7 +221,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Take Profit (%)</label>
                 <input
@@ -232,7 +232,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Leverage</label>
                 <select
@@ -264,7 +264,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
               <p className="text-sm text-gray-400">Configure position sizing and limits</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Max Open Positions</label>
@@ -277,7 +277,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Position Size (USD)</label>
               <input
@@ -287,7 +287,7 @@ const TradingSettings: React.FC<TradingSettingsProps> = ({ onSave }) => {
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Min Balance Threshold (USD)</label>
               <input

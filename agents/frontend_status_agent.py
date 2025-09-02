@@ -329,7 +329,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ status, isConnected 
           {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
         </div>
       </div>
-      
+
       {/* Main Status */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
         <span style={{ fontSize: '24px', marginRight: '12px' }}>{getStatusIcon(status.status)}</span>
@@ -353,7 +353,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ status, isConnected 
             </span>
           </div>
         </div>
-        
+
         <div style={{ backgroundColor: '#374151', borderRadius: '6px', padding: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '14px', color: '#d1d5db' }}>ML Manager</span>
@@ -362,7 +362,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ status, isConnected 
             </span>
           </div>
         </div>
-        
+
         <div style={{ backgroundColor: '#374151', borderRadius: '6px', padding: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '14px', color: '#d1d5db' }}>Exchanges</span>
@@ -371,7 +371,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ status, isConnected 
             </span>
           </div>
         </div>
-        
+
         <div style={{ backgroundColor: '#374151', borderRadius: '6px', padding: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '14px', color: '#d1d5db' }}>Risk Manager</span>
@@ -429,15 +429,15 @@ export const StatusDashboard: React.FC = () => {
     const fetchAllData = async () => {
       try {
         setError(null);
-        
+
         // Загружаем системный статус
         const statusData = await apiService.getSystemStatus();
         setSystemStatus(statusData);
-        
+
         // Загружаем метрики
         const metricsData = await apiService.getSystemMetrics();
         setMetrics(metricsData);
-        
+
         setLastUpdate(new Date());
         setIsConnected(true);
       } catch (err) {
@@ -460,9 +460,9 @@ export const StatusDashboard: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      backgroundColor: '#0d0d0d', 
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#0d0d0d',
       padding: '16px',
       color: 'white',
       fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -519,7 +519,7 @@ export const StatusDashboard: React.FC = () => {
           boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
         }}>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', margin: 0 }}>📊 System Metrics</h2>
-          
+
           {metrics ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* CPU Usage */}
@@ -588,7 +588,7 @@ export const StatusDashboard: React.FC = () => {
       <div style={{ marginTop: '32px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
         <p>BOT_AI_V3 Trading System • Real-time Status Monitor</p>
         <p style={{ marginTop: '4px' }}>
-          {isConnected ? '🟢 Live Data' : '🔴 Cached Data'} • 
+          {isConnected ? '🟢 Live Data' : '🔴 Cached Data'} •
           Auto-refresh: 5s
         </p>
       </div>

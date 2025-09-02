@@ -41,9 +41,9 @@ class Colors:
 
 def print_banner():
     """Выводит заголовок"""
-    print(f"\n{Colors.HEADER}{'='*70}{Colors.ENDC}")
+    print(f"\n{Colors.HEADER}{'=' * 70}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}🎯 ENHANCED POSITION TRACKER TEST RUNNER{Colors.ENDC}")
-    print(f"{Colors.HEADER}{'='*70}{Colors.ENDC}")
+    print(f"{Colors.HEADER}{'=' * 70}{Colors.ENDC}")
     print(f"{Colors.CYAN}🚀 Комплексное тестирование системы отслеживания позиций{Colors.ENDC}")
     print(f"{Colors.BLUE}📊 Unit • Integration • Performance тесты{Colors.ENDC}\n")
 

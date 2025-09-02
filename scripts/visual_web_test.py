@@ -400,7 +400,7 @@ class VisualWebTester:
         print("\n📊 Результаты:")
         print(f"  ✅ Пройдено: {passed}/{total}")
         print(f"  ❌ Провалено: {failed}/{total}")
-        print(f"  📈 Успешность: {(passed/total*100):.1f}%")
+        print(f"  📈 Успешность: {(passed / total * 100):.1f}%")
 
         print("\n📝 Детали тестов:")
         for result in self.results:

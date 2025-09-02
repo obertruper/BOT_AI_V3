@@ -2,12 +2,12 @@ ml:
   enabled: true
   use_adapters: true  # Использовать систему адаптеров
   active_model: "patchtst"  # Активная модель
-  
+
   signal_generation:
     interval_seconds: 180  # 3 минуты между ML предсказаниями
     batch_size: 10
     parallel_workers: 4
-    
+
   symbols:
   - BTCUSDT
   - ETHUSDT
@@ -18,7 +18,7 @@ ml:
   - DOGEUSDT
   - DOTUSDT
   - LINKUSDT
-  
+
   # Новый формат: поддержка множественных моделей
   models:
     patchtst:
@@ -38,7 +38,7 @@ ml:
         n_heads: 8
         n_layers: 6
         num_outputs: 20
-    
+
     # Готово для будущих моделей
     # lstm:
     #   type: "LSTM"
@@ -46,7 +46,7 @@ ml:
     #   adapter_class: "LSTMAdapter"
     #   model_file: "models/saved/lstm_model.pth"
     #   device: "cuda"
-  
+
   # Legacy формат (для обратной совместимости)
   model:
     enabled: true
@@ -54,12 +54,12 @@ ml:
     scaler_path: models/saved/data_scaler.pkl
     device: cuda
     direction_confidence_threshold: 0.5
-  
-  # Параметры фильтрации сигналов  
+
+  # Параметры фильтрации сигналов
   min_confidence: 0.3       # Минимальная уверенность для генерации сигнала
   min_signal_strength: 0.25  # Минимальная сила сигнала
   risk_tolerance: MEDIUM     # LOW, MEDIUM, HIGH
-  
+
   # Параметры кэширования предсказаний
   cache:
     enabled: true
@@ -67,7 +67,7 @@ ml:
     max_size: 1000          # Максимум записей в кэше
     cleanup_interval: 60    # Проверка очистки каждую минуту
     enable_stats: true      # Включить сбор статистики кэша
-    
+
 backtesting:
   commission: 0.001
   initial_capital: 100000
@@ -429,11 +429,11 @@ scheduler:
 signal_filtering:
   # Активная стратегия фильтрации: conservative/moderate/aggressive
   strategy: "moderate"  # Изменено на moderate для баланса
-  
+
   # Веса таймфреймов [15m, 1h, 4h, 12h] - 4h основной
   timeframe_weights: [0.25, 0.25, 0.35, 0.15]
   main_timeframe_index: 2  # 4h - основной таймфрейм
-  
+
   # Консервативная стратегия - высочайшее качество сигналов
   conservative:
     min_timeframe_agreement: 3  # Минимум 3 из 4 таймфреймов
@@ -443,7 +443,7 @@ signal_filtering:
     min_signal_strength: 0.45  # Высокая сила сигнала
     max_risk_level: "MEDIUM"  # Средний риск максимум
     min_quality_score: 0.60  # Высокое качество
-    
+
   # Умеренная стратегия - сбалансированное качество
   moderate:
     min_timeframe_agreement: 3  # Минимум 3 из 4 таймфреймов должны согласиться
@@ -455,13 +455,13 @@ signal_filtering:
     min_signal_strength: 0.40  # Умеренная сила сигнала
     max_risk_level: "MEDIUM"
     min_quality_score: 0.50  # Повышенное качество сигналов
-    
+
     # Отдельные параметры для SHORT сигналов
     short_confidence_threshold: 0.35  # Немного ниже чем для LONG
     short_min_timeframe_agreement: 3  # Требуем 3 из 4 таймфреймов
     short_expected_return_pct: 0.0012  # 0.12% минимальная доходность для SHORT
     short_min_quality_score: 0.45  # Чуть ниже требование к качеству
-    
+
   # Агрессивная стратегия - максимальное покрытие
   aggressive:
     min_timeframe_agreement: 1  # достаточно основного таймфрейма
@@ -471,14 +471,14 @@ signal_filtering:
     min_signal_strength: 0.25  # Низкая сила сигнала допустима
     max_risk_level: "HIGH"
     min_quality_score: 0.30  # Минимальное качество
-    
+
   # Веса для расчета итогового качества сигнала
   quality_weights:
     agreement: 0.35  # согласованность таймфреймов
     confidence: 0.30  # уверенность модели
     return_expectation: 0.20  # ожидаемая доходность
     risk_adjustment: 0.15  # корректировка на риск
-    
+
   # Настройки логирования качества
   logging:
     log_rejection_reasons: true  # детальное логирование отклонений

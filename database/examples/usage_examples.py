@@ -75,7 +75,7 @@ async def example_bulk_operations():
     end_time = asyncio.get_event_loop().time()
 
     print(
-        f"Bulk inserted {len(prediction_ids)} predictions in {(end_time - start_time)*1000:.2f}ms"
+        f"Bulk inserted {len(prediction_ids)} predictions in {(end_time - start_time) * 1000:.2f}ms"
     )
     print(f"IDs: {prediction_ids}")
 
@@ -308,7 +308,7 @@ async def example_performance_testing():
     end_time = asyncio.get_event_loop().time()
 
     print(
-        f"Batch position updates: {updated_count} positions in {(end_time - start_time)*1000:.2f}ms"
+        f"Batch position updates: {updated_count} positions in {(end_time - start_time) * 1000:.2f}ms"
     )
 
 

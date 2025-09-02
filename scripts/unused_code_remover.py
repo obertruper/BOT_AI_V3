@@ -3,6 +3,7 @@
 Безопасное удаление неиспользуемого кода в BOT_AI_V3
 Анализирует и предлагает удаление dead code
 """
+
 import ast
 import json
 import shutil
@@ -513,7 +514,7 @@ class UnusedCodeRemover:
         elif kb_to_remove < 1024:
             return f"{kb_to_remove:.1f} KB"
         else:
-            return f"{kb_to_remove/1024:.1f} MB"
+            return f"{kb_to_remove / 1024:.1f} MB"
 
     def execute_removal_plan(self, plan: RemovalPlan, dry_run: bool = True) -> dict[str, Any]:
         """Выполняет план удаления"""

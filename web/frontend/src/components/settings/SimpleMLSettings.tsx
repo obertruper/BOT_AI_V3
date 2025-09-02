@@ -60,7 +60,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
               <p className="text-sm text-gray-400">Current model statistics and metrics</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700/50 text-center">
               <div className="text-2xl font-bold text-green-400">{modelStats.accuracy}%</div>
@@ -94,7 +94,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
               <p className="text-sm text-gray-400">Core model configuration and architecture</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
@@ -106,7 +106,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent opacity-50"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Input Features</label>
                 <input
@@ -115,7 +115,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Prediction Horizon (minutes)</label>
                 <input
@@ -127,7 +127,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Confidence Threshold</label>
@@ -140,7 +140,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Batch Size</label>
                 <input
@@ -151,7 +151,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Learning Rate</label>
                 <input
@@ -180,7 +180,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
               <p className="text-sm text-gray-400">Real-time prediction and performance settings</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Update Interval (seconds)</label>
@@ -192,7 +192,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Cache TTL (seconds)</label>
               <input
@@ -203,7 +203,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div className="flex items-end">
               <label className="flex items-center space-x-3">
                 <input
@@ -233,7 +233,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
               <p className="text-sm text-gray-400">Feature extraction and processing configuration</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-4 bg-blue-600/10 border border-blue-600/30 rounded-xl text-center">
               <div className="text-2xl font-bold text-blue-400">{config.technicalIndicators}</div>
@@ -246,7 +246,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               />
             </div>
-            
+
             <div className="p-4 bg-green-600/10 border border-green-600/30 rounded-xl text-center">
               <div className="text-2xl font-bold text-green-400">{config.marketFeatures}</div>
               <div className="text-sm text-green-400 mb-3">Market Features</div>
@@ -258,7 +258,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               />
             </div>
-            
+
             <div className="p-4 bg-purple-600/10 border border-purple-600/30 rounded-xl text-center">
               <div className="text-2xl font-bold text-purple-400">{config.sentimentFeatures}</div>
               <div className="text-sm text-purple-400 mb-3">Sentiment Features</div>
@@ -271,7 +271,7 @@ const SimpleMLSettings: React.FC<SimpleMLSettingsProps> = ({ onSave }) => {
               />
             </div>
           </div>
-          
+
           <div className="mt-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700/50 text-center">
             <span className="text-gray-400">Total Features: </span>
             <span className="text-white font-semibold">

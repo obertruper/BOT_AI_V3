@@ -7,16 +7,19 @@
 ## 🚀 Точки входа
 
 ### 1. **Master Test Runner** (главная команда)
+
 ```bash
 python3 scripts/master_test_runner.py --full-analysis
 ```
 
 ### 2. **Визуальный интерфейс**
+
 ```bash
 python3 run_tests.py
 ```
 
 ### 3. **Прямой запуск оркестратора**
+
 ```bash
 python3 scripts/unified_test_orchestrator.py
 ```
@@ -60,11 +63,13 @@ python3 scripts/unified_test_orchestrator.py
 ## 🎨 Режимы работы
 
 ### Интерактивный режим (по умолчанию)
+
 ```bash
 python3 scripts/master_test_runner.py
 ```
 
 Показывает визуальное меню:
+
 - Выбор компонентов для тестирования
 - Переключение компонентов on/off
 - Генерация отчетов
@@ -73,10 +78,13 @@ python3 scripts/master_test_runner.py
 ### CLI режимы
 
 #### Full Analysis
+
 ```bash
 python3 scripts/master_test_runner.py --full-analysis
 ```
+
 Запускает все компоненты:
+
 - Unit тесты
 - Integration тесты
 - Performance тесты
@@ -89,73 +97,89 @@ python3 scripts/master_test_runner.py --full-analysis
 - API тесты
 
 #### Quick Test
+
 ```bash
 python3 scripts/master_test_runner.py --quick
 ```
+
 Только unit тесты для быстрой проверки
 
 #### Visual Tests
+
 ```bash
 python3 scripts/master_test_runner.py --visual
 ```
+
 Тестирование веб-интерфейса с Puppeteer MCP
 
 #### ML Tests
+
 ```bash
 python3 scripts/master_test_runner.py --ml
 ```
+
 Тестирование ML системы
 
 ## 📈 Компоненты тестирования
 
 ### 1. **Unit Tests** 🧪
+
 - Базовые модульные тесты
 - Покрытие основных функций
 - Быстрое выполнение
 
 ### 2. **Integration Tests** 🔗
+
 - Тесты интеграции компонентов
 - API и БД взаимодействие
 - WebSocket соединения
 
 ### 3. **Performance Tests** ⚡
+
 - Замер производительности
 - API response time < 100ms
 - ML inference < 20ms
 - Trading latency < 50ms
 
 ### 4. **Visual Tests** 👁️
+
 - Puppeteer MCP автоматизация
 - Скриншоты интерфейса
 - Проверка UI компонентов
 - Адаптивность
 
 ### 5. **Code Analysis** 🔍
+
 - Анализ цепочек выполнения
 - Граф зависимостей
 - Поиск мертвого кода
 
 ### 6. **Coverage Monitor** 📊
+
 - Мониторинг покрытия
 - Генерация отчетов
 - HTML визуализация
 
 ### 7. **Test Generator** 🤖
+
 - Автоматическая генерация тестов
 - AST анализ кода
 - Создание fixtures
 
 ### 8. **Unused Code Detector** 🗑️
+
 - Поиск неиспользуемого кода
 - Безопасное удаление
 - Rollback функция
 
 ### 9. **ML Tests** 🧠
+
 - Тесты ML pipeline
 - Проверка предсказаний
 - Feature engineering
 
 ### 10. **API Tests** 🌐
+
 - REST эндпоинты
 - WebSocket
 - Интеграция с фронтендом
@@ -169,6 +193,7 @@ test_results/dashboard.html
 ```
 
 Содержит:
+
 - Общую статистику тестов
 - Статус каждого компонента
 - Покрытие кода
@@ -180,6 +205,7 @@ test_results/dashboard.html
 ### Включение/выключение компонентов
 
 В интерактивном режиме:
+
 1. Выберите опцию `[2] Toggle component on/off`
 2. Введите ключ компонента (например, `unit_tests`)
 3. Компонент будет включен/выключен
@@ -191,6 +217,7 @@ python3 scripts/master_test_runner.py --clean
 ```
 
 Удаляет:
+
 - test_results/
 - analysis_results/
 - htmlcov/
@@ -201,6 +228,7 @@ python3 scripts/master_test_runner.py --clean
 ## 📝 Примеры использования
 
 ### Полный цикл тестирования
+
 ```bash
 # Очистка
 python3 scripts/master_test_runner.py --clean
@@ -213,16 +241,19 @@ open test_results/dashboard.html
 ```
 
 ### Быстрая проверка после изменений
+
 ```bash
 python3 scripts/master_test_runner.py --quick
 ```
 
 ### Тестирование UI после изменений фронтенда
+
 ```bash
 python3 scripts/master_test_runner.py --visual
 ```
 
 ### Интерактивный выбор компонентов
+
 ```bash
 python3 scripts/master_test_runner.py
 # Выберите опцию 5 для ручного выбора
@@ -237,6 +268,7 @@ python3 run_tests.py
 ```
 
 Показывает красивое ASCII меню:
+
 ```
 ╔══════════════════════════════════════════════════════════════════╗
 ║     ██████╗  ██████╗ ████████╗     █████╗ ██╗    ██╗   ██╗██████╗
@@ -279,6 +311,7 @@ python3 run_tests.py
 ## 🎯 Итоги
 
 Создана полностью интегрированная система тестирования с:
+
 - **Единой точкой входа** через master_test_runner.py
 - **Визуальным интерфейсом** для удобства использования
 - **HTML дашбордом** для анализа результатов

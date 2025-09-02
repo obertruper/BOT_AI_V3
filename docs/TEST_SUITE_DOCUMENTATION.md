@@ -1,7 +1,8 @@
 # 📊 BOT_AI_V3 Test Suite Documentation
 
 ## 📋 Общая статистика
-- **Всего тестовых файлов:** 95  
+
+- **Всего тестовых файлов:** 95
 - **Всего тестовых функций:** 856
 - **Всего тестовых классов:** 219
 - **Покрытие кода:** ~23%
@@ -9,20 +10,23 @@
 ## 🏗 Структура тестов
 
 ### 📁 tests/unit/ - Unit тесты
+
 **Цель:** Изолированное тестирование отдельных компонентов
 
 #### Trading модуль
+
 - `test_trading_engine.py` - Основной торговый движок
   - Обработка сигналов
   - Управление позициями
   - Интеграция с биржами
-  
+
 - `test_order_manager.py` - Менеджер ордеров
   - Создание ордеров
   - Валидация параметров
   - Отслеживание статусов
 
 #### Orders подмодуль
+
 - `test_dynamic_sltp_calculator.py` ✅ **ИСПРАВЛЕН**
   - Расчет динамических уровней SL/TP
   - ATR волатильность (исправлен метод `_calculate_atr_volatility`)
@@ -35,12 +39,14 @@
   - Синхронизация с биржей
 
 #### SLTP модуль
+
 - `test_enhanced_manager.py` ⚠️ **Требует исправления**
   - Enhanced SL/TP менеджер
   - Трейлинг стоп функциональность
   - Проблемы с Mock объектами и TrailingType enum
 
 #### Risk Management
+
 - `test_risk_calculator.py` - Калькулятор рисков
   - Расчет размера позиции
   - Максимальный риск на сделку
@@ -52,6 +58,7 @@
   - Риск-метрики
 
 #### ML модуль
+
 - `test_ml_predictor.py` - ML предсказания
   - Загрузка моделей
   - Инференс
@@ -63,6 +70,7 @@
   - Временные признаки
 
 #### Core модуль
+
 - `test_orchestrator_ml.py` - ML оркестратор
   - Координация ML компонентов
   - Управление pipeline
@@ -74,6 +82,7 @@
   - Graceful shutdown
 
 ### 📁 tests/integration/ - Интеграционные тесты
+
 **Цель:** Проверка взаимодействия компонентов
 
 - `test_complete_trading.py` ✅ **ИСПРАВЛЕН**
@@ -97,6 +106,7 @@
   - Защита прибыли
 
 ### 📁 tests/performance/ - Performance тесты
+
 **Цель:** Измерение производительности и оптимизация
 
 - `test_ml_inference.py` - Скорость ML инференса
@@ -125,6 +135,7 @@
   - Concurrent requests
 
 ### 📁 tests/analysis/ - Анализ кода
+
 **Цель:** Качество и структура кода
 
 - `test_code_analyzer_validation.py` ✅ **ИСПРАВЛЕН**
@@ -136,6 +147,7 @@
   - Импорт изменен на `scripts.code_chain_analyzer`
 
 ### 📁 tests/fixtures/ - Test Fixtures
+
 **Цель:** Переиспользуемые тестовые данные
 
 - `dynamic_sltp_fixtures.py` - Fixtures для Dynamic SL/TP
@@ -149,6 +161,7 @@
   - Feature sets
 
 ### 📁 tests/strategies/ - Стратегии
+
 **Цель:** Тестирование торговых стратегий
 
 - `test_patchtst_strategy.py` - PatchTST стратегия
@@ -158,7 +171,8 @@
 
 ## 🔧 Исправленные проблемы
 
-### ✅ Успешно исправлено:
+### ✅ Успешно исправлено
+
 1. **test_dynamic_sltp_calculator.py**
    - Метод `_calculate_atr()` → `_calculate_atr_volatility()`
    - Добавлен параметр `current_price`
@@ -172,7 +186,8 @@
    - Импорт `exchanges.base.order_types` работает корректно
    - Модуль существует и доступен
 
-### ⚠️ Требуют внимания:
+### ⚠️ Требуют внимания
+
 1. **test_enhanced_manager.py**
    - Mock объекты возвращают неправильные типы
    - TrailingType enum не принимает Mock значения
@@ -189,6 +204,7 @@
 ## 🚀 Специальные тестовые режимы
 
 ### Orchestrator Main (`orchestrator_main.py`)
+
 Единая точка входа для всех тестов с 12 режимами:
 
 1. **interactive** - Интерактивное меню
@@ -204,7 +220,8 @@
 11. **coverage** - Coverage отчеты
 12. **e2e** - End-to-end тесты
 
-### Запуск тестов:
+### Запуск тестов
+
 ```bash
 # Интерактивный режим (рекомендуется)
 python3 orchestrator_main.py
@@ -222,6 +239,7 @@ python3 orchestrator_main.py --mode ci --quiet
 ## 📈 Ключевые компоненты системы SL/TP
 
 ### Dynamic SL/TP Calculator
+
 - **Адаптивные уровни:** SL 1-2%, TP 3.6-6%
 - **Факторы влияния:**
   - ATR волатильность (50% вес)
@@ -232,6 +250,7 @@ python3 orchestrator_main.py --mode ci --quiet
 - **Частичное закрытие:** 3 уровня (30%/30%/40%)
 
 ### Partial TP Manager
+
 - **Многоуровневое закрытие:**
   - Level 1: 30% при +1%
   - Level 2: 30% при +2%
@@ -244,6 +263,7 @@ python3 orchestrator_main.py --mode ci --quiet
   - Защита 50% прибыли при +2%
 
 ### Enhanced SLTP Manager
+
 - **Интеграция с биржами**
 - **Real-time мониторинг**
 - **Автоматическая модификация уровней**
@@ -251,38 +271,44 @@ python3 orchestrator_main.py --mode ci --quiet
 
 ## 📊 Метрики качества
 
-### Текущее состояние:
+### Текущее состояние
+
 - ✅ **22 теста** успешно собираются
 - ❌ **3 теста** с ошибками импорта (исправлено 2/3)
 - ⚠️ **SQLAlchemy warnings** требуют обновления
 
-### Покрытие по модулям:
+### Покрытие по модулям
+
 - Trading: ~35% coverage
-- ML: ~20% coverage  
+- ML: ~20% coverage
 - Risk Management: ~25% coverage
 - Exchanges: ~15% coverage
 - Database: ~30% coverage
 
 ## 🎯 Рекомендации
 
-### Приоритет 1 (Критично):
+### Приоритет 1 (Критично)
+
 1. Создать `ml/logic/feature_engineering_production.py` или исправить импорты
 2. Исправить Mock объекты в `test_enhanced_manager.py`
 3. Обновить SQLAlchemy импорты до версии 2.0
 
-### Приоритет 2 (Важно):
+### Приоритет 2 (Важно)
+
 1. Увеличить покрытие критических путей до 80%
 2. Добавить интеграционные тесты для новых exchanges
 3. Создать performance benchmarks для ML inference
 
-### Приоритет 3 (Улучшения):
+### Приоритет 3 (Улучшения)
+
 1. Добавить property-based testing (hypothesis)
 2. Реализовать mutation testing
 3. Настроить автоматические smoke тесты в CI/CD
 
 ## 🔄 Continuous Integration
 
-### Pre-commit hooks:
+### Pre-commit hooks
+
 ```bash
 # Установка
 ./scripts/setup_pre_commit.sh
@@ -293,7 +319,8 @@ black . && ruff check --fix .
 mypy . --ignore-missing-imports
 ```
 
-### GitHub Actions:
+### GitHub Actions
+
 - Автоматический запуск тестов на PR
 - Coverage отчеты в комментариях
 - Performance regression detection
@@ -301,6 +328,7 @@ mypy . --ignore-missing-imports
 ## 📝 Заключение
 
 Тестовая инфраструктура BOT_AI_V3 включает комплексное покрытие всех критических компонентов системы. Основной фокус на:
+
 - **Торговая логика** с динамическими SL/TP
 - **ML предсказания** и feature engineering
 - **Risk management** и валидация

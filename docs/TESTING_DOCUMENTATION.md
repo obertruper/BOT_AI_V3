@@ -1,6 +1,7 @@
 # 📚 Полная документация по тестированию BOT_AI_V3
 
 ## 📋 Оглавление
+
 - [Обзор системы тестирования](#обзор-системы-тестирования)
 - [Структура тестов](#структура-тестов)
 - [Основные команды](#основные-команды)
@@ -13,12 +14,14 @@
 ## 🎯 Обзор системы тестирования
 
 ### Текущее состояние
+
 - **Покрытие кода**: 8% (базовая инфраструктура создана)
 - **Количество тестов**: 80+ тестовых случаев
 - **Фреймворки**: pytest, pytest-asyncio, pytest-cov
 - **Цель**: Достижение 90%+ покрытия кода
 
 ### Используемые инструменты
+
 ```bash
 # Основные пакеты тестирования
 pytest==8.4.1          # Основной фреймворк
@@ -250,29 +253,29 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 class TestModuleName:
     """Тесты для ModuleName"""
-    
+
     def test_basic_functionality(self):
         """Тест базовой функциональности"""
         from module.submodule import ClassName
-        
+
         obj = ClassName()
         assert obj is not None
-        
+
     def test_with_mock(self):
         """Тест с использованием моков"""
         from module.submodule import function_to_test
-        
+
         mock_dependency = Mock()
         mock_dependency.method.return_value = "expected"
-        
+
         result = function_to_test(mock_dependency)
         assert result == "expected"
-        
+
     @pytest.mark.asyncio
     async def test_async_function(self):
         """Тест асинхронной функции"""
         from module.async_module import async_function
-        
+
         result = await async_function()
         assert result is not None
 
@@ -296,14 +299,14 @@ from datetime import datetime
 @pytest.mark.integration
 class TestIntegration:
     """Интеграционные тесты"""
-    
+
     @pytest.fixture
     async def setup_environment(self):
         """Настройка тестового окружения"""
         # Setup
         yield
         # Teardown
-        
+
     @pytest.mark.asyncio
     async def test_full_flow(self, setup_environment):
         """Тест полного workflow"""
@@ -355,6 +358,7 @@ git diff --staged | grep -i "api_key\|secret\|password"
 ## 📈 Мониторинг прогресса
 
 ### Текущие метрики
+
 - **Общее покрытие**: 8%
 - **Цель покрытия**: 90%+
 - **Количество тестов**: 80+
@@ -373,6 +377,7 @@ git diff --staged | grep -i "api_key\|secret\|password"
 ### Частые проблемы и решения
 
 #### ImportError при запуске тестов
+
 ```bash
 # Решение: активировать venv
 source venv/bin/activate
@@ -380,12 +385,14 @@ pip install -r requirements.txt
 ```
 
 #### PostgreSQL connection failed
+
 ```bash
 # Проверить что PostgreSQL на порту 5555!
 psql -p 5555 -U obertruper -d bot_trading_v3
 ```
 
 #### Async test not running
+
 ```bash
 # Установить pytest-asyncio
 pip install pytest-asyncio
@@ -396,6 +403,7 @@ asyncio_mode = "auto"
 ```
 
 #### Coverage не работает
+
 ```bash
 # Переустановить pytest-cov
 pip install --upgrade pytest-cov
@@ -418,7 +426,7 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -432,24 +440,24 @@ jobs:
           --health-retries 5
         ports:
           - 5555:5432
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.12'
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    
+
     - name: Run tests with coverage
       run: |
         pytest --cov=. --cov-report=xml --cov-report=term
-    
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
 ```
@@ -457,11 +465,13 @@ jobs:
 ## 📚 Дополнительные ресурсы
 
 ### Документация
+
 - [pytest documentation](https://docs.pytest.org/)
 - [pytest-cov documentation](https://pytest-cov.readthedocs.io/)
 - [pytest-asyncio documentation](https://pytest-asyncio.readthedocs.io/)
 
 ### Внутренние документы
+
 - `docs/TESTING_COMPLETE_GUIDE.md` - Полное руководство
 - `docs/100_PERCENT_COVERAGE_PLAN.md` - План достижения 100% покрытия
 - `docs/CODE_QUALITY.md` - Стандарты качества кода
@@ -469,21 +479,25 @@ jobs:
 ## 🎯 Roadmap
 
 ### Phase 1 (Текущая) ✅
+
 - [x] Создать базовую инфраструктуру тестирования
 - [x] Достичь 8% покрытия
 - [x] Настроить CI/CD
 
 ### Phase 2 (В процессе)
+
 - [ ] Достичь 30% покрытия
 - [ ] Полное покрытие критических компонентов
 - [ ] Интеграционные тесты для всех workflow
 
 ### Phase 3 (Планируется)
+
 - [ ] Достичь 60% покрытия
 - [ ] Performance тесты для всех endpoints
 - [ ] E2E тесты с реальными биржами (testnet)
 
 ### Phase 4 (Цель)
+
 - [ ] Достичь 90%+ покрытия
 - [ ] Автоматическая генерация тестов
 - [ ] Mutation testing

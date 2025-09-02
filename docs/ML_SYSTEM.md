@@ -51,15 +51,18 @@ Creates 240+ technical indicators and ML features from OHLCV data.
 ## 🎯 Model Output Interpretation
 
 ### Direction Classes (CRITICAL)
+
 The model outputs direction predictions with the following class mapping:
+
 ```python
 # ✅ CORRECT Interpretation (as per training project)
 0 = LONG  (bullish signal, buy)
-1 = SHORT (bearish signal, sell)  
+1 = SHORT (bearish signal, sell)
 2 = FLAT  (neutral, no clear direction)
 ```
 
 ### Complete Output Structure (20 values)
+
 | Indices | Output Type | Description |
 |---------|------------|-------------|
 | 0-3 | future_returns | Predicted returns for 15m, 1h, 4h, 12h |

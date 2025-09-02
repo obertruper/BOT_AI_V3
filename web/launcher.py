@@ -29,6 +29,9 @@ if not hasattr(sys, "real_prefix") and not (
 print(f"✅ Используется Python из venv: {sys.executable}")
 
 # Импортируем после добавления пути
+from core.config.config_manager import ConfigManager
+from core.shared_context import shared_context
+from core.system.orchestrator import SystemOrchestrator
 from web.api.main import start_web_server
 
 
@@ -58,6 +61,28 @@ async def main():
     print(f"📖 API Docs: http://{args.host}:{args.port}/api/docs")
     print(f"🔧 Режим: {'DEBUG' if args.debug else 'PRODUCTION'}")
 
+    embed_core = os.environ.get("EMBED_CORE", "false").lower() in ("1", "true", "yes")
+
+    orchestrator = None
+    trader_manager = None
+    exchange_factory = None
+    config_manager = None
+
+    if embed_core:
+        # Инициализируем Core в этом же процессе, чтобы веб работал в боевом режиме
+        print("🧩 EMBED_CORE=TRUE: инициализация Core (SystemOrchestrator) внутри веб-процесса")
+        config_manager = ConfigManager()
+        await config_manager.initialize()
+        orchestrator = SystemOrchestrator(config_manager)
+        await orchestrator.initialize()
+        # Сохраняем в shared_context, чтобы web.api.main смог получить оркестратор
+        shared_context.set_orchestrator(orchestrator)
+        trader_manager = getattr(orchestrator, "trader_manager", None)
+        exchange_factory = getattr(orchestrator, "exchange_factory", None)
+
+        # Запускаем core асинхронно (без блокировки запуска веб-сервера)
+        asyncio.create_task(orchestrator.start())
+
     if args.reload:
         # Используем uvicorn напрямую для auto-reload
         import uvicorn
@@ -72,7 +97,14 @@ async def main():
         )
     else:
         # Используем нашу функцию запуска
-        await start_web_server(host=args.host, port=args.port)
+        await start_web_server(
+            host=args.host,
+            port=args.port,
+            orchestrator=orchestrator,
+            trader_manager=trader_manager,
+            exchange_factory=exchange_factory,
+            config_manager=config_manager,
+        )
 
 
 if __name__ == "__main__":

@@ -17,10 +17,10 @@ interface NotificationCenterProps {
   maxVisible?: number;
 }
 
-const NotificationCenter: React.FC<NotificationCenterProps> = ({ 
-  notifications, 
+const NotificationCenter: React.FC<NotificationCenterProps> = ({
+  notifications,
   onRemove,
-  maxVisible = 5 
+  maxVisible = 5
 }) => {
   const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([]);
 
@@ -106,7 +106,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const formatTime = (date: Date) => {
     const now = new Date();
     const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
+
     if (diff < 60) return `${diff}s ago`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
@@ -120,11 +120,11 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
       {visibleNotifications.map((notification, index) => {
         const Icon = getNotificationIcon(notification.type);
         const colors = getNotificationColors(notification.type);
-        
+
         return (
           <div
             key={notification.id}
-            className={`${colors.bg} backdrop-blur-sm border ${colors.bg} rounded-xl p-4 shadow-2xl 
+            className={`${colors.bg} backdrop-blur-sm border ${colors.bg} rounded-xl p-4 shadow-2xl
               transform transition-all duration-500 ease-out animate-slide-in-right relative overflow-hidden`}
             style={{
               animationDelay: `${index * 100}ms`,
@@ -133,7 +133,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           >
             {/* Progress Bar */}
             {notification.autoClose !== false && (
-              <div 
+              <div
                 className={`absolute bottom-0 left-0 h-1 ${colors.accent} rounded-full transition-all`}
                 style={{
                   width: '100%',
@@ -141,13 +141,13 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                 }}
               />
             )}
-            
+
             <div className="flex items-start space-x-3">
               {/* Icon */}
               <div className={`flex-shrink-0 ${colors.icon} animate-pulse`}>
                 <Icon className="w-5 h-5" />
               </div>
-              
+
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className={`text-sm font-semibold ${colors.text} mb-1`}>
@@ -160,7 +160,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                   {formatTime(notification.timestamp)}
                 </div>
               </div>
-              
+
               {/* Close Button */}
               <button
                 onClick={() => onRemove(notification.id)}
@@ -172,7 +172,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           </div>
         );
       })}
-      
+
       <style>{`
         @keyframes slideInFromRight {
           from {
@@ -184,7 +184,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
             opacity: 1;
           }
         }
-        
+
         @keyframes progress {
           from {
             width: 100%;
@@ -193,7 +193,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
             width: 0%;
           }
         }
-        
+
         .animate-slide-in-right {
           animation: slideInFromRight 0.5s ease-out;
         }

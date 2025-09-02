@@ -10,13 +10,13 @@ interface MetricCardProps {
   description?: string;
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({ 
-  title, 
-  value, 
-  change, 
-  icon, 
+const MetricCard: React.FC<MetricCardProps> = ({
+  title,
+  value,
+  change,
+  icon,
   color,
-  description 
+  description
 }) => {
   const formatChange = (change: number) => {
     const sign = change >= 0 ? '+' : '';
@@ -67,7 +67,7 @@ interface MLMetricsProps {
 
 const MLMetrics: React.FC<MLMetricsProps> = ({ metrics }) => {
   const formatPercentage = (value: number) => `${(value * 100).toFixed(1)}%`;
-  
+
   const metricsData = [
     {
       title: 'Model Accuracy',

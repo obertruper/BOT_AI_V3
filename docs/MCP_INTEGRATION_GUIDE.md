@@ -5,9 +5,11 @@
 ### 🚀 Активные MCP серверы (Декабрь 2024)
 
 #### 1. **Puppeteer MCP** ✅
+
 Автоматизация браузера для тестирования веб-интерфейса
 
 **Доступные функции:**
+
 ```python
 # Навигация
 mcp__puppeteer__puppeteer_navigate(url, launchOptions={headless: true})
@@ -26,6 +28,7 @@ mcp__puppeteer__puppeteer_evaluate(script)
 ```
 
 **Примеры использования для тестирования BOT_AI_V3:**
+
 ```python
 # Проверка загрузки дашборда
 await mcp__puppeteer__puppeteer_navigate("http://localhost:5173")
@@ -42,9 +45,11 @@ chart_visible = await mcp__puppeteer__puppeteer_evaluate(script)
 ```
 
 #### 2. **PostgreSQL MCP** ✅
+
 Прямое взаимодействие с базой данных (порт 5555!)
 
 **Доступные функции:**
+
 ```python
 # Выполнение запросов
 mcp__postgres__query(sql, params=[])
@@ -57,6 +62,7 @@ mcp__postgres__describe_table(table, schema="public")
 ```
 
 **Примеры для проверки данных:**
+
 ```python
 # Проверка позиций
 positions = await mcp__postgres__query(
@@ -70,9 +76,11 @@ predictions = await mcp__postgres__query(
 ```
 
 #### 3. **SonarQube MCP** ✅
+
 Анализ качества кода
 
 **Доступные функции:**
+
 ```python
 # Проекты и метрики
 mcp__sonarqube__projects()
@@ -89,9 +97,11 @@ mcp__sonarqube__measures_component(component, metric_keys)
 ```
 
 #### 4. **Sequential Thinking MCP** ✅
+
 Решение сложных задач пошагово
 
 **Использование:**
+
 ```python
 mcp__sequential-thinking__sequentialthinking(
     thought="Анализирую архитектуру веб-интерфейса",
@@ -102,9 +112,11 @@ mcp__sequential-thinking__sequentialthinking(
 ```
 
 #### 5. **Memory MCP** ✅
+
 Граф знаний для контекста
 
 **Доступные функции:**
+
 ```python
 # Создание сущностей
 mcp__memory__create_entities(entities=[
@@ -121,9 +133,11 @@ mcp__memory__search_nodes(query="trading interface")
 ```
 
 #### 6. **GitHub MCP** ✅
+
 Интеграция с GitHub
 
 **Доступные функции:**
+
 ```python
 # Работа с репозиторием
 mcp__github__get_file_contents(owner, repo, path, branch="main")
@@ -135,9 +149,11 @@ mcp__github__create_pull_request(owner, repo, title, head, base, body)
 ```
 
 #### 7. **Filesystem MCP** ✅
+
 Расширенная работа с файлами
 
 **Доступные функции:**
+
 ```python
 # Чтение и запись
 mcp__filesystem__read_text_file(path)
@@ -153,43 +169,52 @@ mcp__filesystem__search_files(path, pattern)
 ### 🧪 Специализированные агенты для веб-тестирования
 
 #### **web-interface-tester** 🎯
+
 Эксперт по тестированию веб-интерфейса BOT_AI_V3
 
 **Возможности:**
+
 - Автоматизированное тестирование UI с Puppeteer
 - Проверка функциональности компонентов
 - Тестирование real-time обновлений
 - Валидация форм и взаимодействий
 
 **Команда вызова:**
+
 ```
 Use web-interface-tester agent to test the trading dashboard functionality
 ```
 
 #### **ui-ux-analyzer** 🎨
+
 Специалист по анализу UX/UI
 
 **Возможности:**
+
 - Анализ юзабилити интерфейса
 - Проверка доступности (a11y)
 - Оценка производительности UI
 - Визуальная регрессия
 
 **Команда вызова:**
+
 ```
 Use ui-ux-analyzer agent to analyze trading interface usability
 ```
 
 #### **api-integration-tester** 🔌
+
 Эксперт по тестированию API интеграции
 
 **Возможности:**
+
 - Проверка REST эндпоинтов
 - Тестирование WebSocket соединений
 - Валидация данных API
 - Проверка консистентности данных
 
 **Команда вызова:**
+
 ```
 Use api-integration-tester agent to validate API response times
 ```
@@ -197,6 +222,7 @@ Use api-integration-tester agent to validate API response times
 ### 📊 Сценарии комплексной проверки системы
 
 #### 1. **Визуальная проверка интерфейса**
+
 ```python
 # Навигация к главной странице
 await mcp__puppeteer__puppeteer_navigate("http://localhost:5173")
@@ -220,6 +246,7 @@ await mcp__puppeteer__puppeteer_screenshot("dashboard_dark_mode")
 ```
 
 #### 2. **Проверка торговых операций**
+
 ```python
 # Заполнение торговой формы
 await mcp__puppeteer__puppeteer_select("#symbol", "BTCUSDT")
@@ -244,6 +271,7 @@ positions_updated = await mcp__puppeteer__puppeteer_evaluate(
 ```
 
 #### 3. **Проверка real-time данных**
+
 ```python
 # Мониторинг обновления цен
 initial_price = await mcp__puppeteer__puppeteer_evaluate(
@@ -263,6 +291,7 @@ ws_status = await mcp__puppeteer__puppeteer_evaluate("""
 ```
 
 #### 4. **Схематическая проверка архитектуры**
+
 ```python
 # Создание графа компонентов в Memory MCP
 await mcp__memory__create_entities(entities=[
@@ -287,6 +316,7 @@ architecture = await mcp__memory__read_graph()
 ```
 
 #### 5. **Проверка производительности**
+
 ```python
 # Замер времени загрузки
 performance_metrics = await mcp__puppeteer__puppeteer_evaluate("""
@@ -312,7 +342,8 @@ memory_usage = await mcp__puppeteer__puppeteer_evaluate("""
 
 ### 🔧 Конфигурация для полной проверки
 
-#### package.json scripts для тестирования:
+#### package.json scripts для тестирования
+
 ```json
 {
   "scripts": {
@@ -325,7 +356,8 @@ memory_usage = await mcp__puppeteer__puppeteer_evaluate("""
 }
 ```
 
-#### Docker-compose для тестового окружения:
+#### Docker-compose для тестового окружения
+
 ```yaml
 version: '3.8'
 services:
@@ -337,14 +369,14 @@ services:
       POSTGRES_DB: bot_trading_v3_test
       POSTGRES_USER: obertruper
       POSTGRES_PASSWORD: test_password
-  
+
   frontend-test:
     build: ./web/frontend
     ports:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8083
-  
+
   api-test:
     build: .
     ports:
@@ -357,7 +389,8 @@ services:
 
 ### 📈 Метрики для мониторинга
 
-#### Ключевые показатели:
+#### Ключевые показатели
+
 - **Page Load Time**: < 2s
 - **First Contentful Paint**: < 1s
 - **API Response Time**: < 100ms

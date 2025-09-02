@@ -15,15 +15,15 @@ jobs:
   claude-review:
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'pull_request' || 
+      github.event_name == 'pull_request' ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Claude Review
         uses: anthropics/claude-code-action@main
         with:

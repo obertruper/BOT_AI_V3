@@ -335,8 +335,7 @@ class QueryOptimizer:
             # Log slow queries
             if not cached and execution_time_ms > self.slow_query_threshold_ms:
                 logger.warning(
-                    f"Slow query detected: {execution_time_ms:.2f}ms - "
-                    f"{query_template[:100]}..."
+                    f"Slow query detected: {execution_time_ms:.2f}ms - {query_template[:100]}..."
                 )
 
     async def execute(

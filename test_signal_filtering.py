@@ -80,9 +80,9 @@ def test_filtering_strategies():
 
     # Тестируем каждую стратегию
     for strategy_name in ["conservative", "moderate", "aggressive"]:
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"📋 Стратегия: {strategy_name.upper()}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
 
         # Создаем анализатор с нужной стратегией
         analyzer = SignalQualityAnalyzer(config)

@@ -184,13 +184,13 @@ class QuickTestRunner:
 
         report = f"""
 # 🧪 Отчёт быстрого тестирования
-Время: {datetime.now().strftime('%H:%M:%S')}
+Время: {datetime.now().strftime("%H:%M:%S")}
 
 ## 📊 Результаты:
-- Всего тестов: {results.get('total', 0)}
-- ✅ Прошло: {results.get('passed', 0)}
-- ❌ Провалено: {results.get('failed', 0)}
-- 🐌 Медленных: {results.get('slow', 0)}
+- Всего тестов: {results.get("total", 0)}
+- ✅ Прошло: {results.get("passed", 0)}
+- ❌ Провалено: {results.get("failed", 0)}
+- 🐌 Медленных: {results.get("slow", 0)}
 """
 
         if self.failed_tests:

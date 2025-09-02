@@ -13,14 +13,14 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
   const [data, setData] = useState<PriceData[]>([]);
   const [isLive, setIsLive] = useState(true);
   const [chartType, setChartType] = useState<'line' | 'area'>('area');
-  
+
   // Получение реальных данных из API
   useEffect(() => {
     const fetchHistoricalData = async () => {
       try {
         // Пытаемся получить данные из API
         const historicalData = await apiService.getHistoricalData(symbol, '15m', 50);
-        
+
         if (historicalData && historicalData.length > 0) {
           const chartData: PriceData[] = historicalData.map((item: any) => ({
             timestamp: item.datetime || item.timestamp,
@@ -45,19 +45,19 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
       const now = Date.now();
       const mockData: PriceData[] = [];
       let price = 114710; // Реальная текущая цена BTC из БД
-      
+
       for (let i = 0; i < 50; i++) {
         const timestamp = new Date(now - (49 - i) * 15 * 60000).toISOString(); // 15 минутные интервалы
         price += (Math.random() - 0.5) * 1000; // Более реалистичные колебания
         const volume = Math.random() * 2000 + 50; // Более реалистичные объемы
-        
+
         mockData.push({
           timestamp,
           price,
           volume
         });
       }
-      
+
       return mockData;
     };
 
@@ -69,13 +69,13 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
           const newData = [...prevData];
           const lastPrice = newData[newData.length - 1]?.price || 114710;
           const newPrice = lastPrice + (Math.random() - 0.5) * 500; // Более реалистичные колебания для BTC
-          
+
           newData.push({
             timestamp: new Date().toISOString(),
             price: newPrice,
             volume: Math.random() * 2000 + 50
           });
-          
+
           // Оставляем только последние 50 точек
           return newData.slice(-50);
         });
@@ -112,7 +112,7 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
     <div className="card animate-scale-in relative overflow-hidden">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 to-blue-600/10 pointer-events-none"></div>
-      
+
       <div className="relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -141,15 +141,15 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
               </div>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-3">
             {/* Chart Type Toggle */}
             <div className="flex items-center space-x-1 bg-gray-800/50 rounded-lg p-1">
               <button
                 onClick={() => setChartType('line')}
                 className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-                  chartType === 'line' 
-                    ? 'bg-indigo-600 text-white' 
+                  chartType === 'line'
+                    ? 'bg-indigo-600 text-white'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -158,21 +158,21 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
               <button
                 onClick={() => setChartType('area')}
                 className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-                  chartType === 'area' 
-                    ? 'bg-indigo-600 text-white' 
+                  chartType === 'area'
+                    ? 'bg-indigo-600 text-white'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
                 Area
               </button>
             </div>
-            
+
             {/* Live Toggle */}
             <button
               onClick={() => setIsLive(!isLive)}
               className={`flex items-center space-x-2 px-3 py-1 rounded-full transition-all ${
-                isLive 
-                  ? 'bg-green-400/20 text-green-400' 
+                isLive
+                  ? 'bg-green-400/20 text-green-400'
                   : 'bg-gray-600/20 text-gray-400'
               }`}
             >
@@ -197,15 +197,15 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
                       <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05}/>
                     </linearGradient>
                   </defs>
-                  <XAxis 
-                    dataKey="timestamp" 
+                  <XAxis
+                    dataKey="timestamp"
                     tickFormatter={formatTime}
                     stroke="#6b7280"
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
                   />
-                  <YAxis 
+                  <YAxis
                     tickFormatter={formatPrice}
                     stroke="#6b7280"
                     fontSize={12}
@@ -225,15 +225,15 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
                 </AreaChart>
               ) : (
                 <LineChart data={data}>
-                  <XAxis 
-                    dataKey="timestamp" 
+                  <XAxis
+                    dataKey="timestamp"
                     tickFormatter={formatTime}
                     stroke="#6b7280"
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
                   />
-                  <YAxis 
+                  <YAxis
                     tickFormatter={formatPrice}
                     stroke="#6b7280"
                     fontSize={12}
@@ -254,7 +254,7 @@ const RealTimeChart: React.FC<{ symbol: string }> = ({ symbol }) => {
               )}
             </ResponsiveContainer>
           </div>
-          
+
           {/* Chart Stats */}
           <div className="mt-4 pt-4 border-t border-gray-700/50 grid grid-cols-4 gap-4">
             <div className="text-center">

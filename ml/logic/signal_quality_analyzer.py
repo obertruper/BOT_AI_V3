@@ -471,7 +471,6 @@ class SignalQualityAnalyzer:
             if self.active_strategy == FilterStrategy.MODERATE and params.get(
                 "alternative_main_plus_one", False
             ):
-
                 alt_threshold = params.get("alternative_confidence_threshold", 0.75)
                 high_conf_count = np.sum(confidences >= alt_threshold)
 
@@ -517,7 +516,9 @@ class SignalQualityAnalyzer:
         risk_level = (
             "LOW"
             if quality_metrics.risk_score < 0.3
-            else "MEDIUM" if quality_metrics.risk_score < 0.7 else "HIGH"
+            else "MEDIUM"
+            if quality_metrics.risk_score < 0.7
+            else "HIGH"
         )
         max_risk_level = params["max_risk_level"]
 
@@ -964,9 +965,9 @@ class SignalQualityAnalyzer:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Сигнал: {signal_type}
 📈 Future Returns: {future_returns}
-⚖️ Взвешенная доходность: {weighted_return:+.6f} ({weighted_return*100:+.3f}%)
+⚖️ Взвешенная доходность: {weighted_return:+.6f} ({weighted_return * 100:+.3f}%)
 ➕ Положительные ТФ: {positive_returns_count}/4
-➖ Отрицательные ТФ: {negative_returns_count}/4  
+➖ Отрицательные ТФ: {negative_returns_count}/4
 🟡 Нулевые ТФ: {zero_returns_count}/4
 """
         )

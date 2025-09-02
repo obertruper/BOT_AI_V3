@@ -34,16 +34,19 @@
 ## 🔍 Detailed Results
 
 ### Enhanced Analysis
+
 ```
 ...
 ```
 
 ### Test Generation
+
 ```
 ...
 ```
 
 ### Coverage Analysis
+
 ```
 ============================= test session starts ==============================
 platform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0

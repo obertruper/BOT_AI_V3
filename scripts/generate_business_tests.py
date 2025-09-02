@@ -213,7 +213,7 @@ class TestGenerator:
         test_code = f'''"""
 Автоматически сгенерированные тесты для {module_path}
 Функция: {func_name}
-Сложность: {analysis['complexity']}
+Сложность: {analysis["complexity"]}
 """
 
 import pytest
@@ -224,7 +224,7 @@ import numpy as np
 import pandas as pd
 
 # Импорт тестируемого модуля
-from {import_path.rsplit('.', 1)[0]} import {class_name or func_name}
+from {import_path.rsplit(".", 1)[0]} import {class_name or func_name}
 
 '''
 
@@ -237,16 +237,16 @@ from {import_path.rsplit('.', 1)[0]} import {class_name or func_name}
 @pytest.mark.asyncio
 async def {test_method_name}():
     """
-    Тест: {scenario['description']}
-    Тип: {scenario['type']}
+    Тест: {scenario["description"]}
+    Тип: {scenario["type"]}
     """
 '''
             else:
                 test_code += f'''
 def {test_method_name}():
     """
-    Тест: {scenario['description']}
-    Тип: {scenario['type']}
+    Тест: {scenario["description"]}
+    Тип: {scenario["type"]}
     """
 '''
 

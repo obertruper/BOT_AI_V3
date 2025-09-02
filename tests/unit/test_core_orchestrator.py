@@ -569,9 +569,9 @@ class TestErrorHandlingAndRecovery:
 
         for failures, expected_mode in test_scenarios:
             actual_mode = determine_operation_mode(failures)
-            assert (
-                actual_mode == expected_mode
-            ), f"Failed for {failures}: expected {expected_mode}, got {actual_mode}"
+            assert actual_mode == expected_mode, (
+                f"Failed for {failures}: expected {expected_mode}, got {actual_mode}"
+            )
 
     def test_automatic_recovery_system(self):
         """Тест системы автоматического восстановления"""

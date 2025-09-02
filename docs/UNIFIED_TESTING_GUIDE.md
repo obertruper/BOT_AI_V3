@@ -11,6 +11,7 @@ python3 scripts/unified_test_orchestrator.py
 ## 🎯 Доступные режимы
 
 ### 1. Интерактивный режим (по умолчанию)
+
 ```bash
 python3 scripts/unified_test_orchestrator.py
 # или
@@ -18,41 +19,52 @@ python3 scripts/unified_test_orchestrator.py --mode interactive
 ```
 
 **Возможности:**
+
 - Визуальное меню с выбором компонентов
 - Включение/отключение отдельных тестов
 - Генерация HTML отчетов
 - Очистка результатов
 
 ### 2. Быстрое тестирование
+
 ```bash
 python3 scripts/unified_test_orchestrator.py --mode quick
 ```
+
 Запускает только базовые unit тесты.
 
 ### 3. Полный анализ
+
 ```bash
 python3 scripts/unified_test_orchestrator.py --mode full-analysis
 ```
+
 Запускает все доступные тесты и проверки.
 
 ### 4. ML тестирование
+
 ```bash
 python3 scripts/unified_test_orchestrator.py --mode ml
 ```
+
 Фокусируется на ML компонентах и связанных тестах.
 
 ### 5. Анализ кода (НОВОЕ!)
+
 ```bash
 python3 scripts/unified_test_orchestrator.py --mode code-analysis
 ```
+
 Запускает систему анализа использования кода:
+
 - Тесты анализатора кода
-- Валидационные тесты  
+- Валидационные тесты
 - Полный отчет по неиспользуемым файлам
 
 ## 📊 Текущие результаты (последний запуск)
 
 ### Общая статистика
+
 - **Всего тестов**: 357
 - **Успешных**: 335 (93.8%)
 - **Частично успешных**: 22 (6.2%)
@@ -63,6 +75,7 @@ python3 scripts/unified_test_orchestrator.py --mode code-analysis
 ### Компоненты тестирования
 
 #### ✅ Полностью успешные (20 компонентов)
+
 - 🧪 Unit Tests
 - 🗄️ Database Tests
 - 📈 Trading Tests
@@ -85,6 +98,7 @@ python3 scripts/unified_test_orchestrator.py --mode code-analysis
 - **📊 Code Usage Analysis Report (НОВОЕ!)**
 
 #### ⚠️ Частично успешные (4 компонента)
+
 - 🧠 ML Manager Tests
 - ⚙️ Core System Tests
 - 📊 ML Prediction Logger Tests
@@ -134,14 +148,14 @@ python3 scripts/unified_test_orchestrator.py --mode full-analysis
 
 ## 📈 Анализ кода - Новые возможности
 
-### Что включает режим `code-analysis`:
+### Что включает режим `code-analysis`
 
 1. **Code Usage Analyzer Tests** (12 тестов)
    - Тестирование сканирования проекта
    - Валидация извлечения импортов
    - Проверка построения графа зависимостей
 
-2. **Code Analyzer Validation Tests** (11 тестов) 
+2. **Code Analyzer Validation Tests** (11 тестов)
    - Проверка точности на реальном проекте
    - Валидация производительности
    - Тесты на ложные срабатывания
@@ -152,21 +166,24 @@ python3 scripts/unified_test_orchestrator.py --mode full-analysis
    - HTML и JSON отчеты
    - Анализ устаревших файлов
 
-### Результаты анализа кода:
+### Результаты анализа кода
+
 - **Время анализа**: ~0.76 секунды
 - **Найдено неиспользуемых файлов**: 117
-- **Файлов старше недели**: 21  
+- **Файлов старше недели**: 21
 - **Производительность**: 685+ файлов/сек
 - **Все тесты**: ✅ УСПЕШНО
 
 ## 📊 HTML Dashboard
 
 После каждого запуска генерируется интерактивный HTML dashboard:
+
 ```
 test_results/dashboard.html
 ```
 
 **Содержит:**
+
 - Визуальную статистику
 - Статус всех компонентов
 - График покрытия кода
@@ -178,7 +195,7 @@ test_results/dashboard.html
 # Самый быстрый способ запустить все тесты
 python3 scripts/unified_test_orchestrator.py --mode full
 
-# Только анализ кода 
+# Только анализ кода
 python3 scripts/unified_test_orchestrator.py --mode code-analysis
 
 # Интерактивный режим с меню
@@ -205,18 +222,22 @@ analysis_results/
 ## 🎯 Следующие шаги
 
 ### Для улучшения покрытия (текущее: 9.0%)
+
 1. Запустить автогенератор тестов:
+
    ```bash
    python3 scripts/mass_test_generator.py
    ```
 
 2. Сфокусироваться на критических компонентах:
    - `trading/` - торговая логика
-   - `ml/` - ML компоненты  
+   - `ml/` - ML компоненты
    - `exchanges/` - интеграции бирж
 
 ### Для анализа кода
+
 1. Запустить интерактивную очистку:
+
    ```bash
    python3 scripts/interactive_code_cleanup.py
    ```
@@ -226,6 +247,7 @@ analysis_results/
 ## 🛠️ Troubleshooting
 
 ### Проблема: Тесты не запускаются
+
 ```bash
 # Проверить виртуальное окружение
 source venv/bin/activate
@@ -235,6 +257,7 @@ pip install -r requirements.txt
 ```
 
 ### Проблема: Низкое покрытие кода
+
 ```bash
 # Запустить генератор тестов
 python3 scripts/mass_test_generator.py
@@ -244,6 +267,7 @@ python3 scripts/unified_test_orchestrator.py
 ```
 
 ### Проблема: Ошибки ML тестов
+
 ```bash
 # Проверить ML зависимости
 pip install torch numpy pandas scikit-learn
@@ -255,13 +279,14 @@ python3 scripts/unified_test_orchestrator.py --mode ml
 ## 📞 Support
 
 При проблемах:
+
 1. Проверить логи в `test_results/`
 2. Запустить в интерактивном режиме для диагностики
 3. Использовать `--clean` для сброса состояния
 
 ---
 
-**Версия**: 1.4  
-**Последнее обновление**: 2025-08-19  
-**Всего компонентов**: 24  
+**Версия**: 1.4
+**Последнее обновление**: 2025-08-19
+**Всего компонентов**: 24
 **Всего тестов**: 357

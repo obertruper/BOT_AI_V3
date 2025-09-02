@@ -33,8 +33,8 @@ class OrderStatus(Enum):
 class OrderSide(Enum):
     """Order side enumeration."""
 
-    BUY = "buy"
-    SELL = "sell"
+    BUY = "BUY"
+    SELL = "SELL"
 
 
 class OrderType(Enum):
@@ -58,7 +58,6 @@ class Order:
         order_type: str = OrderType.LIMIT.value,
         quantity: Decimal = None,
         price: Decimal | None = None,
-        stop_price: Decimal | None = None,
         filled_quantity: Decimal = Decimal("0"),
         average_price: Decimal | None = None,
         status: str = OrderStatus.PENDING.value,
@@ -80,7 +79,6 @@ class Order:
         self.order_type = order_type
         self.quantity = quantity
         self.price = price
-        self.stop_price = stop_price
         self.filled_quantity = filled_quantity
         self.average_price = average_price
         self.status = status
@@ -143,17 +141,48 @@ class OrderRepository(BaseRepository[Order]):
 
     def _to_dict(self, model: Order) -> dict[str, Any]:
         """Convert Order to dictionary for database."""
+        # Нормализуем enum-поля к формату БД (Enum с UPPER_CASE)
+        def _norm_order_type(value: str | OrderType) -> str:
+            v = value.value if isinstance(value, OrderType) else str(value)
+            v = v.strip().lower()
+            mapping = {
+                "market": "MARKET",
+                "limit": "LIMIT",
+                "stop": "STOP_LIMIT",  # обратно совместимый маппинг
+                "stop_limit": "STOP_LIMIT",
+                "stop_loss": "STOP_LOSS",
+                "take_profit": "TAKE_PROFIT",
+            }
+            return mapping.get(v, v.upper())
+
+        def _norm_status(value: str | OrderStatus) -> str:
+            v = value.value if isinstance(value, OrderStatus) else str(value)
+            v = v.strip().lower()
+            mapping = {
+                "pending": "PENDING",
+                "open": "OPEN",
+                "filled": "FILLED",
+                "partially_filled": "PARTIALLY_FILLED",
+                "cancelled": "CANCELLED",
+                "rejected": "REJECTED",
+                "expired": "EXPIRED",
+            }
+            return mapping.get(v, v.upper())
+
+        def _norm_side(value: str | OrderSide) -> str:
+            v = value.value if isinstance(value, OrderSide) else str(value)
+            return v.strip().upper()
+
         return {
             "symbol": model.symbol,
             "exchange": model.exchange,
-            "side": model.side,
-            "order_type": model.order_type,
+            "side": _norm_side(model.side),
+            "order_type": _norm_order_type(model.order_type),
             "quantity": float(model.quantity),
             "price": float(model.price) if model.price else None,
-            "stop_price": float(model.stop_price) if model.stop_price else None,
             "filled_quantity": float(model.filled_quantity),
             "average_price": float(model.average_price) if model.average_price else None,
-            "status": model.status,
+            "status": _norm_status(model.status),
             "exchange_order_id": model.exchange_order_id,
             "position_id": model.position_id,
             "stop_loss": float(model.stop_loss) if model.stop_loss else None,
@@ -176,7 +205,6 @@ class OrderRepository(BaseRepository[Order]):
             order_type=record["order_type"],
             quantity=Decimal(str(record["quantity"])),
             price=Decimal(str(record["price"])) if record["price"] else None,
-            stop_price=Decimal(str(record["stop_price"])) if record["stop_price"] else None,
             filled_quantity=Decimal(str(record["filled_quantity"])),
             average_price=(
                 Decimal(str(record["average_price"])) if record["average_price"] else None
@@ -206,10 +234,10 @@ class OrderRepository(BaseRepository[Order]):
             Order ID
         """
         query = """
-        INSERT INTO orders 
-        (symbol, exchange, side, order_type, quantity, price, stop_price, 
-         status, stop_loss, take_profit, leverage, created_at, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        INSERT INTO orders
+        (symbol, exchange, side, order_type, quantity, price,
+         status, stop_loss, take_profit, created_at, order_id, extra_data)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id
         """
 
@@ -225,13 +253,12 @@ class OrderRepository(BaseRepository[Order]):
                     data["order_type"],
                     data["quantity"],
                     data["price"],
-                    data["stop_price"],
                     data["status"],
                     data["stop_loss"],
                     data["take_profit"],
-                    data["leverage"],
                     data["created_at"],
-                    data["metadata"],
+                    data.get("exchange_order_id", f"ORDER_{data['symbol']}_{datetime.now().timestamp()}"),  # order_id
+                    data.get("metadata", {}),  # extra_data
                 )
 
                 # Link to signal if provided
@@ -253,13 +280,12 @@ class OrderRepository(BaseRepository[Order]):
                     data["order_type"],
                     data["quantity"],
                     data["price"],
-                    data["stop_price"],
                     data["status"],
                     data["stop_loss"],
                     data["take_profit"],
-                    data["leverage"],
                     data["created_at"],
-                    data["metadata"],
+                    data.get("exchange_order_id", f"ORDER_{data['symbol']}_{datetime.now().timestamp()}"),  # order_id
+                    data.get("metadata", {}),  # extra_data
                 )
 
         order.id = order_id
@@ -318,8 +344,8 @@ class OrderRepository(BaseRepository[Order]):
             param_counter += 1
 
         query = f"""
-        UPDATE orders 
-        SET {', '.join(update_fields)}
+        UPDATE orders
+        SET {", ".join(update_fields)}
         WHERE id = $1
         """
 
@@ -392,12 +418,12 @@ class OrderRepository(BaseRepository[Order]):
             return 0
 
         query = """
-        UPDATE orders 
-        SET status = 'cancelled', 
-            cancelled_at = $1, 
+        UPDATE orders
+        SET status = 'cancelled',
+            cancelled_at = $1,
             updated_at = $1,
             metadata = COALESCE(metadata::jsonb, '{}'::jsonb) || $2::jsonb
-        WHERE id = ANY($3) 
+        WHERE id = ANY($3)
         AND status IN ('pending', 'open', 'partially_filled')
         """
 
@@ -414,9 +440,7 @@ class OrderRepository(BaseRepository[Order]):
         logger.info(f"Cancelled {cancelled_count} orders: {order_ids}")
         return cancelled_count
 
-    async def get_order_by_exchange_id(
-        self, exchange_order_id: str, exchange: str
-    ) -> Order | None:
+    async def get_order_by_exchange_id(self, exchange_order_id: str, exchange: str) -> Order | None:
         """
         Get order by exchange order ID.
 
@@ -428,7 +452,7 @@ class OrderRepository(BaseRepository[Order]):
             Order if found
         """
         query = """
-        SELECT * FROM orders 
+        SELECT * FROM orders
         WHERE exchange_order_id = $1 AND exchange = $2
         """
 
@@ -454,8 +478,8 @@ class OrderRepository(BaseRepository[Order]):
             List of related orders
         """
         query = """
-        SELECT * FROM orders 
-        WHERE position_id = $1 
+        SELECT * FROM orders
+        WHERE position_id = $1
         ORDER BY created_at ASC
         """
 
@@ -482,9 +506,7 @@ class OrderRepository(BaseRepository[Order]):
 
         return await self.bulk_update(formatted_updates)
 
-    async def get_order_stats(
-        self, exchange: str | None = None, days: int = 7
-    ) -> dict[str, Any]:
+    async def get_order_stats(self, exchange: str | None = None, days: int = 7) -> dict[str, Any]:
         """
         Get aggregated order statistics.
 
@@ -498,14 +520,14 @@ class OrderRepository(BaseRepository[Order]):
         cutoff_date = datetime.now() - timedelta(days=days)
 
         query = """
-        SELECT 
+        SELECT
             COUNT(*) as total_orders,
             SUM(CASE WHEN status = 'filled' THEN 1 ELSE 0 END) as filled_orders,
             SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_orders,
             SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_orders,
             SUM(CASE WHEN side = 'buy' THEN 1 ELSE 0 END) as buy_orders,
             SUM(CASE WHEN side = 'sell' THEN 1 ELSE 0 END) as sell_orders,
-            AVG(CASE WHEN executed_at IS NOT NULL AND created_at IS NOT NULL 
+            AVG(CASE WHEN executed_at IS NOT NULL AND created_at IS NOT NULL
                 THEN EXTRACT(EPOCH FROM (executed_at - created_at)) END) as avg_execution_time_seconds,
             COUNT(DISTINCT symbol) as unique_symbols
         FROM orders
@@ -562,14 +584,14 @@ class OrderRepository(BaseRepository[Order]):
             # Only delete cancelled/rejected orders
             query = """
             DELETE FROM orders
-            WHERE created_at < $1 
+            WHERE created_at < $1
             AND status IN ('cancelled', 'rejected', 'expired')
             """
         else:
             # Delete all old orders except active ones
             query = """
             DELETE FROM orders
-            WHERE created_at < $1 
+            WHERE created_at < $1
             AND status NOT IN ('pending', 'open', 'partially_filled')
             """
 

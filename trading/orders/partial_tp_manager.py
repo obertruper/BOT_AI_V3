@@ -109,7 +109,7 @@ class PartialTPManager:
                 remaining_qty -= close_qty
 
                 self.logger.info(
-                    f"📊 Уровень TP{i+1} для {symbol}: "
+                    f"📊 Уровень TP{i + 1} для {symbol}: "
                     f"закрыть {level['percent']}% ({close_qty:.4f}) при {tp_price:.4f}"
                 )
 
@@ -159,9 +159,9 @@ class PartialTPManager:
             # Создаем запрос ордера
             from exchanges.base.order_types import (
                 OrderRequest,
-                OrderSide as ExchangeOrderSide,
-                OrderType as ExchangeOrderType,
             )
+            from exchanges.base.order_types import OrderSide as ExchangeOrderSide
+            from exchanges.base.order_types import OrderType as ExchangeOrderType
 
             order_request = OrderRequest(
                 symbol=order_data["symbol"],
@@ -304,7 +304,9 @@ class PartialTPManager:
             # Используем метод биржи для обновления SL
             # Это зависит от конкретной реализации биржи
             result = await exchange.modify_position_sl_tp(
-                symbol=symbol, stop_loss=stop_price, take_profit=None  # Не меняем TP
+                symbol=symbol,
+                stop_loss=stop_price,
+                take_profit=None,  # Не меняем TP
             )
 
             return result

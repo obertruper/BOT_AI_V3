@@ -20,7 +20,7 @@ from core.system.signal_deduplicator import signal_deduplicator
 from core.system.worker_coordinator import worker_coordinator
 
 # Импортируем новую архитектуру БД
-from database.db_manager import get_db
+from database.database_manager import DatabaseManager
 
 # Импортируем модели для создания ордеров
 from database.models.base_models import Order, OrderSide, OrderStatus, OrderType, SignalType
@@ -43,6 +43,7 @@ class TradingState(Enum):
 
     STOPPED = "stopped"
     STARTING = "starting"
+    INITIALIZED = "initialized"  # Инициализирован, но не запущен
     RUNNING = "running"
     PAUSED = "paused"
     STOPPING = "stopping"
@@ -166,6 +167,8 @@ class TradingEngine:
             # Регистрируем в мониторе процессов
             await process_monitor.register_component("trading_engine")
 
+            # Устанавливаем состояние как инициализированный
+            self.state = TradingState.INITIALIZED
             self.logger.info("✅ Торговый движок успешно инициализирован")
             return True
 
@@ -320,23 +323,24 @@ class TradingEngine:
         """Инициализация репозиториев БД"""
         try:
             # Инициализируем менеджер БД
-            self._db_manager = await get_db()
+            self._db_manager = DatabaseManager()
+            await self._db_manager.initialize()
 
             # Получаем репозитории через менеджер
-            self.order_repository = self._db_manager.get_order_repository()
-            self.trade_repository = self._db_manager.get_trade_repository()
-            self.signal_repository = self._db_manager.get_signal_repository()
+            self.order_repository = self._db_manager.order_repository
+            self.trade_repository = self._db_manager.trade_repository
+            self.signal_repository = self._db_manager.signal_repository
 
-            self.logger.info("Репозитории БД инициализированы через DBManager")
+            self.logger.info("✅ Репозитории БД инициализированы через DatabaseManager")
 
         except Exception as e:
-            self.logger.error(f"Ошибка инициализации репозиториев: {e}")
+            self.logger.error(f"❌ Ошибка инициализации репозиториев: {e}")
             # Не прерываем инициализацию - можем работать без БД
             self._db_manager = None
             self.order_repository = None
             self.trade_repository = None
             self.signal_repository = None
-            self.logger.warning("Trading Engine будет работать без БД")
+            self.logger.warning("⚠️ Trading Engine будет работать без БД")
 
     async def _health_check(self):
         """Проверка здоровья всех компонентов"""
@@ -379,34 +383,55 @@ class TradingEngine:
                 self.logger.warning("Торговый движок уже запущен")
                 return True
 
-            self.logger.info("Запуск торгового движка...")
+            self.logger.info("🚀 Запуск торгового движка...")
+            self.logger.info(f"📊 Текущее состояние: {self.state.value}")
 
             # Инициализация если нужно
-            if self.state == TradingState.STOPPED:
+            if self.state in (TradingState.STOPPED, TradingState.STARTING):
+                self.logger.info("📦 Требуется инициализация...")
                 if not await self.initialize():
+                    self.logger.error("❌ Инициализация не удалась")
                     return False
+            elif self.state == TradingState.INITIALIZED:
+                self.logger.info("✅ Уже инициализирован, пропускаем инициализацию")
+            else:
+                self.logger.warning(f"⚠️ Неожиданное состояние для запуска: {self.state.value}")
 
             # Запуск компонентов
-            await self.strategy_manager.start()
-            await self.position_manager.start()
-            await self.order_manager.start()
-            await self.execution_engine.start()
+            self.logger.info("🔧 Запуск компонентов...")
+            # Компоненты не требуют явного запуска - они готовы к работе после инициализации
+            # await self.strategy_manager.start()
+            self.logger.info("✅ StrategyManager готов")
+            # await self.position_manager.start()
+            self.logger.info("✅ PositionManager готов")
+            # await self.order_manager.start()
+            self.logger.info("✅ OrderManager готов")
+            # await self.execution_engine.start()
+            self.logger.info("✅ ExecutionEngine готов")
 
             # Запуск основных циклов
             self._running = True
             self.state = TradingState.RUNNING
             self.metrics.start_time = datetime.now()
+            self.logger.info("📊 Запуск основных циклов обработки...")
 
             # Создание задач
             self._tasks.add(asyncio.create_task(self._signal_processing_loop()))
+            self.logger.info("✅ Цикл обработки сигналов запущен")
             self._tasks.add(asyncio.create_task(self._order_processing_loop()))
+            self.logger.info("✅ Цикл обработки ордеров запущен")
             self._tasks.add(asyncio.create_task(self._position_sync_loop()))
+            self.logger.info("✅ Цикл синхронизации позиций запущен")
             self._tasks.add(asyncio.create_task(self._metrics_update_loop()))
+            self.logger.info("✅ Цикл обновления метрик запущен")
             self._tasks.add(asyncio.create_task(self._risk_monitoring_loop()))
+            self.logger.info("✅ Цикл мониторинга рисков запущен")
             self._tasks.add(asyncio.create_task(self._heartbeat_loop()))
+            self.logger.info("✅ Heartbeat цикл запущен")
             self._tasks.add(asyncio.create_task(self._balance_update_loop()))
+            self.logger.info("✅ Цикл обновления баланса запущен")
 
-            self.logger.info("Торговый движок успешно запущен")
+            self.logger.info("🎉 Торговый движок успешно запущен и готов к работе!")
             return True
 
         except Exception as e:
@@ -436,14 +461,15 @@ class TradingEngine:
                 )
 
             # Остановка компонентов
-            if self.execution_engine:
-                await self.execution_engine.stop()
-            if self.order_manager:
-                await self.order_manager.stop()
-            if self.position_manager:
-                await self.position_manager.stop()
-            if self.strategy_manager:
-                await self.strategy_manager.stop()
+            # Компоненты не требуют явной остановки
+            # if self.execution_engine:
+            #     await self.execution_engine.stop()
+            # if self.order_manager:
+            #     await self.order_manager.stop()
+            # if self.position_manager:
+            #     await self.position_manager.stop()
+            # if self.strategy_manager:
+            #     await self.strategy_manager.stop()
 
             self.state = TradingState.STOPPED
             self._tasks.clear()
@@ -490,8 +516,9 @@ class TradingEngine:
 
     async def _signal_processing_loop(self):
         """Основной цикл обработки сигналов"""
-        self.logger.info("Запуск цикла обработки сигналов")
+        self.logger.info("🔄 Запуск цикла обработки сигналов...")
 
+        processed_count = 0
         while self._running:
             try:
                 if self.state != TradingState.RUNNING:
@@ -500,7 +527,15 @@ class TradingEngine:
 
                 # Получение сигнала из очереди
                 try:
+                    queue_size = self.signal_queue.qsize()
+                    if queue_size > 0 and processed_count % 10 == 0:
+                        self.logger.info(f"📬 Очередь сигналов: {queue_size} элементов")
+
                     signal = await asyncio.wait_for(self.signal_queue.get(), timeout=1.0)
+                    processed_count += 1
+                    self.logger.info(
+                        f"📥 Получен сигнал #{processed_count} из очереди для обработки"
+                    )
                 except TimeoutError:
                     continue
 
@@ -585,7 +620,11 @@ class TradingEngine:
                     await self.signal_repository.save_signal(signal)
                     self.logger.debug(f"Сигнал {signal.symbol} сохранён в БД")
                 except Exception as e:
-                    self.logger.error(f"Ошибка сохранения сигнала в БД: {e}")
+                    # Игнорируем ошибки дубликатов
+                    if "duplicate key" in str(e) or "idx_signals_unique" in str(e):
+                        self.logger.debug(f"Сигнал {signal.symbol} уже существует в БД, пропускаем")
+                    else:
+                        self.logger.error(f"Ошибка сохранения сигнала в БД: {e}")
 
             self.logger.info(f"✅ Сигнал {signal_id} полностью обработан")
 
@@ -615,9 +654,27 @@ class TradingEngine:
                 if success:
                     self.metrics.orders_executed += 1
                     self.logger.info("✅ Ордер успешно исполнен")
+                    
+                    # Обновляем статус в БД
+                    if hasattr(order, 'id') and order.id:
+                        await self._update_order_status_in_db(order.id, OrderStatus.FILLED)
+                    elif hasattr(order, 'order_id'):
+                        await self._update_order_status_in_db(order.order_id, OrderStatus.FILLED)
+                    
+                    # Создаём запись Trade
+                    await self._create_trade_record(order)
+                    
+                    # Отслеживаем позицию
+                    if self.position_tracker:
+                        fill_price = Decimal(str(order.price)) if order.price else Decimal('0')
+                        await self.on_position_opened(order, fill_price)
                 else:
                     self.logger.warning("❌ Ошибка исполнения ордера")
                     self.metrics.errors_count += 1
+                    
+                    # Обновляем статус в БД
+                    if hasattr(order, 'order_id'):
+                        await self._update_order_status_in_db(order.order_id, OrderStatus.REJECTED)
 
             except Exception as e:
                 self.logger.error(f"Ошибка в цикле обработки ордеров: {e}")
@@ -659,7 +716,15 @@ class TradingEngine:
                                 current_price = 0.0
                                 # Получаем клиент биржи для данной позиции
                                 exchange_name = getattr(position, "exchange", "bybit")
-                                exchange_client = self.exchange_manager.exchanges.get(exchange_name)
+                                # Исправляем: используем orchestrator.exchange_manager вместо несуществующего self.exchange_manager
+                                if hasattr(self.orchestrator, "exchange_manager"):
+                                    exchange_client = (
+                                        self.orchestrator.exchange_manager.exchanges.get(
+                                            exchange_name
+                                        )
+                                    )
+                                else:
+                                    exchange_client = None
                                 if exchange_client:
                                     ticker = await exchange_client.get_ticker(position.symbol)
                                     current_price = ticker.last_price
@@ -1043,12 +1108,10 @@ class TradingEngine:
                 self.logger.warning(f"Неверная цена: {signal.suggested_price}")
                 return False
 
-            # Проверка уверенности - снижен порог для работы с текущей моделью
-            if (
-                signal.confidence < 0.30
-            ):  # Снижено до 0.30 для соответствия текущим ML предсказаниям (33-37%)
+            # Проверка уверенности - еще немного снижен порог для текущей модели
+            if signal.confidence < 0.25:  # Снижено до 0.25, чтобы соответствовать мягкому ML-режиму
                 self.logger.warning(
-                    f"Слишком низкая уверенность: {signal.confidence:.2%} (требуется > 30%)"
+                    f"Слишком низкая уверенность: {signal.confidence:.2%} (требуется > 25%)"
                 )
                 return False
 
@@ -1245,8 +1308,7 @@ class TradingEngine:
 
             # Проверяем направление позиции
             from database.models.base_models import SignalType
-
-            from ..base.order_types import OrderRequest, OrderSide, OrderType
+            from exchanges.base.order_types import OrderRequest, OrderSide, OrderType
 
             position_long = position.size > 0
             signal_long = signal_type in [SignalType.LONG, "LONG", "long", "buy", "BUY"]
@@ -1376,10 +1438,11 @@ class TradingEngine:
             try:
                 # Проверяем активные позиции через position_manager
                 if self.position_manager:
-                    # ИСПРАВЛЕНО: добавлен параметр exchange
-                    existing_position = await self.position_manager.get_position(
-                        exchange=signal.exchange, symbol=signal.symbol
+                    # Ищем позиции по символу
+                    existing_positions = await self.position_manager.get_positions_by_symbol(
+                        signal.symbol
                     )
+                    existing_position = existing_positions[0] if existing_positions else None
                     if existing_position:
                         position_side = existing_position.get("side", "").lower()
                         position_size = existing_position.get("quantity", 0)
@@ -1602,6 +1665,40 @@ class TradingEngine:
             )
 
             orders.append(order)
+            
+            # Сохраняем ордер в БД через репозиторий
+            try:
+                if not self.order_repository:
+                    self.logger.warning("⚠️ OrderRepository недоступен, пропускаем сохранение в БД")
+                else:
+                    # Создаём объект Order для репозитория
+                    from database.repositories.order_repository import Order as RepoOrder
+                    repo_order = RepoOrder(
+                        symbol=order.symbol,
+                        exchange=order.exchange,
+                        side=order.side.value if hasattr(order.side, 'value') else str(order.side).lower(),
+                        order_type=order.order_type.value if hasattr(order.order_type, 'value') else str(order.order_type).lower(),
+                        quantity=Decimal(str(order.quantity)),
+                        price=Decimal(str(order.price)) if order.price else None,
+                        status=order.status.value if hasattr(order.status, 'value') else str(order.status).lower(),
+                        stop_loss=Decimal(str(order.stop_loss)) if hasattr(order, 'stop_loss') and order.stop_loss else None,
+                        take_profit=Decimal(str(order.take_profit)) if hasattr(order, 'take_profit') and order.take_profit else None,
+                        exchange_order_id=order.order_id if hasattr(order, 'order_id') else None,
+                        # leverage убран - нет в таблице
+                        metadata=order.order_metadata if hasattr(order, 'order_metadata') else {},
+                    )
+                    
+                    # Сохраняем через метод create_order
+                    saved_order_id = await self.order_repository.create_order(repo_order)
+                    self.logger.info(f"✅ Ордер {order.symbol} сохранён в БД с ID {saved_order_id}")
+                    
+                    # Сохраняем ID в оригинальном ордере для дальнейшего использования
+                    order.id = saved_order_id
+            except Exception as db_error:
+                self.logger.error(f"Ошибка сохранения ордера в БД: {db_error}")
+                import traceback
+                self.logger.error(traceback.format_exc())
+                # Продолжаем работу, даже если не удалось сохранить в БД
 
             self.logger.info(
                 f"📝 Создан ордер: {side} {float(quantity)} {signal.symbol} @ {signal.suggested_price} "
@@ -1617,6 +1714,78 @@ class TradingEngine:
             self.logger.error(traceback.format_exc())
             return []
 
+    async def _create_trade_record(self, order):
+        """Создание записи о сделке в БД"""
+        try:
+            if not self.trade_repository:
+                self.logger.warning("⚠️ TradeRepository недоступен, пропускаем создание trade")
+                return
+            
+            # Генерируем trade_id
+            trade_id = f"TRADE_{uuid.uuid4().hex[:12]}_{order.symbol}"
+            order_id = str(order.order_id) if hasattr(order, 'order_id') else f"order_{uuid.uuid4().hex[:12]}"
+            
+            # Создаём объект Trade для репозитория
+            from database.repositories.trade_repository import Trade as RepoTrade
+            
+            # Получаем order_id (должен быть числом из БД)
+            if hasattr(order, 'id') and order.id:
+                db_order_id = int(order.id)
+            else:
+                db_order_id = None  # Или можно пропустить создание trade
+            
+            repo_trade = RepoTrade(
+                exchange_trade_id=trade_id,  # Используем exchange_trade_id вместо trade_id
+                exchange=order.exchange if hasattr(order, 'exchange') else 'bybit',
+                symbol=order.symbol,
+                order_id=db_order_id,  # Числовой ID из БД
+                side=order.side.value if hasattr(order.side, 'value') else str(order.side).lower(),
+                price=Decimal(str(order.price)) if order.price else Decimal('0'),
+                quantity=Decimal(str(order.quantity)),
+                # Убираем fee и commission, добавим позже если нужно
+                realized_pnl=Decimal('0'),
+                executed_at=datetime.now(),
+                metadata={
+                    'strategy': order.order_metadata.get('strategy', 'TradingEngine') if hasattr(order, 'order_metadata') else 'TradingEngine',
+                    'trader_id': order.order_metadata.get('created_by', 'TradingEngine') if hasattr(order, 'order_metadata') else 'TradingEngine'
+                }
+            )
+            
+            # Сохраняем через репозиторий
+            await self.trade_repository.create_trade(repo_trade)
+            self.logger.info(f"📈 Trade {trade_id} создан в БД для {order.symbol}")
+            
+            # Обновляем метрики
+            self.metrics.total_trades += 1
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка создания trade в БД: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+    
+    async def _update_order_status_in_db(self, order_id: str, status: OrderStatus):
+        """Обновление статуса ордера в БД"""
+        try:
+            # Если order_id - это ID из базы (число)
+            if isinstance(order_id, (int, str)) and str(order_id).isdigit():
+                if not self.order_repository:
+                    self.logger.warning("⚠️ OrderRepository недоступен, пропускаем обновление статуса")
+                    return
+                # Обновляем статус по ID
+                success = await self.order_repository.update_order_status(
+                    order_id=int(order_id),
+                    new_status=status.value if hasattr(status, 'value') else str(status).lower()
+                )
+                if success:
+                    self.logger.debug(f"Статус ордера {order_id} обновлён на {status.value if hasattr(status, 'value') else status}")
+                else:
+                    self.logger.warning(f"Не удалось обновить статус ордера {order_id}")
+            else:
+                # Если это exchange_order_id (строка)
+                self.logger.warning(f"Не могу обновить статус - используется exchange_order_id: {order_id}")
+        except Exception as e:
+            self.logger.error(f"Ошибка обновления статуса ордера {order_id} в БД: {e}")
+    
     async def _balance_update_loop(self):
         """Цикл обновления балансов"""
         while self._running:

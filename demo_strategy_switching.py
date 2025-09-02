@@ -3,7 +3,6 @@
 Демонстрация переключения стратегий фильтрации и анализа их эффективности
 """
 
-
 # Добавляем путь к проекту
 import sys
 from pathlib import Path
@@ -49,9 +48,9 @@ def create_sample_signal():
 
 def analyze_with_strategy(analyzer: SignalQualityAnalyzer, signal: dict, strategy: str):
     """Анализирует сигнал с заданной стратегией"""
-    logger.info(f"\n{'='*50}")
+    logger.info(f"\n{'=' * 50}")
     logger.info(f"🔍 АНАЛИЗ С СТРАТЕГИЕЙ: {strategy.upper()}")
-    logger.info(f"{'='*50}")
+    logger.info(f"{'=' * 50}")
 
     # Переключаем стратегию
     analyzer.switch_strategy(strategy)
@@ -116,9 +115,9 @@ def main():
         results[strategy] = result
 
     # Сводная таблица
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info("📋 СВОДНАЯ ТАБЛИЦА РЕЗУЛЬТАТОВ")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
 
     logger.info(f"{'Стратегия':<15} {'Результат':<15} {'Качество':<10} {'Причины отклонения'}")
     logger.info("-" * 80)
@@ -138,9 +137,9 @@ def main():
         logger.info(f"{strategy:<15} {status:<15} {quality:<10} {reasons}")
 
     # Статистика анализатора
-    logger.info(f"\n{'='*40}")
+    logger.info(f"\n{'=' * 40}")
     logger.info("📊 СТАТИСТИКА АНАЛИЗАТОРА")
-    logger.info(f"{'='*40}")
+    logger.info(f"{'=' * 40}")
 
     stats = analyzer.get_strategy_statistics()
     for key, value in stats.items():
@@ -153,9 +152,9 @@ def main():
             logger.info(f"   - {reason}: {count}")
 
     # Рекомендации
-    logger.info(f"\n{'='*50}")
+    logger.info(f"\n{'=' * 50}")
     logger.info("💡 РЕКОМЕНДАЦИИ ПО ИСПОЛЬЗОВАНИЮ")
-    logger.info(f"{'='*50}")
+    logger.info(f"{'=' * 50}")
 
     passed_strategies = [s for s, r in results.items() if r.passed]
 

@@ -1,4 +1,3 @@
-
 """
 Единый менеджер для работы с параметрами инструментов.
 
@@ -249,13 +248,31 @@ class InstrumentManager:
 
         # Проверяем наличие обязательных полей
         for field in required_fields:
-            if field not in data or data[field] <= 0:
-                logger.warning(f"Invalid {field} for {symbol}: {data.get(field)}")
+            if field not in data:
+                logger.warning(f"Missing {field} for {symbol}")
+                return False
+            
+            field_value = data[field]
+            # Convert to float for comparison
+            if isinstance(field_value, str):
+                try:
+                    field_value = float(field_value)
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid {field} for {symbol}: {data.get(field)}")
+                    return False
+            elif field_value is None:
+                logger.warning(f"None value for {field} for {symbol}")
+                return False
+            
+            if float(field_value) <= 0:
+                logger.warning(f"Invalid {field} for {symbol}: {field_value}")
                 return False
 
         # Специальные проверки для известных инструментов
         if symbol == "ETHUSDT":
-            if data["qty_step"] < 0.01 or data["min_qty"] < 0.01:
+            qty_step_val = float(data["qty_step"]) if isinstance(data["qty_step"], str) else data["qty_step"]
+            min_qty_val = float(data["min_qty"]) if isinstance(data["min_qty"], str) else data["min_qty"]
+            if qty_step_val < 0.01 or min_qty_val < 0.01:
                 logger.warning(
                     f"Suspicious values for ETHUSDT: qty_step={data['qty_step']}, min_qty={data['min_qty']}"
                 )
@@ -266,22 +283,46 @@ class InstrumentManager:
     def get_tick_size(self, symbol: str) -> float:
         """Получает размер тика (минимальное изменение цены)."""
         info = self.get_instrument_info(symbol)
-        return info.get("tick_size", DEFAULT_SETTINGS["tick_size"])
+        tick_size = info.get("tick_size", DEFAULT_SETTINGS["tick_size"])
+        # Ensure it's float
+        if isinstance(tick_size, str):
+            tick_size = float(tick_size)
+        elif tick_size is None:
+            tick_size = DEFAULT_SETTINGS["tick_size"]
+        return float(tick_size)
 
     def get_qty_step(self, symbol: str) -> float:
         """Получает шаг изменения количества."""
         info = self.get_instrument_info(symbol)
-        return info.get("qty_step", DEFAULT_SETTINGS["qty_step"])
+        qty_step = info.get("qty_step", DEFAULT_SETTINGS["qty_step"])
+        # Ensure it's float
+        if isinstance(qty_step, str):
+            qty_step = float(qty_step)
+        elif qty_step is None:
+            qty_step = DEFAULT_SETTINGS["qty_step"]
+        return float(qty_step)
 
     def get_min_qty(self, symbol: str) -> float:
         """Получает минимальное количество для ордера."""
         info = self.get_instrument_info(symbol)
-        return info.get("min_qty", DEFAULT_SETTINGS["min_qty"])
+        min_qty = info.get("min_qty", DEFAULT_SETTINGS["min_qty"])
+        # Ensure it's float
+        if isinstance(min_qty, str):
+            min_qty = float(min_qty)
+        elif min_qty is None:
+            min_qty = DEFAULT_SETTINGS["min_qty"]
+        return float(min_qty)
 
     def get_min_notional(self, symbol: str) -> float:
         """Получает минимальную стоимость ордера."""
         info = self.get_instrument_info(symbol)
-        return info.get("min_notional", DEFAULT_SETTINGS["min_notional"])
+        min_notional = info.get("min_notional", DEFAULT_SETTINGS["min_notional"])
+        # Ensure it's float
+        if isinstance(min_notional, str):
+            min_notional = float(min_notional)
+        elif min_notional is None:
+            min_notional = DEFAULT_SETTINGS["min_notional"]
+        return float(min_notional)
 
     def round_price(self, symbol: str, price: float, round_up: bool = False) -> float:
         """
@@ -310,9 +351,15 @@ class InstrumentManager:
             Отформатированная строка количества
         """
         qty_step = self.get_qty_step(symbol)
+        
+        # Ensure qty_step is float
+        if isinstance(qty_step, str):
+            qty_step = float(qty_step)
+        elif qty_step is None:
+            qty_step = DEFAULT_SETTINGS["qty_step"]
 
         # Определяем количество знаков после запятой
-        if qty_step >= 1:
+        if float(qty_step) >= 1:
             decimal_places = 0
         else:
             # Считаем количество знаков после запятой в qty_step
@@ -343,7 +390,20 @@ class InstrumentManager:
         Returns:
             Округленное количество
         """
+        # Ensure qty is float
+        if isinstance(qty, str):
+            qty = float(qty) if qty and qty != 'None' else 0.0
+        elif qty is None:
+            qty = 0.0
+        
         qty_step = self.get_qty_step(symbol)
+        
+        # Ensure qty_step is float
+        if isinstance(qty_step, str):
+            qty_step = float(qty_step)
+        elif qty_step is None:
+            qty_step = DEFAULT_SETTINGS["qty_step"]
+        
         rounded_qty = self._round_to_step(qty, qty_step, round_up)
 
         logger.info(
@@ -353,7 +413,14 @@ class InstrumentManager:
         # Проверяем минимальное количество только если enforce_min=True
         if enforce_min:
             min_qty = self.get_min_qty(symbol)
-            if rounded_qty < min_qty:
+            
+            # Ensure min_qty is float
+            if isinstance(min_qty, str):
+                min_qty = float(min_qty)
+            elif min_qty is None:
+                min_qty = DEFAULT_SETTINGS["min_qty"]
+            
+            if float(rounded_qty) < float(min_qty):
                 logger.warning(
                     f"Rounded quantity {rounded_qty} is below minimum {min_qty} for {symbol}"
                 )
@@ -374,8 +441,19 @@ class InstrumentManager:
         Returns:
             Округленное значение
         """
-        if step <= 0:
-            return value
+        # Ensure value and step are floats
+        if isinstance(value, str):
+            value = float(value) if value and value != 'None' else 0.0
+        elif value is None:
+            value = 0.0
+        
+        if isinstance(step, str):
+            step = float(step) if step and step != 'None' else DEFAULT_SETTINGS["qty_step"]
+        elif step is None:
+            step = DEFAULT_SETTINGS["qty_step"]
+        
+        if float(step) <= 0:
+            return float(value)
 
         # Используем Decimal для точности
         decimal_value = Decimal(str(value))

@@ -82,7 +82,7 @@ class MLPredictionRepository(BaseRepository[MLPrediction]):
             Prediction ID
         """
         query = """
-        INSERT INTO ml_predictions 
+        INSERT INTO ml_predictions
         (symbol, timestamp, prediction, confidence, features, model_version,
          exchange, timeframe, signal_strength, expected_return, risk_score, metadata)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -242,7 +242,7 @@ class MLPredictionRepository(BaseRepository[MLPrediction]):
             Statistics dictionary
         """
         base_query = """
-        SELECT 
+        SELECT
             COUNT(*) as total_predictions,
             AVG(confidence) as avg_confidence,
             AVG(signal_strength) as avg_signal_strength,
@@ -340,7 +340,7 @@ class MLPredictionRepository(BaseRepository[MLPrediction]):
         """
         query = """
         SELECT * FROM ml_predictions
-        WHERE symbol = $1 
+        WHERE symbol = $1
         AND timeframe = $2
         AND timestamp > $3
         ORDER BY timestamp DESC
@@ -376,7 +376,7 @@ class MLPredictionRepository(BaseRepository[MLPrediction]):
         # This would require joining with actual trade outcomes
         # Placeholder for future implementation when trade results are linked
         query = """
-        SELECT 
+        SELECT
             COUNT(*) as total,
             SUM(CASE WHEN actual_outcome = prediction THEN 1 ELSE 0 END) as correct
         FROM ml_predictions p
@@ -421,7 +421,7 @@ class MLPredictionRepository(BaseRepository[MLPrediction]):
             List of top performing symbols with stats
         """
         query = """
-        SELECT 
+        SELECT
             symbol,
             COUNT(*) as prediction_count,
             AVG(confidence) as avg_confidence,

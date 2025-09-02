@@ -6,24 +6,24 @@ interface AppState {
   // System Status
   systemStatus: SystemStatus | null;
   isSystemConnected: boolean;
-  
+
   // Trading Data
   positions: Position[];
   orders: Order[];
   strategies: TradingStrategy[];
   mlSignals: MLSignal[];
-  
+
   // Exchange Data
   exchanges: ExchangeInfo[];
   marketData: MarketData[];
-  
+
   // UI State
   selectedSymbol: string;
   selectedTimeframe: string;
   theme: 'dark' | 'light';
   sidebarCollapsed: boolean;
   activeTab: string;
-  
+
   // Notification State
   notifications: Array<{
     id: string;
@@ -32,7 +32,7 @@ interface AppState {
     message: string;
     timestamp: Date;
   }>;
-  
+
   // Loading States
   loading: {
     system: boolean;
@@ -49,33 +49,33 @@ interface AppActions {
   // System Actions
   setSystemStatus: (status: SystemStatus | null) => void;
   setSystemConnected: (connected: boolean) => void;
-  
+
   // Trading Actions
   setPositions: (positions: Position[]) => void;
   setOrders: (orders: Order[]) => void;
   setStrategies: (strategies: TradingStrategy[]) => void;
   setMLSignals: (signals: MLSignal[]) => void;
   updateStrategy: (id: string, updates: Partial<TradingStrategy>) => void;
-  
+
   // Exchange Actions
   setExchanges: (exchanges: ExchangeInfo[]) => void;
   setMarketData: (data: MarketData[]) => void;
-  
+
   // UI Actions
   setSelectedSymbol: (symbol: string) => void;
   setSelectedTimeframe: (timeframe: string) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setActiveTab: (tab: string) => void;
-  
+
   // Notification Actions
   addNotification: (notification: Omit<AppState['notifications'][0], 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
-  
+
   // Loading Actions
   setLoading: (key: keyof AppState['loading'], loading: boolean) => void;
-  
+
   // Utility Actions
   reset: () => void;
 }
@@ -110,11 +110,11 @@ export const useAppStore = create<AppState & AppActions>()(
   devtools(
     (set) => ({
         ...initialState,
-        
+
         // System Actions
         setSystemStatus: (status) => set({ systemStatus: status }),
         setSystemConnected: (connected) => set({ isSystemConnected: connected }),
-        
+
         // Trading Actions
         setPositions: (positions) => set({ positions }),
         setOrders: (orders) => set({ orders }),
@@ -125,18 +125,18 @@ export const useAppStore = create<AppState & AppActions>()(
             strategy.id === id ? { ...strategy, ...updates } : strategy
           )
         })),
-        
+
         // Exchange Actions
         setExchanges: (exchanges) => set({ exchanges }),
         setMarketData: (data) => set({ marketData: data }),
-        
+
         // UI Actions
         setSelectedSymbol: (symbol) => set({ selectedSymbol: symbol }),
         setSelectedTimeframe: (timeframe) => set({ selectedTimeframe: timeframe }),
         setTheme: (theme) => set({ theme }),
         setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
         setActiveTab: (tab) => set({ activeTab: tab }),
-        
+
         // Notification Actions
         addNotification: (notification) => {
           const id = Date.now().toString();
@@ -144,7 +144,7 @@ export const useAppStore = create<AppState & AppActions>()(
           set((state) => ({
             notifications: [...state.notifications, { ...notification, id, timestamp }]
           }));
-          
+
           // Auto-remove after 5 seconds
           setTimeout(() => {
             set((state) => ({
@@ -156,12 +156,12 @@ export const useAppStore = create<AppState & AppActions>()(
           notifications: state.notifications.filter(n => n.id !== id)
         })),
         clearNotifications: () => set({ notifications: [] }),
-        
+
         // Loading Actions
         setLoading: (key, loading) => set((state) => ({
           loading: { ...state.loading, [key]: loading }
         })),
-        
+
         // Utility Actions
         reset: () => set(initialState),
     }),

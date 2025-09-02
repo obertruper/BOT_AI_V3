@@ -50,7 +50,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
                 <p className="text-sm text-gray-400">Enable or disable automated trading</p>
               </div>
             </div>
-            
+
             <label className="flex items-center space-x-3">
               <input
                 type="checkbox"
@@ -78,7 +78,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
               <p className="text-sm text-gray-400">Configure risk parameters and limits</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
@@ -89,7 +89,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Max Daily Loss (USD)</label>
                 <input
@@ -98,7 +98,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Max Drawdown (%)</label>
                 <input
@@ -109,7 +109,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
                 />
               </div>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Stop Loss (%)</label>
@@ -120,7 +120,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Take Profit (%)</label>
                 <input
@@ -130,7 +130,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Leverage</label>
                 <select
@@ -161,7 +161,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
               <p className="text-sm text-gray-400">Configure position sizing and limits</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Max Open Positions</label>
@@ -173,7 +173,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Position Size (USD)</label>
               <input
@@ -182,7 +182,7 @@ const SimpleTradingSettings: React.FC<SimpleTradingSettingsProps> = ({ onSave })
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Min Balance Threshold (USD)</label>
               <input

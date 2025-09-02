@@ -566,7 +566,9 @@ class BalanceManager:
                             }
                         )
                         await self.redis_client.set(
-                            f"balance:{exchange}:{symbol}", balance_data, ex=300  # TTL 5 минут
+                            f"balance:{exchange}:{symbol}",
+                            balance_data,
+                            ex=300,  # TTL 5 минут
                         )
                     except Exception as e:
                         logger.debug(f"⚠️ Не удалось сохранить баланс в Redis: {e}")

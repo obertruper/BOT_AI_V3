@@ -71,7 +71,7 @@ class TestDynamicSLTPPerformance:
         assert result is not None
         assert execution_time < 0.1, f"Расчет занял {execution_time:.4f}s, должен быть < 0.1s"
 
-        print(f"\n📊 Single calculation time: {execution_time*1000:.2f}ms")
+        print(f"\n📊 Single calculation time: {execution_time * 1000:.2f}ms")
 
     @pytest.mark.asyncio
     async def test_batch_calculations(self, large_dataset):
@@ -111,8 +111,8 @@ class TestDynamicSLTPPerformance:
         print("\n📊 Batch processing stats:")
         print(f"   Total symbols: {len(symbols)}")
         print(f"   Total time: {total_time:.2f}s")
-        print(f"   Average per symbol: {avg_time*1000:.2f}ms")
-        print(f"   Throughput: {len(symbols)/total_time:.1f} symbols/sec")
+        print(f"   Average per symbol: {avg_time * 1000:.2f}ms")
+        print(f"   Throughput: {len(symbols) / total_time:.1f} symbols/sec")
 
     @pytest.mark.asyncio
     async def test_parallel_processing(self, large_dataset):
@@ -160,7 +160,7 @@ class TestDynamicSLTPPerformance:
         print(f"   Sequential time: {seq_time:.2f}s")
         print(f"   Parallel time: {parallel_time:.2f}s")
         print(f"   Speedup: {speedup:.2f}x")
-        print(f"   Efficiency: {(speedup/4)*100:.1f}%")
+        print(f"   Efficiency: {(speedup / 4) * 100:.1f}%")
 
     @pytest.mark.asyncio
     async def test_memory_usage(self, large_dataset):
@@ -198,7 +198,7 @@ class TestDynamicSLTPPerformance:
 
         print("\n💾 Memory usage stats:")
         print(f"   Total allocated: {total_memory:.2f}MB")
-        print(f"   Per calculation: {total_memory/100:.3f}MB")
+        print(f"   Per calculation: {total_memory / 100:.3f}MB")
 
     @pytest.mark.asyncio
     async def test_cache_effectiveness(self):
@@ -236,8 +236,8 @@ class TestDynamicSLTPPerformance:
         cache_speedup = cold_time / warm_time if warm_time > 0 else 1
 
         print("\n🚀 Cache effectiveness:")
-        print(f"   Cold cache: {cold_time*1000:.2f}ms")
-        print(f"   Warm cache: {warm_time*1000:.2f}ms")
+        print(f"   Cold cache: {cold_time * 1000:.2f}ms")
+        print(f"   Warm cache: {warm_time * 1000:.2f}ms")
         print(f"   Speedup: {cache_speedup:.2f}x")
 
         # Результаты должны быть идентичными
@@ -343,8 +343,8 @@ class TestDynamicSLTPPerformance:
         print("\n📊 Performance comparison:")
         print(f"   Fixed SL/TP: {fixed_time:.3f}s for {iterations} iterations")
         print(f"   Dynamic SL/TP: {dynamic_time:.3f}s for {iterations} iterations")
-        print(f"   Overhead: {overhead*100:.1f}%")
-        print(f"   Dynamic is {dynamic_time/fixed_time:.1f}x slower")
+        print(f"   Overhead: {overhead * 100:.1f}%")
+        print(f"   Dynamic is {dynamic_time / fixed_time:.1f}x slower")
 
         # Dynamic должен быть не более чем в 10 раз медленнее
         assert dynamic_time / fixed_time < 10, "Dynamic SL/TP too slow compared to fixed"

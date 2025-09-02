@@ -3,6 +3,7 @@
 Тестирование полной цепочки выполнения кода BOT_AI_V3
 Интеграционные тесты всех критических workflow
 """
+
 import asyncio
 import json
 import sys

@@ -71,7 +71,38 @@ class RiskManager:
         Returns:
             Рекомендуемый размер позиции в USDT.
         """
-        # ... (код)
+        # Используем баланс по умолчанию если не передан
+        if balance is None:
+            balance = Decimal(str(self.config.get("default_balance", 500)))
+
+        # Процент риска на сделку (по умолчанию 2%)
+        risk_percentage = Decimal(str(self.config.get("risk_percentage", 0.02)))
+
+        # Минимальный и максимальный размер позиции
+        min_position_size = Decimal(
+            str(self.config.get("min_position_size_usdt", 2))
+        )  # Уменьшено для тестирования
+        max_position_size = Decimal(str(self.config.get("max_position_size_usdt", 1000)))
+
+        # Базовый расчет: процент от баланса
+        position_size = balance * risk_percentage
+
+        # Учитываем уверенность сигнала если есть
+        if "confidence" in signal:
+            confidence = Decimal(str(signal.get("confidence", 0.5)))
+            # Масштабируем размер позиции в зависимости от уверенности (0.5 - 1.5x)
+            confidence_multiplier = Decimal("0.5") + confidence
+            position_size = position_size * confidence_multiplier
+
+        # Применяем лимиты
+        position_size = max(min_position_size, min(position_size, max_position_size))
+
+        self.logger.info(
+            f"📊 Рассчитан размер позиции: ${position_size:.2f} USDT "
+            f"(баланс: ${balance:.2f}, риск: {risk_percentage * 100:.1f}%)"
+        )
+
+        return position_size
 
     async def check_signal_risk(self, signal: dict[str, Any]) -> bool:
         """Проверяет, соответствует ли сигнал установленным риск-лимитам.
@@ -90,6 +121,25 @@ class RiskManager:
         Returns:
             Объект RiskStatus с результатом проверки.
         """
-        # ... (код)
+        # Базовая проверка рисков
+        status = RiskStatus(requires_action=False)
+
+        # Проверяем количество открытых позиций если есть position_manager
+        if self.position_manager:
+            try:
+                active_positions = await self.position_manager.get_active_positions()
+                max_positions = self.config.get("max_concurrent_positions", 10)
+
+                if len(active_positions) >= max_positions:
+                    status.requires_action = True
+                    status.action = "pause"
+                    status.message = (
+                        f"Достигнут лимит открытых позиций: {len(active_positions)}/{max_positions}"
+                    )
+                    self.logger.warning(status.message)
+            except Exception as e:
+                self.logger.error(f"Ошибка проверки позиций: {e}")
+
+        return status
 
     # ... (остальные приватные методы)

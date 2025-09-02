@@ -4,7 +4,7 @@
 
 BOT_AI_V3 теперь оснащён комплексной системой тестирования, которая обеспечивает:
 
-- **100% покрытие кода тестами** 
+- **100% покрытие кода тестами**
 - **Автоматическое обнаружение неиспользуемого кода**
 - **Тестирование полной цепочки выполнения**
 - **Мониторинг покрытия в реальном времени**
@@ -70,12 +70,13 @@ python3 scripts/comprehensive_test_generator.py
 ### 1. Торговая цепочка
 
 ```
-unified_launcher.py → SystemOrchestrator → TradingEngine → 
-Signal Processing → Order Creation → Risk Validation → 
+unified_launcher.py → SystemOrchestrator → TradingEngine →
+Signal Processing → Order Creation → Risk Validation →
 Exchange Execution → Position Update → Database Save
 ```
 
 **Требования производительности:**
+
 - Обработка сигнала: <50мс
 - Создание ордера: <100мс
 - Валидация риска: <50мс
@@ -83,12 +84,13 @@ Exchange Execution → Position Update → Database Save
 ### 2. ML цепочка прогнозирования
 
 ```
-Market Data Collection → Feature Engineering → 
-Model Inference → Signal Generation → Signal Validation → 
+Market Data Collection → Feature Engineering →
+Model Inference → Signal Generation → Signal Validation →
 Prediction Caching
 ```
 
 **Требования производительности:**
+
 - Инференс модели: <20мс
 - Генерация сигнала: <100мс
 - Кэширование: <100мс
@@ -96,11 +98,12 @@ Prediction Caching
 ### 3. API цепочка
 
 ```
-Request Authentication → Request Validation → 
+Request Authentication → Request Validation →
 Business Logic → Database Query → Response Formatting
 ```
 
 **Требования производительности:**
+
 - Общий ответ API: <200мс
 - Аутентификация: <100мс
 - Database запрос: <100мс
@@ -108,11 +111,12 @@ Business Logic → Database Query → Response Formatting
 ### 4. WebSocket цепочка
 
 ```
-WebSocket Connection → Message Parsing → 
+WebSocket Connection → Message Parsing →
 Real-time Processing → Broadcast Update
 ```
 
 **Требования производительности:**
+
 - Обработка сообщения: <50мс
 - Broadcast: <100мс
 
@@ -189,22 +193,24 @@ markers = [
 ### 1. Unit тесты
 
 **Что тестируют:**
+
 - Отдельные функции в изоляции
 - Возвращаемые значения
 - Обработка ошибок
 - Граничные случаи
 
 **Пример:**
+
 ```python
 @pytest.mark.asyncio
 async def test_trading_engine_process_signal():
     # Arrange
     engine = TradingEngine()
     signal = create_test_signal('BTCUSDT', 'BUY', 0.85)
-    
+
     # Act
     result = await engine.process_signal(signal)
-    
+
     # Assert
     assert result['success'] is True
     assert result['order_id'] is not None
@@ -214,12 +220,14 @@ async def test_trading_engine_process_signal():
 ### 2. Integration тесты
 
 **Что тестируют:**
+
 - Взаимодействие между компонентами
 - Database транзакции
 - Exchange API интеграцию
 - ML pipeline
 
 **Пример:**
+
 ```python
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -227,12 +235,12 @@ async def test_ml_to_trading_integration(db_transaction, mock_exchange):
     # Arrange
     ml_manager = MLManager()
     trading_engine = TradingEngine()
-    
+
     # Act
     prediction = await ml_manager.get_prediction('BTCUSDT')
     signal = await ml_manager.generate_signal(prediction)
     order = await trading_engine.process_signal(signal)
-    
+
     # Assert
     assert prediction['confidence'] > 0.7
     assert signal['type'] in ['BUY', 'SELL', 'HOLD']
@@ -242,11 +250,13 @@ async def test_ml_to_trading_integration(db_transaction, mock_exchange):
 ### 3. End-to-End тесты
 
 **Что тестируют:**
+
 - Полные workflow от начала до конца
 - Реальные сценарии использования
 - Производительность системы
 
 **Пример:**
+
 ```python
 @pytest.mark.e2e
 @pytest.mark.asyncio
@@ -254,40 +264,42 @@ async def test_complete_trading_workflow():
     # Запуск системы
     launcher = UnifiedLauncher()
     await launcher.start()
-    
+
     # Симуляция рыночных данных
     market_data = generate_test_market_data('BTCUSDT')
-    
+
     # Обработка данных через всю цепочку
     result = await process_complete_workflow(market_data)
-    
+
     # Проверка результата
     assert result['orders_created'] > 0
     assert result['total_time'] < 5.0  # 5 секунд на полный workflow
-    
+
     await launcher.stop()
 ```
 
 ### 4. Performance тесты
 
 **Что тестируют:**
+
 - Время выполнения критических функций
 - Нагрузочное тестирование
 - Memory leaks
 - CPU usage
 
 **Пример:**
+
 ```python
 @pytest.mark.performance
 @pytest.mark.asyncio
 async def test_ml_prediction_performance():
     model = UnifiedPatchTST()
     features = generate_test_features()
-    
+
     start_time = time.perf_counter()
     prediction = await model.predict(features)
     execution_time = time.perf_counter() - start_time
-    
+
     assert execution_time < 0.020  # 20ms requirement
     assert prediction['confidence'] > 0.0
 ```
@@ -302,6 +314,7 @@ python3 scripts/code_chain_analyzer.py
 ```
 
 **Содержит:**
+
 - Граф зависимостей функций
 - Недостижимые функции
 - Критические пути
@@ -315,6 +328,7 @@ python3 scripts/full_chain_tester.py
 ```
 
 **Содержит:**
+
 - Результаты тестирования 8 критических цепочек
 - Метрики производительности
 - Проблемы и рекомендации
@@ -327,6 +341,7 @@ python3 scripts/coverage_monitor.py
 ```
 
 **Содержит:**
+
 - Real-time покрытие кода
 - Горячие точки и узкие места
 - Тренды использования функций
@@ -343,6 +358,7 @@ python3 scripts/coverage_monitor.py
    - Проверка декораторов
 
 2. **Создание резервной копии:**
+
    ```bash
    # Автоматически создаётся в /backup_before_cleanup_YYYYMMDD_HHMMSS/
    ```
@@ -410,21 +426,21 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.8'
-    
+
     - name: Install dependencies
       run: |
         pip install -r requirements.txt
         pip install -r requirements-test.txt
-    
+
     - name: Run chain analysis
       run: python3 scripts/code_chain_analyzer.py
-    
+
     - name: Run full chain tests
       run: python3 scripts/full_chain_tester.py
-    
+
     - name: Run comprehensive tests
       run: pytest tests/ --cov=. --cov-report=xml
-    
+
     - name: Upload coverage
       uses: codecov/codecov-action@v3
 ```
@@ -516,18 +532,21 @@ rm -rf .coverage htmlcov/
 ## 🎯 Roadmap
 
 ### Этап 1: Базовое покрытие (Недели 1-2)
+
 - [x] Настройка системы тестирования
 - [x] Анализ цепочки кода
 - [x] Детекция неиспользуемого кода
 - [ ] Покрытие критических модулей >50%
 
 ### Этап 2: Полное покрытие (Недели 3-4)
+
 - [ ] Покрытие всех модулей >85%
 - [ ] Performance тесты всех критических функций
 - [ ] Автоматизация CI/CD
 - [ ] Мониторинг в production
 
 ### Этап 3: Оптимизация (Недели 5-6)
+
 - [ ] Удаление неиспользуемого кода
 - [ ] Оптимизация производительности
 - [ ] Advanced мониторинг
@@ -539,13 +558,14 @@ rm -rf .coverage htmlcov/
 
 Система тестирования BOT_AI_V3 обеспечивает:
 
-✅ **100% покрытие активного кода**  
-✅ **Автоматическое обнаружение dead code**  
-✅ **Тестирование полной цепочки выполнения**  
-✅ **Real-time мониторинг производительности**  
-✅ **Безопасную очистку кода**  
+✅ **100% покрытие активного кода**
+✅ **Автоматическое обнаружение dead code**
+✅ **Тестирование полной цепочки выполнения**
+✅ **Real-time мониторинг производительности**
+✅ **Безопасную очистку кода**
 
 **Следующие шаги:**
+
 1. Запустите полный анализ: `python3 scripts/master_test_runner.py --full-analysis`
 2. Просмотрите отчёты в `analysis_results/`
 3. Исправьте найденные проблемы

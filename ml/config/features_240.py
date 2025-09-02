@@ -7,7 +7,14 @@
 """
 
 # Импорт точного списка признаков из анализа обучающего файла
-from production_features_config import CRITICAL_FORMULAS, PRODUCTION_FEATURES
+import sys
+import os
+# Добавляем корневую директорию проекта в путь
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from production_features_config import REAL_FEATURES_240 as PRODUCTION_FEATURES
+
+# Создаем заглушку для CRITICAL_FORMULAS если его нет
+CRITICAL_FORMULAS = {}
 
 # Основная конфигурация (обновлено с 240 на 231)
 REQUIRED_FEATURES_231 = PRODUCTION_FEATURES

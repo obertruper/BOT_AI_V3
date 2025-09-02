@@ -153,7 +153,7 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
             <div className={`absolute inset-0 opacity-5 ${
               exchange.enabled ? 'bg-gradient-to-r from-green-500 to-blue-500' : 'bg-gradient-to-r from-gray-500 to-gray-700'
             }`}></div>
-            
+
             <div className="relative z-10 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-4">
@@ -167,12 +167,12 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                     <p className="text-sm text-gray-400">{exchange.name}</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-4">
                   {validationResults[exchange.name] && (
                     <div className={`flex items-center space-x-2 px-3 py-1 rounded-lg ${
-                      validationResults[exchange.name].valid 
-                        ? 'bg-green-600/20 text-green-400' 
+                      validationResults[exchange.name].valid
+                        ? 'bg-green-600/20 text-green-400'
                         : 'bg-red-600/20 text-red-400'
                     }`}>
                       {validationResults[exchange.name].valid ? (
@@ -183,7 +183,7 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                       <span className="text-sm">{validationResults[exchange.name].message}</span>
                     </div>
                   )}
-                  
+
                   <button
                     onClick={() => testConnection(exchange)}
                     disabled={testing === exchange.name || !exchange.api_key || !exchange.api_secret}
@@ -192,7 +192,7 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                     <TestTube className="w-4 h-4" />
                     <span>{testing === exchange.name ? 'Testing...' : 'Test'}</span>
                   </button>
-                  
+
                   <label className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -212,7 +212,7 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                     <Key className="w-4 h-4 mr-2" />
                     API Credentials
                   </h5>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
                     <div className="relative">
@@ -232,7 +232,7 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">API Secret</label>
                     <div className="relative">
@@ -282,7 +282,7 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                     <Shield className="w-4 h-4 mr-2" />
                     Configuration
                   </h5>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Environment</label>
                     <select
@@ -294,7 +294,7 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                       <option value="live">Live (Production)</option>
                     </select>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Rate Limit (per minute)</label>
                     <input
@@ -306,16 +306,16 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">Maker Fee (%)</label>
                       <input
                         type="number"
                         value={exchange.fees.maker}
-                        onChange={(e) => updateExchange(index, 'fees', { 
-                          ...exchange.fees, 
-                          maker: parseFloat(e.target.value) 
+                        onChange={(e) => updateExchange(index, 'fees', {
+                          ...exchange.fees,
+                          maker: parseFloat(e.target.value)
                         })}
                         step="0.0001"
                         min="0"
@@ -327,9 +327,9 @@ const ExchangeSettings: React.FC<ExchangeSettingsProps> = ({ onSave }) => {
                       <input
                         type="number"
                         value={exchange.fees.taker}
-                        onChange={(e) => updateExchange(index, 'fees', { 
-                          ...exchange.fees, 
-                          taker: parseFloat(e.target.value) 
+                        onChange={(e) => updateExchange(index, 'fees', {
+                          ...exchange.fees,
+                          taker: parseFloat(e.target.value)
                         })}
                         step="0.0001"
                         min="0"

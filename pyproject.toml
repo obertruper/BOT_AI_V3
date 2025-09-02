@@ -102,19 +102,19 @@ minversion = "7.0"
 asyncio_mode = "auto"
 # Базовые настройки
 testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"] 
+python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 # Опции запуска
 addopts = [
     "-v",
-    "--tb=short", 
+    "--tb=short",
     "--strict-markers",
     "--maxfail=3",
     "--ff",
     # Игнорируемые директории
     "--ignore=data",
-    "--ignore=logs", 
+    "--ignore=logs",
     "--ignore=venv",
     "--ignore=.venv",
     "--ignore=node_modules",
@@ -126,7 +126,7 @@ addopts = [
 markers = [
     "asyncio: mark test as async",
     "unit: Unit tests for individual components",
-    "integration: Integration tests for multiple components", 
+    "integration: Integration tests for multiple components",
     "performance: Performance and load tests",
     "ml: Machine Learning specific tests",
     "slow: Tests that take more than 5 seconds",
@@ -137,7 +137,7 @@ markers = [
     "database: Database tests",
     "requires_redis: Tests that require redis",
     "sltp: Dynamic SL/TP (Stop Loss/Take Profit) tests",
-    "position_tracker: Enhanced Position Tracker tests", 
+    "position_tracker: Enhanced Position Tracker tests",
     "e2e: End-to-end tests",
 ]
 # Настройки вывода
@@ -146,7 +146,7 @@ junit_family = "xunit2"
 # Фильтрация предупреждений
 filterwarnings = [
     "ignore::DeprecationWarning",
-    "ignore::PendingDeprecationWarning", 
+    "ignore::PendingDeprecationWarning",
     "ignore::FutureWarning:torch.*",
     "error::UserWarning:ml.*",
 ]

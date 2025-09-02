@@ -13,26 +13,32 @@ from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
 from database.models import Order
 from database.models.signal import Signal
-from exchanges.base.models import Position
 
-# Импортируем утилиты из нового модуля
-try:
-    from .utils import calculate_pnl_percentage, normalize_percentage, round_price, round_qty
-except ImportError:
-    # Fallback если модуль utils еще не импортирован
-    def round_qty(symbol: str, qty: float) -> float:
-        """Округляет количество согласно правилам символа"""
-        return round(qty, 3)
 
-    def round_price(symbol: str, price: float) -> float:
-        """Округляет цену согласно правилам символа"""
-        return round(price, 4)
+# Утилиты для работы с числами
+def round_qty(symbol: str, qty: float) -> float:
+    """Округляет количество согласно правилам символа"""
+    return round(qty, 3)
 
-    def normalize_percentage(value: float) -> float:
-        """Нормализация процентов"""
-        if value < 0.1:
-            return value * 100
-        return value
+
+def round_price(symbol: str, price: float) -> float:
+    """Округляет цену согласно правилам символа"""
+    return round(price, 4)
+
+
+def normalize_percentage(value: float) -> float:
+    """Нормализация процентов"""
+    if value < 0.1:
+        return value * 100
+    return value
+
+
+def calculate_pnl_percentage(entry_price: float, current_price: float, side: str) -> float:
+    """Рассчитывает процент PnL"""
+    if side.upper() in ["BUY", "LONG"]:
+        return ((current_price - entry_price) / entry_price) * 100
+    else:
+        return ((entry_price - current_price) / entry_price) * 100
 
 
 # Добавим недостающие функции из V2
@@ -750,12 +756,16 @@ class EnhancedSLTPManager:
         )
 
         # Создаем временную позицию для использования существующей логики
-        temp_position = Position(
-            symbol=symbol,
-            side=side,
-            size=trade_qty or 1.0,
-            entry_price=entry_price,
-            mark_price=entry_price,
+        class TempPosition:
+            def __init__(self, symbol, side, size, entry_price):
+                self.symbol = symbol
+                self.side = side
+                self.size = size
+                self.entry_price = entry_price
+                self.id = f"{symbol}_{side}"
+
+        temp_position = TempPosition(
+            symbol=symbol, side=side, size=trade_qty or 1.0, entry_price=entry_price
         )
 
         # Создаем конфигурацию
@@ -979,8 +989,19 @@ class EnhancedSLTPManager:
             return None
 
         try:
-            response = await self.exchange_client.set_stop_loss(
-                position.symbol, sl_price, position.size
+            # Используем create_order для SL
+            close_side = "Sell" if position.side.upper() in ["BUY", "LONG"] else "Buy"
+            response = await self.exchange_client.create_order(
+                {
+                    "symbol": position.symbol,
+                    "side": close_side,
+                    "order_type": "Market",
+                    "qty": position.size,
+                    "trigger_price": sl_price,
+                    "trigger_by": "LastPrice",
+                    "reduce_only": True,
+                    "position_idx": self._get_position_idx(position.side),
+                }
             )
 
             if response.success:
@@ -1013,8 +1034,19 @@ class EnhancedSLTPManager:
             return None
 
         try:
-            response = await self.exchange_client.set_take_profit(
-                position.symbol, tp_price, quantity
+            # Используем create_order для TP
+            close_side = "Sell" if position.side.upper() in ["BUY", "LONG"] else "Buy"
+            response = await self.exchange_client.create_order(
+                {
+                    "symbol": position.symbol,
+                    "side": close_side,
+                    "order_type": "Market",
+                    "qty": quantity,
+                    "trigger_price": tp_price,
+                    "trigger_by": "LastPrice",
+                    "reduce_only": True,
+                    "position_idx": self._get_position_idx(position.side),
+                }
             )
 
             if response.success:
@@ -1072,16 +1104,20 @@ class EnhancedSLTPManager:
             await self._cancel_order(order)
 
             # Создаем временный объект позиции для создания нового ордера
-            temp_position = Position(
+            class TempPosition:
+                def __init__(self, symbol, side, size, position_id):
+                    self.symbol = symbol
+                    self.side = side
+                    self.size = size
+                    self.id = position_id
+                    self.entry_price = 0.0
+
+            temp_position = TempPosition(
                 symbol=order.symbol,
                 side="Buy" if order.side == "Sell" else "Sell",
                 size=order.quantity,
-                entry_price=0.0,  # Не используется для SL
-                mark_price=0.0,  # Требуется для модели
+                position_id=order.position_id,
             )
-            # Добавляем id если доступен
-            if hasattr(temp_position, "id"):
-                temp_position.id = order.position_id
 
             new_order = await self._create_stop_loss_order(temp_position, new_price)
             if new_order:
@@ -1118,16 +1154,20 @@ class EnhancedSLTPManager:
         # Пересоздаем ордер
         await self._cancel_order(order)
 
-        temp_position = Position(
+        class TempPosition:
+            def __init__(self, symbol, side, size, position_id):
+                self.symbol = symbol
+                self.side = side
+                self.size = size
+                self.id = position_id
+                self.entry_price = 0.0
+
+        temp_position = TempPosition(
             symbol=order.symbol,
             side="Buy" if order.side == "Sell" else "Sell",
             size=order.quantity,
-            entry_price=0.0,
-            mark_price=0.0,
+            position_id=order.position_id,
         )
-        # Добавляем id если доступен
-        if hasattr(temp_position, "id"):
-            temp_position.id = order.position_id
 
         new_order = await self._create_take_profit_order(
             temp_position, order.trigger_price, order.quantity

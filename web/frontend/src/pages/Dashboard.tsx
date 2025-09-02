@@ -60,7 +60,7 @@ const Dashboard: React.FC = () => {
             Real-time monitoring and control of BOT_AI_V3 trading system
           </p>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <div className="text-right">
             <div className="text-sm text-gray-400">Last Update</div>

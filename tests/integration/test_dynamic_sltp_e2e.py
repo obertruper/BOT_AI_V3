@@ -309,7 +309,7 @@ class TestDynamicSLTPEndToEnd:
                     # Мокируем выполнение частичного закрытия
                     setup["exchange_mock"].place_order.return_value = {
                         "success": True,
-                        "order_id": f'PARTIAL_{level["percent"]}_{i}',
+                        "order_id": f"PARTIAL_{level['percent']}_{i}",
                         "filled_quantity": close_qty,
                     }
 

@@ -27,6 +27,9 @@ from core.logger import setup_logger
 # Import InstrumentManager for proper quantity rounding
 from trading.instrument_manager import InstrumentManager
 
+# Setup logger for this module
+logger = setup_logger("bybit_client")
+
 from ..base.api_key_manager import KeyType, get_key_manager
 
 # from ..base.rate_limiter import RequestPriority, get_rate_limiter  # Заменено на EnhancedRateLimiter
@@ -155,19 +158,83 @@ def format_quantity(
     Raises:
         ValueError: Если количество не соответствует требованиям
     """
+    # Детальное логирование для отладки
+    logger.debug(f"format_quantity called with: quantity={quantity} (type={type(quantity)}), "
+                f"qty_step={qty_step} (type={type(qty_step)}), "
+                f"min_qty={min_qty} (type={type(min_qty)}), "
+                f"max_qty={max_qty} (type={type(max_qty)}), symbol={symbol}")
+    
+    try:
+        # Преобразуем все входные параметры в числа с обработкой Decimal
+        from decimal import Decimal
+        
+        # Обработка quantity
+        if isinstance(quantity, Decimal):
+            quantity = float(quantity)
+        elif isinstance(quantity, str):
+            quantity = float(quantity) if quantity and quantity != 'None' else 0.0
+        elif quantity is None:
+            quantity = 0.0
+        else:
+            quantity = float(quantity)
+            
+        # Обработка qty_step
+        if isinstance(qty_step, Decimal):
+            qty_step = float(qty_step)
+        elif isinstance(qty_step, str):
+            qty_step = float(qty_step) if qty_step and qty_step != 'None' else 0.1
+        elif qty_step is None:
+            qty_step = 0.1
+        else:
+            qty_step = float(qty_step)
+            
+        # Обработка min_qty
+        if isinstance(min_qty, Decimal):
+            min_qty = float(min_qty)
+        elif isinstance(min_qty, str):
+            min_qty = float(min_qty) if min_qty and min_qty != 'None' else 0.0
+        elif min_qty is None:
+            min_qty = 0.0
+        else:
+            min_qty = float(min_qty)
+            
+        # Обработка max_qty
+        if isinstance(max_qty, Decimal):
+            max_qty = float(max_qty)
+        elif isinstance(max_qty, str):
+            max_qty = float(max_qty) if max_qty and max_qty != 'None' and max_qty != 'inf' else float("inf")
+        elif max_qty is None:
+            max_qty = float("inf")
+        else:
+            max_qty = float(max_qty)
+            
+        logger.debug(f"After conversion: quantity={quantity}, qty_step={qty_step}, "
+                    f"min_qty={min_qty}, max_qty={max_qty}")
+        
+    except (ValueError, TypeError) as e:
+        logger.error(f"Error converting parameters to float: {e}")
+        logger.error(f"Original values: quantity={quantity} (type={type(quantity)}), "
+                    f"qty_step={qty_step} (type={type(qty_step)}), "
+                    f"min_qty={min_qty} (type={type(min_qty)}), "
+                    f"max_qty={max_qty} (type={type(max_qty)})")
+        raise ValueError(f"Cannot convert parameters to numbers: {e}")
+    
     # Если передан символ, используем InstrumentManager для точного округления
     if symbol:
         try:
             instrument_manager = get_instrument_manager()
             # Используем round_qty с ROUND_DOWN для избежания превышения баланса
             rounded_qty = instrument_manager.round_qty(
-                symbol=symbol, qty=quantity, round_up=False, enforce_min=True  # ROUND_DOWN
+                symbol=symbol,
+                qty=quantity,
+                round_up=False,
+                enforce_min=True,  # ROUND_DOWN
             )
             # Форматируем количество с правильным числом знаков после запятой
             return instrument_manager.format_qty(symbol, rounded_qty)
-        except Exception:
+        except Exception as e:
             # Если InstrumentManager не может обработать, используем fallback
-            pass
+            logger.debug(f"InstrumentManager failed for {symbol}: {e}, using fallback")
 
     # Fallback: оригинальная логика для обратной совместимости
     from decimal import ROUND_DOWN, Decimal
@@ -202,6 +269,8 @@ def format_quantity(
     # Определяем количество знаков после запятой на основе qty_step
     if qty_step >= 1:
         decimal_places = 0
+        # Для целых чисел возвращаем без десятичной точки
+        formatted_qty = str(int(rounded_qty))
     else:
         # Считаем количество знаков после запятой в qty_step
         step_str = f"{qty_step:.10f}".rstrip("0")  # Форматируем с избытком и удаляем trailing zeros
@@ -209,13 +278,15 @@ def format_quantity(
             decimal_places = len(step_str.split(".")[1])
         else:
             decimal_places = 0
-
-    # Форматируем с нужным количеством знаков используя Decimal для точности
-    # Важно: убираем trailing zeros для целых чисел
-    if decimal_places == 0:
-        formatted_qty = str(int(rounded_qty))
-    else:
+        
+        # Форматируем с точным количеством знаков после запятой
+        # Используем format для Decimal чтобы сохранить точность
         formatted_qty = format(rounded_qty, f".{decimal_places}f")
+        
+        # НЕ убираем десятичную часть, даже если все нули - некоторые биржи требуют точный формат
+    
+    # Логирование для отладки
+    logger.debug(f"Format quantity: {quantity} -> {formatted_qty} (step={qty_step}, places={decimal_places if qty_step < 1 else 0})")
 
     return formatted_qty
 
@@ -261,6 +332,14 @@ class BybitClient(BaseExchangeInterface):
         self.error_count = 0
         self.last_errors = []
 
+        # Синхронизация времени и окно приёма
+        self._server_time_offset_ms: int = 0  # server_ms - local_ms
+        import os as _os
+        try:
+            self._recv_window_ms: int = int(_os.getenv("BYBIT_RECV_WINDOW_MS", "60000"))
+        except Exception:
+            self._recv_window_ms = 60000
+
         # Rate limiter - используем только enhanced версию
         # self.rate_limiter = get_rate_limiter()  # Удалено - используем enhanced_limiter
 
@@ -282,28 +361,25 @@ class BybitClient(BaseExchangeInterface):
         # Добавляем биржу в мониторинг здоровья
         self.health_monitor.add_exchange("bybit")
 
-        # Загружаем конфигурацию торговли
-        self.hedge_mode = False
+        # Загружаем конфигурацию торговли (единый источник через ConfigManager/runtime_flags)
+        from core.config.runtime_flags import get_hedge_mode
+        from core.config.config_manager import get_global_config_manager
+
+        self.hedge_mode = get_hedge_mode()
         self.default_leverage = 5
         self.trading_category = "linear"
         try:
-            import yaml
-
-            # Пытаемся загрузить настройки из system.yaml
-            config_path = "config/system.yaml"
-            if os.path.exists(config_path):
-                with open(config_path) as f:
-                    system_config = yaml.safe_load(f)
-                if system_config and "trading" in system_config:
-                    trading_cfg = system_config["trading"]
-                    self.hedge_mode = trading_cfg.get("hedge_mode", False)
-                    self.default_leverage = trading_cfg.get("leverage", 5)
-                    self.trading_category = trading_cfg.get("category", "linear")
-                    self.logger.debug(
-                        f"Trading config loaded: hedge_mode={self.hedge_mode}, leverage={self.default_leverage}, category={self.trading_category}"
-                    )
+            cm = get_global_config_manager()
+            self.default_leverage = cm.get_config("trading.leverage", self.default_leverage)
+            self.trading_category = cm.get_config("trading.category", self.trading_category)
         except Exception as e:
-            self.logger.warning(f"Failed to load trading config, using defaults: {e}")
+            self.logger.debug(f"ConfigManager not available, using defaults: {e}")
+
+        # Логируем итоговые настройки
+        self.logger.info(
+            f"🔧 Bybit client initialized - Hedge mode: {self.hedge_mode}, "
+            f"Leverage: {self.default_leverage}, Category: {self.trading_category}"
+        )
 
         # Кеш для инструментов
         self._instruments_cache: dict[str, list[Instrument]] = {}
@@ -386,6 +462,25 @@ class BybitClient(BaseExchangeInterface):
 
         return datetime.now()
 
+    async def _sync_server_time(self) -> None:
+        """Синхронизирует локальный оффсет времени с сервером Bybit."""
+        try:
+            # Используем публичный эндпоинт времени
+            if not self.session:
+                await self.connect()
+            resp = await self._make_request("GET", "/v5/market/time")
+            if resp.get("retCode") == 0:
+                server_sec = int(resp.get("result", {}).get("timeSecond", 0))
+                import time as _time
+                local_ms = int(_time.time() * 1000)
+                server_ms = server_sec * 1000
+                self._server_time_offset_ms = server_ms - local_ms
+                self.logger.info(
+                    f"⏱️ Синхронизация времени Bybit: offset={self._server_time_offset_ms} ms"
+                )
+        except Exception as e:
+            self.logger.warning(f"Не удалось синхронизировать время Bybit: {e}")
+
     # =================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===================
 
     def _generate_signature(self, params: str | dict, timestamp: str) -> str:
@@ -434,7 +529,7 @@ class BybitClient(BaseExchangeInterface):
 
         try:
             url = f"{self.base_url}{endpoint}"
-            headers = {}
+            base_headers = {}
 
             # Подготовка параметров
             query_string = ""
@@ -447,44 +542,8 @@ class BybitClient(BaseExchangeInterface):
                 else:
                     json_data = params
 
-            # Аутентификация
-            if auth:
-                # В публичном режиме пропускаем аутентификацию
-                if self.public_only:
-                    self.logger.debug(f"Skipping authentication for public-only mode: {endpoint}")
-                else:
-                    # Получаем актуальный ключ из менеджера
-                    key_info = await self.key_manager.get_active_key("bybit")
-                    if not key_info:
-                        raise AuthenticationError("bybit", "NO_VALID_KEY")
-
-                    timestamp = str(int(time.time() * 1000))
-                    sign_params = (
-                        json.dumps(params) if method == "POST" and params else query_string
-                    )
-
-                    # Используем ключи из менеджера
-
-                    signature = hmac.new(
-                        bytes(key_info.api_secret, "utf-8"),
-                        bytes(
-                            timestamp + key_info.api_key + "20000" + (sign_params or ""),
-                            "utf-8",
-                        ),
-                        hashlib.sha256,
-                    ).hexdigest()
-
-                    headers.update(
-                        {
-                            "X-BAPI-API-KEY": key_info.api_key,
-                            "X-BAPI-TIMESTAMP": timestamp,
-                            "X-BAPI-SIGN": signature,
-                            "X-BAPI-RECV-WINDOW": "20000",
-                        }
-                    )
-
             if method == "POST":
-                headers["Content-Type"] = "application/json"
+                base_headers["Content-Type"] = "application/json"
 
             # Выполнение запроса с exponential backoff
             for attempt in range(self.retry_count + 1):
@@ -501,6 +560,36 @@ class BybitClient(BaseExchangeInterface):
                         await asyncio.sleep(delay)
                         self.logger.info(
                             f"Retry attempt {attempt} for {method} {endpoint} after {delay:.1f}s"
+                        )
+
+                    # Аутентификация (перерасчёт на каждую попытку, чтобы обновить timestamp)
+                    headers = dict(base_headers)
+                    if auth and not self.public_only:
+                        key_info = await self.key_manager.get_active_key("bybit")
+                        if not key_info:
+                            raise AuthenticationError("bybit", "NO_VALID_KEY")
+
+                        # Рассчитываем метку времени с учетом оффсета
+                        ts = int(time.time() * 1000 + self._server_time_offset_ms)
+                        timestamp = str(ts)
+                        recv_window = str(self._recv_window_ms)
+                        sign_params = (
+                            json.dumps(params) if method == "POST" and params else query_string
+                        )
+                        payload = timestamp + key_info.api_key + recv_window + (sign_params or "")
+                        signature = hmac.new(
+                            bytes(key_info.api_secret, "utf-8"),
+                            bytes(payload, "utf-8"),
+                            hashlib.sha256,
+                        ).hexdigest()
+
+                        headers.update(
+                            {
+                                "X-BAPI-API-KEY": key_info.api_key,
+                                "X-BAPI-TIMESTAMP": timestamp,
+                                "X-BAPI-SIGN": signature,
+                                "X-BAPI-RECV-WINDOW": recv_window,
+                            }
                         )
 
                     # Выполнение запроса
@@ -582,6 +671,9 @@ class BybitClient(BaseExchangeInterface):
                             20033,  # Position is in liquidation
                         ]
                         if ret_code in retry_codes and attempt < self.retry_count:
+                            # Специальная обработка 10002 — рассинхрон времени
+                            if str(ret_code) == "10002":
+                                await self._sync_server_time()
                             # self.rate_limiter.record_error(  # Заменено на enhanced_limiter
                             self.logger.warning(f"Rate limit error: {endpoint}, code {ret_code}")
                             continue
@@ -1007,11 +1099,25 @@ class BybitClient(BaseExchangeInterface):
 
     # =================== УПРАВЛЕНИЕ ОРДЕРАМИ ===================
 
-    def _get_position_idx(self, side: str, hedge_mode: bool | None = None) -> int:
-        """Определение position index для Bybit API"""
-        # ИСПРАВЛЕНО: Аккаунт на самом деле в hedge mode, а не one-way
-        # Hedge mode: 1=Buy/Long, 2=Sell/Short
-        return 1 if side.upper() in ["BUY", "LONG"] else 2
+    def _get_position_idx(
+        self, side: str, hedge_mode: bool | None = None, symbol: str | None = None
+    ) -> int:
+        """Определение position index для Bybit API
+
+        One-way mode: positionIdx = 0
+        Hedge mode: 1=Buy/Long, 2=Sell/Short
+        """
+        # Определяем hedge_mode из конфигурации или переменной окружения
+        if hedge_mode is None:
+            # Сначала используем атрибут класса (из единого источника)
+            hedge_mode = getattr(self, "hedge_mode", True)
+
+        # В hedge режиме: 1=Buy/Long, 2=Sell/Short
+        if hedge_mode:
+            return 1 if side.upper() in ["BUY", "LONG"] else 2
+
+        # В one-way режиме всегда 0
+        return 0
 
     def _map_order_type_to_bybit(self, order_type: OrderType) -> str:
         """Маппинг типов ордеров к формату Bybit"""
@@ -1052,7 +1158,7 @@ class BybitClient(BaseExchangeInterface):
                 )
 
             symbol = clean_symbol(order_request.symbol)
-            position_idx = self._get_position_idx(order_request.side.value)
+            position_idx = self._get_position_idx(order_request.side.value, symbol=symbol)
 
             # Устанавливаем leverage для символа (если задан)
             leverage = getattr(order_request, "leverage", self.default_leverage)
@@ -1098,10 +1204,25 @@ class BybitClient(BaseExchangeInterface):
                 "qty": formatted_qty,
                 "timeInForce": order_request.time_in_force.value,
             }
+            
+            # Дополнительная проверка и логирование qty
+            self.logger.info(f"Formatted qty for {symbol}: '{formatted_qty}' (original: {order_request.quantity})")
 
-            # Добавляем positionIdx только если не 0 (Bybit игнорирует 0)
-            if position_idx != 0:
+            # В Bybit hedge mode ВСЕГДА нужен positionIdx
+            # Проверяем текущий режим позиций из единого флага
+            is_hedge_mode = bool(getattr(self, "hedge_mode", True))
+            
+            if is_hedge_mode:
+                # В hedge mode ВСЕГДА нужен positionIdx (1 или 2, никогда 0)
+                if position_idx == 0:
+                    # Исправляем на основе стороны
+                    position_idx = 1 if order_request.side.value.upper() in ["BUY", "LONG"] else 2
+                    self.logger.warning(f"   Hedge mode: position_idx was 0, corrected to {position_idx}")
                 params["positionIdx"] = position_idx
+                self.logger.info(f"   Using hedge mode with positionIdx={position_idx}")
+            else:
+                # В one-way mode не добавляем positionIdx
+                self.logger.info("   Using one-way mode (no positionIdx)")
 
             # Добавляем цену для лимитных ордеров
             if order_request.price is not None:
@@ -1121,6 +1242,15 @@ class BybitClient(BaseExchangeInterface):
                 except:
                     params["triggerPrice"] = str(order_request.stop_price)
 
+            # Логируем параметры для отладки
+            self.logger.info(f"📝 Параметры ордера для {symbol}:")
+            self.logger.info(
+                f"   Side: {params.get('side')}, Qty: {params.get('qty')}, PositionIdx: {params.get('positionIdx', 0)}"
+            )
+            self.logger.info(
+                f"   OrderType: {params.get('orderType')}, Price: {params.get('price', 'Market')}"
+            )
+
             # Дополнительные параметры
             if order_request.reduce_only:
                 params["reduceOnly"] = True
@@ -1129,35 +1259,44 @@ class BybitClient(BaseExchangeInterface):
             if order_request.client_order_id:
                 params["orderLinkId"] = order_request.client_order_id
 
-            # SL/TP параметры - НЕ корректируем, доверяем расчетам из ml_signal_processor
-            if order_request.stop_loss is not None:
-                sl_price = float(order_request.stop_loss)
-                # Логирование для отладки
-                self.logger.info(
-                    f"🛡️ Setting StopLoss for {order_request.side.value} order: {sl_price}"
-                )
-                try:
-                    # Используем tick_size из instrument_info или settings
-                    if "instrument_info" in locals():
-                        tick_size = instrument_info.tick_size
-                    else:
-                        tick_size = settings.get("tickSize", 0.0001)
-                    formatted_sl = format_price(sl_price, tick_size)
-                    params["stopLoss"] = formatted_sl
-                except:
-                    params["stopLoss"] = str(sl_price)
+            # SL/TP параметры - для рыночных ордеров НЕ передаем в параметрах создания
+            # Они должны устанавливаться отдельно после открытия позиции через trading-stop
+            # Сохраняем для последующей установки
+            sl_to_set = None
+            tp_to_set = None
 
-            if order_request.take_profit is not None:
-                try:
-                    # Используем tick_size из instrument_info или settings
-                    if "instrument_info" in locals():
-                        tick_size = instrument_info.tick_size
-                    else:
-                        tick_size = settings.get("tickSize", 0.0001)
-                    formatted_tp = format_price(order_request.take_profit, tick_size)
-                    params["takeProfit"] = formatted_tp
-                except:
-                    params["takeProfit"] = str(order_request.take_profit)
+            if order_request.order_type == OrderType.MARKET:
+                # Для рыночных ордеров сохраняем SL/TP для установки после создания позиции
+                if order_request.stop_loss is not None:
+                    sl_to_set = order_request.stop_loss
+                    self.logger.info(f"🛡️ Will set StopLoss after order: {sl_to_set}")
+                if order_request.take_profit is not None:
+                    tp_to_set = order_request.take_profit
+                    self.logger.info(f"🎯 Will set TakeProfit after order: {tp_to_set}")
+            else:
+                # Для лимитных ордеров можно передавать SL/TP в параметрах
+                if order_request.stop_loss is not None:
+                    sl_price = float(order_request.stop_loss)
+                    try:
+                        if "instrument_info" in locals():
+                            tick_size = instrument_info.tick_size
+                        else:
+                            tick_size = settings.get("tickSize", 0.0001)
+                        formatted_sl = format_price(sl_price, tick_size)
+                        params["stopLoss"] = formatted_sl
+                    except:
+                        params["stopLoss"] = str(sl_price)
+
+                if order_request.take_profit is not None:
+                    try:
+                        if "instrument_info" in locals():
+                            tick_size = instrument_info.tick_size
+                        else:
+                            tick_size = settings.get("tickSize", 0.0001)
+                        formatted_tp = format_price(order_request.take_profit, tick_size)
+                        params["takeProfit"] = formatted_tp
+                    except:
+                        params["takeProfit"] = str(order_request.take_profit)
 
             # Добавляем exchange-специфичные параметры
             params.update(order_request.exchange_params)
@@ -1166,21 +1305,96 @@ class BybitClient(BaseExchangeInterface):
                 f"Placing order: {symbol} {order_request.side.value} {order_request.quantity} -> {formatted_qty} {order_request.order_type.value}"
             )
             self.logger.info(f"Order params: {params}")
+            
+            # Финальная валидация qty перед отправкой
+            final_qty = params.get("qty")
+            if not final_qty:
+                raise ValueError("Qty is missing in order params")
+            
+            # Проверяем, что qty это строка
+            if not isinstance(final_qty, str):
+                self.logger.warning(f"Qty is not a string: {type(final_qty)}, converting...")
+                params["qty"] = str(final_qty)
+            
+            self.logger.debug(f"Final qty to send: '{params['qty']}' (type: {type(params['qty'])})")
 
             # Выполнение запроса с высоким приоритетом для ордеров
-            response = await self._make_request(
-                "POST",
-                "/v5/order/create",
-                params,
-                auth=True,
-                priority="high",
-            )
+            async def _send_create(_params: dict[str, Any]):
+                return await self._make_request(
+                    "POST",
+                    "/v5/order/create",
+                    _params,
+                    auth=True,
+                    priority="high",
+                )
+
+            try:
+                response = await _send_create(params)
+            except APIError as e:
+                # Обработка несоответствия positionIdx и режима позиций аккаунта
+                api_msg = (e.context.get("api_message") if hasattr(e, "context") else None) or ""
+                api_code = (e.context.get("api_error_code") if hasattr(e, "context") else None) or ""
+                mismatch = (
+                    "position idx not match position mode" in str(api_msg).lower()
+                    or str(api_code) in {"20025"}
+                )
+                if mismatch and "positionIdx" in params:
+                    if getattr(self, "hedge_mode", True):
+                        # Пытаемся принудительно включить hedge mode на аккаунте и повторить
+                        try:
+                            self.logger.warning(
+                                "Bybit: переключаю аккаунт в Hedge Mode и повторяю с positionIdx"
+                            )
+                            await self.set_position_mode(symbol, hedge_mode=True)
+                            # Пересчёт positionIdx после смены режима
+                            position_idx = self._get_position_idx(order_request.side.value, symbol=symbol)
+                            params["positionIdx"] = position_idx
+                            response = await _send_create(params)
+                        except Exception as se:
+                            self.logger.warning(
+                                f"Не удалось переключить режим позиций автоматически: {se}. Пробую без positionIdx (one-way)."
+                            )
+                            fallback_params = dict(params)
+                            fallback_params.pop("positionIdx", None)
+                            response = await _send_create(fallback_params)
+                            params = fallback_params
+                    else:
+                        # Если используем one-way, пробуем повтор без positionIdx
+                        self.logger.warning(
+                            "Bybit: positionIdx конфликтует с режимом позиций. Пробую без positionIdx (one-way)."
+                        )
+                        fallback_params = dict(params)
+                        fallback_params.pop("positionIdx", None)
+                        response = await _send_create(fallback_params)
+                        params = fallback_params
+                else:
+                    raise
 
             result = response.get("result", {})
             order_id = result.get("orderId", "")
 
             if order_id:
                 self.logger.info(f"Order placed successfully: {order_id}")
+
+                # Для рыночных ордеров устанавливаем SL/TP после создания ордера
+                if order_request.order_type == OrderType.MARKET and (sl_to_set or tp_to_set):
+                    # Даем время на исполнение рыночного ордера
+                    await asyncio.sleep(0.5)
+
+                    # Устанавливаем Stop Loss
+                    if sl_to_set:
+                        self.logger.info(f"🛡️ Setting Stop Loss at {sl_to_set}")
+                        sl_response = await self.set_stop_loss(symbol, sl_to_set)
+                        if not sl_response.success:
+                            self.logger.warning(f"Failed to set SL: {sl_response.message}")
+
+                    # Устанавливаем Take Profit
+                    if tp_to_set:
+                        self.logger.info(f"🎯 Setting Take Profit at {tp_to_set}")
+                        tp_response = await self.set_take_profit(symbol, tp_to_set)
+                        if not tp_response.success:
+                            self.logger.warning(f"Failed to set TP: {tp_response.message}")
+
                 return OrderResponse.success_response(
                     order_id=order_id,
                     symbol=symbol,
@@ -1195,7 +1409,9 @@ class BybitClient(BaseExchangeInterface):
                 return OrderResponse.error_response(error_msg)
 
         except Exception as e:
+            import traceback
             self.logger.error(f"Failed to place order: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             raise OrderError("bybit", "placement", symbol=order_request.symbol, reason=str(e))
 
     async def cancel_order(self, symbol: str, order_id: str) -> OrderResponse:
@@ -1654,6 +1870,8 @@ class BybitClient(BaseExchangeInterface):
             OrderResponse с результатом операции
         """
         try:
+            import os
+
             symbol = clean_symbol(symbol)
 
             # Получаем текущую позицию для определения режима
@@ -1661,19 +1879,43 @@ class BybitClient(BaseExchangeInterface):
             if not positions:
                 return OrderResponse.error_response("No position found for symbol")
 
+            # Определяем positionIdx из текущей позиции
+            position = positions[0]
+            position_idx = 0  # По умолчанию one-way
+
+            # Проверяем positionIdx из позиции
+            if hasattr(position, "position_idx"):
+                position_idx = position.position_idx
+            elif hasattr(position, "info") and isinstance(position.info, dict):
+                position_idx = position.info.get("positionIdx", 0)
+
+            # Особый случай для SOL - всегда one-way
+            if "SOL" in symbol.upper():
+                position_idx = 0
+            # Для остальных символов определяем по стороне позиции
+            elif position_idx == 0 and getattr(self, "hedge_mode", True) is True:
+                # Если hedge mode включен, но позиция имеет idx=0, определяем по стороне
+                if hasattr(position, "side"):
+                    side = (
+                        position.side.upper()
+                        if isinstance(position.side, str)
+                        else str(position.side).upper()
+                    )
+                    if side in ["BUY", "LONG"]:
+                        position_idx = 1
+                    elif side in ["SELL", "SHORT"]:
+                        position_idx = 2
+
             params = {
                 "category": "linear",
                 "symbol": symbol,
                 "tpslMode": "Full",  # Полное закрытие позиции
                 "stopLoss": str(stop_price),
-                "positionIdx": 0,  # One-way mode по умолчанию
             }
 
-            # Если есть позиция, определяем positionIdx
-            position = positions[0]
-            if hasattr(position, "side") and position.side:
-                # Hedge mode
-                params["positionIdx"] = 1 if position.side.upper() == "BUY" else 2
+            # Добавляем positionIdx только для hedge mode
+            if position_idx != 0:
+                params["positionIdx"] = position_idx
 
             self.logger.info(f"Setting stop loss for {symbol} at price {stop_price}")
             response = await self._make_request(
@@ -1682,7 +1924,9 @@ class BybitClient(BaseExchangeInterface):
 
             if response.get("retCode") == 0:
                 self.logger.info(f"Stop loss set successfully for {symbol}")
-                return OrderResponse.success_response(
+                # Для SL/TP возвращаем простой OrderResponse с success=True
+                return OrderResponse(
+                    success=True,
                     order_id=None,
                     status=OrderStatus.PENDING,
                     message="Stop loss set successfully",
@@ -1711,6 +1955,8 @@ class BybitClient(BaseExchangeInterface):
             OrderResponse с результатом операции
         """
         try:
+            import os
+
             symbol = clean_symbol(symbol)
 
             # Получаем текущую позицию для определения режима
@@ -1718,19 +1964,43 @@ class BybitClient(BaseExchangeInterface):
             if not positions:
                 return OrderResponse.error_response("No position found for symbol")
 
+            # Определяем positionIdx из текущей позиции
+            position = positions[0]
+            position_idx = 0  # По умолчанию one-way
+
+            # Проверяем positionIdx из позиции
+            if hasattr(position, "position_idx"):
+                position_idx = position.position_idx
+            elif hasattr(position, "info") and isinstance(position.info, dict):
+                position_idx = position.info.get("positionIdx", 0)
+
+            # Особый случай для SOL - всегда one-way
+            if "SOL" in symbol.upper():
+                position_idx = 0
+            # Для остальных символов определяем по стороне позиции
+            elif position_idx == 0 and getattr(self, "hedge_mode", True) is True:
+                # Если hedge mode включен, но позиция имеет idx=0, определяем по стороне
+                if hasattr(position, "side"):
+                    side = (
+                        position.side.upper()
+                        if isinstance(position.side, str)
+                        else str(position.side).upper()
+                    )
+                    if side in ["BUY", "LONG"]:
+                        position_idx = 1
+                    elif side in ["SELL", "SHORT"]:
+                        position_idx = 2
+
             params = {
                 "category": "linear",
                 "symbol": symbol,
                 "tpslMode": "Full",  # Полное закрытие позиции
                 "takeProfit": str(take_price),
-                "positionIdx": 0,  # One-way mode по умолчанию
             }
 
-            # Если есть позиция, определяем positionIdx
-            position = positions[0]
-            if hasattr(position, "side") and position.side:
-                # Hedge mode
-                params["positionIdx"] = 1 if position.side.upper() == "BUY" else 2
+            # Добавляем positionIdx только для hedge mode
+            if position_idx != 0:
+                params["positionIdx"] = position_idx
 
             self.logger.info(f"Setting take profit for {symbol} at price {take_price}")
             response = await self._make_request(
@@ -1739,7 +2009,9 @@ class BybitClient(BaseExchangeInterface):
 
             if response.get("retCode") == 0:
                 self.logger.info(f"Take profit set successfully for {symbol}")
-                return OrderResponse.success_response(
+                # Для SL/TP возвращаем простой OrderResponse с success=True
+                return OrderResponse(
+                    success=True,
                     order_id=None,
                     status=OrderStatus.PENDING,
                     message="Take profit set successfully",

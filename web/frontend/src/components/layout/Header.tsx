@@ -9,7 +9,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ title }) => {
   const { isSystemConnected, notifications } = useAppStore();
   const systemStatus = useSystemStatus();
-  
+
   const unreadNotifications = notifications.filter(n => !n.id).length;
 
   const getStatusColor = (status: string) => {
@@ -61,7 +61,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                   Uptime: {formatUptime(systemStatus.uptime)}
                 </div>
               </div>
-              
+
               {/* Key Metrics */}
               <div className="flex items-center space-x-4 text-sm">
                 <div className="text-center">
@@ -95,7 +95,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             </button>
 
             {/* Refresh */}
-            <button 
+            <button
               className="p-2 rounded-lg hover:bg-gray-700 transition-colors"
               title="Refresh Data"
             >
@@ -103,7 +103,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             </button>
 
             {/* System Control */}
-            <button 
+            <button
               className="p-2 rounded-lg hover:bg-gray-700 transition-colors"
               title="System Control"
             >

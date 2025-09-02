@@ -155,7 +155,7 @@ class PositionRepository(BaseRepository[Position]):
 
         async def create_position(conn):
             query = """
-            INSERT INTO positions 
+            INSERT INTO positions
             (symbol, exchange, side, quantity, entry_price, stop_loss, take_profit,
              leverage, status, opened_at, metadata)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -181,7 +181,7 @@ class PositionRepository(BaseRepository[Position]):
         async def link_order(conn):
             if order_id:
                 query = """
-                UPDATE orders 
+                UPDATE orders
                 SET position_id = $1, status = 'filled'
                 WHERE id = $2
                 """
@@ -244,7 +244,7 @@ class PositionRepository(BaseRepository[Position]):
 
             # Update position
             update_query = """
-            UPDATE positions 
+            UPDATE positions
             SET current_price = $1, pnl = $2, pnl_percentage = $3, updated_at = $4
             WHERE id = $5
             RETURNING *
@@ -300,7 +300,7 @@ class PositionRepository(BaseRepository[Position]):
 
             # Update position
             update_query = """
-            UPDATE positions 
+            UPDATE positions
             SET status = $1, current_price = $2, pnl = $3, pnl_percentage = $4,
                 closed_at = $5, metadata = metadata || $6
             WHERE id = $7
@@ -417,7 +417,9 @@ class PositionRepository(BaseRepository[Position]):
 
             # Check stop loss
             if position.stop_loss:
-                if (position.side == PositionSide.LONG.value and current_price <= position.stop_loss) or (
+                if (
+                    position.side == PositionSide.LONG.value and current_price <= position.stop_loss
+                ) or (
                     position.side == PositionSide.SHORT.value
                     and current_price >= position.stop_loss
                 ):
@@ -466,7 +468,7 @@ class PositionRepository(BaseRepository[Position]):
         cutoff_date = datetime.now() - timedelta(days=days)
 
         query = """
-        SELECT 
+        SELECT
             COUNT(*) as total_positions,
             SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open_positions,
             SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed_positions,
@@ -525,8 +527,8 @@ class PositionRepository(BaseRepository[Position]):
             Number of updated positions
         """
         query = """
-        UPDATE positions 
-        SET leverage = $1 
+        UPDATE positions
+        SET leverage = $1
         WHERE status = 'open' AND leverage != $1
         """
 

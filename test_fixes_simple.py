@@ -2,6 +2,7 @@
 """
 Упрощенный тест исправлений
 """
+
 import sys
 from pathlib import Path
 

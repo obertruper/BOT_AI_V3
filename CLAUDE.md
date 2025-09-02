@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Quick Start Commands
 
 ### Interactive Startup (Recommended)
+
 ```bash
 ./quick_start.sh               # Interactive menu with system checks
 ./start_with_logs_filtered.sh  # Start with colored filtered logs
@@ -21,6 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 
 ### Manual Launch
+
 ```bash
 # Environment setup
 source venv/bin/activate
@@ -40,6 +42,7 @@ python3 unified_launcher.py --logs       # Follow logs
 ## Development Commands
 
 ### Code Quality (RUN BEFORE COMMIT)
+
 ```bash
 black . && ruff check --fix .                            # Format and fix
 mypy . --ignore-missing-imports                          # Type checking
@@ -47,6 +50,7 @@ git diff --staged | grep -i "api_key\|secret\|password"  # Check for secrets
 ```
 
 ### Testing
+
 ```bash
 # Unit tests
 pytest tests/unit/ -v                                    # All unit tests
@@ -67,6 +71,7 @@ python3 scripts/coverage_monitor.py --realtime           # Real-time coverage mo
 ```
 
 ### Database Operations
+
 ```bash
 # Connection (port 5555!)
 psql -p 5555 -U obertruper -d bot_trading_v3 -c "SELECT version();"
@@ -81,6 +86,7 @@ python3 -c "from database.connections.postgres import AsyncPGPool; import asynci
 ```
 
 ### Monitoring & Debugging
+
 ```bash
 # Real-time monitoring
 tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep ERROR
@@ -91,6 +97,10 @@ python utils/checks/check_all_positions.py    # Verify positions & leverage
 python utils/checks/check_balance.py          # Check account balance
 python test_ml_uniqueness.py                  # Verify ML predictions unique
 python quick_uniqueness_check.py              # Analyze prediction diversity
+python utils/checks/check_ml_predictions.py   # Check current ML predictions
+python utils/analyze_signal_quality.py        # Analyze signal quality scores
+python utils/analyze_kelly_performance.py     # Check Kelly Criterion efficiency
+python utils/ml_trading_stats.py             # Overall ML trading statistics
 
 # Port monitoring
 lsof -i :8083  # API Server
@@ -104,6 +114,7 @@ lsof -i :5555  # PostgreSQL
 ## Architecture Overview
 
 ### System Entry & Coordination
+
 ```
 unified_launcher.py (Entry Point)
     ↓
@@ -115,6 +126,7 @@ SystemOrchestrator (core/system/orchestrator.py)
 ```
 
 ### Data Flow Pipeline
+
 ```
 Market Data (7 Exchanges via CCXT)
     ↓
@@ -134,27 +146,40 @@ PostgreSQL:5555 (async persistence)
 ### Key Components
 
 **Trading Core** (`trading/`)
+
 - `engine.py:597` - Signal processing, order management
 - `order_manager.py` - Order lifecycle states
 - `strategies/optimized_strategy.py` - ML strategy implementation
 
 **ML Pipeline** (`ml/`)
+
 - `logic/patchtst_model.py` - Transformer model architecture
-- `logic/feature_engineering_v2.py` - 240 features generation  
+- `logic/feature_engineering_v2.py` - 240 features generation
 - `ml_manager.py` - ML model management with torch.compile optimization
+- `ml_signal_processor.py` - Enhanced signal processing with Expected Value
 - 🚀 **torch.compile**: 7.7x ускорение инференса на RTX 5090 (1.5ms vs 11.8ms)
+- 📈 **ML Enhancements**: Expected Value, Kelly Criterion, Dynamic TP/SL
+  - Model outputs: 20 parameters ([0-3] returns, [4-15] directions, [16-19] risk metrics)
+  - Expected Value calculation for mathematically sound decisions
+  - Kelly Criterion for optimal position sizing (25% of full Kelly)
+  - Quality Score filtering (min 0.45) for signal validation
+  - Volatility-adjusted position sizing
+  - See `docs/ML_TRADING_ENHANCEMENTS.md` for details
 
 **Risk Management** (`risk_management/`)
+
 - 5x leverage enforcement
 - 2% risk per trade ($500 fixed balance)
 - Automatic SL/TP calculation
 
 **Database Layer** (`database/`)
+
 - PostgreSQL port 5555 (CRITICAL)
 - `connections/postgres.py` - AsyncPGPool for async operations
 - SQLAlchemy 2.0 with async support
 
 **Exchange Integration** (`exchanges/`)
+
 - 7 exchanges: Bybit, Binance, OKX, Gate.io, KuCoin, HTX, BingX
 - Unified CCXT interface with async adapters
 - Hedge mode position management
@@ -162,12 +187,14 @@ PostgreSQL:5555 (async persistence)
 ## Configuration
 
 ### Files
+
 - `config/trading.yaml` - Trading parameters (leverage, risk, SL/TP)
 - `config/system.yaml` - System settings (ports, intervals, timeouts)
 - `config/ml/ml_config.yaml` - ML model configuration
 - `.env` - API keys and secrets (NEVER commit)
 
 ### Critical .env Variables
+
 ```
 PGPORT=5555
 PGUSER=obertruper
@@ -182,6 +209,7 @@ RISK_LIMIT_PERCENTAGE=2
 ## Database Schema
 
 **Core Tables:**
+
 - `orders` - Order states (pending, open, filled, cancelled)
 - `trades` - Executed trades with PnL tracking
 - `signals` - Trading signals from strategies/ML
@@ -190,18 +218,19 @@ RISK_LIMIT_PERCENTAGE=2
 
 ## Service Endpoints
 
-- **Frontend**: http://localhost:5173
-- **API Server**: http://localhost:8083
-- **API Docs**: http://localhost:8083/api/docs
-- **REST API**: http://localhost:8084
-- **WebSocket**: http://localhost:8085
-- **Webhook**: http://localhost:8086
-- **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3000
+- **Frontend**: <http://localhost:5173>
+- **API Server**: <http://localhost:8083>
+- **API Docs**: <http://localhost:8083/api/docs>
+- **REST API**: <http://localhost:8084>
+- **WebSocket**: <http://localhost:8085>
+- **Webhook**: <http://localhost:8086>
+- **Prometheus**: <http://localhost:9090>
+- **Grafana**: <http://localhost:3000>
 
 ## MCP Servers (Model Context Protocol)
 
 Active servers:
+
 - `postgres` - Database access (port 5555)
 - `filesystem` - File operations
 - `puppeteer` - Browser automation

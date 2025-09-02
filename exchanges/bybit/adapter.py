@@ -22,6 +22,7 @@ from ..base.order_types import (
     TimeInForce,
 )
 from .client import BybitClient, clean_symbol
+from .singleton_client import get_bybit_client
 
 
 class BybitLegacyAdapter:
@@ -33,8 +34,8 @@ class BybitLegacyAdapter:
     """
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = False):
-        # Создаем унифицированный клиент
-        self.client = BybitClient(api_key=api_key, api_secret=api_secret, sandbox=testnet)
+        # Используем синглтон для единого клиента
+        self.client = get_bybit_client(api_key=api_key, api_secret=api_secret, sandbox=testnet)
 
         # Логирование
         self.logger = setup_logger("bybit_adapter")
@@ -357,8 +358,8 @@ class BybitAPIClient(BybitLegacyAdapter):
             return {"retCode": 99999, "retMsg": str(e), "result": None}
 
 
-# Фабричная функция для совместимости
-def get_bybit_client(
+# Фабричная функция для совместимости (перенесена в singleton_client.py)
+def get_bybit_client_legacy(
     api_key="", api_secret="", testnet=False, config_path=None, db_path=None
 ) -> BybitAPIClient:
     """
@@ -382,5 +383,5 @@ __all__ = [
     "BybitClient",  # Новый унифицированный клиент
     "BybitLegacyAdapter",  # Адаптер для legacy кода
     "clean_symbol",  # Утилита
-    "get_bybit_client",  # Фабричная функция
+    "get_bybit_client_legacy",  # Legacy фабричная функция
 ]

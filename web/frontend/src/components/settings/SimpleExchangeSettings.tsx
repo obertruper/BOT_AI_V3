@@ -40,7 +40,7 @@ const SimpleExchangeSettings: React.FC<SimpleExchangeSettingsProps> = ({ onSave 
             <div className={`absolute inset-0 opacity-5 ${
               exchange.enabled ? 'bg-gradient-to-r from-green-500 to-blue-500' : 'bg-gradient-to-r from-gray-500 to-gray-700'
             }`}></div>
-            
+
             <div className="relative z-10 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-4">
@@ -54,13 +54,13 @@ const SimpleExchangeSettings: React.FC<SimpleExchangeSettingsProps> = ({ onSave 
                     <p className="text-sm text-gray-400">{exchange.name}</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-4">
                   <button className="flex items-center space-x-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm transition-colors">
                     <TestTube className="w-4 h-4" />
                     <span>Test</span>
                   </button>
-                  
+
                   <label className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -79,7 +79,7 @@ const SimpleExchangeSettings: React.FC<SimpleExchangeSettingsProps> = ({ onSave 
                     <Key className="w-4 h-4 mr-2" />
                     API Credentials
                   </h5>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
                     <div className="relative">
@@ -97,7 +97,7 @@ const SimpleExchangeSettings: React.FC<SimpleExchangeSettingsProps> = ({ onSave 
                       </button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">API Secret</label>
                     <div className="relative">
@@ -119,7 +119,7 @@ const SimpleExchangeSettings: React.FC<SimpleExchangeSettingsProps> = ({ onSave 
 
                 <div className="space-y-4">
                   <h5 className="text-md font-medium text-gray-300">Configuration</h5>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Environment</label>
                     <select className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
@@ -127,7 +127,7 @@ const SimpleExchangeSettings: React.FC<SimpleExchangeSettingsProps> = ({ onSave 
                       <option value="live">Live (Production)</option>
                     </select>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Rate Limit (per minute)</label>
                     <input

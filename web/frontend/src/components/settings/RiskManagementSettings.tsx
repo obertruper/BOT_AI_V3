@@ -15,7 +15,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
     maxPositions: 5,
     defaultLeverage: 5,
     maxLeverage: 20,
-    
+
     // Профили риска
     riskProfile: 'standard',
     profiles: {
@@ -23,7 +23,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
       conservative: { multiplier: 0.7, confidence: 70, maxSize: 35 },
       veryConservative: { multiplier: 0.5, confidence: 80, maxSize: 25 }
     },
-    
+
     // Трейлинг стоп
     trailingStop: {
       enabled: true,
@@ -33,7 +33,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
       adaptiveStep: true,
       maxUpdates: 15
     },
-    
+
     // Частичный тейк-профит
     partialTP: {
       enabled: true,
@@ -44,7 +44,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
       ],
       moveToBreakeven: true
     },
-    
+
     // Защита прибыли
     profitProtection: {
       enabled: true,
@@ -55,7 +55,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
         { trigger: 3.0, lock: 1.5 }
       ]
     },
-    
+
     // Динамические SL/TP
     dynamicSLTP: {
       minSL: 1.0,
@@ -77,13 +77,13 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
     setConfig(prevConfig => {
       const newConfig = { ...prevConfig };
       let current: any = newConfig;
-      
+
       for (let i = 0; i < keys.length - 1; i++) {
         if (!current[keys[i]]) current[keys[i]] = {};
         current = current[keys[i]];
       }
       current[keys[keys.length - 1]] = value;
-      
+
       return newConfig;
     });
   };
@@ -102,7 +102,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
 
   // Удаление уровня частичного TP
   const removePartialTPLevel = (index: number) => {
-    updateConfig('partialTP.levels', 
+    updateConfig('partialTP.levels',
       config.partialTP.levels.filter((_, i) => i !== index)
     );
   };
@@ -136,7 +136,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               <p className="text-sm text-gray-400">Базовые настройки управления капиталом</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -156,7 +156,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 <span>5%</span>
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Фиксированный баланс для расчетов (USD)
@@ -168,7 +168,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Максимальный общий риск: {config.maxTotalRisk}%
@@ -183,7 +183,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Максимум позиций: {config.maxPositions}
@@ -198,7 +198,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Дефолтное плечо: {config.defaultLeverage}x
@@ -213,7 +213,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 ))}
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Максимальное плечо: {config.maxLeverage}x
@@ -244,7 +244,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               <p className="text-sm text-gray-400">Выберите подходящий профиль торговли</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {Object.entries(config.profiles).map(([key, profile]) => (
               <div
@@ -257,8 +257,8 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 }`}
               >
                 <div className="text-lg font-semibold text-white mb-2">
-                  {key === 'standard' ? 'Стандартный' : 
-                   key === 'conservative' ? 'Консервативный' : 
+                  {key === 'standard' ? 'Стандартный' :
+                   key === 'conservative' ? 'Консервативный' :
                    'Очень консервативный'}
                 </div>
                 <div className="space-y-1 text-sm">
@@ -301,7 +301,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               <span className="text-white">Включено</span>
             </label>
           </div>
-          
+
           {config.trailingStop.enabled && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -318,7 +318,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Шаг трейлинга: {config.trailingStop.stepPercent}%
@@ -333,7 +333,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Минимальная дистанция: {config.trailingStop.minDistance}%
@@ -348,7 +348,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Максимум обновлений: {config.trailingStop.maxUpdates}
@@ -363,7 +363,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
-              
+
               <div className="md:col-span-2">
                 <label className="flex items-center space-x-3">
                   <input
@@ -406,7 +406,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               <span className="text-white">Включено</span>
             </label>
           </div>
-          
+
           {config.partialTP.enabled && (
             <>
               <div className="space-y-3 mb-4">
@@ -450,7 +450,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                   </div>
                 ))}
               </div>
-              
+
               {config.partialTP.levels.length < 5 && (
                 <button
                   onClick={addPartialTPLevel}
@@ -459,7 +459,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                   + Добавить уровень
                 </button>
               )}
-              
+
               <div className="mt-4 pt-4 border-t border-gray-700">
                 <label className="flex items-center space-x-3">
                   <input
@@ -474,7 +474,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                   </div>
                 </label>
               </div>
-              
+
               {/* Визуализация распределения */}
               <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
                 <div className="text-sm text-gray-400 mb-2">Визуализация закрытий:</div>
@@ -529,7 +529,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               <span className="text-white">Включено</span>
             </label>
           </div>
-          
+
           {config.profitProtection.enabled && (
             <>
               <div className="mb-4">
@@ -546,7 +546,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
-              
+
               <div className="space-y-3">
                 <div className="text-sm font-medium text-gray-300 mb-2">Уровни защиты прибыли:</div>
                 {config.profitProtection.levels.map((level, index) => (
@@ -599,7 +599,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               <p className="text-sm text-gray-400">Адаптивные уровни на основе рыночных условий</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Stop Loss диапазон</label>
@@ -623,7 +623,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 />
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Take Profit диапазон</label>
               <div className="flex items-center space-x-3">
@@ -647,10 +647,10 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               </div>
             </div>
           </div>
-          
+
           <div className="space-y-4">
             <div className="text-sm font-medium text-gray-300 mb-2">Веса факторов влияния:</div>
-            
+
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-400">Волатильность</span>
@@ -665,7 +665,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               />
             </div>
-            
+
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-400">RSI</span>
@@ -680,7 +680,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               />
             </div>
-            
+
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-400">Объем</span>
@@ -695,7 +695,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               />
             </div>
-            
+
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-400">Тренд</span>
@@ -710,12 +710,12 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               />
             </div>
-            
+
             <div className="mt-4 p-3 bg-yellow-600/10 border border-yellow-600/30 rounded-lg">
               <div className="flex items-start space-x-2">
                 <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-yellow-300">
-                  Сумма весов: {Object.values(config.dynamicSLTP.weights).reduce((a, b) => a + b, 0)}%. 
+                  Сумма весов: {Object.values(config.dynamicSLTP.weights).reduce((a, b) => a + b, 0)}%.
                   Рекомендуется использовать 100% для оптимального баланса.
                 </div>
               </div>
@@ -736,7 +736,7 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               <p className="text-sm text-gray-400">Оценка потенциальных результатов с текущими настройками</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 bg-gray-800/50 rounded-xl text-center">
               <div className="text-2xl font-bold text-green-400">
@@ -744,48 +744,48 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
               </div>
               <div className="text-sm text-gray-400 mt-1">Риск на сделку</div>
             </div>
-            
+
             <div className="p-4 bg-gray-800/50 rounded-xl text-center">
               <div className="text-2xl font-bold text-blue-400">
-                {((config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 / 
+                {((config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 /
                   ((config.dynamicSLTP.minSL + config.dynamicSLTP.maxSL) / 2)).toFixed(2)}:1
               </div>
               <div className="text-sm text-gray-400 mt-1">Risk/Reward</div>
             </div>
-            
+
             <div className="p-4 bg-gray-800/50 rounded-xl text-center">
               <div className="text-2xl font-bold text-purple-400">
-                {(100 / ((config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 / 
+                {(100 / ((config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 /
                   ((config.dynamicSLTP.minSL + config.dynamicSLTP.maxSL) / 2) + 1)).toFixed(1)}%
               </div>
               <div className="text-sm text-gray-400 mt-1">Точка безубытка</div>
             </div>
           </div>
-          
+
           <div className="mt-4 p-4 bg-gray-800/50 rounded-xl">
             <div className="text-sm text-gray-400 mb-3">Потенциальные результаты (10 сделок):</div>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Лучший сценарий (70% winrate):</span>
                 <span className="text-green-400 font-medium">
-                  +${(config.fixedRiskBalance * config.riskPerTrade / 100 * 
-                    (7 * (config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 / 100 - 
+                  +${(config.fixedRiskBalance * config.riskPerTrade / 100 *
+                    (7 * (config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 / 100 -
                      3 * (config.dynamicSLTP.minSL + config.dynamicSLTP.maxSL) / 2 / 100) * 10).toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Средний сценарий (50% winrate):</span>
                 <span className="text-blue-400 font-medium">
-                  +${(config.fixedRiskBalance * config.riskPerTrade / 100 * 
-                    (5 * (config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 / 100 - 
+                  +${(config.fixedRiskBalance * config.riskPerTrade / 100 *
+                    (5 * (config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 / 100 -
                      5 * (config.dynamicSLTP.minSL + config.dynamicSLTP.maxSL) / 2 / 100) * 10).toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Худший сценарий (30% winrate):</span>
                 <span className="text-red-400 font-medium">
-                  -${Math.abs(config.fixedRiskBalance * config.riskPerTrade / 100 * 
-                    (3 * (config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 / 100 - 
+                  -${Math.abs(config.fixedRiskBalance * config.riskPerTrade / 100 *
+                    (3 * (config.dynamicSLTP.minTP + config.dynamicSLTP.maxTP) / 2 / 100 -
                      7 * (config.dynamicSLTP.minSL + config.dynamicSLTP.maxSL) / 2 / 100) * 10).toFixed(2)}
                 </span>
               </div>
@@ -801,8 +801,8 @@ const RiskManagementSettings: React.FC<RiskManagementSettingsProps> = ({ onSave 
           <div>
             <h4 className="text-blue-400 font-medium mb-1">Важная информация</h4>
             <p className="text-blue-300 text-sm">
-              Настройки управления рисками критически важны для сохранения капитала. 
-              Рекомендуется начинать с консервативных настроек и постепенно корректировать их 
+              Настройки управления рисками критически важны для сохранения капитала.
+              Рекомендуется начинать с консервативных настроек и постепенно корректировать их
               на основе результатов торговли. Всегда тестируйте новые настройки на демо-счете.
             </p>
           </div>

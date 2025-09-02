@@ -604,9 +604,9 @@ class TestAPIPerformance:
         # Проверяем соответствие требованиям
         for endpoint, actual_time in response_times.items():
             required_time = performance_requirements[endpoint]
-            assert (
-                actual_time < required_time
-            ), f"{endpoint} too slow: {actual_time}s > {required_time}s"
+            assert actual_time < required_time, (
+                f"{endpoint} too slow: {actual_time}s > {required_time}s"
+            )
 
     def test_concurrent_requests_handling(self):
         """Тест обработки конкурентных запросов"""

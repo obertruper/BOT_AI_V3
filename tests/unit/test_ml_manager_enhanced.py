@@ -36,7 +36,6 @@ class TestMLManagerEnhanced:
             patch("torch.cuda.memory_allocated", return_value=0),
             patch("torch.zeros") as mock_zeros,
         ):
-
             # Mock GPU properties
             mock_gpu_props = Mock()
             mock_gpu_props.name = "RTX 5090"
@@ -72,7 +71,6 @@ class TestMLManagerEnhanced:
             patch("torch.cuda.is_available", return_value=False),
             patch("ml.ml_manager.FeatureEngineer") as mock_feature_engineer,
         ):
-
             from ml.ml_manager import MLManager
 
             # Mock feature engineer
@@ -107,7 +105,6 @@ class TestMLManagerEnhanced:
             patch("ml.ml_manager.create_unified_model"),
             patch("ml.ml_manager.ml_prediction_logger") as mock_ml_logger,
         ):
-
             from ml.ml_manager import MLManager
 
             config = {
@@ -300,7 +297,6 @@ class TestMLPerformanceOptimization:
             patch("torch.cuda.memory_allocated", return_value=1024**3),
             patch("core.logger.setup_logger"),
         ):
-
             from ml.ml_manager import MLManager
 
             config = {
@@ -414,7 +410,6 @@ class TestMLSignalQuality:
             patch("ml.ml_manager.SignalQualityAnalyzer") as mock_analyzer,
             patch("core.logger.setup_logger"),
         ):
-
             from ml.ml_manager import MLManager
 
             # Mock analyzer

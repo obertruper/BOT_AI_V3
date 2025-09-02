@@ -409,9 +409,14 @@ class SecretsManager:
         for category, prefixes in categories.items():
             category_secrets = []
             for key, description in self._required_secrets.items():
-                if any(key.startswith(prefix) for prefix in prefixes) or (category == "Общие" and not any(
-                    key.startswith(p) for cat_prefixes in categories.values() for p in cat_prefixes
-                )):
+                if any(key.startswith(prefix) for prefix in prefixes) or (
+                    category == "Общие"
+                    and not any(
+                        key.startswith(p)
+                        for cat_prefixes in categories.values()
+                        for p in cat_prefixes
+                    )
+                ):
                     category_secrets.append((key, description))
 
             if category_secrets:

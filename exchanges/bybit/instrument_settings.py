@@ -48,10 +48,10 @@ INSTRUMENT_SETTINGS = {
     },
     "XRPUSDT": {
         "tickSize": 0.0001,
-        "qtyStep": 0.1,
+        "qtyStep": 0.1,  # XRP uses 0.1 step according to Bybit API
         "minOrderQty": 0.1,
         "minNotionalValue": 5.0,
-        "requiresWholeNumber": False,  # Changed from True to match API requirements
+        "requiresWholeNumber": False,
         "maxOrderQty": 1000000,
         "maxMktOrderQty": 500000,
     },

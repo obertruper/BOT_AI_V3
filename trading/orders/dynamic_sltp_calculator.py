@@ -118,7 +118,7 @@ class DynamicSLTPCalculator:
                 dynamic_sl_pct *= session_multiplier
                 dynamic_tp_pct *= session_multiplier
                 self.logger.debug(
-                    f"Азиатская сессия: уровни уменьшены на {(1-session_multiplier)*100:.0f}%"
+                    f"Азиатская сессия: уровни уменьшены на {(1 - session_multiplier) * 100:.0f}%"
                 )
 
             # 8. Рассчитываем абсолютные уровни цен
@@ -210,7 +210,7 @@ class DynamicSLTPCalculator:
             normalized = min(max((volatility_ratio - 0.01) / 0.02, 0), 1)
 
             self.logger.debug(
-                f"ATR={atr:.4f}, Ratio={volatility_ratio:.4f}, " f"Normalized={normalized:.2f}"
+                f"ATR={atr:.4f}, Ratio={volatility_ratio:.4f}, Normalized={normalized:.2f}"
             )
 
             return atr, normalized

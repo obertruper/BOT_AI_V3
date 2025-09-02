@@ -39,9 +39,57 @@ class SignalRepository(BaseRepository[Signal]):
             transaction_manager: Transaction manager for atomic operations
         """
         super().__init__(pool, "signals", Signal, transaction_manager)
+        # Кэш списка колонок таблицы для адаптации под разные схемы
+        self._table_columns: set[str] | None = None
+        self._signaltype_labels: set[str] | None = None
+
+    async def _ensure_table_columns(self, conn: asyncpg.Connection) -> set[str]:
+        """Получает и кеширует список колонок таблицы signals"""
+        if self._table_columns is not None:
+            return self._table_columns
+
+        query = """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'signals'
+        """
+        rows = await conn.fetch(query)
+        self._table_columns = {r["column_name"] for r in rows}
+        if not self._table_columns:
+            logger.warning(
+                "Не удалось получить список колонок таблицы signals; используем полное множество из модели"
+            )
+        return self._table_columns or set()
+
+    async def _ensure_signaltype_labels(self, conn: asyncpg.Connection) -> set[str]:
+        """Получает и кеширует список допустимых значений enum signaltype"""
+        if self._signaltype_labels is not None:
+            return self._signaltype_labels
+        try:
+            query = """
+            SELECT e.enumlabel
+            FROM pg_type t
+            JOIN pg_enum e ON t.oid = e.enumtypid
+            WHERE t.typname = 'signaltype'
+            """
+            rows = await conn.fetch(query)
+            self._signaltype_labels = {r["enumlabel"] for r in rows}
+            if not self._signaltype_labels:
+                logger.warning("Не удалось получить значения enum signaltype; пропускаем адаптацию")
+        except Exception as e:
+            logger.warning(f"Ошибка получения enum labels для signaltype: {e}")
+            self._signaltype_labels = set()
+        return self._signaltype_labels
 
     def _to_dict(self, model: Signal) -> dict[str, Any]:
         """Convert Signal to dictionary for database."""
+        from datetime import UTC, datetime
+
+        # Убедимся, что временные метки установлены
+        current_time = datetime.now(UTC)
+        created_at = model.created_at if model.created_at is not None else current_time
+        updated_at = model.updated_at if model.updated_at is not None else current_time
+
         return {
             "symbol": model.symbol,
             "exchange": model.exchange,
@@ -70,8 +118,8 @@ class SignalRepository(BaseRepository[Signal]):
             "metadata": json.dumps(model.signal_metadata) if model.signal_metadata else None,
             "status": getattr(model, "status", "active"),
             "processed_at": getattr(model, "processed_at", None),
-            "created_at": model.created_at,
-            "updated_at": model.updated_at,
+            "created_at": created_at,
+            "updated_at": updated_at,
         }
 
     def _from_record(self, record: asyncpg.Record) -> Signal:
@@ -144,16 +192,6 @@ class SignalRepository(BaseRepository[Signal]):
         Returns:
             Signal ID
         """
-        query = """
-        INSERT INTO signals 
-        (symbol, exchange, signal_type, strength, confidence, suggested_price,
-         suggested_stop_loss, suggested_take_profit, suggested_quantity,
-         strategy_name, timeframe, expires_at, indicators, extra_data,
-         metadata, status, processed_at, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-        RETURNING id
-        """
-
         data = self._to_dict(signal)
 
         async with (
@@ -161,28 +199,66 @@ class SignalRepository(BaseRepository[Signal]):
             if self.transaction_manager
             else self.pool.acquire()
         ) as conn:
-            signal_id = await conn.fetchval(
-                query,
-                data["symbol"],
-                data["exchange"],
-                data["signal_type"],
-                data["strength"],
-                data["confidence"],
-                data["suggested_price"],
-                data["suggested_stop_loss"],
-                data["suggested_take_profit"],
-                data["suggested_quantity"],
-                data["strategy_name"],
-                data["timeframe"],
-                data["expires_at"],
-                data["indicators"],
-                data["extra_data"],
-                data["metadata"],
-                data["status"],
-                data["processed_at"],
-                data["created_at"],
-                data["updated_at"],
+            # Определяем доступные колонки и формируем INSERT динамически
+            table_columns = await self._ensure_table_columns(conn)
+
+            # Ожидаемые колонки по данным
+            desired_columns = [
+                "symbol",
+                "exchange",
+                "signal_type",
+                "strength",
+                "confidence",
+                "suggested_price",
+                "suggested_stop_loss",
+                "suggested_take_profit",
+                "suggested_quantity",
+                "strategy_name",
+                "timeframe",
+                "expires_at",
+                "indicators",
+                "extra_data",
+                "metadata",
+                "status",
+                "processed_at",
+                "created_at",
+                "updated_at",
+            ]
+
+            # Фильтруем по реально существующим колонкам
+            columns = [c for c in desired_columns if c in table_columns]
+            values = [data.get(c) for c in columns]
+
+            if not columns:
+                raise RuntimeError("Не удалось определить доступные колонки для вставки сигнала")
+
+            # Приводим signal_type к ожидаемому виду (учитываем верхний/нижний регистр и наличие NEUTRAL)
+            if "signal_type" in columns:
+                labels = await self._ensure_signaltype_labels(conn)
+                idx = columns.index("signal_type")
+                st_val = values[idx]
+                if isinstance(st_val, str):
+                    if st_val not in labels and labels:
+                        # Пробуем разные варианты регистра
+                        candidates = {st_val, st_val.upper(), st_val.lower(), st_val.capitalize()}
+                        mapped = next((c for c in candidates if c in labels), None)
+                        if mapped:
+                            values[idx] = mapped
+                        else:
+                            # Если NEUTRAL не поддерживается, не сохраняем сигнал без ошибки
+                            if st_val.lower() == "neutral":
+                                logger.info(
+                                    "Пропуск сохранения: enum signaltype не поддерживает 'neutral'"
+                                )
+                                return 0
+
+            placeholders = ", ".join(f"${i}" for i in range(1, len(columns) + 1))
+            cols_sql = ", ".join(columns)
+            query = (
+                f"INSERT INTO {self.table_name} ({cols_sql}) VALUES ({placeholders}) RETURNING id"
             )
+
+            signal_id = await conn.fetchval(query, *values)
 
         signal.id = signal_id
         logger.info(
@@ -207,7 +283,7 @@ class SignalRepository(BaseRepository[Signal]):
             processed_at = datetime.now()
 
         query = """
-        UPDATE signals 
+        UPDATE signals
         SET status = 'processed', processed_at = $2, updated_at = $3
         WHERE id = $1 AND status != 'processed'
         """
@@ -299,9 +375,7 @@ class SignalRepository(BaseRepository[Signal]):
             records = await conn.fetch(query, *args)
             return [self._from_record(record) for record in records]
 
-    async def get_signal_stats(
-        self, exchange: str | None = None, days: int = 7
-    ) -> dict[str, Any]:
+    async def get_signal_stats(self, exchange: str | None = None, days: int = 7) -> dict[str, Any]:
         """
         Get signal statistics.
 
@@ -324,7 +398,7 @@ class SignalRepository(BaseRepository[Signal]):
         where_clause = " AND ".join(where_conditions)
 
         query = f"""
-        SELECT 
+        SELECT
             COUNT(*) as total_signals,
             SUM(CASE WHEN status = 'processed' THEN 1 ELSE 0 END) as processed_signals,
             SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_signals,

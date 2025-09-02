@@ -43,7 +43,7 @@ const PerformanceOverview: React.FC = () => {
   const getPerformanceStatus = () => {
     const totalPnL = systemStatus?.metrics?.total_pnl || 0;
     const winRate = systemStatus?.metrics?.win_rate || 0;
-    
+
     if (totalPnL > 0 && winRate > 60) return { status: 'Excellent', color: 'text-green-400', icon: Award };
     if (totalPnL > 0 && winRate > 50) return { status: 'Good', color: 'text-blue-400', icon: TrendingUp };
     if (totalPnL >= 0) return { status: 'Stable', color: 'text-yellow-400', icon: Target };
@@ -63,7 +63,7 @@ const PerformanceOverview: React.FC = () => {
           <TrendingUp className="w-5 h-5 mr-2 text-green-400" />
           Performance
         </h3>
-        
+
         <div className={`flex items-center space-x-2 px-3 py-1 rounded-full ${performance.color === 'text-green-400' ? 'bg-green-400/20' : performance.color === 'text-red-400' ? 'bg-red-400/20' : 'bg-yellow-400/20'}`}>
           <PerformanceIcon className={`w-4 h-4 ${performance.color}`} />
           <span className={`text-sm font-medium ${performance.color}`}>

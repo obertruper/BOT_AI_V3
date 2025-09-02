@@ -19,11 +19,11 @@ export const useWebSocketConnection = () => {
     setMarketData,
     addNotification,
   } = useAppStore();
-  
+
   const lastJsonMessage = useRef<WebSocketMessage | null>(null);
 
   // Динамически определяем WebSocket URL
-  const wsUrl = import.meta.env.VITE_WS_URL || 
+  const wsUrl = import.meta.env.VITE_WS_URL ||
     `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
   const { sendMessage, lastMessage, readyState } = useWebSocket(
@@ -52,29 +52,29 @@ export const useWebSocketConnection = () => {
       case 'system_status':
         setSystemStatus(message.data as SystemStatus);
         break;
-        
+
       case 'position_update':
         if (Array.isArray(message.data)) {
           setPositions(message.data as Position[]);
         }
         break;
-        
+
       case 'order_update':
         if (Array.isArray(message.data)) {
           setOrders(message.data as Order[]);
         }
         break;
-        
+
       case 'ml_signal':
         if (Array.isArray(message.data)) {
           setMLSignals(message.data as MLSignal[]);
         }
         break;
-        
+
       case 'market_data':
         setMarketData(message.data as MarketData[]);
         break;
-        
+
       case 'notification':
         addNotification({
           type: message.data.type || 'info',
@@ -82,7 +82,7 @@ export const useWebSocketConnection = () => {
           message: message.data.message || 'No message provided',
         });
         break;
-        
+
       default:
         console.warn('Unknown WebSocket message type:', message.type);
     }

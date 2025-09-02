@@ -7,29 +7,34 @@
 ## ✅ Реализованные компоненты
 
 ### 1. Backend визуализация (`visualize_ml_predictions.py`)
+
 - ✅ **Интерактивные графики Plotly** (6 панелей, ~4.5MB HTML)
-- ✅ **Анализ рыночных данных** (4 графика Matplotlib, ~200KB PNG)  
+- ✅ **Анализ рыночных данных** (4 графика Matplotlib, ~200KB PNG)
 - ✅ **Тепловая карта признаков** (топ-50 из 240, Seaborn, ~100KB PNG)
 - ✅ **Исправлена ошибка** преобразования string/float в heatmap
 
 ### 2. API Endpoints (`web/api/endpoints/ml_visualization.py`)
+
 - ✅ Создан полный REST API на `/api/ml-viz/`
 - ✅ Endpoints: predictions, features, metrics, reports
 - ✅ Интеграция с основным API сервером
 
 ### 3. Frontend компоненты (React/TypeScript)
+
 - ✅ **MLPanel.tsx** - полная переработка из заглушки
 - ✅ **MLChart.tsx** - универсальный компонент графиков
 - ✅ **MLMetrics.tsx** - карточки метрик
 - ✅ **PredictionVisualization.tsx** - детальная визуализация
 
 ### 4. Утилиты визуализации
+
 - ✅ **run_visualization_demo.py** - демо с тестовыми данными
 - ✅ **visualize_real_ml_data.py** - работа с реальными данными из БД
 
 ## 🚀 Быстрый старт
 
 ### Запуск системы
+
 ```bash
 # Основной способ запуска с фильтрованными логами
 ./start_with_logs_filtered.sh
@@ -40,28 +45,35 @@ python3 unified_launcher.py    # Прямой запуск
 ```
 
 ### Доступ к визуализации
-- **Web интерфейс**: http://localhost:5173/ml
-- **API endpoints**: http://localhost:8083/api/ml-viz/
+
+- **Web интерфейс**: <http://localhost:5173/ml>
+- **API endpoints**: <http://localhost:8083/api/ml-viz/>
 - **Локальные файлы**: `/data/charts/`
 
 ## 📈 Примеры использования
 
 ### 1. Демонстрация с тестовыми данными
+
 ```bash
 python3 run_visualization_demo.py
 ```
+
 Создает визуализации для BTCUSDT, ETHUSDT, SOLUSDT с синтетическими данными.
 
 ### 2. Визуализация реальных данных
+
 ```bash
 python3 visualize_real_ml_data.py
 ```
+
 Загружает данные из PostgreSQL (порт 5555) и создает визуализации на основе:
+
 - 97,674 записей рыночных данных
 - 5,514 сигналов
 - 1,068 обработанных признаков
 
 ### 3. Программное использование
+
 ```python
 from visualize_ml_predictions import (
     create_predictions_chart,
@@ -72,7 +84,7 @@ from visualize_ml_predictions import (
 # Интерактивный график
 chart = create_predictions_chart("BTCUSDT", prediction, df)
 
-# Анализ рынка  
+# Анализ рынка
 market = create_market_data_analysis("BTCUSDT", df, timestamp)
 
 # Тепловая карта
@@ -82,6 +94,7 @@ heatmap = create_features_heatmap("BTCUSDT", features, timestamp)
 ## 📊 Созданные визуализации
 
 ### Интерактивные графики (Plotly)
+
 - Размер: ~4.5-4.6 MB на файл
 - Содержат 6 панелей:
   1. Вероятности по таймфреймам (15m, 1h, 4h, 12h)
@@ -92,6 +105,7 @@ heatmap = create_features_heatmap("BTCUSDT", features, timestamp)
   6. Матрица направлений (heatmap)
 
 ### Анализ рыночных данных (Matplotlib)
+
 - Размер: ~185-220 KB на файл
 - 4 графика:
   1. Цена со скользящими средними MA20/MA50
@@ -100,6 +114,7 @@ heatmap = create_features_heatmap("BTCUSDT", features, timestamp)
   4. Распределение доходностей (histogram)
 
 ### Тепловые карты признаков (Seaborn)
+
 - Размер: ~96-216 KB на файл
 - Топ-50 признаков из 240
 - Цветовая схема RdYlBu_r
@@ -156,7 +171,7 @@ BOT_AI_V3/
 # Проверка данных в БД
 psql -p 5555 -U obertruper -d bot_trading_v3 -c "
 SELECT COUNT(*) FROM raw_market_data;
-SELECT COUNT(*) FROM signals; 
+SELECT COUNT(*) FROM signals;
 SELECT COUNT(*) FROM processed_market_data;
 "
 
@@ -173,6 +188,7 @@ tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep ML
 ## 📝 Итоги реализации
 
 ✅ **Успешно реализовано**:
+
 - Полноценная система визуализации входных и выходных данных ML модели
 - 3 типа визуализаций (интерактивные, статические, тепловые карты)
 - REST API для программного доступа
@@ -181,6 +197,7 @@ tail -f data/logs/bot_trading_$(date +%Y%m%d).log | grep ML
 - Исправлены все критические ошибки
 
 ⚠️ **Требует внимания**:
+
 - Интеграция ML manager с API для полной функциональности endpoints
 - Тестирование WebSocket для real-time обновлений
 - Оптимизация модели для повышения конфиденции сигналов

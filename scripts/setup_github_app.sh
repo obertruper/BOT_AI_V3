@@ -63,15 +63,15 @@ if [[ "$response" == "y" ]]; then
     git add test_claude_code.md
     git commit -m "test: Check Claude Code integration"
     git push origin "$BRANCH_NAME"
-    
+
     gh pr create \
         --title "Test: Claude Code Integration" \
         --body "@claude Please review this test PR and confirm you're working correctly." \
         --base main
-    
+
     echo "✅ Тестовый PR создан!"
     echo "Откройте PR и проверьте ответ от Claude"
-    
+
     # Возврат на main
     git checkout main
 fi

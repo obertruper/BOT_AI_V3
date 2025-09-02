@@ -3,6 +3,7 @@
 Мониторинг покрытия кода в реальном времени для BOT_AI_V3
 Отслеживает какой код реально выполняется в продакшене
 """
+
 import ast
 import json
 import sqlite3
@@ -108,14 +109,14 @@ class RealTimeCoverageTracer:
 
             conn.execute(
                 """
-                CREATE INDEX IF NOT EXISTS idx_function_name 
+                CREATE INDEX IF NOT EXISTS idx_function_name
                 ON execution_traces(function_name)
             """
             )
 
             conn.execute(
                 """
-                CREATE INDEX IF NOT EXISTS idx_timestamp 
+                CREATE INDEX IF NOT EXISTS idx_timestamp
                 ON execution_traces(timestamp)
             """
             )
@@ -296,7 +297,7 @@ class RealTimeCoverageTracer:
                     conn.execute(
                         """
                         INSERT OR REPLACE INTO execution_traces
-                        (function_name, file_path, line_number, timestamp, 
+                        (function_name, file_path, line_number, timestamp,
                          execution_time, call_count, arguments, return_value_type, caller_function)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -499,9 +500,9 @@ class RealTimeCoverageTracer:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.execute(
                     """
-                    SELECT timestamp, coverage_percentage 
-                    FROM coverage_snapshots 
-                    ORDER BY timestamp DESC 
+                    SELECT timestamp, coverage_percentage
+                    FROM coverage_snapshots
+                    ORDER BY timestamp DESC
                     LIMIT 100
                 """
                 )

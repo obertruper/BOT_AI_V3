@@ -414,9 +414,22 @@ class EnhancedRiskCalculator:
     ) -> tuple[float, float]:
         """Рассчитывает уровни SL/TP"""
         try:
-            # Используем значения из ML-сигнала или дефолтные
-            sl_pct = ml_signal.stop_loss_pct if ml_signal.stop_loss_pct else 0.02
-            tp_pct = ml_signal.take_profit_pct if ml_signal.take_profit_pct else 0.04
+            # Получаем правильные значения из enhanced_sltp конфигурации
+            enhanced_sltp = self.config.get("enhanced_sltp", {})
+            initial_sltp = enhanced_sltp.get("initial", {})
+
+            # Используем значения из ML-сигнала или из enhanced_sltp
+            if ml_signal.stop_loss_pct:
+                sl_pct = ml_signal.stop_loss_pct
+            else:
+                # Используем минимальное значение из конфигурации (1.5% по умолчанию)
+                sl_pct = initial_sltp.get("stop_loss_percent_min", 1.5) / 100
+
+            if ml_signal.take_profit_pct:
+                tp_pct = ml_signal.take_profit_pct
+            else:
+                # Используем минимальное значение из конфигурации (4% по умолчанию)
+                tp_pct = initial_sltp.get("take_profit_percent_min", 4.0) / 100
 
             # Корректировка на основе типа актива
             asset_category = self._get_asset_category(symbol)

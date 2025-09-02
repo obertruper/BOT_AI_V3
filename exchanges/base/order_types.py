@@ -40,19 +40,19 @@ class OrderSide(Enum):
 class OrderStatus(Enum):
     """Статусы ордера"""
 
-    NEW = "New"  # Новый ордер
-    PARTIALLY_FILLED = "PartiallyFilled"  # Частично исполнен
-    FILLED = "Filled"  # Полностью исполнен
-    CANCELLED = "Cancelled"  # Отменен
-    REJECTED = "Rejected"  # Отклонен
-    EXPIRED = "Expired"  # Истек
-    PENDING = "Pending"  # Ожидает
-    TRIGGERED = "Triggered"  # Сработал триггер
-    DEACTIVATED = "Deactivated"  # Деактивирован
+    NEW = "new"  # Новый ордер
+    PARTIALLY_FILLED = "partially_filled"  # Частично исполнен
+    FILLED = "filled"  # Полностью исполнен
+    CANCELLED = "cancelled"  # Отменен
+    REJECTED = "rejected"  # Отклонен
+    EXPIRED = "expired"  # Истек
+    PENDING = "pending"  # Ожидает
+    TRIGGERED = "triggered"  # Сработал триггер
+    DEACTIVATED = "deactivated"  # Деактивирован
 
     # Специальные статусы
-    PENDING_CANCEL = "PendingCancel"  # Ожидает отмены
-    PENDING_NEW = "PendingNew"  # Ожидает создания
+    PENDING_CANCEL = "pending_cancel"  # Ожидает отмены
+    PENDING_NEW = "pending_new"  # Ожидает создания
 
 
 class TimeInForce(Enum):
@@ -183,20 +183,33 @@ class OrderRequest:
         if not self.symbol:
             errors.append("Symbol is required")
 
-        if self.quantity <= 0:
-            errors.append("Quantity must be positive")
+        # Ensure quantity is a number for comparison
+        try:
+            qty_val = float(self.quantity) if isinstance(self.quantity, (str, int)) else self.quantity
+            if qty_val <= 0:
+                errors.append("Quantity must be positive")
+        except (TypeError, ValueError):
+            errors.append(f"Invalid quantity: {self.quantity}")
 
         if self.order_type in [
             OrderType.LIMIT,
             OrderType.STOP_LIMIT,
             OrderType.TAKE_PROFIT_LIMIT,
         ]:
-            if self.price is None or self.price <= 0:
-                errors.append(f"{self.order_type.value} order requires valid price")
+            try:
+                price_val = float(self.price) if isinstance(self.price, (str, int)) else self.price
+                if self.price is None or price_val <= 0:
+                    errors.append(f"{self.order_type.value} order requires valid price")
+            except (TypeError, ValueError):
+                errors.append(f"Invalid price: {self.price}")
 
         if self.order_type in [OrderType.STOP_MARKET, OrderType.STOP_LIMIT]:
-            if self.stop_price is None or self.stop_price <= 0:
-                errors.append(f"{self.order_type.value} order requires valid stop price")
+            try:
+                stop_val = float(self.stop_price) if isinstance(self.stop_price, (str, int)) else self.stop_price
+                if self.stop_price is None or stop_val <= 0:
+                    errors.append(f"{self.order_type.value} order requires valid stop price")
+            except (TypeError, ValueError):
+                errors.append(f"Invalid stop price: {self.stop_price}")
 
         if self.time_in_force == TimeInForce.GTD and self.expire_time is None:
             errors.append("GTD order requires expire time")

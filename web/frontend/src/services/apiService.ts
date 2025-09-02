@@ -158,10 +158,10 @@ class ApiService {
       const response = await fetch(`${this.baseURL}/system/status`);
       if (!response.ok) throw new Error('Failed to fetch system status');
       const data = await response.json();
-      
+
       // Адаптируем структуру ответа API к нашему интерфейсу
       const apiData = data.success ? data.data : data;
-      
+
       return {
         status: apiData.status || 'unknown',
         uptime: apiData.uptime || 0,
@@ -215,14 +215,14 @@ class ApiService {
       if (!response.ok) throw new Error('Failed to fetch system metrics');
       const data = await response.json();
       const apiData = data.success ? data.data : data;
-      
+
       return {
         cpu_usage: apiData.system_metrics?.cpu_usage || 0,
         memory_usage: apiData.system_metrics?.memory_usage || 0,
         disk_usage: 45, // Mock data
-        network_io: { 
-          bytes_sent: 1024000, 
-          bytes_recv: 2048000 
+        network_io: {
+          bytes_sent: 1024000,
+          bytes_recv: 2048000
         },
         database_connections: apiData.system_metrics?.open_connections || 0,
         api_requests_per_minute: apiData.system_metrics?.api_calls_per_minute || 0
@@ -361,8 +361,8 @@ class ApiService {
   // Market Data
   async getMarketData(symbols?: string[]): Promise<MarketData[]> {
     try {
-      const url = symbols ? 
-        `${this.baseURL}/market/data?symbols=${symbols.join(',')}` : 
+      const url = symbols ?
+        `${this.baseURL}/market/data?symbols=${symbols.join(',')}` :
         `${this.baseURL}/market/data`;
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch market data');

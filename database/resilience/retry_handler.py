@@ -389,9 +389,7 @@ class DatabaseRetryManager:
             ),
         }
 
-    def create_handler(
-        self, name: str, config: RetryConfig | None = None
-    ) -> DatabaseRetryHandler:
+    def create_handler(self, name: str, config: RetryConfig | None = None) -> DatabaseRetryHandler:
         """
         Create a new retry handler.
 

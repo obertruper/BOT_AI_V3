@@ -9,6 +9,7 @@
 Автоматически запускаются локально перед каждым коммитом:
 
 ### Базовые проверки
+
 - ✅ **trailing-whitespace** - удаление пробелов в конце строк
 - ✅ **end-of-file-fixer** - добавление новой строки в конец файла
 - ✅ **check-yaml** - валидация YAML файлов
@@ -23,16 +24,19 @@
 - ✅ **check-ast** - проверка синтаксиса Python
 
 ### Форматирование кода
+
 - ✅ **Black** - автоформатирование Python (line-length=100)
 - ✅ **Ruff** - быстрый линтер и форматтер
 - ✅ **isort** - сортировка импортов
 
 ### Качество кода
+
 - ✅ **MyPy** - статическая типизация
 - ✅ **Bandit** - проверка безопасности
 - ✅ **detect-secrets** - поиск секретов и паролей
 
 ### Другие языки
+
 - ✅ **markdownlint** - проверка Markdown
 - ✅ **yamllint** - линтинг YAML
 - ✅ **eslint** - проверка JavaScript/TypeScript
@@ -43,61 +47,74 @@
 После push запускаются следующие workflow:
 
 ### 2.1 Pre-commit проверки
+
 ```yaml
 Workflow: ci.yml -> pre-commit
 ```
+
 - Запуск всех pre-commit хуков на всех файлах
 - Время: ~2 минуты
 
 ### 2.2 Security Scan (Сканирование безопасности)
+
 ```yaml
 Workflow: ci.yml -> security-scan
 ```
+
 - **Bandit** - анализ уязвимостей Python кода
   - Проверяет: SQL инъекции, хардкод паролей, unsafe функции
   - Создаёт: bandit-report.json
-  
+
 - **Safety** - проверка известных уязвимостей в зависимостях
   - База данных CVE уязвимостей
   - Создаёт: safety-report.json
-  
+
 - **Semgrep** - статический анализ с правилами OWASP
   - Проверяет: OWASP Top 10, crypto ошибки
   - Создаёт: semgrep-report.json
 
 ### 2.3 Secrets Scan (Поиск секретов)
+
 ```yaml
 Workflow: ci.yml -> secrets-scan
 ```
+
 - **TruffleHog** - глубокое сканирование на утечки
   - Проверяет: API ключи, токены, пароли
   - Анализирует: всю историю git
   - Режим: only-verified (только подтверждённые)
 
 ### 2.4 Lint and Format (Проверка стиля)
+
 ```yaml
 Workflow: ci.yml -> lint-and-format
 ```
+
 - **Black** - проверка форматирования (не изменяет)
 - **Ruff** - линтинг по 500+ правилам
 - **Pylint** - глубокий анализ кода (минимум 8.0/10)
 - **MyPy** - проверка типов для Python 3.12
 
 ### 2.5 Unit & Integration Tests (Тесты)
+
 ```yaml
 Workflow: ci.yml -> test
 ```
+
 Запускается в матрице для Python 3.10, 3.11, 3.12:
 
 #### Окружение тестов
+
 - PostgreSQL 15 на порту 5555
 - Redis 7 на порту 6379
 - Alembic миграции
 
 #### Unit тесты (`tests/unit/`)
+
 ```bash
 pytest tests/unit/ --cov=. --cov-report=xml -v
 ```
+
 - **core/** - тесты orchestrator, system
 - **database/** - тесты моделей и репозиториев
 - **trading/** - тесты engine, orders, positions
@@ -107,48 +124,57 @@ pytest tests/unit/ --cov=. --cov-report=xml -v
 - **utils/** - тесты утилит
 
 #### Integration тесты (`tests/integration/`)
+
 ```bash
 pytest tests/integration/ -v
 ```
+
 - Тесты взаимодействия компонентов
 - E2E сценарии торговли
 - WebSocket тесты
 
 #### Покрытие кода
+
 - Минимум: 80% для новых файлов
 - Отчёт: coverage.xml
 - Загрузка в Codecov
 
 ### 2.6 Dependency Check (Проверка зависимостей)
+
 ```yaml
 Workflow: ci.yml -> dependency-check
 ```
+
 - **pip-audit** - аудит безопасности пакетов
 - **pip-licenses** - проверка лицензий (создаёт licenses.md)
 
 ### 2.7 Code Quality (Метрики качества)
+
 ```yaml
 Workflow: ci.yml -> code-quality
 ```
+
 - **Radon CC** - цикломатическая сложность
   - A (1-5) простой код
   - B (6-10) слегка сложный
   - C (11-20) сложный
   - D (21-30) очень сложный
-  
+
 - **Radon MI** - индекс поддерживаемости
   - A (100-20) очень высокий
   - B (19-10) средний
   - C (9-0) низкий
-  
+
 - **Xenon** - контроль сложности
   - Максимум: B для модулей
   - Среднее: A для проекта
 
 ### 2.8 Docker Build (Сборка образа)
+
 ```yaml
 Workflow: ci.yml -> docker-build
 ```
+
 - Только для Pull Requests
 - Тестовая сборка Docker образа
 - Кэширование слоёв
@@ -156,9 +182,11 @@ Workflow: ci.yml -> docker-build
 ## 🤖 3. CLAUDE CODE REVIEW (AI проверка)
 
 ### Автоматический review для PR
+
 ```yaml
 Workflow: claude-code.yml
 ```
+
 - Анализ изменений кода
 - Поиск потенциальных проблем
 - Предложения улучшений
@@ -212,6 +240,7 @@ tests/
 ## 📈 5. МЕТРИКИ И ОТЧЁТЫ
 
 ### Генерируемые отчёты
+
 - **coverage.xml** - покрытие кода
 - **bandit-report.json** - уязвимости
 - **safety-report.json** - CVE в зависимостях
@@ -219,6 +248,7 @@ tests/
 - **licenses.md** - лицензии пакетов
 
 ### Пороговые значения
+
 - Покрытие кода: минимум 80%
 - Pylint оценка: минимум 8.0/10
 - Цикломатическая сложность: максимум B
@@ -227,32 +257,38 @@ tests/
 ## 🔧 6. ЛОКАЛЬНЫЙ ЗАПУСК ТЕСТОВ
 
 ### Запуск всех pre-commit хуков
+
 ```bash
 pre-commit run --all-files
 ```
 
 ### Запуск unit тестов
+
 ```bash
 pytest tests/unit/ -v --cov=.
 ```
 
 ### Запуск конкретного теста
+
 ```bash
 pytest tests/unit/trading/test_engine.py::test_signal_processing -v
 ```
 
 ### Проверка безопасности
+
 ```bash
 bandit -r . --skip B101,B601
 safety check
 ```
 
 ### Проверка типов
+
 ```bash
 mypy . --ignore-missing-imports
 ```
 
 ### Форматирование
+
 ```bash
 black .
 ruff check --fix .
@@ -260,7 +296,8 @@ ruff check --fix .
 
 ## 📊 7. СТАТИСТИКА
 
-### Общее количество проверок при push:
+### Общее количество проверок при push
+
 - **15** pre-commit хуков
 - **3** инструмента безопасности
 - **1** сканер секретов
@@ -271,20 +308,23 @@ ruff check --fix .
 - **3** метрики качества кода
 - **2** проверки зависимостей
 
-### Время выполнения:
+### Время выполнения
+
 - Pre-commit: ~30 сек локально
 - CI Pipeline: ~3-5 минут
 - Полный прогон: ~5-7 минут
 
 ## 🚨 8. ОБРАБОТКА ОШИБОК
 
-### При провале тестов:
+### При провале тестов
+
 1. GitHub Actions блокирует merge
 2. Создаётся отчёт с деталями
 3. Claude Code предлагает исправления
 4. Разработчик получает уведомление
 
-### Игнорирование проверок (не рекомендуется):
+### Игнорирование проверок (не рекомендуется)
+
 ```bash
 # Коммит без pre-commit
 git commit --no-verify
@@ -297,7 +337,8 @@ git commit --no-verify
 
 ## 📝 9. ДОБАВЛЕНИЕ НОВЫХ ТЕСТОВ
 
-### Создание unit теста:
+### Создание unit теста
+
 ```python
 # tests/unit/my_module/test_my_feature.py
 import pytest
@@ -313,7 +354,8 @@ async def test_async_function():
     assert result is not None
 ```
 
-### Добавление в CI:
+### Добавление в CI
+
 1. Тесты автоматически подхватываются pytest
 2. Добавить в `tests/unit/` или `tests/integration/`
 3. Следовать naming convention: `test_*.py`

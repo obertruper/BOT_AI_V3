@@ -96,7 +96,7 @@ class BaseRepository(Generic[T], ABC):
         duration_ms = (time.time() - start_time) * 1000
         logger.info(
             f"Bulk inserted {total_items} items into {self.table_name} "
-            f"in {duration_ms:.2f}ms ({total_items/duration_ms*1000:.0f} items/sec)"
+            f"in {duration_ms:.2f}ms ({total_items / duration_ms * 1000:.0f} items/sec)"
         )
 
         return results
@@ -192,7 +192,7 @@ class BaseRepository(Generic[T], ABC):
 
         duration_ms = (time.time() - start_time) * 1000
         logger.info(
-            f"Bulk updated {total_updated} records in {self.table_name} " f"in {duration_ms:.2f}ms"
+            f"Bulk updated {total_updated} records in {self.table_name} in {duration_ms:.2f}ms"
         )
 
         return total_updated
@@ -232,8 +232,8 @@ class BaseRepository(Generic[T], ABC):
 
                     query = f"""
                     UPDATE {self.table_name}
-                    SET {', '.join(set_parts)}
-                    WHERE {' AND '.join(where_parts)}
+                    SET {", ".join(set_parts)}
+                    WHERE {" AND ".join(where_parts)}
                     """
 
                     result = await conn.execute(query, *args)
@@ -295,7 +295,7 @@ class BaseRepository(Generic[T], ABC):
 
         query = f"""
         DELETE FROM {self.table_name}
-        WHERE {' OR '.join(or_conditions)}
+        WHERE {" OR ".join(or_conditions)}
         """
 
         async with (
@@ -308,8 +308,7 @@ class BaseRepository(Generic[T], ABC):
 
         duration_ms = (time.time() - start_time) * 1000
         logger.info(
-            f"Bulk deleted {total_deleted} records from {self.table_name} "
-            f"in {duration_ms:.2f}ms"
+            f"Bulk deleted {total_deleted} records from {self.table_name} in {duration_ms:.2f}ms"
         )
 
         return total_deleted
@@ -355,8 +354,8 @@ class BaseRepository(Generic[T], ABC):
 
         # Build ON CONFLICT clause
         on_conflict = f"""
-        ON CONFLICT ({','.join(conflict_columns)})
-        DO UPDATE SET {','.join([f'{col} = EXCLUDED.{col}' for col in update_columns])}
+        ON CONFLICT ({",".join(conflict_columns)})
+        DO UPDATE SET {",".join([f"{col} = EXCLUDED.{col}" for col in update_columns])}
         """
 
         return await self.bulk_insert(
@@ -478,7 +477,7 @@ class BaseRepository(Generic[T], ABC):
 
         query = f"""
         SELECT * FROM {self.table_name}
-        WHERE {id_column} = ANY($1::{'int[]' if isinstance(ids[0], int) else 'text[]'})
+        WHERE {id_column} = ANY($1::{"int[]" if isinstance(ids[0], int) else "text[]"})
         """
 
         async with (

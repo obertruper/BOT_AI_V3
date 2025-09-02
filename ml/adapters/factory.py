@@ -44,7 +44,7 @@ class ModelAdapterFactory:
         # Проверяем наличие адаптера
         if model_type not in cls._adapters:
             available = ", ".join(cls._adapters.keys())
-            raise ValueError(f"Unknown model type: {model_type}. " f"Available types: {available}")
+            raise ValueError(f"Unknown model type: {model_type}. Available types: {available}")
 
         # Создаем адаптер
         adapter_class = cls._adapters[model_type]
@@ -65,8 +65,7 @@ class ModelAdapterFactory:
         """
         if not issubclass(adapter_class, BaseModelAdapter):
             raise ValueError(
-                f"Adapter class must inherit from BaseModelAdapter, "
-                f"got {adapter_class.__name__}"
+                f"Adapter class must inherit from BaseModelAdapter, got {adapter_class.__name__}"
             )
 
         cls._adapters[model_type] = adapter_class

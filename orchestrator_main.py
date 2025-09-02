@@ -63,13 +63,13 @@ class Colors:
 
 def print_welcome():
     """Приветственное сообщение"""
-    print(f"\n{Colors.HEADER}{'='*80}{Colors.ENDC}")
+    print(f"\n{Colors.HEADER}{'=' * 80}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}🎯 BOT_AI_V3 UNIFIED TEST ORCHESTRATOR 🎯{Colors.ENDC}")
-    print(f"{Colors.HEADER}{'='*80}{Colors.ENDC}")
+    print(f"{Colors.HEADER}{'=' * 80}{Colors.ENDC}")
     print(f"{Colors.CYAN}🚀 Единая точка входа для всего тестирования системы{Colors.ENDC}")
     print(f"{Colors.BLUE}📊 Включает Dynamic SL/TP тесты и полную интеграцию{Colors.ENDC}")
     print(f"{Colors.GREEN}✨ Интерактивный режим с визуальными отчетами{Colors.ENDC}")
-    print(f"{Colors.HEADER}{'='*80}{Colors.ENDC}\n")
+    print(f"{Colors.HEADER}{'=' * 80}{Colors.ENDC}\n")
 
 
 async def run_position_tracker_tests(args):
@@ -111,7 +111,7 @@ def print_help():
 
 {Colors.CYAN}Интерактивный режим:{Colors.ENDC}
   python3 orchestrator_main.py
-  
+
   Полнофункциональное меню с возможностью:
   - Выбора конкретных компонентов
   - Запуска Dynamic SL/TP suite
@@ -120,7 +120,7 @@ def print_help():
 
 {Colors.CYAN}CLI режимы:{Colors.ENDC}
   --mode quick          Быстрые smoke и unit тесты
-  --mode standard       Unit + ML + Database тесты  
+  --mode standard       Unit + ML + Database тесты
   --mode full           Полное тестирование всех компонентов
   --mode dynamic-sltp   Только Dynamic SL/TP тесты
   --mode position-tracker Только Position Tracker тесты
@@ -135,7 +135,7 @@ def print_help():
 
 {Colors.CYAN}Параметры:{Colors.ENDC}
   --verbose, -v         Подробный вывод
-  --quiet, -q           Минимальный вывод  
+  --quiet, -q           Минимальный вывод
   --timeout SECONDS     Таймаут для тестов (по умолчанию 1800)
   --parallel            Параллельное выполнение тестов
   --generate-report     Генерировать HTML отчет после завершения
@@ -146,7 +146,7 @@ def print_help():
 # Интерактивный режим (рекомендуется)
 python3 orchestrator_main.py
 
-# Быстрая проверка перед коммитом  
+# Быстрая проверка перед коммитом
 python3 orchestrator_main.py --mode quick --generate-report
 
 # Полное тестирование с параллелизмом
@@ -158,14 +158,14 @@ python3 orchestrator_main.py --mode dynamic-sltp --verbose
 # Только Position Tracker тесты
 python3 orchestrator_main.py --mode position-tracker --verbose
 
-# CI/CD режим  
+# CI/CD режим
 python3 orchestrator_main.py --mode ci --quiet --timeout 600
 
 {Colors.BOLD}📊 DYNAMIC SL/TP ТЕСТЫ:{Colors.ENDC}
 
 Специализированный набор тестов для динамических Stop Loss/Take Profit:
 - Unit тесты калькулятора
-- Integration тесты с ML сигналами  
+- Integration тесты с ML сигналами
 - Performance тесты скорости расчета
 - E2E тесты полного пайплайна
 - Stress тесты различных рыночных условий
@@ -183,7 +183,7 @@ python3 orchestrator_main.py --mode ci --quiet --timeout 600
 
 test_results/
 ├── dashboard.html          # Главный дашборд
-├── detailed_report.json    # Детализированные результаты  
+├── detailed_report.json    # Детализированные результаты
 ├── coverage/              # Coverage отчеты
 ├── performance/           # Performance метрики
 └── dynamic_sltp/         # Специальные отчеты для SL/TP

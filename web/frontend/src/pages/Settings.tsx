@@ -111,7 +111,7 @@ const Settings: React.FC = () => {
               <span>Refresh</span>
             </button>
           </div>
-          
+
           {systemStatus && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700/50">
@@ -143,7 +143,7 @@ const Settings: React.FC = () => {
       <div className="card">
         <div className="p-6">
           <h3 className="text-xl font-semibold text-white mb-6">Configuration Files</h3>
-          
+
           {configFiles.length > 0 ? (
             <div className="grid gap-4">
               {configFiles.map((file, index) => (
@@ -253,12 +253,12 @@ const Settings: React.FC = () => {
             System configuration and management
           </p>
         </div>
-        
+
         {/* Status Badge */}
         {systemStatus && (
           <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
-            systemStatus.status === 'running' 
-              ? 'bg-green-600/20 text-green-400 border border-green-600/30' 
+            systemStatus.status === 'running'
+              ? 'bg-green-600/20 text-green-400 border border-green-600/30'
               : 'bg-red-600/20 text-red-400 border border-red-600/30'
           }`}>
             <div className={`w-2 h-2 rounded-full ${
@@ -302,8 +302,8 @@ const Settings: React.FC = () => {
       {/* Notification */}
       {notification && (
         <div className={`fixed bottom-4 right-4 flex items-center space-x-3 px-4 py-3 rounded-lg shadow-lg z-50 animate-slide-in-bottom ${
-          notification.type === 'success' 
-            ? 'bg-green-600 text-white' 
+          notification.type === 'success'
+            ? 'bg-green-600 text-white'
             : 'bg-red-600 text-white'
         }`}>
           {notification.type === 'success' ? (

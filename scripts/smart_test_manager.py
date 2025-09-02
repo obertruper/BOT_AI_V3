@@ -225,7 +225,7 @@ class SmartTestManager:
         template = f'''"""
 Автоматически сгенерированный тест для {file_path}
 Функция: {func_name}
-Сгенерировано: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Сгенерировано: {datetime.now().strftime("%Y-%m-%d %H:%M")}
 """
 
 import pytest
@@ -233,35 +233,35 @@ from unittest.mock import Mock, patch, AsyncMock
 import asyncio
 
 # TODO: Проверить импорт
-from {file_path.replace('/', '.').replace('.py', '')} import *
+from {file_path.replace("/", ".").replace(".py", "")} import *
 
 
-class Test{func_name.replace('.', '')}:
+class Test{func_name.replace(".", "")}:
     """Тесты для {func_name}"""
-    
-    def test_{func_name.replace('.', '_')}_success(self):
+
+    def test_{func_name.replace(".", "_")}_success(self):
         """Тест успешного выполнения"""
         # TODO: Реализовать тест
         assert True  # Заглушка
-    
-    def test_{func_name.replace('.', '_')}_with_invalid_input(self):
+
+    def test_{func_name.replace(".", "_")}_with_invalid_input(self):
         """Тест с некорректными входными данными"""
         # TODO: Реализовать тест
         with pytest.raises(Exception):
             pass  # Заглушка
-    
-    def test_{func_name.replace('.', '_')}_edge_cases(self):
+
+    def test_{func_name.replace(".", "_")}_edge_cases(self):
         """Тест граничных случаев"""
         # TODO: Реализовать тест
         assert True  # Заглушка
-    
+
     @pytest.mark.asyncio
-    async def test_{func_name.replace('.', '_')}_async(self):
+    async def test_{func_name.replace(".", "_")}_async(self):
         """Асинхронный тест (если функция async)"""
         # TODO: Проверить и реализовать если нужно
         pass
-    
-    def test_{func_name.replace('.', '_')}_performance(self):
+
+    def test_{func_name.replace(".", "_")}_performance(self):
         """Тест производительности"""
         import time
         start = time.time()
@@ -383,35 +383,35 @@ class Test{func_name.replace('.', '')}:
 <body>
     <div class="header">
         <h1>🧪 BOT_AI_V3 Test Dashboard</h1>
-        <p>Последнее обновление: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <p>Последнее обновление: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
     </div>
-    
+
     <div class="metrics">
-        <div class="metric {'good' if coverage_percent > 80 else 'warning' if coverage_percent > 60 else 'bad'}">
+        <div class="metric {"good" if coverage_percent > 80 else "warning" if coverage_percent > 60 else "bad"}">
             <h3>Покрытие функций</h3>
             <div class="value">{coverage_percent:.1f}%</div>
             <small>{covered_functions} из {total_functions}</small>
         </div>
-        
-        <div class="metric {'good' if coverage['total_coverage'] > 80 else 'warning' if coverage['total_coverage'] > 60 else 'bad'}">
+
+        <div class="metric {"good" if coverage["total_coverage"] > 80 else "warning" if coverage["total_coverage"] > 60 else "bad"}">
             <h3>Покрытие кода</h3>
-            <div class="value">{coverage['total_coverage']:.1f}%</div>
+            <div class="value">{coverage["total_coverage"]:.1f}%</div>
             <small>По строкам кода</small>
         </div>
-        
-        <div class="metric {'bad' if len(missing_tests) > 20 else 'warning' if len(missing_tests) > 10 else 'good'}">
+
+        <div class="metric {"bad" if len(missing_tests) > 20 else "warning" if len(missing_tests) > 10 else "good"}">
             <h3>Отсутствует тестов</h3>
             <div class="value">{len(missing_tests)}</div>
             <small>Функций без тестов</small>
         </div>
-        
-        <div class="metric {'warning' if len(changes['modified']) > 0 else 'good'}">
+
+        <div class="metric {"warning" if len(changes["modified"]) > 0 else "good"}">
             <h3>Изменённых файлов</h3>
-            <div class="value">{len(changes['modified'])}</div>
+            <div class="value">{len(changes["modified"])}</div>
             <small>Требуют проверки тестов</small>
         </div>
     </div>
-    
+
     <div class="section">
         <h2>📊 Покрытие по модулям</h2>
         <table>
@@ -442,8 +442,8 @@ class Test{func_name.replace('.', '')}:
             html += f"""
             <tr>
                 <td><strong>{module}</strong></td>
-                <td>{stats['total']}</td>
-                <td>{stats['covered']}</td>
+                <td>{stats["total"]}</td>
+                <td>{stats["covered"]}</td>
                 <td>{percent:.1f}%</td>
                 <td>
                     <div class="progress-bar">
@@ -456,7 +456,7 @@ class Test{func_name.replace('.', '')}:
         html += """
         </table>
     </div>
-    
+
     <div class="section">
         <h2>⚠️ Требуют внимания</h2>
 """
@@ -473,7 +473,7 @@ class Test{func_name.replace('.', '')}:
 
         html += """
     </div>
-    
+
     <div class="section">
         <h2>🚀 Быстрые команды</h2>
         <pre>
@@ -490,7 +490,7 @@ pytest tests/ -v
 pytest tests/ --cov=. --cov-report=html
         </pre>
     </div>
-    
+
     <script>
         // Автообновление каждые 30 секунд
         setTimeout(() => location.reload(), 30000);
@@ -572,10 +572,10 @@ def dashboard():
 ✅ Дашборд создан!
 
 📈 Статистика:
-  • Всего функций: {stats['total_functions']}
-  • Покрыто тестами: {stats['covered_functions']}
-  • Отсутствует тестов: {stats['missing_tests']}
-  • Изменено файлов: {stats['changed_files']}
+  • Всего функций: {stats["total_functions"]}
+  • Покрыто тестами: {stats["covered_functions"]}
+  • Отсутствует тестов: {stats["missing_tests"]}
+  • Изменено файлов: {stats["changed_files"]}
 
 Откройте: tests/test_dashboard.html
 """

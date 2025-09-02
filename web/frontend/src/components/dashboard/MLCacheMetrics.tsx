@@ -99,7 +99,7 @@ const MLCacheMetrics: React.FC = () => {
             <span>{hitRate.toFixed(0)}%</span>
           </div>
           <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div 
+            <div
               className={`h-full rounded-full transition-all duration-500 ${
                 hitRate >= 70 ? 'bg-green-500' : hitRate >= 50 ? 'bg-yellow-500' : 'bg-red-500'
               }`}
@@ -115,7 +115,7 @@ const MLCacheMetrics: React.FC = () => {
             <span>{metrics.cache_size}/1000</span>
           </div>
           <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div 
+            <div
               className={`h-full rounded-full transition-all duration-500 ${
                 cacheUsage < 50 ? 'bg-green-500' : cacheUsage < 80 ? 'bg-yellow-500' : 'bg-red-500'
               }`}
@@ -135,7 +135,7 @@ const MLCacheMetrics: React.FC = () => {
         </div>
         <div className="flex flex-wrap gap-2">
           {metrics.symbols_list.slice(0, 6).map((symbol) => (
-            <span 
+            <span
               key={symbol}
               className="px-2 py-1 bg-gray-700/50 text-xs text-gray-300 rounded-md border border-gray-600/50"
             >

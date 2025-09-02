@@ -24,6 +24,7 @@ from exchanges.base.order_types import OrderRequest, OrderResponse
 
 from .adapter import BybitAPIClient, BybitLegacyAdapter
 from .client import BybitClient
+from .singleton_client import get_bybit_client
 
 logger = setup_logger("bybit_exchange")
 
@@ -46,9 +47,9 @@ class BybitExchange(BaseExchangeInterface):
             sandbox: Использовать тестовую сеть
             timeout: Таймаут соединения
         """
-        # Создаем клиент
-        self.client = BybitClient(
-            api_key=api_key, api_secret=api_secret, sandbox=sandbox, timeout=timeout
+        # Используем синглтон для единого клиента
+        self.client = get_bybit_client(
+            api_key=api_key, api_secret=api_secret, sandbox=sandbox
         )
 
         # Для обратной совместимости создаем legacy адаптер

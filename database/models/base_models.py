@@ -55,8 +55,8 @@ class OrderType(enum.Enum):
 class OrderSide(enum.Enum):
     """Направление ордера"""
 
-    BUY = "buy"
-    SELL = "sell"
+    BUY = "BUY"
+    SELL = "SELL"
 
 
 class SignalType(enum.Enum):

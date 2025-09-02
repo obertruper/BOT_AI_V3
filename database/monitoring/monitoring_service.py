@@ -147,8 +147,8 @@ class DatabaseMonitoringService:
                 name="no_free_connections",
                 metric_path="pool.free_connections",
                 operator="<=",
-                threshold=1,
-                severity="critical",
+                threshold=0,  # Alert only when completely exhausted
+                severity="warning",  # Reduced from critical since we have overflow
                 cooldown_seconds=60,
             ),
             AlertRule(
@@ -225,7 +225,7 @@ class DatabaseMonitoringService:
         while True:
             try:
                 await self._evaluate_alert_rules()
-                await asyncio.sleep(10)  # Check alerts more frequently
+                await asyncio.sleep(60)  # Check alerts every minute to reduce load
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -270,18 +270,38 @@ class DatabaseMonitoringService:
     async def _collect_pool_metrics(self) -> dict[str, float]:
         """Collect connection pool metrics."""
         try:
-            # Get pool statistics
-            pool_size = getattr(self.pool, "_size", 0)
-            free_connections = getattr(self.pool, "_free", None)
-            free_count = free_connections.qsize() if free_connections else 0
-            active_connections = pool_size - free_count
+            # Try to use public methods first (asyncpg >= 0.27)
+            if hasattr(self.pool, "get_size"):
+                pool_size = self.pool.get_size()
+                idle_size = self.pool.get_idle_size() if hasattr(self.pool, "get_idle_size") else 0
+                active_connections = pool_size - idle_size
+            # Fallback to private attributes for older versions
+            elif hasattr(self.pool, "_holders"):
+                pool_size = len(self.pool._holders)
+                idle_size = len([h for h in self.pool._holders if h._con is None])
+                active_connections = pool_size - idle_size
+            # Last resort - query pg_stat_activity
+            else:
+                async with self.pool.acquire() as conn:
+                    result = await conn.fetchrow(
+                        """
+                        SELECT
+                            COUNT(*) as total,
+                            COUNT(*) FILTER (WHERE state = 'idle') as idle
+                        FROM pg_stat_activity
+                        WHERE datname = current_database()
+                    """
+                    )
+                    pool_size = result["total"] if result else 0
+                    idle_size = result["idle"] if result else 0
+                    active_connections = pool_size - idle_size
 
             usage_percentage = (active_connections / pool_size * 100) if pool_size > 0 else 0
 
             return {
                 "total_connections": float(pool_size),
                 "active_connections": float(active_connections),
-                "free_connections": float(free_count),
+                "free_connections": float(idle_size),
                 "usage_percentage": usage_percentage,
             }
         except Exception as e:
@@ -312,9 +332,9 @@ class DatabaseMonitoringService:
             async with self.pool.acquire() as conn:
                 long_txns = await conn.fetchval(
                     """
-                    SELECT COUNT(*) 
-                    FROM pg_stat_activity 
-                    WHERE state = 'active' 
+                    SELECT COUNT(*)
+                    FROM pg_stat_activity
+                    WHERE state = 'active'
                     AND query_start < NOW() - INTERVAL '5 minutes'
                 """
                 )
@@ -327,8 +347,8 @@ class DatabaseMonitoringService:
             async with self.pool.acquire() as conn:
                 locks_count = await conn.fetchval(
                     """
-                    SELECT COUNT(*) 
-                    FROM pg_locks 
+                    SELECT COUNT(*)
+                    FROM pg_locks
                     WHERE NOT granted
                 """
                 )
@@ -348,7 +368,7 @@ class DatabaseMonitoringService:
                 # Get query statistics from pg_stat_statements if available
                 stats = await conn.fetchrow(
                     """
-                    SELECT 
+                    SELECT
                         COALESCE(SUM(calls), 0) as total_calls,
                         COALESCE(AVG(mean_exec_time), 0) as avg_execution_time_ms,
                         COALESCE(MAX(max_exec_time), 0) as max_execution_time_ms,
@@ -583,7 +603,9 @@ class DatabaseMonitoringService:
                 trend = (
                     "increasing"
                     if recent_avg > older_avg * 1.1
-                    else "decreasing" if recent_avg < older_avg * 0.9 else "stable"
+                    else "decreasing"
+                    if recent_avg < older_avg * 0.9
+                    else "stable"
                 )
                 trends[key] = {"trend": trend, "recent_avg": recent_avg, "older_avg": older_avg}
 

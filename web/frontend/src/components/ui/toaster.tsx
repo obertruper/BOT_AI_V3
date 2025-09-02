@@ -42,7 +42,7 @@ export const Toaster: React.FC = () => {
                 <div className="font-semibold text-sm">{notification.title}</div>
                 <div className="text-sm opacity-90">{notification.message}</div>
               </div>
-              <button 
+              <button
                 className="flex-shrink-0 opacity-70 hover:opacity-100"
                 onClick={() => {/* Remove notification */}}
               >

@@ -3,6 +3,7 @@
 ML Manager для управления PatchTST моделью в BOT Trading v3
 """
 
+import asyncio
 import os
 import pickle
 from datetime import UTC, datetime
@@ -16,24 +17,24 @@ import torch
 from core.logger import setup_logger
 from core.system.signal_deduplicator import signal_deduplicator
 from core.system.worker_coordinator import worker_coordinator
-from ml.logic.feature_engineering_production import (  # Production версия из обучающего файла
-    ProductionFeatureEngineer as FeatureEngineer,
+from ml.logic.feature_engineering_production import (
+    ProductionFeatureEngineer as FeatureEngineer,  # Production версия из обучающего файла
 )
 from ml.logic.patchtst_model import create_unified_model
 from ml.logic.signal_quality_analyzer import SignalQualityAnalyzer
 from ml.ml_prediction_logger import ml_prediction_logger
+from production_features_config import REAL_FEATURES_240 as REQUIRED_FEATURES_240
 
 # Импорт системы адаптеров
+logger = setup_logger("ml_manager")
+
 try:
-    from ml.adapters.base import BaseModelAdapter
     from ml.adapters.factory import ModelAdapterFactory
 
     ADAPTERS_AVAILABLE = True
 except ImportError:
     ADAPTERS_AVAILABLE = False
     logger.warning("ML adapters not available, using legacy mode")
-
-logger = setup_logger("ml_manager")
 
 # Глобальные оптимизации GPU при импорте модуля - ТОЧНАЯ КОПИЯ из рабочего проекта
 if torch.cuda.is_available():
@@ -120,6 +121,15 @@ class MLManager:
         else:
             logger.info("Адаптеры недоступны или отключены, используем legacy режим")
             self.use_adapter = False
+        # Диагностика: логируем хэш и длину списка признаков
+        try:
+            import hashlib
+
+            feats_blob = ("\n".join(REQUIRED_FEATURES_240)).encode()
+            feats_hash = hashlib.md5(feats_blob).hexdigest()
+            logger.info(f"📦 Feature set: {len(REQUIRED_FEATURES_240)} features, md5={feats_hash}")
+        except Exception as e:
+            logger.debug(f"Не удалось вычислить хэш списка признаков: {e}")
         # Получаем device из конфигурации
         device_config = self.config.get("ml", {}).get("model", {}).get("device", "auto")
 
@@ -187,6 +197,12 @@ class MLManager:
 
                             # Проверяем поддержку torch.compile
                             try:
+                                # Ограничиваем количество воркеров для torch.compile
+                                import os
+
+                                os.environ["TORCH_COMPILE_MAX_AUTOTUNE_WORKERS"] = "4"
+                                os.environ["TORCHINDUCTOR_MAX_AUTOTUNE_WORKERS"] = "4"
+
                                 # Тест компиляции простой модели
                                 import torch.nn as nn
 
@@ -426,7 +442,7 @@ class MLManager:
             raise
 
     async def predict(
-        self, input_data: pd.DataFrame | np.ndarray, symbol: str | None = None
+        self, input_data: pd.DataFrame | np.ndarray, symbol: str | None = None, **kwargs
     ) -> dict[str, Any]:
         """
         Делает предсказание на основе данных.
@@ -451,12 +467,48 @@ class MLManager:
                     raise ValueError("Invalid input data for adapter prediction")
 
                 # Делаем предсказание через адаптер
-                result = await self.adapter.predict(input_data)
+                raw_outputs = await self.adapter.predict(input_data)
 
-                # Адаптер уже возвращает dict, но проверим на всякий случай
-                if hasattr(result, "to_dict"):
-                    return result.to_dict()
-                return result
+                # Интерпретируем сырые выходы в унифицированный формат
+                if isinstance(raw_outputs, np.ndarray):
+                    # Получаем текущую цену для интерпретации
+                    current_price = None
+                    if isinstance(input_data, pd.DataFrame) and not input_data.empty:
+                        current_price = float(input_data["close"].iloc[-1])
+                    elif kwargs.get("current_price"):
+                        current_price = float(kwargs.get("current_price"))
+                    else:
+                        # Попробуем получить текущую цену из других источников
+                        if symbol and hasattr(self, "market_data_provider"):
+                            try:
+                                latest_price = await self.market_data_provider.get_current_price(
+                                    symbol
+                                )
+                                if latest_price:
+                                    current_price = float(latest_price)
+                            except:
+                                pass  # Используем None как fallback
+
+                    # Интерпретируем через адаптер
+                    unified_prediction = self.adapter.interpret_outputs(
+                        raw_outputs, symbol=symbol, current_price=current_price
+                    )
+
+                    # Возвращаем в dict формате
+                    return unified_prediction.to_dict()
+
+                elif hasattr(raw_outputs, "to_dict"):
+                    return raw_outputs.to_dict()
+                elif isinstance(raw_outputs, dict):
+                    return raw_outputs
+                else:
+                    # Fallback - используем старую логику интерпретации
+                    logger.warning("Адаптер вернул неожиданный тип результата, используем fallback")
+                    return self._interpret_predictions(
+                        torch.tensor(raw_outputs)
+                        if isinstance(raw_outputs, np.ndarray)
+                        else raw_outputs
+                    )
 
             # Обратная совместимость
             # ВАЛИДАЦИЯ: Проверяем что модель инициализирована
@@ -657,8 +709,8 @@ class MLManager:
                 # Выводим таблицу одним блоком
                 logger.info("\n".join(features_table))
 
-                # Нормализуем данные с помощью загруженного scaler
-                features_scaled = self.scaler.transform(features)
+                # Нормализуем данные с помощью загруженного scaler (в отдельном потоке)
+                features_scaled = await asyncio.to_thread(self.scaler.transform, features)
                 logger.info("✅ Данные нормализованы с помощью scaler")
 
                 # ФИЛЬТРАЦИЯ ZERO VARIANCE FEATURES (из BOT_AI_V2)
@@ -901,16 +953,16 @@ class MLManager:
 ║                    🤖 ML MODEL PREDICTION ANALYSIS                   ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║ 📊 RAW MODEL OUTPUTS (20 parameters):                                ║
-║  [0-4]:  {', '.join(outputs_formatted[0:5]):50s}    ║
-║  [5-9]:  {', '.join(outputs_formatted[5:10]):50s}    ║
-║  [10-14]: {', '.join(outputs_formatted[10:15]):50s}   ║
-║  [15-19]: {', '.join(outputs_formatted[15:20]):50s}   ║
+║  [0-4]:  {", ".join(outputs_formatted[0:5]):50s}    ║
+║  [5-9]:  {", ".join(outputs_formatted[5:10]):50s}    ║
+║  [10-14]: {", ".join(outputs_formatted[10:15]):50s}   ║
+║  [15-19]: {", ".join(outputs_formatted[15:20]):50s}   ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║ 📈 FUTURE RETURNS (ожидаемые доходности):                           ║
-║   • 15m:  {future_returns[0]:+.6f} ({future_returns[0]*100:+6.3f}%)                       ║
-║   • 1h:   {future_returns[1]:+.6f} ({future_returns[1]*100:+6.3f}%)                       ║
-║   • 4h:   {future_returns[2]:+.6f} ({future_returns[2]*100:+6.3f}%)                       ║
-║   • 12h:  {future_returns[3]:+.6f} ({future_returns[3]*100:+6.3f}%)                       ║
+║   • 15m:  {future_returns[0]:+.6f} ({future_returns[0] * 100:+6.3f}%)                       ║
+║   • 1h:   {future_returns[1]:+.6f} ({future_returns[1] * 100:+6.3f}%)                       ║
+║   • 4h:   {future_returns[2]:+.6f} ({future_returns[2] * 100:+6.3f}%)                       ║
+║   • 12h:  {future_returns[3]:+.6f} ({future_returns[3] * 100:+6.3f}%)                       ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║ 🎯 НАПРАВЛЕНИЯ ПО ТАЙМФРЕЙМАМ:                                      ║
 ║   • 15m:  {direction_names.get(directions[0], str(directions[0])):8s} | Conf: {direction_probs[0].max():.3f} |                      ║
@@ -1040,9 +1092,9 @@ class MLManager:
                     stop_loss_pct *= 1.2
                     take_profit_pct *= 1.2
 
-                # Финальные ограничения
-                stop_loss_pct = np.clip(stop_loss_pct, 0.005, 0.025)  # 0.5% - 2.5%
-                take_profit_pct = np.clip(take_profit_pct, 0.01, 0.05)  # 1% - 5%
+                # Финальные ограничения - используем правильные диапазоны
+                stop_loss_pct = np.clip(stop_loss_pct, 0.01, 0.02)  # 1% - 2%
+                take_profit_pct = np.clip(take_profit_pct, 0.036, 0.06)  # 3.6% - 6%
             else:
                 stop_loss_pct = None
                 take_profit_pct = None
@@ -1076,13 +1128,13 @@ class MLManager:
 ║                    📊 ML PREDICTION FINAL RESULT                     ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║ {signal_emoji} SIGNAL TYPE: {signal_type:8s} | Strategy: {strategy_used:12s}        ║
-║ {passed_emoji} Quality Filter: {'PASSED' if filter_result.passed else 'REJECTED':8s} | Score: {quality_score:.3f}              ║
+║ {passed_emoji} Quality Filter: {"PASSED" if filter_result.passed else "REJECTED":8s} | Score: {quality_score:.3f}              ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║ 📈 PREDICTIONS BY TIMEFRAME:                                         ║
-║   15m: {direction_map.get(int(directions[0]), 'N/A'):8s} | Ret: {future_returns[0]:+.4f} | Conf: {confidence_scores[0]:.3f}       ║
-║   1h:  {direction_map.get(int(directions[1]), 'N/A'):8s} | Ret: {future_returns[1]:+.4f} | Conf: {confidence_scores[1]:.3f}       ║
-║   4h:  {direction_map.get(int(directions[2]), 'N/A'):8s} | Ret: {future_returns[2]:+.4f} | Conf: {confidence_scores[2]:.3f}       ║
-║   12h: {direction_map.get(int(directions[3]), 'N/A'):8s} | Ret: {future_returns[3]:+.4f} | Conf: {confidence_scores[3]:.3f}       ║
+║   15m: {direction_map.get(int(directions[0]), "N/A"):8s} | Ret: {future_returns[0]:+.4f} | Conf: {confidence_scores[0]:.3f}       ║
+║   1h:  {direction_map.get(int(directions[1]), "N/A"):8s} | Ret: {future_returns[1]:+.4f} | Conf: {confidence_scores[1]:.3f}       ║
+║   4h:  {direction_map.get(int(directions[2]), "N/A"):8s} | Ret: {future_returns[2]:+.4f} | Conf: {confidence_scores[2]:.3f}       ║
+║   12h: {direction_map.get(int(directions[3]), "N/A"):8s} | Ret: {future_returns[3]:+.4f} | Conf: {confidence_scores[3]:.3f}       ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║ 💪 SIGNAL STRENGTH: {signal_strength:.3f} | CONFIDENCE: {combined_confidence:.1%}           ║
 ║ ⚠️  RISK LEVEL: {risk_level:6s} | Score: {avg_risk:.3f}                         ║

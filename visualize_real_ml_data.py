@@ -25,7 +25,7 @@ from visualize_ml_predictions import (
 async def get_latest_market_data(symbol: str, limit: int = 200):
     """Получает последние рыночные данные из БД"""
     query = f"""
-    SELECT datetime, open, high, low, close, volume 
+    SELECT datetime, open, high, low, close, volume
     FROM raw_market_data
     WHERE symbol = '{symbol}'
     ORDER BY datetime DESC
@@ -154,7 +154,7 @@ async def visualize_real_data():
 
         # Получаем список активных символов
         symbols_query = """
-        SELECT DISTINCT s.symbol 
+        SELECT DISTINCT s.symbol
         FROM signals s
         INNER JOIN raw_market_data r ON s.symbol = r.symbol
         ORDER BY s.symbol
@@ -171,9 +171,9 @@ async def visualize_real_data():
         print(f"\n📈 Найдено {len(symbols)} символов с данными: {symbols}")
 
         for symbol in symbols[:3]:  # Визуализируем первые 3
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"🎯 Обработка {symbol}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
             # Получаем данные
             print("  📥 Загрузка рыночных данных...")

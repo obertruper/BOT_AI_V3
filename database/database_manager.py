@@ -253,7 +253,6 @@ class DatabaseContext:
 async def example_atomic_operations():
     """Example of using atomic operations with DatabaseManager."""
     async with DatabaseContext() as db_manager:
-
         # Example 1: Simple transaction
         async def update_order_status(conn):
             return await conn.execute("UPDATE orders SET status = $1 WHERE id = $2", "filled", 123)

@@ -948,7 +948,7 @@ class TestMLIntegrationWorkflows:
                         "metric": "error_rate",
                         "value": error_rate * 100,
                         "threshold": 10,
-                        "message": f"Error rate {error_rate*100:.1f}% is critically high",
+                        "message": f"Error rate {error_rate * 100:.1f}% is critically high",
                     }
                 )
             elif error_rate > 0.05:  # 5% предупреждение
@@ -958,7 +958,7 @@ class TestMLIntegrationWorkflows:
                         "metric": "error_rate",
                         "value": error_rate * 100,
                         "threshold": 5,
-                        "message": f"Error rate {error_rate*100:.1f}% is elevated",
+                        "message": f"Error rate {error_rate * 100:.1f}% is elevated",
                     }
                 )
 

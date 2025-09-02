@@ -1575,7 +1575,7 @@ class ProductionFeatureEngineer:
         # Заполняем пропуски
         for feature in ml_features:
             if feature in df.columns:
-                df[feature] = df[feature].fillna(method="ffill").fillna(0)
+                df[feature] = df[feature].ffill().fillna(0)
 
         return df
 
@@ -1653,6 +1653,17 @@ class ProductionFeatureEngineer:
 
         result_df = pd.concat(processed_dfs, ignore_index=True)
 
+        # Улучшенная финальная обработка NaN
+        # Сначала пробуем интерполяцию для временных рядов
+        numeric_cols = result_df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            if result_df[col].isna().any():
+                # Пробуем интерполяцию
+                result_df[col] = result_df[col].interpolate(method='linear', limit_direction='both')
+                # Если остались NaN, используем прямое/обратное заполнение
+                if result_df[col].isna().any():
+                    result_df[col] = result_df[col].ffill().bfill()
+        
         # Финальная проверка
         nan_count = result_df.isna().sum().sum()
         if nan_count > 0:
@@ -1738,7 +1749,7 @@ class ProductionFeatureEngineer:
             )
 
             # ИСПРАВЛЕНО: заполняем NaN значения для BTC-связанных признаков
-            df["btc_close"] = df["btc_close"].fillna(method="ffill").fillna(method="bfill")
+            df["btc_close"] = df["btc_close"].ffill().bfill()
             df["btc_returns"] = df["btc_returns"].fillna(0.0)
             df["btc_correlation"] = df["btc_correlation"].fillna(0.5)  # нейтральная корреляция
             df["relative_strength_btc"] = df["relative_strength_btc"].fillna(1.0)
@@ -2435,7 +2446,6 @@ class ProductionFeatureEngineer:
             norm_iterator = tqdm(unique_symbols, desc="Нормализация", unit="символ")
 
         for symbol in norm_iterator:
-
             # Маски для каждого символа
             train_mask = train_data["symbol"] == symbol
             val_mask = val_data["symbol"] == symbol

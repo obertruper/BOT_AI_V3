@@ -16,17 +16,22 @@ echo "📦 Архивирование старых логов..."
 # Архивируем логи старше 1 дня
 find data/logs -name "*.log" -type f -mtime +1 -exec mv {} data/logs/archive/ \; 2>/dev/null
 
-# Архивируем большие файлы (>100MB)
-for file in data/logs/*.log; do
-    if [ -f "$file" ]; then
-        SIZE=$(du -m "$file" | cut -f1)
-        if [ "$SIZE" -gt 100 ]; then
-            BASENAME=$(basename "$file" .log)
-            gzip "$file"
-            mv "$file.gz" "data/logs/archive/${BASENAME}_${CURRENT_DATE}.log.gz"
-            echo "  📦 Архивирован: $file (${SIZE}MB)"
-        fi
+# Архивируем большие файлы (>100MB) — включая вложенные каталоги
+find data/logs -type f -name "*.log" -printf "%p\n" | while read -r file; do
+  if [ -f "$file" ]; then
+    SIZE=$(du -m "$file" | cut -f1)
+    if [ "$SIZE" -gt 100 ]; then
+      # Выровнять имя архива относительно data/logs
+      REL_PATH=${file#data/logs/}
+      REL_DIR=$(dirname "$REL_PATH")
+      BASENAME=$(basename "$file" .log)
+      # Создать подкаталог в archive для структуры
+      mkdir -p "data/logs/archive/${REL_DIR}"
+      gzip -c "$file" > "data/logs/archive/${REL_DIR}/${BASENAME}_${CURRENT_DATE}.log.gz"
+      : > "$file"  # обнулить исходный большой файл после архивирования
+      echo "  📦 Архивирован: $file (${SIZE}MB) -> archive/${REL_DIR}/${BASENAME}_${CURRENT_DATE}.log.gz"
     fi
+  fi
 done
 
 # Создаем новые пустые логи для текущего дня

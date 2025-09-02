@@ -55,14 +55,14 @@ if [[ "$setup_secrets" == "y" ]]; then
     echo ""
     echo "Введите данные для деплоя:"
     echo ""
-    
+
     # Запрос данных
     read -p "STAGING_HOST (IP сервера): " staging_host
     read -p "STAGING_USER (SSH пользователь) [$(whoami)]: " staging_user
     staging_user=${staging_user:-$(whoami)}
     read -p "STAGING_PORT (SSH порт) [22]: " staging_port
     staging_port=${staging_port:-22}
-    
+
     echo ""
     echo "Для SSH ключа:"
     echo "1. Использовать существующий ~/.ssh/id_rsa"
@@ -70,7 +70,7 @@ if [[ "$setup_secrets" == "y" ]]; then
     echo "3. Указать путь к другому ключу"
     read -p "Выберите (1/2/3) [1]: " key_choice
     key_choice=${key_choice:-1}
-    
+
     case $key_choice in
         1)
             if [ -f ~/.ssh/id_rsa ]; then
@@ -99,23 +99,23 @@ if [[ "$setup_secrets" == "y" ]]; then
             fi
             ;;
     esac
-    
+
     # Добавление секретов в GitHub
     echo ""
     echo "📤 Добавление секретов в GitHub..."
-    
+
     # Проверка авторизации
     if ! gh auth status &>/dev/null; then
         echo -e "${YELLOW}Требуется авторизация в GitHub${NC}"
         gh auth login
     fi
-    
+
     # Добавление секретов
     echo "$staging_host" | gh secret set STAGING_HOST -R obertruper/BOT_AI_V3
     echo "$staging_user" | gh secret set STAGING_USER -R obertruper/BOT_AI_V3
     echo "$staging_port" | gh secret set STAGING_PORT -R obertruper/BOT_AI_V3
     cat "$ssh_key_path" | gh secret set STAGING_SSH_KEY -R obertruper/BOT_AI_V3
-    
+
     echo -e "${GREEN}✅${NC} Секреты добавлены в GitHub!"
 fi
 
@@ -159,7 +159,7 @@ if [[ "$test_deploy" == "y" ]]; then
     git add .deploy_test
     git commit -m "test: Auto deployment check" --no-verify
     git push origin main
-    
+
     echo ""
     echo "📊 Отслеживание статуса:"
     echo "1. GitHub Actions: https://github.com/obertruper/BOT_AI_V3/actions"

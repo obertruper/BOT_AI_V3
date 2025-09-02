@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Brain, 
-  Activity, 
-  Settings, 
-  BarChart3, 
+import {
+  Brain,
+  Activity,
+  Settings,
+  BarChart3,
   RefreshCw,
   Download,
   AlertCircle,
@@ -81,9 +81,9 @@ const MLPanel: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // API Queries
-  const { 
-    data: mlMetrics, 
-    isLoading: metricsLoading, 
+  const {
+    data: mlMetrics,
+    isLoading: metricsLoading,
     error: metricsError,
     refetch: refetchMetrics
   } = useQuery({
@@ -92,9 +92,9 @@ const MLPanel: React.FC = () => {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const { 
-    data: predictions, 
-    isLoading: predictionsLoading, 
+  const {
+    data: predictions,
+    isLoading: predictionsLoading,
     error: predictionsError,
     refetch: refetchPredictions
   } = useQuery({
@@ -103,10 +103,10 @@ const MLPanel: React.FC = () => {
     refetchInterval: 60000, // Refresh every minute
   });
 
-  const { 
-    data: featureImportance, 
+  const {
+    data: featureImportance,
     isLoading: featuresLoading,
-    refetch: refetchFeatures 
+    refetch: refetchFeatures
   } = useQuery({
     queryKey: ['feature-importance', selectedSymbol],
     queryFn: () => fetchFeatureImportance(selectedSymbol),
@@ -136,7 +136,7 @@ const MLPanel: React.FC = () => {
           include_features: true
         }
       });
-      
+
       // Poll for report completion
       const reportId = response.data.report_id;
       const pollReport = async () => {
@@ -148,7 +148,7 @@ const MLPanel: React.FC = () => {
           setTimeout(pollReport, 2000);
         }
       };
-      
+
       setTimeout(pollReport, 2000);
       alert('Report generation started. Download will begin automatically when ready.');
     } catch (error) {
@@ -158,25 +158,25 @@ const MLPanel: React.FC = () => {
   };
 
   const tabs = [
-    { 
-      id: 'overview', 
-      label: 'Overview', 
-      icon: <Brain className="w-5 h-5" /> 
+    {
+      id: 'overview',
+      label: 'Overview',
+      icon: <Brain className="w-5 h-5" />
     },
-    { 
-      id: 'predictions', 
-      label: 'Predictions', 
-      icon: <BarChart3 className="w-5 h-5" /> 
+    {
+      id: 'predictions',
+      label: 'Predictions',
+      icon: <BarChart3 className="w-5 h-5" />
     },
-    { 
-      id: 'features', 
-      label: 'Features', 
-      icon: <Activity className="w-5 h-5" /> 
+    {
+      id: 'features',
+      label: 'Features',
+      icon: <Activity className="w-5 h-5" />
     },
-    { 
-      id: 'settings', 
-      label: 'Settings', 
-      icon: <Settings className="w-5 h-5" /> 
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: <Settings className="w-5 h-5" />
     }
   ];
 
@@ -191,7 +191,7 @@ const MLPanel: React.FC = () => {
                 <span className="text-red-400">Error loading ML metrics</span>
               </div>
             )}
-            
+
             {metricsLoading ? (
               <div className="bg-gray-800 rounded-xl p-8 text-center border border-gray-700">
                 <RefreshCw className="w-8 h-8 text-gray-400 mx-auto mb-4 animate-spin" />
@@ -238,14 +238,14 @@ const MLPanel: React.FC = () => {
                 <span className="text-red-400">Error loading predictions</span>
               </div>
             )}
-            
+
             {predictionsLoading ? (
               <div className="bg-gray-800 rounded-xl p-8 text-center border border-gray-700">
                 <RefreshCw className="w-8 h-8 text-gray-400 mx-auto mb-4 animate-spin" />
                 <p className="text-gray-400">Loading predictions...</p>
               </div>
             ) : predictions && predictions.length > 0 ? (
-              <PredictionVisualization 
+              <PredictionVisualization
                 data={predictions}
                 selectedSymbol={selectedSymbol}
                 onSymbolSelect={setSelectedSymbol}
@@ -267,7 +267,7 @@ const MLPanel: React.FC = () => {
               <h3 className="text-lg font-semibold text-white mb-4">
                 Feature Importance - {selectedSymbol}
               </h3>
-              
+
               {featuresLoading ? (
                 <div className="text-center py-8">
                   <RefreshCw className="w-8 h-8 text-gray-400 mx-auto mb-4 animate-spin" />
@@ -283,8 +283,8 @@ const MLPanel: React.FC = () => {
                       </div>
                       <div className="flex items-center space-x-3">
                         <div className="w-32 bg-gray-600 rounded-full h-2">
-                          <div 
-                            className="bg-blue-500 h-2 rounded-full" 
+                          <div
+                            className="bg-blue-500 h-2 rounded-full"
                             style={{ width: `${feature.importance_score * 100}%` }}
                           />
                         </div>
@@ -325,8 +325,8 @@ const MLPanel: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Prediction Interval (seconds)
                   </label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     defaultValue="60"
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
                   />
@@ -335,10 +335,10 @@ const MLPanel: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Confidence Threshold
                   </label>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
                     defaultValue="75"
                     className="w-full"
                   />
@@ -348,8 +348,8 @@ const MLPanel: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Auto-Retrain
                   </label>
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     defaultChecked
                     className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded"
                   />
@@ -361,7 +361,7 @@ const MLPanel: React.FC = () => {
             <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
               <h3 className="text-lg font-semibold text-white mb-4">Actions</h3>
               <div className="flex flex-wrap gap-4">
-                <button 
+                <button
                   onClick={handleGenerateReport}
                   className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
                 >

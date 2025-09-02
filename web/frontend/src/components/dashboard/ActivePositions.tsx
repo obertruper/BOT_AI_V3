@@ -41,7 +41,7 @@ const ActivePositions: React.FC = () => {
           <Target className="w-5 h-5 mr-2 text-blue-400" />
           Active Positions
         </h3>
-        
+
         <div className="flex items-center space-x-3">
           <div className={`px-4 py-2 rounded-lg ${totalPnL >= 0 ? 'bg-green-400/20' : 'bg-red-400/20'} backdrop-blur-sm border ${totalPnL >= 0 ? 'border-green-400/30' : 'border-red-400/30'}`}>
             <div className="text-xs text-gray-300 font-medium">Total PnL</div>
@@ -92,7 +92,7 @@ const ActivePositions: React.FC = () => {
               <div key={position.id} className="relative group">
                 <div className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl blur-lg"
                      style={{
-                       background: position.pnl >= 0 
+                       background: position.pnl >= 0
                          ? 'linear-gradient(90deg, rgba(34,197,94,0.1) 0%, rgba(16,185,129,0.1) 100%)'
                          : 'linear-gradient(90deg, rgba(239,68,68,0.1) 0%, rgba(220,38,38,0.1) 100%)'
                      }}></div>
@@ -114,7 +114,7 @@ const ActivePositions: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="text-right">
                       <div className={`text-lg font-bold ${pnlColor} flex items-center justify-end space-x-1`}>
                         <PnLIcon className="w-4 h-4" />
@@ -134,7 +134,7 @@ const ActivePositions: React.FC = () => {
                       </div>
                       <div className="text-white font-semibold">{position.size.toFixed(4)}</div>
                     </div>
-                    
+
                     <div className="p-2 bg-gray-900/30 rounded-lg">
                       <div className="flex items-center space-x-1 text-gray-400 mb-1">
                         <Target className="w-3 h-3" />
@@ -142,7 +142,7 @@ const ActivePositions: React.FC = () => {
                       </div>
                       <div className="text-white font-semibold">${position.entry_price.toFixed(2)}</div>
                     </div>
-                    
+
                     <div className="p-2 bg-gray-900/30 rounded-lg">
                       <div className="flex items-center space-x-1 text-gray-400 mb-1">
                         <TrendingUp className="w-3 h-3" />
@@ -164,7 +164,7 @@ const ActivePositions: React.FC = () => {
                         <span className="text-xs text-yellow-400 font-medium">{position.leverage}x</span>
                       </div>
                     </div>
-                    
+
                     <div className="text-xs text-gray-400 px-2 py-1 bg-gray-900/30 rounded-lg font-medium">
                       {position.exchange}
                     </div>

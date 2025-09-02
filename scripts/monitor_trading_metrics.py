@@ -162,7 +162,9 @@ class TradingMetricsMonitor:
         cpu_color = (
             "red"
             if system_metrics["cpu"] > 80
-            else "yellow" if system_metrics["cpu"] > 50 else "green"
+            else "yellow"
+            if system_metrics["cpu"] > 50
+            else "green"
         )
         cpu_status = (
             "🔴" if system_metrics["cpu"] > 80 else "🟡" if system_metrics["cpu"] > 50 else "🟢"
@@ -173,12 +175,16 @@ class TradingMetricsMonitor:
         mem_color = (
             "red"
             if system_metrics["memory"] > 80
-            else "yellow" if system_metrics["memory"] > 50 else "green"
+            else "yellow"
+            if system_metrics["memory"] > 50
+            else "green"
         )
         mem_status = (
             "🔴"
             if system_metrics["memory"] > 80
-            else "🟡" if system_metrics["memory"] > 50 else "🟢"
+            else "🟡"
+            if system_metrics["memory"] > 50
+            else "🟢"
         )
         table.add_row(
             "Memory",
@@ -190,7 +196,9 @@ class TradingMetricsMonitor:
         disk_color = (
             "red"
             if system_metrics["disk"] > 90
-            else "yellow" if system_metrics["disk"] > 70 else "green"
+            else "yellow"
+            if system_metrics["disk"] > 70
+            else "green"
         )
         disk_status = (
             "🔴" if system_metrics["disk"] > 90 else "🟡" if system_metrics["disk"] > 70 else "🟢"

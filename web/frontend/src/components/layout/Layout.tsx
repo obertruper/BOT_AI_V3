@@ -12,7 +12,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const { sidebarCollapsed } = useAppStore();
-  
+
   // Initialize WebSocket connection
   useWebSocketConnection();
 
@@ -34,12 +34,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="flex h-screen bg-gray-900 text-white">
       <Sidebar />
-      
+
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${
         sidebarCollapsed ? 'ml-16' : 'ml-64'
       }`}>
         <Header title={getPageTitle(location.pathname)} />
-        
+
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-900">
           <div className="container mx-auto px-6 py-8">
             {children}

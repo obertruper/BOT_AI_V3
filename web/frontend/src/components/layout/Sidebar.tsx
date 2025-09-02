@@ -1,15 +1,15 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppStore } from '@/store/useAppStore';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  Activity, 
-  Brain, 
-  Target, 
-  Zap, 
-  Wallet, 
-  PieChart, 
+import {
+  BarChart3,
+  TrendingUp,
+  Activity,
+  Brain,
+  Target,
+  Zap,
+  Wallet,
+  PieChart,
   Settings,
   Menu,
   Home
@@ -51,7 +51,7 @@ const Sidebar: React.FC = () => {
             </h1>
           </div>
         )}
-        
+
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           className="p-2 rounded-lg hover:bg-gray-700 transition-colors"
@@ -66,19 +66,19 @@ const Sidebar: React.FC = () => {
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = isActiveRoute(item.path);
-            
+
             return (
               <li key={item.path}>
                 <Link
                   to={item.path}
                   className={`flex items-center px-3 py-3 rounded-lg transition-colors group ${
-                    isActive 
-                      ? 'bg-gray-700 text-white' 
+                    isActive
+                      ? 'bg-gray-700 text-white'
                       : 'text-gray-400 hover:bg-gray-700 hover:text-white'
                   }`}
                 >
                   <Icon className={`w-5 h-5 ${isActive ? item.color : 'group-hover:' + item.color}`} />
-                  
+
                   {!sidebarCollapsed && (
                     <>
                       <span className="ml-3 font-medium">{item.name}</span>

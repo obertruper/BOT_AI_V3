@@ -63,7 +63,7 @@ const TradingActivity: React.FC = () => {
           <Activity className="w-5 h-5 mr-2 text-orange-400" />
           Trading Activity
         </h3>
-        
+
         <div className="flex items-center space-x-3">
           <div className="px-3 py-2 bg-yellow-400/20 rounded-lg backdrop-blur-sm border border-yellow-400/30">
             <div className="text-lg font-bold text-yellow-400">{activeOrders.length}</div>
@@ -143,20 +143,20 @@ const TradingActivity: React.FC = () => {
                 <div key={order.id} className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl blur-sm"
                        style={{
-                         background: order.side === 'buy' 
+                         background: order.side === 'buy'
                            ? 'linear-gradient(90deg, rgba(34,197,94,0.05) 0%, rgba(16,185,129,0.05) 100%)'
                            : 'linear-gradient(90deg, rgba(239,68,68,0.05) 0%, rgba(220,38,38,0.05) 100%)'
                        }}></div>
                   <div className="relative grid grid-cols-7 gap-4 text-sm px-4 py-3 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-gray-600/50 transition-all">
                     <div className="font-semibold text-white">{order.symbol}</div>
-                    
+
                     <div className="flex items-center space-x-1">
                       <SideIcon className={`w-4 h-4 ${sideColor}`} />
                       <span className={`capitalize font-medium ${sideColor}`}>{order.side}</span>
                     </div>
-                    
+
                     <div className="text-gray-300 capitalize">{order.type}</div>
-                    
+
                     <div className="text-white">
                       {formatAmount(order.amount)}
                       {order.filled > 0 && (
@@ -165,14 +165,14 @@ const TradingActivity: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="text-white font-medium">{formatPrice(order.price)}</div>
-                    
+
                     <div className="flex items-center space-x-1">
                       <StatusIcon className={`w-4 h-4 ${statusColor}`} />
                       <span className={`capitalize text-xs font-medium ${statusColor}`}>{order.status}</span>
                     </div>
-                    
+
                     <div className="text-xs text-gray-400">
                       {new Date(order.created_at).toLocaleTimeString()}
                     </div>
@@ -197,25 +197,25 @@ const TradingActivity: React.FC = () => {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-gradient-to-br from-blue-600/10 to-cyan-600/10 rounded-xl p-4 text-center border border-gray-700/50">
             <div className="text-xl font-bold text-white">
-              {completedOrders.length > 0 ? 
-                ((completedOrders.length / orders.length) * 100).toFixed(1) : 
+              {completedOrders.length > 0 ?
+                ((completedOrders.length / orders.length) * 100).toFixed(1) :
                 '0.0'
               }%
             </div>
             <div className="text-xs text-gray-400 font-medium">Fill Rate</div>
           </div>
-          
+
           <div className="bg-gradient-to-br from-yellow-600/10 to-orange-600/10 rounded-xl p-4 text-center border border-gray-700/50">
             <div className="text-xl font-bold text-white">
               ${orders.reduce((sum, o) => sum + (o.fees || 0), 0).toFixed(2)}
             </div>
             <div className="text-xs text-gray-400 font-medium">Total Fees</div>
           </div>
-          
+
           <div className="bg-gradient-to-br from-purple-600/10 to-pink-600/10 rounded-xl p-4 text-center border border-gray-700/50">
             <div className="text-xl font-bold text-white">
-              {orders.length > 0 ? 
-                (orders.reduce((sum, o) => sum + o.amount, 0) / orders.length).toFixed(2) : 
+              {orders.length > 0 ?
+                (orders.reduce((sum, o) => sum + o.amount, 0) / orders.length).toFixed(2) :
                 '0.00'
               }
             </div>

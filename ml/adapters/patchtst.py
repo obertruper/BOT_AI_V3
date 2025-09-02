@@ -22,11 +22,10 @@ from ml.adapters.base import (
     TimeframePrediction,
     UnifiedPrediction,
 )
-from ml.logic.feature_engineering_production import (
-    ProductionFeatureEngineer as FeatureEngineer,
-)
+from ml.logic.feature_engineering_production import ProductionFeatureEngineer as FeatureEngineer
 from ml.logic.patchtst_model import create_unified_model
 from ml.logic.signal_quality_analyzer import SignalQualityAnalyzer
+from production_features_config import REAL_FEATURES_240 as REQUIRED_FEATURES_240
 
 logger = setup_logger(__name__)
 
@@ -81,6 +80,9 @@ class PatchTSTAdapter(BaseModelAdapter):
 
             # Инициализируем анализатор качества
             self.quality_analyzer = SignalQualityAnalyzer(self.config)
+
+            # Self-check: соответствие числа признаков и хэш списка
+            await self._self_check_feature_set()
 
             logger.info("✅ PatchTST components loaded successfully")
 
@@ -190,8 +192,10 @@ class PatchTSTAdapter(BaseModelAdapter):
             # DataFrame с OHLCV - генерируем признаки
             features = self._prepare_features_from_dataframe(data)
 
-        # Нормализация
-        features_scaled = self.scaler.transform(features)
+        # Нормализация (переносим в отдельный поток, чтобы не блокировать event loop)
+        import asyncio
+
+        features_scaled = await asyncio.to_thread(self.scaler.transform, features)
 
         # Фильтрация zero variance features
         features_scaled = self._handle_zero_variance(features_scaled)
@@ -205,6 +209,49 @@ class PatchTSTAdapter(BaseModelAdapter):
 
         # Возвращаем numpy array
         return outputs.cpu().numpy()[0]
+
+    async def _self_check_feature_set(self) -> None:
+        """Проверка соответствия набора признаков и скейлера/модели (fail-fast)."""
+        try:
+            import hashlib
+
+            feats_blob = ("\n".join(REQUIRED_FEATURES_240)).encode()
+            feats_hash = hashlib.md5(feats_blob).hexdigest()
+            logger.info(
+                f"📦 Feature set (adapter): {len(REQUIRED_FEATURES_240)} features, md5={feats_hash}"
+            )
+
+            # Проверяем скейлер
+            if hasattr(self.scaler, "n_features_in_"):
+                n_in = int(getattr(self.scaler, "n_features_in_", 0))
+                if n_in != self.num_features:
+                    raise ValueError(
+                        f"Scaler n_features_in_={n_in} != expected {self.num_features}"
+                    )
+            # Доп. проверка по форме параметров скейлера (mean_/scale_)
+            for attr in ("mean_", "scale_", "center_"):
+                if hasattr(self.scaler, attr):
+                    arr = getattr(self.scaler, attr)
+                    try:
+                        if len(arr) != self.num_features:
+                            raise ValueError(
+                                f"Scaler.{attr} length={len(arr)} != expected {self.num_features}"
+                            )
+                    except TypeError:
+                        # Не массив — пропускаем
+                        pass
+
+            # Проверяем модель входной размерности по первому слою, если возможно
+            try:
+                sample = torch.zeros(1, self.context_length, self.num_features).to(self.device)
+                with torch.no_grad():
+                    _ = self.model(sample)
+            except Exception as e:
+                raise ValueError(f"Model forward shape check failed: {e}")
+
+        except Exception as e:
+            logger.error(f"❌ Feature set self-check failed: {e}")
+            raise
 
     def _prepare_features_from_array(self, data: np.ndarray) -> np.ndarray:
         """Подготавливает признаки из numpy array"""
@@ -229,36 +276,67 @@ class PatchTSTAdapter(BaseModelAdapter):
         if len(df) < self.context_length:
             raise ValueError(f"Need at least {self.context_length} candles, got {len(df)}")
 
-        # Добавляем symbol если отсутствует
+        # Обеспечиваем наличие обязательных служебных колонок
         if "symbol" not in df.columns:
             df = df.copy()
             df["symbol"] = "UNKNOWN"
+        # Гарантируем наличие datetime как колонки
+        if "datetime" not in df.columns:
+            if getattr(df.index, "name", None) == "datetime":
+                df = df.reset_index()
+            else:
+                # Создаем из индекса
+                df = df.copy()
+                df["datetime"] = df.index
 
         # Генерируем признаки
         features_result = self.feature_engineer.create_features(df)
 
-        # Извлекаем числовые признаки
+        # Извлекаем признаки строго в порядке обучения
         if isinstance(features_result, pd.DataFrame):
-            numeric_cols = features_result.select_dtypes(include=[np.number]).columns
-            feature_cols = [
-                col
-                for col in numeric_cols
-                if not col.startswith(("future_", "direction_", "profit_"))
-                and col not in ["id", "timestamp", "datetime", "symbol"]
-            ]
-            features_array = features_result[feature_cols].values
+            # Служебные/целевые исключаем, недостающие — заглушки
+            service_cols = {
+                "datetime",
+                "symbol",
+                "id",
+                "timestamp",
+            }
+            target_prefixes = ("future_", "direction_", "profit_", "target_")
 
-            # Подгоняем количество признаков
-            if features_array.shape[1] != self.num_features:
-                if features_array.shape[1] > self.num_features:
-                    features_array = features_array[:, : self.num_features]
+            feature_cols: list[str] = []
+            for name in REQUIRED_FEATURES_240:
+                if name in service_cols or any(name.startswith(p) for p in target_prefixes):
+                    repl = f"{name}_numeric"
+                    if repl not in features_result:
+                        features_result[repl] = 0.0
+                    feature_cols.append(repl)
+                elif name in features_result.columns:
+                    if not pd.api.types.is_numeric_dtype(features_result[name]):
+                        repl = f"{name}_numeric"
+                        if repl not in features_result:
+                            features_result[repl] = 0.0
+                        feature_cols.append(repl)
+                    else:
+                        feature_cols.append(name)
                 else:
-                    padding = np.zeros(
-                        (features_array.shape[0], self.num_features - features_array.shape[1])
-                    )
-                    features_array = np.hstack([features_array, padding])
+                    miss = f"{name}_missing"
+                    if miss not in features_result:
+                        features_result[miss] = 0.0
+                    feature_cols.append(miss)
+
+            # Гарантируем ровно num_features колонок
+            if len(feature_cols) > self.num_features:
+                feature_cols = feature_cols[: self.num_features]
+            elif len(feature_cols) < self.num_features:
+                for i in range(self.num_features - len(feature_cols)):
+                    pad = f"padding_{i}"
+                    if pad not in features_result:
+                        features_result[pad] = 0.0
+                    feature_cols.append(pad)
+
+            features_array = features_result[feature_cols].values
         else:
-            features_array = features_result
+            features_array = np.asarray(features_result)
 
         # Берем последние context_length строк
         if len(features_array) >= self.context_length:
@@ -395,9 +473,9 @@ class PatchTSTAdapter(BaseModelAdapter):
                     stop_loss_pct *= 1.2
                     take_profit_pct *= 1.2
 
-                # Ограничения
-                stop_loss_pct = np.clip(stop_loss_pct, 0.005, 0.025)
-                take_profit_pct = np.clip(take_profit_pct, 0.01, 0.05)
+                # Ограничения - используем правильные диапазоны
+                stop_loss_pct = np.clip(stop_loss_pct, 0.01, 0.02)  # 1% - 2%
+                take_profit_pct = np.clip(take_profit_pct, 0.036, 0.06)  # 3.6% - 6%
             else:
                 stop_loss_pct = None
                 take_profit_pct = None
@@ -540,3 +618,27 @@ class PatchTSTAdapter(BaseModelAdapter):
                 "quality_weights": self.quality_analyzer.quality_weights,
             }
         return {}
+    
+    async def cleanup(self) -> None:
+        """Очистка ресурсов адаптера"""
+        try:
+            # Очищаем модель из памяти
+            if self.model:
+                del self.model
+                self.model = None
+                
+            # Очищаем scaler
+            if self.scaler:
+                del self.scaler
+                self.scaler = None
+                
+            # Очищаем CUDA кэш если используем GPU
+            if self.device.type == "cuda":
+                import torch
+                torch.cuda.empty_cache()
+                
+            self._initialized = False
+            logger.info("✅ PatchTSTAdapter cleanup completed")
+            
+        except Exception as e:
+            logger.error(f"❌ Error during PatchTSTAdapter cleanup: {e}")

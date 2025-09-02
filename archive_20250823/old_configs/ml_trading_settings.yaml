@@ -8,32 +8,32 @@ ml_trading:
     min_confidence: 0.40          # Минимальная общая уверенность (реальный диапазон 0.35-0.48)
     min_signal_strength: 0.40     # Минимальная сила сигнала
     min_quality_score: 0.45       # Минимальное качество сигнала
-    
-  # СОГЛАСОВАНИЕ ТАЙМФРЕЙМОВ  
+
+  # СОГЛАСОВАНИЕ ТАЙМФРЕЙМОВ
   timeframe_agreement:
     min_agreeing_timeframes: 3    # Минимум 3 из 4 таймфреймов должны согласиться
     required_confidence_per_tf: 0.38  # Минимальная confidence для каждого ТФ
     main_tf_required_confidence: 0.40 # 4h таймфрейм важнее - требуем больше
     main_timeframe_index: 2       # Индекс 4h таймфрейма (0=15m, 1=1h, 2=4h, 3=12h)
-    
+
   # ПОРОГИ ДОХОДНОСТИ
   returns:
     min_expected_return_pct: 0.0010  # Минимум 0.10% ожидаемой доходности
     max_acceptable_drawdown: 0.05    # Максимальная просадка 5%
-    
+
   # УПРАВЛЕНИЕ РИСКОМ
   risk:
     max_risk_level: "MEDIUM"      # Допускаем LOW и MEDIUM риск
     risk_per_trade: 0.02          # 2% от баланса на сделку
     fixed_risk_balance: 500       # Фиксированный баланс для расчета риска
-    
+
   # ВЕСА ТАЙМФРЕЙМОВ (сумма = 1.0)
   timeframe_weights:
     15m: 0.15
     1h: 0.25
     4h: 0.40    # Основной вес на 4h
     12h: 0.20
-    
+
   # ВЕСА ДЛЯ РАСЧЕТА КАЧЕСТВА
   quality_weights:
     agreement: 0.35       # Вес согласованности таймфреймов

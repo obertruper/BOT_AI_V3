@@ -6,6 +6,8 @@ PostgreSQL подключение для BOT Trading v3
 Поддерживает как синхронное (SQLAlchemy), так и асинхронное (asyncpg) подключение.
 """
 
+import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager, contextmanager
 
@@ -17,6 +19,9 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 # Импорт TransactionManager для интеграции
 from database.connections.transaction_manager import TransactionManager
+
+# Настройка логгера
+logger = logging.getLogger(__name__)
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -41,10 +46,10 @@ Base = declarative_base()
 # Синхронный движок и сессии с оптимизированным пулом
 engine = create_engine(
     SYNC_DATABASE_URL,
-    pool_size=10,  # Уменьшаем размер пула для избежания "remaining connection slots"
-    max_overflow=5,  # Разрешаем немного overflow
+    pool_size=20,  # Увеличиваем размер пула для стабильной работы
+    max_overflow=10,  # Разрешаем overflow для пиковых нагрузок
     pool_timeout=30,  # Таймаут ожидания соединения
-    pool_recycle=3600,  # Переиспользование соединений каждый час
+    pool_recycle=1800,  # Переиспользование соединений каждые 30 минут
     pool_pre_ping=True,  # Проверка соединения перед использованием
     echo=False,  # Установите True для отладки SQL запросов
 )
@@ -54,10 +59,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Асинхронный движок и сессии с оптимизированным пулом
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    pool_size=10,  # Уменьшаем размер пула
-    max_overflow=5,  # Разрешаем немного overflow
+    pool_size=20,  # Увеличиваем размер пула для стабильной работы
+    max_overflow=10,  # Разрешаем overflow для пиковых нагрузок
     pool_timeout=30,  # Таймаут ожидания соединения
-    pool_recycle=3600,  # Переиспользование соединений каждый час
+    pool_recycle=1800,  # Переиспользование соединений каждые 30 минут
     pool_pre_ping=True,
     echo=False,
 )
@@ -117,11 +122,16 @@ class AsyncPGPool:
         if cls._pool is None:
             cls._pool = await asyncpg.create_pool(
                 ASYNCPG_URL,
-                min_size=5,  # Уменьшаем минимальный размер
-                max_size=10,  # Уменьшаем максимальный размер для избежания "remaining connection slots"
-                max_inactive_connection_lifetime=300,  # Закрываем неактивные соединения через 5 минут
-                command_timeout=60,
+                min_size=25,  # Увеличиваем для стабильной работы с 9 символами
+                max_size=50,  # Увеличиваем для предотвращения исчерпания пула
+                max_inactive_connection_lifetime=120,  # Быстрее освобождаем неактивные соединения
+                command_timeout=30,  # Уменьшаем таймаут для быстрого обнаружения проблем
+                max_queries=10000,  # Уменьшаем для быстрой ротации соединений
+                setup=cls._setup_connection,  # Настройка каждого соединения
             )
+            logger.info(f"✅ PostgreSQL pool initialized: min={25}, max={50}")
+            # Запускаем мониторинг здоровья пула
+            asyncio.create_task(cls._monitor_pool_health())
         return cls._pool
 
     @classmethod
@@ -130,12 +140,60 @@ class AsyncPGPool:
         if cls._pool is None:
             cls._pool = await asyncpg.create_pool(
                 ASYNCPG_URL,
-                min_size=5,  # Уменьшаем минимальный размер
-                max_size=10,  # Уменьшаем максимальный размер
-                max_inactive_connection_lifetime=300,  # Закрываем неактивные соединения через 5 минут
-                command_timeout=60,
+                min_size=25,  # Увеличиваем для стабильной работы с 9 символами
+                max_size=50,  # Увеличиваем для предотвращения исчерпания пула
+                max_inactive_connection_lifetime=120,  # Быстрее освобождаем неактивные соединения
+                command_timeout=30,  # Уменьшаем таймаут для быстрого обнаружения проблем
+                max_queries=10000,  # Уменьшаем для быстрой ротации соединений
+                setup=cls._setup_connection,  # Настройка каждого соединения
             )
+            logger.info(f"✅ PostgreSQL pool initialized: min={25}, max={50}")
+            # Запускаем мониторинг здоровья пула
+            asyncio.create_task(cls._monitor_pool_health())
         return cls._pool
+
+    @classmethod
+    async def _setup_connection(cls, conn):
+        """Настройка каждого нового соединения в пуле"""
+        await conn.execute(
+            "SET statement_timeout = '30s'"
+        )  # Уменьшаем для быстрого обнаружения проблем
+        await conn.execute("SET lock_timeout = '10s'")  # Быстрее освобождаем блокировки
+        await conn.execute(
+            "SET idle_in_transaction_session_timeout = '30s'"
+        )  # Быстрее закрываем простаивающие транзакции
+
+    @classmethod
+    async def _monitor_pool_health(cls):
+        """Мониторинг здоровья пула соединений"""
+        while cls._pool and not cls._pool._closed:
+            try:
+                await asyncio.sleep(30)  # Проверяем каждые 30 секунд
+
+                if cls._pool:
+                    total_size = cls._pool.get_size()
+                    idle_size = cls._pool.get_idle_size()
+                    active_size = total_size - idle_size
+
+                    # Логируем метрики
+                    logger.debug(
+                        f"Pool status: total={total_size}, active={active_size}, idle={idle_size}"
+                    )
+
+                    # Предупреждение при высокой нагрузке (сместили порог)
+                    if active_size > int(0.9 * total_size):
+                        logger.warning(
+                            f"High pool usage: {active_size}/{total_size} connections active"
+                        )
+
+                    # Предупреждение при почти полном исчерпании пула
+                    if idle_size <= 1:
+                        logger.warning(
+                            f"Connection pool nearly exhausted - only {idle_size} idle connections!"
+                        )
+
+            except Exception as e:
+                logger.error(f"Pool health monitor error: {e}")
 
     @classmethod
     async def close_pool(cls):

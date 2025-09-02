@@ -8,8 +8,6 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
-from core.config.config_manager import ConfigManager
-from core.logger import setup_logger
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -17,6 +15,9 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
 )
+
+from core.config.config_manager import ConfigManager
+from core.logger import setup_logger
 
 logger = setup_logger("telegram_service")
 

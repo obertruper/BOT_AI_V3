@@ -1598,7 +1598,9 @@ class WebTestAgentPuppeteer:
         success_rate_class = (
             "success"
             if summary["success_rate"] > 0.8
-            else "warning" if summary["success_rate"] > 0.5 else "danger"
+            else "warning"
+            if summary["success_rate"] > 0.5
+            else "danger"
         )
         success_class = "success" if summary["success_rate"] > 0.8 else "warning"
 

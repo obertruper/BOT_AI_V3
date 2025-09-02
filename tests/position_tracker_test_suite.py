@@ -114,7 +114,10 @@ class PositionTrackerTestSuite:
 
             # Запускаем тесты
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300  # 5 минут на каждый тип тестов
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 минут на каждый тип тестов
             )
 
             end_time = time.perf_counter()
@@ -347,28 +350,28 @@ class PositionTrackerTestSuite:
         <div class="header">
             <h1>🎯 Enhanced Position Tracker</h1>
             <h2>Test Results Report</h2>
-            <p>Сгенерирован: {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p>Сгенерирован: {time.strftime("%Y-%m-%d %H:%M:%S")}</p>
         </div>
-        
+
         <div class="summary">
-            <div class="card {'success' if summary.get('overall_success') else 'danger'}">
-                <h3>{'✅' if summary.get('overall_success') else '❌'}</h3>
+            <div class="card {"success" if summary.get("overall_success") else "danger"}">
+                <h3>{"✅" if summary.get("overall_success") else "❌"}</h3>
                 <p>Общий результат</p>
             </div>
             <div class="card">
-                <h3>{summary.get('success_rate', 0):.1f}%</h3>
+                <h3>{summary.get("success_rate", 0):.1f}%</h3>
                 <p>Процент успешности</p>
             </div>
             <div class="card">
-                <h3>{summary.get('total_total', 0)}</h3>
+                <h3>{summary.get("total_total", 0)}</h3>
                 <p>Всего тестов</p>
             </div>
             <div class="card">
-                <h3>{summary.get('total_execution_time', 0):.1f}s</h3>
+                <h3>{summary.get("total_execution_time", 0):.1f}s</h3>
                 <p>Время выполнения</p>
             </div>
         </div>
-        
+
         <div class="test-section">
             <h2>📋 Результаты по типам тестов</h2>
             <div class="test-grid">
@@ -381,13 +384,13 @@ class PositionTrackerTestSuite:
                 success = result.get("success", False)
 
                 html += f"""
-                <div class="test-item {'success' if success else 'failure'}">
-                    <h4>{'✅' if success else '❌'} {test_type.capitalize()} Tests</h4>
+                <div class="test-item {"success" if success else "failure"}">
+                    <h4>{"✅" if success else "❌"} {test_type.capitalize()} Tests</h4>
                     <div class="stats">
-                        <p><strong>Время:</strong> {result.get('execution_time', 0):.2f}s</p>
-                        <p><strong>Пройдено:</strong> {result.get('passed', 0)}/{result.get('total', 0)}</p>
-                        <p><strong>Провалено:</strong> {result.get('failed', 0)}</p>
-                        <p><strong>Пропущено:</strong> {result.get('skipped', 0)}</p>
+                        <p><strong>Время:</strong> {result.get("execution_time", 0):.2f}s</p>
+                        <p><strong>Пройдено:</strong> {result.get("passed", 0)}/{result.get("total", 0)}</p>
+                        <p><strong>Провалено:</strong> {result.get("failed", 0)}</p>
+                        <p><strong>Пропущено:</strong> {result.get("skipped", 0)}</p>
                     </div>
                 </div>
                 """
@@ -395,7 +398,7 @@ class PositionTrackerTestSuite:
         html += """
             </div>
         </div>
-        
+
         <div class="footer">
             <p>🤖 Автоматически сгенерированный отчет Enhanced Position Tracker Test Suite</p>
         </div>

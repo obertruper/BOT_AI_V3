@@ -176,12 +176,22 @@ class SystemOrchestrator:
 
         self.logger.info("🎯 Запуск системы BOT_Trading v3.0...")
         try:
+            # Проверяем наличие компонентов
+            self.logger.info("📊 Состояние компонентов:")
+            self.logger.info(f"   - trader_manager: {self.trader_manager is not None}")
+            self.logger.info(f"   - trading_engine: {self.trading_engine is not None}")
+
             if self.trader_manager:
                 await self.trader_manager.start()
                 self.active_components.add("trader_manager")
+
             if self.trading_engine:
-                await self.trading_engine.start()
+                self.logger.info("🎯 Вызываем trading_engine.start()...")
+                result = await self.trading_engine.start()
+                self.logger.info(f"📊 Результат запуска trading_engine: {result}")
                 self.active_components.add("trading_engine")
+            else:
+                self.logger.warning("⚠️ Trading Engine не инициализирован, пропускаем запуск")
             if self.ai_signal_generator:
                 await self.ai_signal_generator.start()
             if self.signal_scheduler:
@@ -580,10 +590,25 @@ class SystemOrchestrator:
             self.failed_components.add("trader_manager")
 
     async def _initialize_exchange_registry(self) -> None:
-        """Инициализация реестра бирж."""
-        # Заглушка для будущей реализации
-        self.logger.info("🏪 Инициализация реестра бирж...")
-        pass
+        """Инициализация реестра бирж и менеджера."""
+        self.logger.info("🏪 Инициализация реестра бирж и менеджера...")
+
+        try:
+            from exchanges.exchange_manager import ExchangeManager
+
+            # Создаем менеджер бирж
+            self.exchange_manager = ExchangeManager(self.config)
+            await self.exchange_manager.initialize()
+
+            # exchange_registry берем из exchange_manager если есть
+            if hasattr(self.exchange_manager, "registry"):
+                self.exchange_registry = self.exchange_manager.registry
+
+            self.logger.info("✅ ExchangeManager успешно инициализирован")
+        except Exception as e:
+            self.logger.warning(f"⚠️ Не удалось инициализировать ExchangeManager: {e}")
+            self.exchange_manager = None
+            self.exchange_registry = None
 
     async def _initialize_trading_engine(self) -> None:
         """Инициализация торгового движка."""

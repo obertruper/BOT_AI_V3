@@ -6,6 +6,7 @@
 import logging
 from typing import Any
 
+from core.config.config_manager import ConfigManager
 from database.models import Order
 from database.models.base_models import OrderSide
 from trading.sltp.enhanced_manager import EnhancedSLTPManager
@@ -52,9 +53,32 @@ class SLTPIntegration:
                 position_idx=1 if position_side == "Buy" else 2,  # Hedge mode
             )
 
-            # Получаем параметры SL/TP из конфигурации или сигнала
-            sl_percentage = (order.extra_data or {}).get("stop_loss_pct", 0.02)
-            tp_percentage = (order.extra_data or {}).get("take_profit_pct", 0.04)
+            # Получаем базовые нормативы из конфига
+            cfg = ConfigManager().get_config()
+            enh = cfg.get("enhanced_sltp", {}) if isinstance(cfg, dict) else {}
+            initial = enh.get("initial", {}) if isinstance(enh, dict) else {}
+            sl_min = float(initial.get("stop_loss_percent_min", 1.0)) / 100.0
+            sl_max = float(initial.get("stop_loss_percent_max", 2.0)) / 100.0
+            tp_min = float(initial.get("take_profit_percent_min", 3.6)) / 100.0
+            tp_max = float(initial.get("take_profit_percent_max", 6.0)) / 100.0
+
+            # Получаем параметры SL/TP из сигнала (если есть) или из trader risk_management
+            extra = order.extra_data or {}
+            sl_percentage = extra.get("stop_loss_pct")
+            tp_percentage = extra.get("take_profit_pct")
+
+            if sl_percentage is None or tp_percentage is None:
+                # Попытка взять из traders.risk_management
+                traders = cfg.get("traders", []) if isinstance(cfg, dict) else []
+                risk = traders[0].get("risk_management", {}) if traders else {}
+                sl_pct_default = float(risk.get("stop_loss_percentage", 2.0)) / 100.0
+                tp_pct_default = float(risk.get("take_profit_percentage", 5.0)) / 100.0
+                sl_percentage = sl_percentage if sl_percentage is not None else sl_pct_default
+                tp_percentage = tp_percentage if tp_percentage is not None else tp_pct_default
+
+            # Нормируем по нормативам
+            sl_percentage = max(sl_min, min(sl_percentage, sl_max))
+            tp_percentage = max(tp_min, min(tp_percentage, tp_max))
 
             # Рассчитываем абсолютные значения SL/TP
             entry_price = temp_position.entry_price

@@ -26,8 +26,10 @@ class MLPredictionLogger:
         """Инициализация логгера предсказаний"""
         self.model_version = "unified_patchtst_v1.0"
         self.batch_predictions = []
-        self.batch_size = 1  # Сохраняем сразу же для реального времени
+        # Увеличиваем размер батча для снижения нагрузки на пул соединений
+        self.batch_size = 10  # Сохраняем пакетами по 10 записей
         self._db_manager = None
+        self._last_flush_ts = time.time()
 
     async def _get_db_manager(self):
         """Получает менеджер БД (ленивая инициализация)"""
@@ -113,9 +115,11 @@ class MLPredictionLogger:
         # Добавляем в батч для сохранения
         self.batch_predictions.append(prediction_record)
 
-        # Сохраняем в БД если набрался батч
-        if len(self.batch_predictions) >= self.batch_size:
+        # Сохраняем в БД если набрался батч или прошло больше 2 секунд
+        now_ts = time.time()
+        if len(self.batch_predictions) >= self.batch_size or (now_ts - self._last_flush_ts) > 2.0:
             await self._save_batch_to_db()
+            self._last_flush_ts = now_ts
 
     def _compute_features_hash(self, features: np.ndarray) -> int:
         """Вычисляет хэш массива признаков для дедупликации"""

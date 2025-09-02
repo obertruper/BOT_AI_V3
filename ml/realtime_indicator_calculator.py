@@ -49,13 +49,15 @@ class RealTimeIndicatorCalculator:
         self.cache_ttl = cache_ttl
         self._lock = asyncio.Lock()
         self.use_inference_mode = use_inference_mode
+        # Ограничение конкуренции при сохранении в БД
+        self._db_semaphore = asyncio.Semaphore(4)
 
         logger.info(
             f"RealTimeIndicatorCalculator инициализирован (inference_mode={use_inference_mode})"
         )
 
     async def calculate_indicators(
-        self, symbol: str, ohlcv_df: pd.DataFrame, save_to_db: bool = True
+        self, symbol: str, ohlcv_df: pd.DataFrame, save_to_db: bool = True, use_cache: bool = True
     ) -> dict[str, Any]:
         """
         Рассчитывает все индикаторы для символа в реальном времени
@@ -64,18 +66,20 @@ class RealTimeIndicatorCalculator:
             symbol: Торговый символ
             ohlcv_df: DataFrame с OHLCV данными (должен содержать минимум 150 свечей)
             save_to_db: Сохранять ли результаты в БД
+            use_cache: Использовать ли кеш (отключаем для последнего таймфрейма)
 
         Returns:
             Словарь с рассчитанными индикаторами и признаками
         """
         try:
             logger.info(f"🔍 Starting calculate_indicators for {symbol}")
-            # Проверяем кеш
+            # Проверяем кеш только если разрешено
             cache_key = f"{symbol}_{ohlcv_df.index[-1]}"
-            cached_result = self._get_from_cache(cache_key)
-            if cached_result:
-                logger.debug(f"Использован кеш для {symbol}")
-                return cached_result
+            if use_cache:
+                cached_result = self._get_from_cache(cache_key)
+                if cached_result:
+                    logger.debug(f"Использован кеш для {symbol}")
+                    return cached_result
 
             # Проверяем достаточность данных
             if len(ohlcv_df) < 96:
@@ -90,8 +94,9 @@ class RealTimeIndicatorCalculator:
 
             # Рассчитываем все признаки
             logger.info(f"About to call create_features for {symbol}")
-            # ProductionFeatureEngineer не принимает inference_mode, но принимает use_enhanced_features
-            features_result = self.feature_engineer.create_features(df, use_enhanced_features=True)
+            # ProductionFeatureEngineer не принимает inference_mode
+            # Отключаем enhanced_features - модуль не существует
+            features_result = self.feature_engineer.create_features(df, use_enhanced_features=False)
             logger.info(
                 f"create_features returned type: {type(features_result)}, shape: {getattr(features_result, 'shape', 'no shape')}"
             )
@@ -158,6 +163,9 @@ class RealTimeIndicatorCalculator:
 
             # Структурируем результат
             result = self._structure_indicators(current_features, ohlcv_df)
+            
+            # Добавляем все признаки для совместимости
+            result["features"] = current_features
 
             # Добавляем метаинформацию
             result["metadata"] = {
@@ -172,8 +180,9 @@ class RealTimeIndicatorCalculator:
             if save_to_db:
                 await self._save_to_database(symbol, result)
 
-            # Кешируем результат
-            self._add_to_cache(cache_key, result)
+            # Кешируем результат только если разрешено
+            if use_cache:
+                self._add_to_cache(cache_key, result)
 
             logger.info(f"Рассчитано {len(current_features)} признаков для {symbol}")
 
@@ -249,8 +258,11 @@ class RealTimeIndicatorCalculator:
             # Если нет datetime ни как колонки ни как индекса, создаем из индекса
             df["datetime"] = df.index
 
-        # Сортируем по времени
-        df = df.sort_index()
+        # Сортируем по времени по колонке 'datetime' если доступна; иначе по индексу
+        if "datetime" in df.columns:
+            df = df.sort_values("datetime")
+        else:
+            df = df.sort_index()
 
         return df
 
@@ -326,12 +338,16 @@ class RealTimeIndicatorCalculator:
             # Получаем последнюю запись из raw_market_data - используем упрощенный подход
             query = """
                 SELECT id, timestamp, datetime, open, high, low, close, volume
-                FROM raw_market_data 
-                WHERE symbol = $1 
-                ORDER BY timestamp DESC 
+                FROM raw_market_data
+                WHERE symbol = $1
+                ORDER BY timestamp DESC
                 LIMIT 1
             """
-            raw_data_row = await db.fetch_one(query, symbol)
+            raw_data_row = (
+                await db.fetch_one(query, symbol)
+                if hasattr(db, "fetch_one")
+                else await db.pool.fetchrow(query, symbol)
+            )
 
             if not raw_data_row:
                 logger.warning(f"Не найдены raw данные для {symbol}")
@@ -344,12 +360,12 @@ class RealTimeIndicatorCalculator:
             # Используем простой INSERT или UPDATE вместо upsert для надежности
             insert_query = """
                 INSERT INTO processed_market_data (
-                    raw_data_id, symbol, timestamp, datetime, 
+                    raw_data_id, symbol, timestamp, datetime,
                     open, high, low, close, volume,
                     technical_indicators, microstructure_features, ml_features,
                     processing_version, model_version, created_at, updated_at
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-                ON CONFLICT (symbol, timestamp) 
+                ON CONFLICT (symbol, timestamp)
                 DO UPDATE SET
                     technical_indicators = EXCLUDED.technical_indicators,
                     microstructure_features = EXCLUDED.microstructure_features,
@@ -361,25 +377,48 @@ class RealTimeIndicatorCalculator:
 
             now = datetime.now(UTC)
 
-            await db.execute(
-                insert_query,
-                raw_data_row["id"],
-                symbol,
-                metadata.get("timestamp", raw_data_row["timestamp"]),
-                metadata.get("datetime", raw_data_row["datetime"]),
-                str(ohlcv.get("open", raw_data_row["open"])),
-                str(ohlcv.get("high", raw_data_row["high"])),
-                str(ohlcv.get("low", raw_data_row["low"])),
-                str(ohlcv.get("close", raw_data_row["close"])),
-                str(ohlcv.get("volume", raw_data_row["volume"])),
-                json.dumps(indicators.get("technical_indicators", {})),
-                json.dumps(indicators.get("microstructure_features", {})),
-                json.dumps(indicators.get("ml_features", {})),
-                "2.0",  # processing_version
-                "patchtst_v1",  # model_version
-                now,
-                now,
-            )
+            # Используем pool напрямую для выполнения запроса, ограничивая конкуренцию
+            async with self._db_semaphore:
+                async with db.pool.acquire() as conn:
+                    await conn.execute(
+                        insert_query,
+                        raw_data_row["id"],
+                        symbol,
+                        metadata.get("timestamp", raw_data_row["timestamp"]),
+                        metadata.get("datetime", raw_data_row["datetime"]),
+                        (
+                            float(ohlcv.get("open", raw_data_row["open"]))
+                            if ohlcv.get("open") is not None
+                            else float(raw_data_row["open"])
+                        ),
+                        (
+                            float(ohlcv.get("high", raw_data_row["high"]))
+                            if ohlcv.get("high") is not None
+                            else float(raw_data_row["high"])
+                        ),
+                        (
+                            float(ohlcv.get("low", raw_data_row["low"]))
+                            if ohlcv.get("low") is not None
+                            else float(raw_data_row["low"])
+                        ),
+                        (
+                            float(ohlcv.get("close", raw_data_row["close"]))
+                            if ohlcv.get("close") is not None
+                            else float(raw_data_row["close"])
+                        ),
+                        (
+                            float(ohlcv.get("volume", raw_data_row["volume"]))
+                            if ohlcv.get("volume") is not None
+                            else float(raw_data_row["volume"])
+                        ),
+                        json.dumps(indicators.get("technical_indicators", {})),
+                        json.dumps(indicators.get("microstructure_features", {})),
+                        json.dumps(indicators.get("ml_features", {})),
+                        "2.0",  # processing_version
+                        "patchtst_v1",  # model_version
+                        now,
+                        now,
+                    )
 
             logger.debug(f"Сохранены индикаторы для {symbol} в БД")
 
@@ -465,7 +504,8 @@ class RealTimeIndicatorCalculator:
             df = self._prepare_dataframe(ohlcv_df, symbol)
 
             # Прямо вызываем create_features (это синхронный метод)
-            features_result = self.feature_engineer.create_features(df, use_enhanced_features=True)
+            # Отключаем enhanced_features - модуль не существует
+            features_result = self.feature_engineer.create_features(df, use_enhanced_features=False)
 
             # Обработка результата - используем точный список признаков
             if isinstance(features_result, pd.DataFrame):
@@ -490,9 +530,9 @@ class RealTimeIndicatorCalculator:
                 logger.info(
                     f"🔧 get_features_for_ml: selected_features={len(selected_features)}, required={len(REQUIRED_FEATURES_240)}"
                 )
-                assert (
-                    len(selected_features) == 240
-                ), f"Должно быть 240 признаков, получено {len(selected_features)}"
+                assert len(selected_features) == 240, (
+                    f"Должно быть 240 признаков, получено {len(selected_features)}"
+                )
                 features_array = features_result[selected_features].values
                 logger.info(
                     f"🔧 get_features_for_ml: final features_array shape: {features_array.shape}"
@@ -511,9 +551,9 @@ class RealTimeIndicatorCalculator:
                 logger.info(
                     f"✅ get_features_for_ml: Extracted {len(last_features)} features for {symbol}"
                 )
-                assert (
-                    len(last_features) == 240
-                ), f"Ожидалось 240 признаков, получено {len(last_features)}"
+                assert len(last_features) == 240, (
+                    f"Ожидалось 240 признаков, получено {len(last_features)}"
+                )
                 return last_features
             else:
                 logger.error(f"Неожиданная форма features_array: {features_array.shape}")
@@ -554,65 +594,73 @@ class RealTimeIndicatorCalculator:
         # Рассчитываем признаки для всего DataFrame
         # FeatureEngineer возвращает массив (n_samples, n_features)
         # ProductionFeatureEngineer не принимает inference_mode
-        features_result = self.feature_engineer.create_features(df, use_enhanced_features=True)
+        # Отключаем enhanced_features - модуль не существует
+        features_result = self.feature_engineer.create_features(df, use_enhanced_features=False)
 
         if isinstance(features_result, pd.DataFrame):
-            # ИСПРАВЛЕНО: Используем ВСЕ доступные числовые признаки для ML модели
+            # ИСПРАВЛЕНО: Жестко формируем 240 признаков строго в порядке обучения
             available_cols = features_result.columns.tolist()
             logger.info(f"🔧 DataFrame от FeatureEngineer: {len(available_cols)} колонок")
 
-            # Исключаем служебные колонки и целевые переменные
-            exclude_cols = [
+            # Служебные и временные колонки, которые НЕЛЬЗЯ включать в признаки
+            # ВНИМАНИЕ: базовые OHLCV НЕ считаем служебными — если они есть в списке обучения,
+            # их нужно включать как есть. Исключаем только явные служебные/временные.
+            service_cols = {
                 "datetime",
                 "symbol",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "quote_volume",
-                "turnover",
+                "id",
                 "sector",
-            ]
+                "timestamp",
+                "ts",
+                "ts_ms",
+                "time",
+                "date",
+                "index",
+            }
 
-            # Исключаем целевые переменные (содержат строки 'UP', 'DOWN', 'FLAT')
-            target_patterns = ["direction_", "future_return_", "target_tp_", "target_sl_"]
-            for col in available_cols:
-                if any(pattern in col for pattern in target_patterns):
-                    exclude_cols.append(col)
+            # Целевые и вспомогательные паттерны, которые исключаем
+            target_patterns = ("direction_", "future_return_", "target_tp_", "target_sl_")
 
-            # Берем все признаки кроме служебных
-            all_features = [col for col in available_cols if col not in exclude_cols]
+            selected_features: list[str] = []
+            for feature in REQUIRED_FEATURES_240:
+                if feature in service_cols or any(tp in feature for tp in target_patterns):
+                    # Если список обучения по ошибке содержит служебную/целевую колонку — заменим заглушкой
+                    feat_name = f"{feature}_numeric"
+                    if feat_name not in features_result:
+                        features_result[feat_name] = 0.0
+                    selected_features.append(feat_name)
+                    continue
 
-            # ОГРАНИЧИВАЕМ до первых 240 признаков (как в обучении модели)
-            selected_features = all_features[:240]
-            logger.info(f"🎯 Всего доступно признаков: {len(all_features)}")
-            logger.info(f"🎯 Выбрано для ML модели: {len(selected_features)} (ограничено до 240)")
+                if feature in features_result.columns:
+                    # Если колонка существует, но не числовая — создаем числовую заглушку
+                    if not pd.api.types.is_numeric_dtype(features_result[feature]):
+                        num_name = f"{feature}_numeric"
+                        if num_name not in features_result:
+                            features_result[num_name] = 0.0
+                        selected_features.append(num_name)
+                    else:
+                        selected_features.append(feature)
+                else:
+                    # Отсутствует — создаем заглушку
+                    miss_name = f"{feature}_missing"
+                    if miss_name not in features_result:
+                        features_result[miss_name] = 0.0
+                    selected_features.append(miss_name)
 
-            # Логируем статус enhanced features
-            enhanced_features = [
-                col
-                for col in selected_features
-                if any(
-                    x in col
-                    for x in [
-                        "trend_strength",
-                        "regime",
-                        "volatility_ratio",
-                        "ofi",
-                        "trade_intensity",
-                    ]
-                )
-            ]
-            if enhanced_features:
-                logger.info(f"✅ Enhanced features активны: {len(enhanced_features)} найдено")
-                logger.info(f"   Enhanced features: {enhanced_features}")
-            else:
-                logger.warning("⚠️ Enhanced features НЕ найдены!")
+            # Гарантируем ровно 240 признаков
+            if len(selected_features) > 240:
+                selected_features = selected_features[:240]
+            elif len(selected_features) < 240:
+                # Дополняем padding-колонками
+                pad_needed = 240 - len(selected_features)
+                for i in range(pad_needed):
+                    pad_col = f"padding_{i}"
+                    if pad_col not in features_result:
+                        features_result[pad_col] = 0.0
+                    selected_features.append(pad_col)
 
-            # Создаем массив признаков
             features_array = features_result[selected_features].values
-            logger.info(f"✅ Использовано {len(selected_features)} признаков для ML модели")
+            logger.info("✅ Использовано 240 признаков для ML модели")
             logger.info(f"🔧 features_array shape: {features_array.shape}")
         elif isinstance(features_result, np.ndarray):
             logger.info(

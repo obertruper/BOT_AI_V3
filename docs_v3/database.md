@@ -7,12 +7,13 @@
 ## Архитектура и технологии
 
 - **База данных:** `PostgreSQL` (порт `5555`)
-- **Драйвер:** `asyncpg` - высокопроизводительный асинхронный драйвер PostgreSQL  
+- **Драйвер:** `asyncpg` - высокопроизводительный асинхронный драйвер PostgreSQL
 - **Пулинг соединений:** Управляемые пулы соединений с автоматическим восстановлением
 - **Паттерны устойчивости:** Circuit Breaker, Retry с экспоненциальным backoff
 - **Миграции:** `Alembic` для управления версиями схемы БД
 
 Новая архитектура построена на пяти основных компонентах:
+
 1. **DBManager** - Центральная точка доступа к БД (Singleton)
 2. **Repositories** - Слой доступа к данным с оптимизацией производительности
 3. **TransactionManager** - Управление атомарными транзакциями (Unit of Work)
@@ -39,6 +40,7 @@
 ## Основные компоненты
 
 ### DBManager - Центральный фасад
+
 ```python
 from database.db_manager import get_db
 
@@ -52,12 +54,13 @@ ml_repo = db_manager.get_ml_prediction_repository()
 ```
 
 ### Репозитории с высокой производительностью
+
 ```python
 # Массовые операции (20x ускорение)
 orders = [Order(...) for _ in range(1000)]
 await order_repo.bulk_insert(orders, chunk_size=500)
 
-# Атомарные транзакции  
+# Атомарные транзакции
 async with db_manager.get_transaction_manager() as tx:
     order_id = await order_repo.create_order(order)
     await trade_repo.create_trade(trade)
@@ -65,11 +68,12 @@ async with db_manager.get_transaction_manager() as tx:
 ```
 
 ### Мониторинг и метрики
+
 ```python
 # Проверка здоровья БД
 health = await db_manager.get_monitoring_service().get_health_status()
 
-# Метрики производительности  
+# Метрики производительности
 metrics = await db_manager.get_monitoring_service().get_performance_metrics()
 ```
 
@@ -78,24 +82,28 @@ metrics = await db_manager.get_monitoring_service().get_performance_metrics()
 ## Ключевые особенности
 
 ### 🚀 Производительность
+
 - **Bulk операции**: 20x ускорение для массовых вставок/обновлений
 - **Prepared statements**: Кэширование скомпилированных запросов
 - **Connection pooling**: Эффективное использование соединений
 - **Query optimization**: Автоматическая оптимизация медленных запросов
 
-### 🛡️ Надёжность  
+### 🛡️ Надёжность
+
 - **Circuit Breaker**: Защита от каскадных сбоев
-- **Retry логика**: Умные повторы с экспоненциальным backoff  
+- **Retry логика**: Умные повторы с экспоненциальным backoff
 - **Transaction management**: Атомарность операций (Unit of Work)
 - **Health monitoring**: Автоматическое обнаружение проблем
 
 ### 📊 Мониторинг
+
 - **Real-time метрики**: Latency, throughput, error rates
 - **Health checks**: Проверка состояния БД и соединений
 - **Alerting**: Автоматические уведомления о проблемах
 - **Performance tracking**: Отслеживание медленных запросов
 
 ### 🔧 Масштабируемость
+
 - **Async-first**: Полностью асинхронная архитектура
 - **Resource pooling**: Эффективное управление ресурсами
 - **Horizontal scaling**: Готовность к горизонтальному масштабированию
@@ -106,6 +114,7 @@ metrics = await db_manager.get_monitoring_service().get_performance_metrics()
 ## Примеры использования
 
 ### Торговые операции
+
 ```python
 # Создание ордера с автоматическим SL/TP
 order = Order(
@@ -116,15 +125,16 @@ order = Order(
 )
 order_id = await order_repo.create_order(order)
 
-# Обновление статуса ордера  
+# Обновление статуса ордера
 await order_repo.update_order_status(
-    order_id, "filled", 
+    order_id, "filled",
     executed_quantity=Decimal("0.01"),
     executed_price=Decimal("50050")
 )
 ```
 
 ### ML предсказания
+
 ```python
 # Сохранение предсказания ML модели
 prediction = MLPrediction(
@@ -141,6 +151,7 @@ await ml_repo.bulk_insert(predictions)
 ```
 
 ### Аналитика и отчёты
+
 ```python
 # Статистика торговли
 stats = await trade_repo.get_trading_stats(

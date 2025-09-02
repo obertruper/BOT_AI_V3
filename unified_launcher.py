@@ -157,7 +157,7 @@ class UnifiedLauncher:
         # Конфигурация по умолчанию
         default_config = {
             "core": {
-                "enabled": True,
+                "enabled": False,  # Core будет встроен в API процесс (EMBED_CORE)
                 "command": "venv/bin/python main.py",
                 "name": "Core System",
                 "auto_restart": True,
@@ -189,6 +189,7 @@ class UnifiedLauncher:
                     "UNIFIED_MODE": "true",
                     "PYTHONPATH": str(Path(__file__).parent),
                     "PATH": f"{Path(__file__).parent}/venv/bin:" + os.environ.get("PATH", ""),
+                    "EMBED_CORE": "true",  # Встраиваем Core в веб-процесс для боевого режима
                 },
             },
             "frontend": {
@@ -513,6 +514,23 @@ class UnifiedLauncher:
             proc_info = self.process_manager.get_process_info(comp_name)
             if proc_info and proc_info.get("restart_count", 0) >= 3:
                 logger.warning(f"⏸️ Пропуск перезапуска {comp_name} - слишком много попыток")
+                return
+
+            # Проверяем, зарегистрирован ли компонент
+            if comp_name not in self.process_manager.processes:
+                logger.warning(f"⚠️ Компонент {comp_name} не зарегистрирован, попытка запуска")
+                # Если это API, пытаемся запустить через subprocess
+                if comp_name == "api" and "components" in self.config and comp_name in self.config["components"]:
+                    comp_config = self.config["components"][comp_name]
+                    if comp_config.get("enabled", False):
+                        await self.process_manager.start_component(
+                            name=comp_name,
+                            command=comp_config.get("command"),
+                            cwd=comp_config.get("cwd"),
+                            env=comp_config.get("env", {}),
+                            auto_restart=comp_config.get("auto_restart", True),
+                        )
+                        logger.info(f"✅ Компонент {comp_name} запущен")
                 return
 
             await self.process_manager.restart_component(comp_name)

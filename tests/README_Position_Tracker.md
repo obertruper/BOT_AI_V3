@@ -5,6 +5,7 @@
 ## 🚀 Быстрый старт
 
 ### Запуск всех тестов
+
 ```bash
 # Все тесты Position Tracker
 python3 test_position_tracker.py
@@ -17,6 +18,7 @@ python3 orchestrator_main.py --mode position-tracker
 ```
 
 ### Выборочные тесты
+
 ```bash
 # Только unit тесты (быстро)
 python3 test_position_tracker.py --unit
@@ -32,6 +34,7 @@ python3 test_position_tracker.py --quick
 ```
 
 ### С помощью pytest напрямую
+
 ```bash
 # Все Position Tracker тесты
 pytest -m position_tracker
@@ -49,6 +52,7 @@ pytest -m position_tracker -v -s
 ## 📊 Структура тестов
 
 ### Unit Tests (`tests/unit/test_position_tracker.py`)
+
 - ✅ Инициализация трекера
 - ✅ Добавление/удаление позиций
 - ✅ Расчет нереализованного PnL
@@ -61,6 +65,7 @@ pytest -m position_tracker -v -s
 **Зависимости:** Нет (все замокано)
 
 ### Integration Tests (`tests/integration/test_position_tracker_integration.py`)
+
 - ✅ Интеграция с базой данных PostgreSQL
 - ✅ Интеграция с ExchangeManager
 - ✅ API интеграция (FastAPI endpoints)
@@ -72,6 +77,7 @@ pytest -m position_tracker -v -s
 **Зависимости:** PostgreSQL (мокнутый), Exchange API (мокнутый)
 
 ### Performance Tests (`tests/performance/test_position_tracker_performance.py`)
+
 - ⚡ Скорость отслеживания позиций
 - ⚡ Множественные позиции (до 2000)
 - ⚡ Высокочастотные обновления
@@ -85,17 +91,21 @@ pytest -m position_tracker -v -s
 ## 🎨 Отчеты и результаты
 
 ### HTML Dashboard
+
 ```bash
 python3 test_position_tracker.py --html
 ```
+
 Создает: `test_results/position_tracker_report.html`
 
 ### JSON отчеты
+
 - `test_results/position_tracker_unit_report.json`
 - `test_results/position_tracker_integration_report.json`
 - `test_results/position_tracker_performance_report.json`
 
 ### Консольный отчет
+
 ```
 ================================================================================
 🎯 ENHANCED POSITION TRACKER TEST RESULTS
@@ -106,7 +116,7 @@ python3 test_position_tracker.py --html
 
 📋 Статистика по типам тестов:
   ✅ Unit: 25/25 (3.45s)
-  ✅ Integration: 15/15 (12.78s)  
+  ✅ Integration: 15/15 (12.78s)
   ✅ Performance: 12/12 (28.99s)
 
 🔢 Общая статистика:
@@ -120,6 +130,7 @@ python3 test_position_tracker.py --html
 ## 🔧 Настройка и конфигурация
 
 ### Переменные окружения
+
 ```bash
 # База данных (обязательно)
 export PGPORT=5555
@@ -133,18 +144,21 @@ export BYBIT_TESTNET=true
 ```
 
 ### Pytest конфигурация
+
 Файл `pytest.ini` уже настроен с маркерами:
+
 ```ini
 markers =
     position_tracker: Enhanced Position Tracker tests
     unit: Unit tests
-    integration: Integration tests  
+    integration: Integration tests
     performance: Performance tests
 ```
 
 ## 🐛 Решение проблем
 
 ### Ошибки импорта
+
 ```bash
 # Убедитесь что venv активирован
 source venv/bin/activate
@@ -154,6 +168,7 @@ pip install -r requirements.txt
 ```
 
 ### Ошибки базы данных
+
 ```bash
 # Проверьте PostgreSQL на порту 5555
 lsof -i :5555
@@ -163,6 +178,7 @@ alembic upgrade head
 ```
 
 ### Таймауты тестов
+
 ```bash
 # Увеличьте таймаут для медленных систем
 pytest -m position_tracker --timeout=300
@@ -171,13 +187,15 @@ pytest -m position_tracker --timeout=300
 ## 📈 Метрики производительности
 
 ### Ожидаемые показатели
+
 - **Создание позиции:** < 100ms
-- **Обновление метрик:** < 50ms  
+- **Обновление метрик:** < 50ms
 - **1000 позиций:** < 2s создание
 - **Высокочастотные обновления:** > 100 ops/sec
 - **Память на позицию:** < 0.1MB
 
 ### Benchmark тесты
+
 ```bash
 # Запустить только performance тесты
 python3 test_position_tracker.py --performance -v
@@ -189,16 +207,17 @@ pytest -m "position_tracker and performance" --profile
 ## 🚀 Интеграция в CI/CD
 
 ### GitHub Actions
+
 ```yaml
 - name: Run Position Tracker Tests
   run: |
     source venv/bin/activate
     python3 test_position_tracker.py --quick
-    
-- name: Generate Test Report  
+
+- name: Generate Test Report
   run: |
     python3 test_position_tracker.py --html
-    
+
 - name: Upload Test Results
   uses: actions/upload-artifact@v3
   with:
@@ -207,6 +226,7 @@ pytest -m "position_tracker and performance" --profile
 ```
 
 ### Docker
+
 ```dockerfile
 # Запуск тестов в контейнере
 RUN python3 test_position_tracker.py --quick --html
@@ -226,7 +246,7 @@ await suite.run_all_tests(verbose=True)
 
 # Выборочные тесты
 await suite.run_unit_tests()
-await suite.run_integration_tests() 
+await suite.run_integration_tests()
 await suite.run_performance_tests()
 
 # Отчеты

@@ -160,10 +160,10 @@ class TradeRepository(BaseRepository[Trade]):
             Trade ID
         """
         query = """
-        INSERT INTO trades 
-        (order_id, symbol, exchange, side, quantity, price, fee, fee_currency,
-         realized_pnl, commission, exchange_trade_id, status, executed_at, created_at, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        INSERT INTO trades
+        (order_id, symbol, exchange, side, quantity, price, commission, commission_asset,
+         realized_pnl, trade_id, executed_at, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id
         """
 
@@ -182,15 +182,12 @@ class TradeRepository(BaseRepository[Trade]):
                 data["side"],
                 data["quantity"],
                 data["price"],
-                data["fee"],
-                data["fee_currency"],
+                data.get("commission", 0),  # commission
+                data.get("fee_currency", "USDT"),  # commission_asset
                 data["realized_pnl"],
-                data["commission"],
-                data["exchange_trade_id"],
-                data["status"],
+                data["exchange_trade_id"],  # trade_id 
                 data["executed_at"],
                 data["created_at"],
-                data["metadata"],
             )
 
         trade.id = trade_id
@@ -217,7 +214,7 @@ class TradeRepository(BaseRepository[Trade]):
             Trading statistics dictionary
         """
         # Build WHERE clause
-        where_conditions = ["status = 'executed'"]
+        where_conditions = []  # В таблице trades нет колонки status, все записи считаются исполненными
         args = []
         param_counter = 1
 
@@ -241,22 +238,22 @@ class TradeRepository(BaseRepository[Trade]):
             args.append(end_date)
             param_counter += 1
 
-        where_clause = " AND ".join(where_conditions)
+        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
         query = f"""
-        SELECT 
+        SELECT
             COUNT(*) as total_trades,
             SUM(quantity * price) as total_volume,
             SUM(realized_pnl) as total_pnl,
             AVG(realized_pnl) as avg_pnl,
-            SUM(fee + commission) as total_fees,
+            SUM(commission) as total_fees,
             SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as winning_trades,
             SUM(CASE WHEN realized_pnl < 0 THEN 1 ELSE 0 END) as losing_trades,
             MAX(realized_pnl) as best_trade,
             MIN(realized_pnl) as worst_trade,
             COUNT(DISTINCT symbol) as unique_symbols,
-            SUM(CASE WHEN side = 'buy' THEN 1 ELSE 0 END) as buy_trades,
-            SUM(CASE WHEN side = 'sell' THEN 1 ELSE 0 END) as sell_trades
+            SUM(CASE WHEN side = 'BUY' THEN 1 ELSE 0 END) as buy_trades,
+            SUM(CASE WHEN side = 'SELL' THEN 1 ELSE 0 END) as sell_trades
         FROM trades
         WHERE {where_clause}
         """
@@ -290,9 +287,7 @@ class TradeRepository(BaseRepository[Trade]):
                 "sell_trades": record["sell_trades"] or 0,
             }
 
-    async def get_recent_trades(
-        self, limit: int = 50, exchange: str | None = None
-    ) -> list[Trade]:
+    async def get_recent_trades(self, limit: int = 50, exchange: str | None = None) -> list[Trade]:
         """
         Get recent trades.
 
@@ -303,7 +298,7 @@ class TradeRepository(BaseRepository[Trade]):
         Returns:
             List of recent trades
         """
-        query_parts = ["SELECT * FROM trades WHERE status = 'executed'"]
+        query_parts = ["SELECT * FROM trades WHERE 1=1"]  # Все записи считаются исполненными
         args = []
         param_counter = 1
 
@@ -337,7 +332,7 @@ class TradeRepository(BaseRepository[Trade]):
         Returns:
             List of daily PnL data
         """
-        where_conditions = ["status = 'executed'", f"executed_at >= NOW() - INTERVAL '{days} days'"]
+        where_conditions = [f"executed_at >= NOW() - INTERVAL '{days} days'"]  # Все записи считаются исполненными
         args = []
         param_counter = 1
 
@@ -346,15 +341,15 @@ class TradeRepository(BaseRepository[Trade]):
             args.append(exchange)
             param_counter += 1
 
-        where_clause = " AND ".join(where_conditions)
+        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
         query = f"""
-        SELECT 
+        SELECT
             DATE(executed_at) as trade_date,
             COUNT(*) as trades_count,
             SUM(realized_pnl) as daily_pnl,
             SUM(quantity * price) as daily_volume,
-            SUM(fee + commission) as daily_fees
+            SUM(commission) as daily_fees
         FROM trades
         WHERE {where_clause}
         GROUP BY DATE(executed_at)
@@ -391,7 +386,7 @@ class TradeRepository(BaseRepository[Trade]):
             List of symbol performance data
         """
         query = """
-        SELECT 
+        SELECT
             symbol,
             COUNT(*) as trades_count,
             SUM(realized_pnl) as total_pnl,
@@ -399,8 +394,7 @@ class TradeRepository(BaseRepository[Trade]):
             SUM(quantity * price) as total_volume,
             SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as winning_trades
         FROM trades
-        WHERE status = 'executed' 
-        AND executed_at >= NOW() - INTERVAL '%s days'
+        WHERE executed_at >= NOW() - INTERVAL '%s days'
         GROUP BY symbol
         HAVING COUNT(*) > 0
         ORDER BY total_pnl DESC
@@ -448,7 +442,7 @@ class TradeRepository(BaseRepository[Trade]):
 
         query = """
         DELETE FROM trades
-        WHERE executed_at < $1 
+        WHERE executed_at < $1
         AND status IN ('cancelled', 'failed')
         """
 

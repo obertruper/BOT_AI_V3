@@ -75,7 +75,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ status, isConnected 
           {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
         </div>
       </div>
-      
+
       {/* Main Status */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
         <span style={{ fontSize: '24px', marginRight: '12px' }}>{getStatusIcon(status.status)}</span>
@@ -99,7 +99,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ status, isConnected 
             </span>
           </div>
         </div>
-        
+
         <div style={{ backgroundColor: '#374151', borderRadius: '6px', padding: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '14px', color: '#d1d5db' }}>ML Manager</span>
@@ -108,7 +108,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ status, isConnected 
             </span>
           </div>
         </div>
-        
+
         <div style={{ backgroundColor: '#374151', borderRadius: '6px', padding: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '14px', color: '#d1d5db' }}>Exchanges</span>
@@ -117,7 +117,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ status, isConnected 
             </span>
           </div>
         </div>
-        
+
         <div style={{ backgroundColor: '#374151', borderRadius: '6px', padding: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '14px', color: '#d1d5db' }}>Risk Manager</span>

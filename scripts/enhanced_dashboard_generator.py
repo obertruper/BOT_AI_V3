@@ -495,7 +495,7 @@ class EnhancedDashboardGenerator:
             <h1>🚀 BOT_AI_V3 Interactive Test Dashboard</h1>
             <div class="subtitle">Comprehensive Testing & Code Analysis • Click components to expand details</div>
         </div>
-        
+
         <div class="legend">
             <h3>📊 Status Legend & Quick Actions</h3>
             <div class="legend-item">
@@ -514,7 +514,7 @@ class EnhancedDashboardGenerator:
                 <div class="legend-icon legend-pending"></div>
                 <span>Pending - Not executed</span>
             </div>
-            
+
             <div class="filter-buttons">
                 <button class="filter-btn active" onclick="filterComponents('all')">Show All</button>
                 <button class="filter-btn" onclick="filterComponents('success')">Success Only</button>
@@ -523,68 +523,68 @@ class EnhancedDashboardGenerator:
                 <button class="filter-btn" onclick="collapseAll()">Collapse All</button>
             </div>
         </div>
-        
+
         <div class="stats-grid">
             <div class="stat-card" onclick="showOverallStats()">
                 <div class="stat-icon">📋</div>
-                <div class="stat-value">{stats['total_tests']}</div>
+                <div class="stat-value">{stats["total_tests"]}</div>
                 <div class="stat-label">Total Tests</div>
             </div>
-            
+
             <div class="stat-card" onclick="filterComponents('success')">
                 <div class="stat-icon">✅</div>
-                <div class="stat-value">{stats['passed_tests']}</div>
+                <div class="stat-value">{stats["passed_tests"]}</div>
                 <div class="stat-label">Passed Tests</div>
             </div>
-            
+
             <div class="stat-card" onclick="filterComponents('issues')">
                 <div class="stat-icon">❌</div>
-                <div class="stat-value">{stats['failed_tests']}</div>
+                <div class="stat-value">{stats["failed_tests"]}</div>
                 <div class="stat-label">Failed Tests</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-icon">📊</div>
-                <div class="stat-value">{stats['coverage_percent']:.1f}%</div>
+                <div class="stat-value">{stats["coverage_percent"]:.1f}%</div>
                 <div class="stat-label">Code Coverage</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-icon">⏱️</div>
-                <div class="stat-value">{stats['execution_time']:.1f}s</div>
+                <div class="stat-value">{stats["execution_time"]:.1f}s</div>
                 <div class="stat-label">Execution Time</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-icon">🎯</div>
-                <div class="stat-value">{len([c for c in components.values() if c['status'] == 'success'])}/{len(components)}</div>
+                <div class="stat-value">{len([c for c in components.values() if c["status"] == "success"])}/{len(components)}</div>
                 <div class="stat-label">Components Passed</div>
             </div>
         </div>
-        
+
         <div class="components">
             <h2 style="margin-bottom: 20px; color: #333;">🔍 Test Components Details • Click to Expand</h2>
             {self._generate_interactive_components(components, results or {{}})}
-            
+
             <div class="coverage-bar">
-                <div class="coverage-fill" style="width: {stats['coverage_percent']}%">
-                    {stats['coverage_percent']:.1f}% Code Coverage
+                <div class="coverage-fill" style="width: {stats["coverage_percent"]}%">
+                    {stats["coverage_percent"]:.1f}% Code Coverage
                 </div>
             </div>
         </div>
-        
+
         <div class="timestamp">
-            Generated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} • Interactive Dashboard v2.0 • BOT_AI_V3
+            Generated at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} • Interactive Dashboard v2.0 • BOT_AI_V3
         </div>
     </div>
 
     <script>
         let expandedComponents = new Set();
-        
+
         function toggleComponent(componentId) {{
             const details = document.getElementById('details-' + componentId);
             const icon = document.getElementById('icon-' + componentId);
-            
+
             if (details.classList.contains('expanded')) {{
                 details.classList.remove('expanded');
                 icon.classList.remove('expanded');
@@ -599,15 +599,15 @@ class EnhancedDashboardGenerator:
         function filterComponents(filter) {{
             const components = document.querySelectorAll('.component-item');
             const buttons = document.querySelectorAll('.filter-btn');
-            
+
             // Update active button
             buttons.forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
-            
+
             components.forEach(comp => {{
                 const statusEl = comp.querySelector('.component-status');
                 const statusText = statusEl.textContent.toLowerCase();
-                
+
                 let show = false;
                 if (filter === 'all') {{
                     show = true;
@@ -616,7 +616,7 @@ class EnhancedDashboardGenerator:
                 }} else if (filter === 'issues' && (statusText.includes('failed') || statusText.includes('partial'))) {{
                     show = true;
                 }}
-                
+
                 comp.style.display = show ? 'flex' : 'none';
             }});
         }}
@@ -628,7 +628,7 @@ class EnhancedDashboardGenerator:
                     const componentId = comp.id.replace('component-', '');
                     const details = document.getElementById('details-' + componentId);
                     const icon = document.getElementById('icon-' + componentId);
-                    
+
                     if (!details.classList.contains('expanded')) {{
                         details.classList.add('expanded');
                         icon.classList.add('expanded');
@@ -644,7 +644,7 @@ class EnhancedDashboardGenerator:
                 const componentId = comp.id.replace('component-', '');
                 const details = document.getElementById('details-' + componentId);
                 const icon = document.getElementById('icon-' + componentId);
-                
+
                 if (details.classList.contains('expanded')) {{
                     details.classList.remove('expanded');
                     icon.classList.remove('expanded');
@@ -657,7 +657,7 @@ class EnhancedDashboardGenerator:
             const successRate = ({stats["passed_tests"]} / Math.max({stats["total_tests"]}, 1) * 100).toFixed(1);
             const failureRate = ({stats["failed_tests"]} / Math.max({stats["total_tests"]}, 1) * 100).toFixed(1);
             const componentsSuccessRate = ({len([c for c in components.values() if c["status"] == "success"])} / {len(components)} * 100).toFixed(1);
-            
+
             alert(`📊 BOT_AI_V3 Testing Overview\\n\\n` +
                   `✅ Tests Passed: {stats["passed_tests"]} (${successRate}%)\\n` +
                   `❌ Tests Failed: {stats["failed_tests"]} (${failureRate}%)\\n` +
@@ -685,11 +685,11 @@ class EnhancedDashboardGenerator:
         function searchComponents(query) {{
             const components = document.querySelectorAll('.component-item');
             const searchQuery = query.toLowerCase();
-            
+
             components.forEach(comp => {{
                 const name = comp.querySelector('.component-name').textContent.toLowerCase();
                 const description = comp.querySelector('.component-description')?.textContent.toLowerCase() || '';
-                
+
                 if (name.includes(searchQuery) || description.includes(searchQuery)) {{
                     comp.style.display = 'flex';
                 }} else {{
@@ -727,22 +727,22 @@ class EnhancedDashboardGenerator:
                 f"""
             <div class="component-item" id="component-{key}">
                 <div class="component-header" onclick="toggleComponent('{key}')">
-                    <div class="component-icon">{component['icon']}</div>
-                    <div class="component-name">{component['name']}</div>
-                    <div class="component-status status-{component['status']}">{component['status'].upper()}</div>
+                    <div class="component-icon">{component["icon"]}</div>
+                    <div class="component-name">{component["name"]}</div>
+                    <div class="component-status status-{component["status"]}">{component["status"].upper()}</div>
                     <div class="expand-icon" id="icon-{key}">▼</div>
                 </div>
-                
+
                 <div class="component-details" id="details-{key}">
                     <div class="importance-badge {importance_class}">{importance}</div>
-                    
+
                     <div class="component-description">{description}</div>
-                    
+
                     <div class="checks-list">
                         <div class="checks-title">🔍 Что проверяется:</div>
-                        {''.join(f'<div class="check-item">{check}</div>' for check in checks)}
+                        {"".join(f'<div class="check-item">{check}</div>' for check in checks)}
                     </div>
-                    
+
                     <div class="component-output">
                         <div class="output-header">📄 Вывод выполнения:</div>
                         {self._format_output_for_html(full_output)}

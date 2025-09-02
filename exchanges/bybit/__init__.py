@@ -17,9 +17,10 @@ Bybit Exchange Module для BOT_Trading v3.0
     from exchanges.bybit import clean_symbol
 """
 
-from .adapter import BybitAPIClient, BybitLegacyAdapter, get_bybit_client
+from .adapter import BybitAPIClient, BybitLegacyAdapter
 from .bybit_exchange import BybitExchange, create_bybit_exchange
 from .client import BybitClient, clean_symbol
+from .singleton_client import get_bybit_client, BybitClientSingleton
 
 # Экспорт всех публичных классов и функций
 __all__ = [
@@ -28,10 +29,12 @@ __all__ = [
     "create_bybit_exchange",
     # Основной унифицированный клиент
     "BybitClient",
+    # Синглтон для единого клиента
+    "get_bybit_client",
+    "BybitClientSingleton",
     # Legacy совместимость
     "BybitLegacyAdapter",
     "BybitAPIClient",
-    "get_bybit_client",
     # Утилиты
     "clean_symbol",
 ]

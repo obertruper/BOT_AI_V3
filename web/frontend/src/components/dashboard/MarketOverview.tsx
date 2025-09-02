@@ -47,7 +47,7 @@ const MarketOverview: React.FC = () => {
           <Globe className="w-5 h-5 mr-2 text-purple-400" />
           Market Overview
         </h3>
-        
+
         <div className="flex items-center space-x-2 px-3 py-1 bg-purple-400/20 rounded-full">
           <BarChart3 className="w-4 h-4 text-purple-400" />
           <span className="text-sm text-purple-400 font-medium">Live Data</span>
@@ -66,7 +66,7 @@ const MarketOverview: React.FC = () => {
             <div key={market.symbol} className="relative group">
               <div className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl blur-lg"
                    style={{
-                     background: isPositive 
+                     background: isPositive
                        ? 'linear-gradient(90deg, rgba(34,197,94,0.1) 0%, rgba(16,185,129,0.1) 100%)'
                        : 'linear-gradient(90deg, rgba(239,68,68,0.1) 0%, rgba(220,38,38,0.1) 100%)'
                    }}></div>
@@ -87,7 +87,7 @@ const MarketOverview: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="text-right">
                   <div className="text-sm font-bold text-white">
                     {formatPrice(market.price, market.symbol)}
@@ -109,7 +109,7 @@ const MarketOverview: React.FC = () => {
           <span className="text-sm font-medium text-gray-300">Market Summary</span>
           <span className="text-xs text-gray-500 px-2 py-1 bg-gray-900/50 rounded-lg">24h</span>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 bg-green-400/10 rounded-lg border border-green-400/20">
             <div className="text-xl font-bold text-green-400">

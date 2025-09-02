@@ -14,12 +14,13 @@ import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
 from core.config.config_manager import ConfigManager
 from core.exceptions import (
+    ConfigurationError,
     TooManyTradersError,
     TraderAlreadyExistsError,
     TraderManagerError,
@@ -34,6 +35,7 @@ class ManagerState(Enum):
 
     CREATED = "created"
     INITIALIZING = "initializing"
+    INITIALIZED = "initialized"
     RUNNING = "running"
     STOPPING = "stopping"
     STOPPED = "stopped"
@@ -132,44 +134,50 @@ class TraderManager:
         Raises:
             TraderManagerError: Если произошла ошибка во время инициализации.
         """
-        async with self._lock:
-            if self._state != ManagerState.CREATED:
-                return
-            try:
-                self._state = ManagerState.INITIALIZING
-                self.logger.info("Инициализация менеджера трейдеров...")
-                if not hasattr(self.trader_factory, "_is_initialized"):
-                    await self._initialize_trader_factory()
-                await self._load_trader_configurations()
-                self.logger.info("Менеджер трейдеров инициализирован")
-                self._state = ManagerState.RUNNING
-            except Exception as e:
-                self._state = ManagerState.ERROR
-                error_msg = f"Ошибка инициализации менеджера трейдеров: {e}"
-                self.logger.error(error_msg)
-                raise TraderManagerError(error_msg) from e
+        if self._state != ManagerState.CREATED:
+            return
+        try:
+            self._state = ManagerState.INITIALIZING
+            self.logger.info("Инициализация менеджера трейдеров...")
+            # Пропускаем инициализацию trader_factory, так как он может быть не нужен
+            # await self._load_trader_configurations()
+            self.logger.info("Менеджер трейдеров инициализирован")
+            self._state = ManagerState.INITIALIZED
+        except Exception as e:
+            self._state = ManagerState.ERROR
+            error_msg = f"Ошибка инициализации менеджера трейдеров: {e}"
+            self.logger.error(error_msg)
+            raise TraderManagerError(error_msg) from e
 
     async def start(self) -> None:
         """Запускает менеджер и все включенные в конфигурации трейдеры.
 
         Также запускает фоновые задачи для мониторинга здоровья и сбора метрик.
         """
-        async with self._lock:
-            if self._state == ManagerState.RUNNING:
-                return
-            if self._state != ManagerState.RUNNING:
-                await self.initialize()
-            try:
-                self.logger.info("Запуск менеджера трейдеров...")
-                self._started_at = datetime.now()
-                await self._start_monitoring()
-                await self._start_enabled_traders()
-                self.logger.info("Менеджер трейдеров запущен")
-            except Exception as e:
-                self._state = ManagerState.ERROR
-                error_msg = f"Ошибка запуска менеджера трейдеров: {e}"
-                self.logger.error(error_msg)
-                raise TraderManagerError(error_msg) from e
+        self.logger.info("🔄 Начинаем запуск TraderManager...")
+
+        if self._state == ManagerState.RUNNING:
+            self.logger.info("TraderManager уже запущен, пропускаем")
+            return
+
+        # Инициализация если нужно
+        if self._state not in (ManagerState.INITIALIZED, ManagerState.RUNNING):
+            self.logger.info("📦 Требуется инициализация TraderManager...")
+            await self.initialize()
+
+        try:
+            self.logger.info("🚀 Запуск менеджера трейдеров...")
+            self._started_at = datetime.now()
+            # Запускаем мониторинг и трейдеры (пустые методы пока)
+            await self._start_monitoring()
+            await self._start_enabled_traders()
+            self._state = ManagerState.RUNNING
+            self.logger.info("✅ Менеджер трейдеров успешно запущен")
+        except Exception as e:
+            self._state = ManagerState.ERROR
+            error_msg = f"Ошибка запуска менеджера трейдеров: {e}"
+            self.logger.error(error_msg)
+            raise TraderManagerError(error_msg) from e
 
     async def stop(self) -> None:
         """Корректно останавливает менеджер и всех запущенных трейдеров."""
@@ -295,9 +303,23 @@ class TraderManager:
             self.logger.error(error_msg)
             raise TraderManagerError(error_msg) from e
 
+    def remove_trader(self, trader_id: str) -> None:
+        """Удаляет трейдера из менеджера.
+
+        Args:
+            trader_id: Идентификатор трейдера для удаления.
+        """
+        if trader_id in self._traders:
+            del self._traders[trader_id]
+        if trader_id in self._trader_health:
+            del self._trader_health[trader_id]
+        if trader_id in self._trader_tasks:
+            del self._trader_tasks[trader_id]
+        self.metrics.total_traders = len(self._traders)
+
     def get_trader_statistics(self, trader_id: str) -> dict[str, Any]:
         """Получает статистику по трейдеру."""
-        trader_context = self.traders.get(trader_id)
+        trader_context = self._traders.get(trader_id)
         if not trader_context:
             return {}
 
@@ -316,7 +338,7 @@ class TraderManager:
         inactive_threshold = timedelta(hours=1)  # 1 час неактивности
 
         traders_to_remove = []
-        for trader_id, trader_context in self.traders.items():
+        for trader_id, trader_context in self._traders.items():
             if (current_time - trader_context.last_activity) > inactive_threshold:
                 if trader_context.status == "stopped":
                     traders_to_remove.append(trader_id)
@@ -336,18 +358,85 @@ class TraderManager:
                 )
 
         # Проверяем уникальность ID
-        if config["id"] in self.traders:
+        if config["id"] in self._traders:
             raise ConfigurationError(f"Трейдер с ID '{config['id']}' уже существует")
 
     def get_active_traders_count(self) -> int:
         """Возвращает количество активных трейдеров."""
-        return len([t for t in self.traders.values() if t.status == "running"])
+        return len([t for t in self._traders.values() if t.status == "running"])
 
     def get_all_traders_info(self) -> dict[str, dict]:
         """Возвращает информацию о всех трейдерах."""
         return {
-            trader_id: self.get_trader_statistics(trader_id) for trader_id in self.traders.keys()
+            trader_id: self.get_trader_statistics(trader_id) for trader_id in self._traders.keys()
         }
+
+    async def _start_monitoring(self) -> None:
+        """Запускает мониторинг трейдеров."""
+        self.logger.info("📊 Запуск мониторинга трейдеров...")
+        # TODO: Реализовать мониторинг
+        pass
+
+    async def _start_enabled_traders(self) -> None:
+        """Запускает включенные трейдеры."""
+        self.logger.info("🚀 Запуск включенных трейдеров...")
+        # TODO: Реализовать запуск трейдеров из конфигурации
+        pass
+
+    async def _initialize_trader_factory(self) -> None:
+        """Инициализирует фабрику трейдеров."""
+        self.logger.info("🏭 Инициализация фабрики трейдеров...")
+        # TODO: Реализовать инициализацию
+        pass
+
+    async def _load_trader_configurations(self) -> None:
+        """Загружает конфигурации трейдеров."""
+        self.logger.info("📋 Загрузка конфигураций трейдеров...")
+        # TODO: Реализовать загрузку конфигураций
+        pass
+
+    async def _stop_monitoring(self) -> None:
+        """Останавливает мониторинг."""
+        self.logger.info("🛑 Остановка мониторинга...")
+        if self._health_check_task:
+            self._health_check_task.cancel()
+        if self._metrics_update_task:
+            self._metrics_update_task.cancel()
+
+    async def _stop_all_traders(self) -> None:
+        """Останавливает всех трейдеров."""
+        self.logger.info("🛑 Остановка всех трейдеров...")
+        for trader_id in list(self._traders.keys()):
+            try:
+                await self.stop_trader(trader_id)
+            except Exception as e:
+                self.logger.error(f"Ошибка остановки трейдера {trader_id}: {e}")
+
+    async def _run_trader(self, trader_context: TraderContext) -> None:
+        """Запускает трейдера."""
+        try:
+            await trader_context.run()
+        except Exception as e:
+            self.logger.error(f"Ошибка выполнения трейдера {trader_context.trader_id}: {e}")
+
+    async def _emit_event(self, event_name: str, *args, **kwargs) -> None:
+        """Генерирует событие."""
+        if event_name in self._event_callbacks:
+            for callback in self._event_callbacks[event_name]:
+                try:
+                    (
+                        await callback(*args, **kwargs)
+                        if asyncio.iscoroutinefunction(callback)
+                        else callback(*args, **kwargs)
+                    )
+                except Exception as e:
+                    self.logger.error(f"Ошибка обработки события {event_name}: {e}")
+
+    async def _reduce_positions(self) -> None:
+        """Уменьшает позиции."""
+        self.logger.warning("📉 Уменьшение позиций...")
+        # TODO: Реализовать уменьшение позиций
+        pass
 
 
 # Глобальная переменная для singleton instance

@@ -302,6 +302,10 @@ class EnhancedPositionTracker:
         """Получить позиции по символу"""
         return [pos for pos in self.tracked_positions.values() if pos.symbol == symbol]
 
+    async def get_all_positions(self) -> list[TrackedPosition]:
+        """Получить все позиции (алиас для get_active_positions для совместимости)"""
+        return await self.get_active_positions()
+
     async def calculate_unrealized_pnl(self, position_id: str) -> Decimal | None:
         """
         Рассчитать нереализованный PnL позиции
@@ -355,11 +359,19 @@ class EnhancedPositionTracker:
                 return False
 
             # Обновляем локальные данные
-            position.current_price = Decimal(str(exchange_data.get("markPrice", 0)))
-            position.size = Decimal(str(exchange_data.get("size", position.size)))
+            # exchange_data может быть либо dict (из fetch_positions), либо Position объект
+            if isinstance(exchange_data, dict):
+                position.current_price = Decimal(str(exchange_data.get("markPrice", 0)))
+                position.size = Decimal(str(exchange_data.get("size", position.size)))
+                size_value = exchange_data.get("size", 0)
+            else:
+                # Если это объект Position
+                position.current_price = Decimal(str(getattr(exchange_data, "mark_price", 0)))
+                position.size = Decimal(str(getattr(exchange_data, "size", position.size)))
+                size_value = getattr(exchange_data, "size", 0)
 
             # Проверяем статус
-            if exchange_data.get("size", 0) == 0:
+            if size_value == 0:
                 await self.remove_position(position_id, "closed")
                 return True
 
@@ -504,8 +516,9 @@ class EnhancedPositionTracker:
 
         try:
             exchange_instance = await self.exchange_manager.get_exchange(exchange)
-            ticker = await exchange_instance.fetch_ticker(symbol)
-            return Decimal(str(ticker["last"]))
+            # Исправляем: используем get_ticker вместо несуществующего fetch_ticker
+            ticker = await exchange_instance.get_ticker(symbol)
+            return Decimal(str(ticker.last_price))
         except Exception as e:
             logger.error(f"❌ Ошибка получения цены {symbol}: {e}")
             return Decimal("0")
@@ -537,7 +550,7 @@ class EnhancedPositionTracker:
         try:
             query = """
             SELECT position_id, symbol, side, size, entry_price, stop_loss, take_profit, exchange, created_at
-            FROM tracked_positions 
+            FROM tracked_positions
             WHERE status = 'active'
             """
 
@@ -568,8 +581,8 @@ class EnhancedPositionTracker:
 
         try:
             query = """
-            INSERT INTO tracked_positions 
-            (position_id, symbol, side, size, entry_price, stop_loss, take_profit, 
+            INSERT INTO tracked_positions
+            (position_id, symbol, side, size, entry_price, stop_loss, take_profit,
              exchange, status, health, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             ON CONFLICT (position_id) DO UPDATE SET
@@ -647,6 +660,169 @@ class EnhancedPositionTracker:
                 count += 1
 
         return total_time / count if count > 0 else 0
+
+    async def sync_positions(self) -> None:
+        """Синхронизирует позиции с биржей"""
+        try:
+            if not self.exchange_manager:
+                logger.warning("ExchangeManager не установлен, пропускаем синхронизацию")
+                return
+
+            # Получаем позиции с всех бирж
+            for exchange_name in self.exchange_manager.exchanges:
+                try:
+                    positions = await self.exchange_manager.get_positions(exchange_name)
+
+                    # Сформируем множество актуальных символов с непустым размером на бирже
+                    present_symbols: set[str] = set()
+
+                    # Обновляем tracked_positions по фактическим данным биржи
+                    for position_data in positions:
+                        # position_data теперь объект Position из exchanges/base/models.py (либо dict в некоторых источниках)
+                        symbol = (
+                            position_data.symbol
+                            if hasattr(position_data, "symbol")
+                            else position_data.get("symbol") if isinstance(position_data, dict) else None
+                        )
+
+                        if not symbol:
+                            continue
+
+                        # Определяем размер позиции (contracts|size) и текущую/входную цену
+                        size_val = (
+                            getattr(position_data, "size", None)
+                            if hasattr(position_data, "size")
+                            else position_data.get("contracts") if isinstance(position_data, dict) else None
+                        )
+                        try:
+                            size_val = Decimal(str(size_val or 0))
+                        except Exception:
+                            size_val = Decimal("0")
+
+                        # Пропускаем нулевые позиции, но зафиксируем символ, чтобы ниже корректно обработать закрытие
+                        if size_val and size_val != 0:
+                            present_symbols.add(symbol)
+
+                        # Если размер нулевой — на обновление/создание не тратим ресурсы (будет обработано удаление ниже)
+                        if size_val == 0:
+                            continue
+
+                        # Создаем или обновляем локальную позицию
+                        position_id = f"{exchange_name}_{symbol}"
+
+                        if position_id not in self.tracked_positions:
+                            # Создаем новую позицию
+                            tracked_position = TrackedPosition(
+                                position_id=position_id,
+                                symbol=symbol,
+                                side=(
+                                    getattr(position_data, "side", "")
+                                    if hasattr(position_data, "side")
+                                    else position_data.get("side", "")
+                                ),
+                                size=size_val,
+                                entry_price=Decimal(
+                                    str(
+                                        getattr(position_data, "entry_price", 0)
+                                        if hasattr(position_data, "entry_price")
+                                        else position_data.get("entry_price", 0)
+                                    )
+                                ),
+                                current_price=Decimal(
+                                    str(
+                                        getattr(position_data, "mark_price", 0)
+                                        if hasattr(position_data, "mark_price")
+                                        else position_data.get("markPrice", 0)
+                                    )
+                                ),
+                                stop_loss=(
+                                    Decimal(str(position_data.stop_loss))
+                                    if hasattr(position_data, "stop_loss") and position_data.stop_loss is not None
+                                    else Decimal(str(position_data.get("stop_loss")))
+                                    if isinstance(position_data, dict) and position_data.get("stop_loss") is not None
+                                    else None
+                                ),
+                                take_profit=(
+                                    Decimal(str(position_data.take_profit))
+                                    if hasattr(position_data, "take_profit") and position_data.take_profit is not None
+                                    else Decimal(str(position_data.get("take_profit")))
+                                    if isinstance(position_data, dict) and position_data.get("take_profit") is not None
+                                    else None
+                                ),
+                                exchange=exchange_name,
+                            )
+                            self.tracked_positions[position_id] = tracked_position
+                        else:
+                            # Обновляем существующую
+                            tracked_position = self.tracked_positions[position_id]
+                            tracked_position.current_price = Decimal(
+                                str(
+                                    getattr(position_data, "mark_price", 0)
+                                    if hasattr(position_data, "mark_price")
+                                    else position_data.get("markPrice", 0)
+                                )
+                            )
+                            tracked_position.size = size_val
+                            tracked_position.updated_at = datetime.now()
+
+                            # Обновляем метрики PnL, если присутствуют
+                            if tracked_position.metrics:
+                                try:
+                                    unreal = (
+                                        getattr(position_data, "unrealised_pnl", None)
+                                        if hasattr(position_data, "unrealised_pnl")
+                                        else position_data.get("unrealisedPnl")
+                                        if isinstance(position_data, dict)
+                                        else None
+                                    )
+                                    real = (
+                                        getattr(position_data, "realised_pnl", None)
+                                        if hasattr(position_data, "realised_pnl")
+                                        else position_data.get("realisedPnl")
+                                        if isinstance(position_data, dict)
+                                        else None
+                                    )
+                                    if unreal is not None:
+                                        tracked_position.metrics.unrealized_pnl = Decimal(str(unreal))
+                                    if real is not None:
+                                        tracked_position.metrics.realized_pnl = Decimal(str(real))
+                                except Exception:
+                                    pass
+
+                    # Закрываем/удаляем из отслеживания локальные позиции, которых больше нет на бирже
+                    # и те, у которых размер стал нулевым
+                    stale_ids: list[str] = []
+                    for pos_id, tracked in list(self.tracked_positions.items()):
+                        if tracked.exchange != exchange_name:
+                            continue
+                        # Если символ не в списке актуальных с ненулевым размером — считаем позицию закрытой
+                        if tracked.symbol not in present_symbols:
+                            stale_ids.append(pos_id)
+
+                    for pos_id in stale_ids:
+                        await self.remove_position(pos_id, "closed")
+
+                    logger.info(
+                        f"✅ Синхронизировано {len(present_symbols)} активных позиций с {exchange_name}; "
+                        f"закрыто: {len(stale_ids)}"
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Ошибка синхронизации с {exchange_name}: {e}")
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка синхронизации позиций: {e}")
+
+    async def calculate_total_pnl(self) -> Decimal:
+        """Рассчитывает общий PnL по всем позициям"""
+        total_pnl = Decimal("0")
+
+        for position in self.tracked_positions.values():
+            # Суммируем realized и unrealized PnL из метрик
+            if position.metrics:
+                total_pnl += position.metrics.realized_pnl + position.metrics.unrealized_pnl
+
+        logger.info(f"💰 Общий PnL: ${total_pnl:.2f}")
+        return total_pnl
 
 
 # Глобальный экземпляр для использования в системе

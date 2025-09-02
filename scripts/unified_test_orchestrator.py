@@ -431,7 +431,7 @@ class UnifiedTestOrchestrator:
     async def run_dynamic_sltp_suite(self):
         """Специализированная функция для запуска Dynamic SL/TP test suite"""
         print(f"\n{Colors.HEADER}📊 DYNAMIC SL/TP TEST SUITE{Colors.ENDC}")
-        print(f"{Colors.CYAN}{'='*50}{Colors.ENDC}")
+        print(f"{Colors.CYAN}{'=' * 50}{Colors.ENDC}")
 
         # Определяем все компоненты Dynamic SL/TP
         dynamic_sltp_components = [
@@ -832,64 +832,73 @@ class UnifiedTestOrchestrator:
             <h1>🚀 BOT_AI_V3 Test Dashboard</h1>
             <div class="subtitle">Comprehensive Testing & Code Analysis</div>
         </div>
-        
+
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-icon">📋</div>
-                <div class="stat-value">{self.stats['total_tests']}</div>
+                <div class="stat-value">{self.stats["total_tests"]}</div>
                 <div class="stat-label">Total Tests</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-icon">✅</div>
-                <div class="stat-value">{self.stats['passed_tests']}</div>
+                <div class="stat-value">{self.stats["passed_tests"]}</div>
                 <div class="stat-label">Passed Tests</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-icon">❌</div>
-                <div class="stat-value">{self.stats['failed_tests']}</div>
+                <div class="stat-value">{self.stats["failed_tests"]}</div>
                 <div class="stat-label">Failed Tests</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-icon">📊</div>
-                <div class="stat-value">{self.stats['coverage_percent']:.1f}%</div>
+                <div class="stat-value">{self.stats["coverage_percent"]:.1f}%</div>
                 <div class="stat-label">Code Coverage</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-icon">⏱️</div>
-                <div class="stat-value">{self.stats['execution_time']:.1f}s</div>
+                <div class="stat-value">{self.stats["execution_time"]:.1f}s</div>
                 <div class="stat-label">Execution Time</div>
             </div>
-            
+
             <div class="stat-card">
                 <div class="stat-icon">🎯</div>
-                <div class="stat-value">{len([c for c in self.components.values() if c['status'] == 'success'])}/{len(self.components)}</div>
+                <div class="stat-value">{
+            len([c for c in self.components.values() if c["status"] == "success"])
+        }/{len(self.components)}</div>
                 <div class="stat-label">Components Passed</div>
             </div>
         </div>
-        
+
         <div class="components">
             <h2 style="margin-bottom: 20px; color: #333;">Test Components Status</h2>
-            {"".join([f'''
+            {
+            "".join(
+                [
+                    f'''
             <div class="component-item">
-                <div class="component-icon">{component['icon']}</div>
-                <div class="component-name">{component['name']}</div>
-                <div class="component-status status-{component['status']}">{component['status'].upper()}</div>
+                <div class="component-icon">{component["icon"]}</div>
+                <div class="component-name">{component["name"]}</div>
+                <div class="component-status status-{component["status"]}">{component["status"].upper()}</div>
             </div>
-            ''' for component in self.components.values()])}
-            
+            '''
+                    for component in self.components.values()
+                ]
+            )
+        }
+
             <div class="coverage-bar">
-                <div class="coverage-fill" style="width: {self.stats['coverage_percent']}%">
-                    {self.stats['coverage_percent']:.1f}% Coverage
+                <div class="coverage-fill" style="width: {self.stats["coverage_percent"]}%">
+                    {self.stats["coverage_percent"]:.1f}% Coverage
                 </div>
             </div>
         </div>
-        
+
         <div class="timestamp">
-            Generated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+            Generated at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         </div>
     </div>
 </body>

@@ -116,9 +116,10 @@ class TransactionManager:
             transaction = conn.transaction()
             await transaction.start()
 
-            logger.debug(
-                f"Transaction {transaction_id} started with isolation level: {isolation_level}"
-            )
+            # Закомментировано для уменьшения логов
+            # logger.debug(
+            #     f"Transaction {transaction_id} started with isolation level: {isolation_level}"
+            # )
 
             yield conn
 
@@ -127,9 +128,11 @@ class TransactionManager:
             metrics.state = TransactionState.COMMITTED
             metrics.end_time = time.time()
 
-            logger.debug(
-                f"Transaction {transaction_id} committed successfully in {metrics.duration_ms:.2f}ms"
-            )
+            # Логируем только медленные транзакции
+            if metrics.duration_ms > 100:
+                logger.debug(
+                    f"Transaction {transaction_id} committed successfully in {metrics.duration_ms:.2f}ms"
+                )
 
         except asyncpg.DeadlockDetectedError as e:
             # Handle deadlock
@@ -137,8 +140,9 @@ class TransactionManager:
             metrics.error = f"Deadlock detected: {e!s}"
             metrics.end_time = time.time()
 
+            # Safe rollback with connection check
             if conn and transaction:
-                await transaction.rollback()
+                await self._safe_rollback(conn, transaction, transaction_id)
 
             logger.error(f"Transaction {transaction_id} deadlock detected: {e}")
             raise
@@ -149,8 +153,9 @@ class TransactionManager:
             metrics.error = str(e)
             metrics.end_time = time.time()
 
+            # Safe rollback with connection check
             if conn and transaction:
-                await transaction.rollback()
+                await self._safe_rollback(conn, transaction, transaction_id)
 
             logger.error(f"Transaction {transaction_id} rolled back due to error: {e}")
             raise
@@ -162,6 +167,52 @@ class TransactionManager:
 
             # Clean up metrics after delay (for monitoring)
             asyncio.create_task(self._cleanup_transaction_metrics(transaction_id))
+
+    async def _safe_rollback(self, conn: asyncpg.Connection, transaction, transaction_id: str):
+        """
+        Safely rollback transaction with connection state checks.
+
+        Args:
+            conn: Database connection
+            transaction: Transaction object
+            transaction_id: Transaction identifier
+        """
+        try:
+            # Check if connection is still alive
+            if conn.is_closed():
+                logger.warning(
+                    f"Transaction {transaction_id}: Connection is closed, cannot rollback"
+                )
+                return
+
+            # Check transaction state if available
+            if hasattr(transaction, "_state"):
+                if transaction._state in ("committed", "rolledback"):
+                    logger.debug(
+                        f"Transaction {transaction_id} already in state: {transaction._state}"
+                    )
+                    return
+
+            # Attempt rollback with timeout
+            try:
+                await asyncio.wait_for(transaction.rollback(), timeout=5.0)
+                # logger.debug(f"Transaction {transaction_id} rolled back successfully")
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Transaction {transaction_id} rollback timed out - connection may be dead"
+                )
+
+        except asyncpg.InterfaceError as e:
+            error_msg = str(e).lower()
+            if any(
+                phrase in error_msg
+                for phrase in ["connection is closed", "connection closed", "underlying connection"]
+            ):
+                logger.warning(f"Transaction {transaction_id}: Cannot rollback - {e}")
+            else:
+                logger.error(f"Transaction {transaction_id} rollback interface error: {e}")
+        except Exception as e:
+            logger.error(f"Transaction {transaction_id} unexpected rollback error: {e}")
 
     async def _cleanup_transaction_metrics(self, transaction_id: str, delay: int = 60):
         """

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   LineChart,
   Line,
@@ -44,8 +44,8 @@ interface PredictionVisualizationProps {
   onSymbolSelect?: (symbol: string) => void;
 }
 
-const SignalIndicator: React.FC<{ 
-  signal: 'LONG' | 'SHORT' | 'NEUTRAL'; 
+const SignalIndicator: React.FC<{
+  signal: 'LONG' | 'SHORT' | 'NEUTRAL';
   confidence: number;
   strength: number;
 }> = ({ signal, confidence, strength }) => {
@@ -93,8 +93,8 @@ const SignalIndicator: React.FC<{
   );
 };
 
-const TimeframeProbabilities: React.FC<{ 
-  probabilities: { timeframes: string[]; data: number[][] } 
+const TimeframeProbabilities: React.FC<{
+  probabilities: { timeframes: string[]; data: number[][] }
 }> = ({ probabilities }) => {
   const chartData = probabilities.timeframes.map((tf, index) => ({
     timeframe: tf,
@@ -132,8 +132,8 @@ const TimeframeProbabilities: React.FC<{
   );
 };
 
-const ReturnsChart: React.FC<{ 
-  returns: { '15m': number; '1h': number; '4h': number; '12h': number } 
+const ReturnsChart: React.FC<{
+  returns: { '15m': number; '1h': number; '4h': number; '12h': number }
 }> = ({ returns }) => {
   const chartData = Object.entries(returns).map(([timeframe, value]) => ({
     timeframe,
@@ -150,8 +150,8 @@ const ReturnsChart: React.FC<{
         <BarChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
           <XAxis dataKey="timeframe" stroke="#9CA3AF" />
-          <YAxis 
-            stroke="#9CA3AF" 
+          <YAxis
+            stroke="#9CA3AF"
             tickFormatter={(value) => `${(value * 100).toFixed(2)}%`}
           />
           <Tooltip
@@ -175,10 +175,10 @@ const ReturnsChart: React.FC<{
   );
 };
 
-const RiskLevels: React.FC<{ 
-  riskLevel: string; 
-  stopLoss?: number; 
-  takeProfit?: number; 
+const RiskLevels: React.FC<{
+  riskLevel: string;
+  stopLoss?: number;
+  takeProfit?: number;
   currentPrice: number;
 }> = ({ riskLevel, stopLoss, takeProfit, currentPrice }) => {
   const getRiskColor = () => {
@@ -196,7 +196,7 @@ const RiskLevels: React.FC<{
         <AlertCircle className="w-5 h-5 mr-2" />
         Risk Management
       </h3>
-      
+
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-gray-400">Risk Level</span>
@@ -248,7 +248,7 @@ const PredictionVisualization: React.FC<PredictionVisualizationProps> = ({
   onSymbolSelect
 }) => {
   const [activeSymbol, setActiveSymbol] = useState(selectedSymbol || data[0]?.symbol);
-  
+
   useEffect(() => {
     if (selectedSymbol) {
       setActiveSymbol(selectedSymbol);
@@ -301,7 +301,7 @@ const PredictionVisualization: React.FC<PredictionVisualizationProps> = ({
           </div>
         </div>
 
-        <SignalIndicator 
+        <SignalIndicator
           signal={selectedPrediction.signalType}
           confidence={selectedPrediction.confidence}
           strength={selectedPrediction.strength}

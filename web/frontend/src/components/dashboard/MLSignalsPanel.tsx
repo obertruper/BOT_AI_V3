@@ -49,8 +49,8 @@ const MLSignalsPanel: React.FC = () => {
   const longSignals = mlSignals.filter(s => s.signal_type === 'LONG' || s.signal_type === 'buy').length;
   const shortSignals = mlSignals.filter(s => s.signal_type === 'SHORT' || s.signal_type === 'sell').length;
   const flatSignals = mlSignals.filter(s => s.signal_type === 'FLAT' || s.signal_type === 'NEUTRAL').length;
-  const avgConfidence = mlSignals.length > 0 
-    ? mlSignals.reduce((sum, s) => sum + s.confidence, 0) / mlSignals.length 
+  const avgConfidence = mlSignals.length > 0
+    ? mlSignals.reduce((sum, s) => sum + s.confidence, 0) / mlSignals.length
     : 0;
 
   return (
@@ -63,7 +63,7 @@ const MLSignalsPanel: React.FC = () => {
           <Brain className="w-5 h-5 mr-2 text-pink-400" />
           ML Signals
         </h3>
-        
+
         <div className="flex items-center space-x-3">
           <div className={`px-3 py-2 rounded-lg ${avgConfidence >= 0.8 ? 'bg-green-400/20' : avgConfidence >= 0.6 ? 'bg-yellow-400/20' : 'bg-red-400/20'} backdrop-blur-sm`}>
             <div className="text-xs text-gray-300 font-medium">Avg Confidence</div>
@@ -105,7 +105,7 @@ const MLSignalsPanel: React.FC = () => {
           <Clock className="w-4 h-4 mr-2" />
           Recent Signals
         </h4>
-        
+
         {recentSignals.length > 0 ? (
           recentSignals.map((signal) => {
             const SignalIcon = getSignalIcon(signal.signal_type);
@@ -117,7 +117,7 @@ const MLSignalsPanel: React.FC = () => {
               <div key={signal.id} className="relative group">
                 <div className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl blur-lg"
                      style={{
-                       background: signal.signal_type === 'buy' 
+                       background: signal.signal_type === 'buy'
                          ? 'linear-gradient(90deg, rgba(34,197,94,0.1) 0%, rgba(16,185,129,0.1) 100%)'
                          : 'linear-gradient(90deg, rgba(239,68,68,0.1) 0%, rgba(220,38,38,0.1) 100%)'
                      }}></div>
@@ -139,7 +139,7 @@ const MLSignalsPanel: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="text-right">
                       <div className={`text-lg font-bold ${confidenceColor}`}>
                         {(signal.confidence * 100).toFixed(1)}%
@@ -179,7 +179,7 @@ const MLSignalsPanel: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     {signal.risk_level && (
                       <span className={`text-xs px-2 py-1 rounded bg-gray-600 ${getRiskLevelColor(signal.risk_level)}`}>
@@ -218,7 +218,7 @@ const MLSignalsPanel: React.FC = () => {
               <span className="text-xs text-green-400 font-medium">Active</span>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-3">
             <div className="p-2 bg-gray-900/30 rounded-lg">
               <div className="text-xs text-gray-400 mb-1">Features</div>

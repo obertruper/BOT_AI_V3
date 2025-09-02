@@ -393,7 +393,9 @@ class TradingMonitor:
             status_style = (
                 "green"
                 if order["status"] == "FILLED"
-                else "yellow" if order["status"] == "PENDING" else "dim"
+                else "yellow"
+                if order["status"] == "PENDING"
+                else "dim"
             )
 
             table.add_row(

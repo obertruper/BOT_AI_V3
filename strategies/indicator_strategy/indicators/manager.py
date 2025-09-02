@@ -33,7 +33,7 @@ class IndicatorManager:
         }
 
         # Пул потоков для параллельных вычислений
-        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.executor = ThreadPoolExecutor(max_workers=2)  # Оптимизировано для уменьшения нагрузки
 
         # Инициализация индикаторов
         self._initialize_indicators()

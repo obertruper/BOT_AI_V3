@@ -176,14 +176,24 @@ class UnsupportedStrategyError(BaseTradingError):
 class ExchangeError(BaseTradingError):
     """Ошибка загрузки данных."""
 
-    def __init__(self, message: str, **kwargs):
+    def __init__(self, message: str, exchange_name: str | None = None, **kwargs):
+        # Если указано имя биржи, добавляем его в сообщение
+        if exchange_name:
+            full_message = f"[{exchange_name}] {message}"
+        else:
+            full_message = message
+
         super().__init__(
-            message=message,
+            message=full_message,
             severity=ErrorSeverity.MEDIUM,
             category=ErrorCategory.SYSTEM,
             error_code="DATA_LOAD_ERROR",
             **kwargs,
         )
+
+        # Сохраняем имя биржи в контексте
+        if exchange_name:
+            self.context["exchange_name"] = exchange_name
 
 
 class TraderFactoryError(BaseTradingError):

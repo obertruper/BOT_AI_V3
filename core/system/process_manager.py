@@ -170,12 +170,35 @@ class ProcessManager:
                         log_buffer.clear()
                         last_flush = now
 
-                    # Выводим только критические ошибки для снижения шума
+                    # Выводим только значимые сообщения с корректным уровнем
                     line_str = line.decode("utf-8", errors="replace").strip()
-                    if b"CRITICAL" in line or (b"ERROR" in line and b"BrokenPipeError" not in line):
+                    lower = line.lower()
+
+                    # Явное соответствие уровням из исходной строки
+                    if b" - ERROR - " in line or b"CRITICAL" in line:
                         logger.error(f"[{name}] {line_str}")
-                    elif b"timeout" in line.lower() or b"connection" in line.lower():
+                    elif b" - WARNING - " in line:
                         logger.warning(f"[{name}] {line_str}")
+                    else:
+                        # Эвристики по проблемным ключевым словам
+                        is_problem_connection = b"connection" in lower and (
+                            b"error" in lower
+                            or b"fail" in lower
+                            or b"refused" in lower
+                            or b"exhausted" in lower
+                        )
+                        is_timeout = b"timeout" in lower
+                        is_benign_init = (
+                            b"initialized" in lower or b"created" in lower
+                        ) and b"circuit breaker" in lower
+
+                        if (is_problem_connection or is_timeout) and not is_benign_init:
+                            logger.warning(f"[{name}] {line_str}")
+                        # Иначе подавляем до DEBUG, чтобы не поднимать уровень лишним INFO
+                        elif b" - INFO - " in line:
+                            logger.info(f"[{name}] {line_str}")
+                        else:
+                            logger.debug(f"[{name}] {line_str}")
 
             except Exception as e:
                 logger.debug(f"Stream reading error for {name}: {e}")

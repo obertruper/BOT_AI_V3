@@ -146,25 +146,25 @@ const MLDirectionDistribution: React.FC = () => {
         <div className="h-32 flex items-end gap-4">
           {/* LONG бар */}
           <div className="flex-1 flex flex-col items-center">
-            <div 
+            <div
               className="w-full bg-gradient-to-t from-green-600 to-green-400 rounded-t-lg transition-all duration-500"
               style={{ height: `${stats.long_percentage}%` }}
             />
             <div className="text-xs text-gray-400 mt-2">LONG</div>
           </div>
-          
+
           {/* SHORT бар */}
           <div className="flex-1 flex flex-col items-center">
-            <div 
+            <div
               className="w-full bg-gradient-to-t from-red-600 to-red-400 rounded-t-lg transition-all duration-500"
               style={{ height: `${stats.short_percentage}%` }}
             />
             <div className="text-xs text-gray-400 mt-2">SHORT</div>
           </div>
-          
+
           {/* FLAT бар */}
           <div className="flex-1 flex flex-col items-center">
-            <div 
+            <div
               className="w-full bg-gradient-to-t from-gray-600 to-gray-400 rounded-t-lg transition-all duration-500"
               style={{ height: `${stats.flat_percentage}%` }}
             />
@@ -202,7 +202,7 @@ const MLDirectionDistribution: React.FC = () => {
       <div className="mt-4 p-3 bg-blue-900/10 border border-blue-700/30 rounded-lg">
         <div className="text-xs text-blue-400 font-medium mb-1">Рекомендации</div>
         <div className="text-xs text-gray-300">
-          {stats.flat_percentage > 40 
+          {stats.flat_percentage > 40
             ? 'Высокий процент FLAT может указывать на неопределенность рынка. Рассмотрите снижение размера позиций.'
             : stats.long_percentage > 60
             ? 'Преобладание LONG сигналов. Возможен бычий тренд, но будьте осторожны с перекупленностью.'

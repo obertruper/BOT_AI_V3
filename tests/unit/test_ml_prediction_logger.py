@@ -27,7 +27,6 @@ class TestMLPredictionLoggerCore:
             patch("ml.ml_prediction_logger.setup_logger") as mock_setup_logger,
             patch("ml.ml_prediction_logger.AsyncPGPool"),
         ):
-
             mock_logger = Mock()
             mock_setup_logger.return_value = mock_logger
 
@@ -49,7 +48,6 @@ class TestMLPredictionLoggerCore:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool"),
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()
@@ -84,7 +82,6 @@ class TestMLPredictionLoggerCore:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool"),
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()
@@ -148,7 +145,6 @@ class TestMLPredictionLoggerCore:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool"),
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()
@@ -192,7 +188,6 @@ class TestMLPredictionLoggerCore:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool") as mock_pool,
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()
@@ -261,7 +256,6 @@ class TestMLLoggingFormatting:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool"),
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()
@@ -322,7 +316,6 @@ class TestMLLoggingFormatting:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool"),
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()
@@ -369,7 +362,6 @@ class TestMLLoggingIntegration:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool") as mock_pool,
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()
@@ -401,7 +393,6 @@ class TestMLLoggingIntegration:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool"),
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()
@@ -426,7 +417,6 @@ class TestMLLoggingIntegration:
             patch("ml.ml_prediction_logger.setup_logger"),
             patch("ml.ml_prediction_logger.AsyncPGPool"),
         ):
-
             from ml.ml_prediction_logger import MLPredictionLogger
 
             logger = MLPredictionLogger()

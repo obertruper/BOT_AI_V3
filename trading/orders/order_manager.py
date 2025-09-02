@@ -248,9 +248,9 @@ class OrderManager:
                 # Создаем OrderRequest для Bybit
                 from exchanges.base.order_types import (
                     OrderRequest,
-                    OrderSide as ExchangeOrderSide,
-                    OrderType as ExchangeOrderType,
                 )
+                from exchanges.base.order_types import OrderSide as ExchangeOrderSide
+                from exchanges.base.order_types import OrderType as ExchangeOrderType
 
                 # Маппинг типов ордеров
                 order_type_map = {
@@ -267,27 +267,81 @@ class OrderManager:
                     "sell": ExchangeOrderSide.SELL,
                 }
 
-                # Определяем position_idx для hedge mode (исправлено для правильного enum)
-                position_idx = 1 if order.side == OrderSide.BUY else 2  # Для hedge mode
-                # position_idx = 0  # Для one-way mode
+                # Определяем position_idx для one-way mode (по умолчанию)
+                # One-way mode: positionIdx = 0
+                # Hedge mode: 1=Buy/Long, 2=Sell/Short
+                position_idx = 0  # Используем one-way mode по умолчанию
 
                 # 🛡️ Валидация SL/TP перед отправкой (исправление для Bybit API)
                 validated_sl = order.stop_loss
                 validated_tp = order.take_profit
                 current_price = float(order.price) if order.price else None
+                if current_price is None:
+                    # Рыночный ордер или цена не задана — получим текущую цену с биржи
+                    try:
+                        exchange = await self.exchange_registry.get_exchange(order.exchange)
+                        if exchange:
+                            ticker = await exchange.get_ticker(order.symbol)
+                            # Унифицированная модель Ticker обычно имеет last_price/price
+                            current_price = float(
+                                getattr(ticker, "last_price", None)
+                                or getattr(ticker, "price", None)
+                                or getattr(ticker, "close_price", None)
+                            )
+                            self.logger.info(
+                                f"💱 Получена текущая цена для {order.symbol}: {current_price}"
+                            )
+                    except Exception as e:
+                        self.logger.warning(
+                            f"⚠️ Не удалось получить текущую цену для {order.symbol}: {e}"
+                        )
 
-                if order.stop_loss and order.take_profit and current_price:
+                # Если один из уровней отсутствует, заполним из конфигурации (гарантия SL/TP при открытии)
+                try:
+                    from core.config.config_manager import ConfigManager
+                    cm = ConfigManager()
+                    cfg = cm.get_config()
+                    enhanced_sltp = cfg.get("enhanced_sltp", {}) if isinstance(cfg, dict) else {}
+                    initial_sltp = enhanced_sltp.get("initial", {})
+                    sl_pct_default = float(initial_sltp.get("stop_loss_percent_min", 1.5)) / 100.0
+                    tp_pct_default = float(initial_sltp.get("take_profit_percent_min", 4.0)) / 100.0
+                except Exception:
+                    sl_pct_default = 0.015
+                    tp_pct_default = 0.04
+
+                if current_price:
+                    # Если есть TP, но нет SL — рассчитаем SL по умолчанию
+                    if validated_tp and not validated_sl:
+                        if order.side == OrderSide.BUY:
+                            validated_sl = round(current_price * (1.0 - sl_pct_default), 10)
+                        else:
+                            validated_sl = round(current_price * (1.0 + sl_pct_default), 10)
+                        self.logger.info(
+                            f"🛡️ Авто-расчёт SL по умолчанию: SL={validated_sl} (pct={sl_pct_default:.2%})"
+                        )
+
+                    # Если есть SL, но нет TP — рассчитаем TP по умолчанию
+                    if validated_sl and not validated_tp:
+                        if order.side == OrderSide.BUY:
+                            validated_tp = round(current_price * (1.0 + tp_pct_default), 10)
+                        else:
+                            validated_tp = round(current_price * (1.0 - tp_pct_default), 10)
+                        self.logger.info(
+                            f"🎯 Авто-расчёт TP по умолчанию: TP={validated_tp} (pct={tp_pct_default:.2%})"
+                        )
+
+                if validated_sl and validated_tp and current_price:
                     # Проверяем корректность SL/TP для разных направлений
                     if order.side == OrderSide.SELL:  # SHORT позиция
                         # Для SELL (SHORT): SL должен быть ВЫШЕ цены, TP должен быть НИЖЕ цены
-                        if order.stop_loss <= current_price:
+                        if validated_sl <= current_price:
                             self.logger.error(
                                 f"❌ НЕКОРРЕКТНЫЙ SL для SHORT: SL={order.stop_loss} <= Price={current_price}"
                             )
                             # Возможное исправление - но лучше отклонить ордер
                             return False
 
-                        if order.take_profit >= current_price:
+                        if validated_tp >= current_price:
                             self.logger.error(
                                 f"❌ НЕКОРРЕКТНЫЙ TP для SHORT: TP={order.take_profit} >= Price={current_price}"
                             )
@@ -295,13 +349,13 @@ class OrderManager:
 
                     elif order.side == OrderSide.BUY:  # LONG позиция
                         # Для BUY (LONG): SL должен быть НИЖЕ цены, TP должен быть ВЫШЕ цены
-                        if order.stop_loss >= current_price:
+                        if validated_sl >= current_price:
                             self.logger.error(
                                 f"❌ НЕКОРРЕКТНЫЙ SL для LONG: SL={order.stop_loss} >= Price={current_price}"
                             )
                             return False
 
-                        if order.take_profit <= current_price:
+                        if validated_tp <= current_price:
                             self.logger.error(
                                 f"❌ НЕКОРРЕКТНЫЙ TP для LONG: TP={order.take_profit} <= Price={current_price}"
                             )
@@ -318,22 +372,42 @@ class OrderManager:
                 )
                 exchange_side = order_side_map.get(order_side_value, ExchangeOrderSide.BUY)
 
+                # Форматируем количество перед отправкой
+                formatted_quantity = order.quantity
+                if order.exchange.lower() == "bybit":
+                    try:
+                        from exchanges.bybit.client import format_quantity
+                        from exchanges.bybit.instrument_settings import get_instrument_settings
+                        
+                        settings = get_instrument_settings(order.symbol)
+                        # Преобразуем все параметры в числа
+                        formatted_quantity_str = format_quantity(
+                            quantity=float(order.quantity),
+                            qty_step=float(settings.get("qtyStep", 0.1)),
+                            min_qty=float(settings.get("minOrderQty", 0.1)),
+                            max_qty=float(settings.get("maxOrderQty", float("inf"))),
+                            symbol=order.symbol
+                        )
+                        # format_quantity возвращает строку, преобразуем обратно в float
+                        formatted_quantity = float(formatted_quantity_str)
+                        self.logger.info(f"📏 Отформатировано количество: {order.quantity} -> {formatted_quantity}")
+                    except Exception as e:
+                        self.logger.warning(f"⚠️ Не удалось отформатировать количество: {e}")
+                        formatted_quantity = float(order.quantity)
+
                 order_request = OrderRequest(
                     symbol=order.symbol,
                     side=exchange_side,
                     order_type=order_type_map.get(order.order_type.value, ExchangeOrderType.LIMIT),
-                    quantity=order.quantity,
+                    quantity=formatted_quantity,  # Используем отформатированное количество
                     price=order.price if order.order_type.value == "limit" else None,
                     # ВАЖНО: Используем валидированные SL/TP
                     stop_loss=validated_sl,
                     take_profit=validated_tp,
                     position_idx=position_idx,  # Для правильного режима позиций
-                    # Дополнительные параметры для Bybit
-                    exchange_params={
-                        "tpslMode": "Full",  # Или "Partial" для частичного закрытия
-                        "tpOrderType": "Market",
-                        "slOrderType": "Market",
-                    },
+                    # НЕ добавляем tpslMode в основной ордер - это вызывает ошибку!
+                    # SL/TP устанавливаются отдельно после создания позиции
+                    exchange_params={},
                 )
 
                 # Отправляем ордер
@@ -580,8 +654,34 @@ class OrderManager:
         try:
             db_manager = await get_db()
             async with db_manager.transaction() as db:
-                await db.merge(order)
-                await db.commit()
+                # Используем UPDATE для обновления существующего ордера
+                # Получаем статус в правильном формате для БД
+                if hasattr(order.status, 'value'):
+                    # Используем enum напрямую для корректного маппинга
+                    status_value = order.status.value
+                else:
+                    # Если это строка, нормализуем её
+                    status_value = str(order.status).lower()
+                    # Специальные маппинги для совместимости
+                    if status_value == "partiallifilled":
+                        status_value = "partially_filled"
+                    elif status_value == "new":
+                        status_value = "pending"
+
+                await db.execute(
+                    """
+                    UPDATE orders
+                    SET status = $1,
+                        filled_quantity = $2,
+                        average_price = $3,
+                        updated_at = NOW()
+                    WHERE order_id = $4
+                    """,
+                    status_value,
+                    getattr(order, "filled_quantity", 0),
+                    getattr(order, "average_price", 0),
+                    order.order_id if hasattr(order, "order_id") else order.id,
+                )
         except Exception as e:
             self.logger.error(f"Ошибка обновления ордера в БД: {e}")
 

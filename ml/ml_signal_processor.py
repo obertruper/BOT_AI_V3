@@ -10,17 +10,16 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import and_, select
 
 from core.config.config_manager import ConfigManager
 from core.logger import setup_logger
 from data.data_loader import DataLoader
 from database.db_manager import get_db
 from database.models.base_models import SignalType
-from database.models.market_data import RawMarketData
 from database.models.signal import Signal
 from ml.ml_manager import MLManager
 from ml.realtime_indicator_calculator import RealTimeIndicatorCalculator
+from production_features_config import REAL_FEATURES_240 as REQUIRED_FEATURES_240
 
 # Импорт UnifiedPrediction для поддержки нового формата
 try:
@@ -57,30 +56,46 @@ class MLSignalProcessor:
         self.config = config
         self.config_manager = config_manager
 
-        # Пороги для принятия решений из конфигурации
+        # Пороги для принятия решений из конфигурации (читаем из ml.filters)
         # Поддержка и Pydantic и dict конфигурации
         if hasattr(config, "ml"):
             ml_config = config.ml
-            # Конвертируем Pydantic в dict
             if hasattr(ml_config, "model_dump"):
                 ml_config = ml_config.model_dump()
             elif hasattr(ml_config, "dict"):
                 ml_config = ml_config.dict()
             else:
-                # Fallback на прямой доступ к атрибутам
-                ml_config = {
-                    "min_confidence": getattr(ml_config, "min_confidence", 0.3),
-                    "min_signal_strength": getattr(ml_config, "min_signal_strength", 0.25),
-                    "risk_tolerance": getattr(ml_config, "risk_tolerance", "MEDIUM"),
-                }
+                ml_config = dict(ml_config)
         else:
             ml_config = config.get("ml", {})
-        # Используем правильные пороги из ml_config.yaml
-        self.min_confidence = ml_config.get(
-            "min_confidence", 0.3
-        )  # Из конфига confidence_threshold: 0.3
-        self.min_signal_strength = ml_config.get("min_signal_strength", 0.25)  # Базовое значение
-        self.risk_tolerance = ml_config.get("risk_tolerance", "MEDIUM")  # Консервативный подход
+
+        filters_cfg = {}
+        if isinstance(ml_config, dict):
+            filters_cfg = ml_config.get("filters", {}) or {}
+
+        # «Мягкие» значения по умолчанию
+        self.min_confidence = filters_cfg.get(
+            "min_confidence", ml_config.get("min_confidence", 0.30)
+        )
+        # Порог уверенности по типам сигналов (кастомизируемые)
+        self.min_confidence_long = filters_cfg.get(
+            "min_confidence_long", self.min_confidence
+        )
+        self.min_confidence_short = filters_cfg.get(
+            "min_confidence_short", self.min_confidence
+        )
+        self.neutral_min_confidence = filters_cfg.get(
+            "neutral_min_confidence", 0.80
+        )
+        self.min_signal_strength = filters_cfg.get(
+            "min_signal_strength", ml_config.get("min_signal_strength", 0.30)
+        )
+        self.risk_tolerance = ml_config.get("risk_tolerance", "MEDIUM")
+
+        # Пороговые метрики качества (configurable)
+        self.min_quality_score = filters_cfg.get("min_quality_score", 0.30)
+        self.min_expected_value = filters_cfg.get("min_expected_value", 0.0015)
+        self.min_risk_reward = filters_cfg.get("min_risk_reward", 1.10)
 
         # Кэш для предсказаний с коротким TTL
         self.prediction_cache = {}
@@ -240,9 +255,9 @@ class MLSignalProcessor:
 
         # Обработка NEUTRAL сигналов
         if ml_signal_type == "NEUTRAL":
-            if prediction.confidence < 0.8:
+            if prediction.confidence < self.neutral_min_confidence:
                 logger.debug(
-                    f"🎯 NEUTRAL сигнал с уверенностью {prediction.confidence:.1%} < 80%, пропускаем"
+                    f"🎯 NEUTRAL сигнал с уверенностью {prediction.confidence:.1%} < {self.neutral_min_confidence:.0%}, пропускаем"
                 )
                 return None
 
@@ -260,7 +275,11 @@ class MLSignalProcessor:
         # Получаем текущую цену
         entry_price = (additional_data.get("current_price") if additional_data else None) or 0.0
 
-        # Создаем сигнал
+        # Создаем сигнал с явным указанием временных меток
+        from datetime import UTC, datetime
+
+        current_time = datetime.now(UTC)
+
         signal = Signal(
             strategy_name="UnifiedMLStrategy",
             symbol=symbol,
@@ -271,6 +290,8 @@ class MLSignalProcessor:
             confidence=prediction.confidence,
             strength=prediction.signal_strength,
             exchange=exchange,
+            created_at=current_time,
+            updated_at=current_time,
             metadata={
                 "risk_level": risk_level,
                 "quality_score": (
@@ -400,7 +421,26 @@ class MLSignalProcessor:
             f"(цена: ${current_price:.2f})"
         )
 
-        # Создаем сигнал
+        # Подготовим EV на основе SL/TP, если они рассчитаны
+        ev_from_sltp = 0.0
+        try:
+            if (
+                locals().get("stop_loss") is not None
+                and locals().get("take_profit") is not None
+                and current_price
+                and current_price > 0
+            ):
+                risk_pct = abs(current_price - locals().get("stop_loss")) / current_price
+                reward_pct = abs(locals().get("take_profit") - current_price) / current_price
+                ev_from_sltp = reward_pct * confidence - risk_pct * (1 - confidence)
+        except Exception:
+            ev_from_sltp = 0.0
+
+        # Создаем сигнал с явным указанием временных меток
+        # ВАЖНО: если выше рассчитали SL/TP (по pct или дефолтным), используем их,
+        # чтобы downstream-логика (EV, RR) работала корректно
+        current_time = datetime.now(UTC)
+
         signal = Signal(
             symbol=symbol,
             exchange=exchange,
@@ -409,15 +449,18 @@ class MLSignalProcessor:
             confidence=confidence,  # Точное значение без округления
             strategy_name="PatchTST_ML",
             suggested_price=current_price,
-            suggested_stop_loss=prediction.get("stop_loss"),
-            suggested_take_profit=prediction.get("take_profit"),
+            suggested_stop_loss=locals().get("stop_loss"),
+            suggested_take_profit=locals().get("take_profit"),
             suggested_quantity=suggested_quantity,  # ДОБАВЛЕНО: правильный размер в единицах
             suggested_position_size=position_size_usd,  # ДОБАВЛЕНО: размер в USD для signal_processor
+            created_at=current_time,
+            updated_at=current_time,
             indicators={
                 "ml_predictions": prediction.get("predictions", {}),
                 "risk_level": risk_level,
                 "signal_strength": signal_strength_value,
                 "success_probability": prediction.get("success_probability", 0.5),  # Добавлено!
+                "expected_value": ev_from_sltp,
             },
             extra_data={
                 "ml_model": "UnifiedPatchTST",
@@ -583,7 +626,7 @@ class MLSignalProcessor:
 
     async def validate_signal(self, signal: Signal) -> bool:
         """
-        Дополнительная валидация сигнала.
+        Улучшенная валидация сигнала с quality score и Expected Value.
 
         Args:
             signal: Сигнал для валидации
@@ -591,51 +634,218 @@ class MLSignalProcessor:
         Returns:
             True если сигнал валиден
         """
-        # Специальное логирование для SHORT сигналов
+        # Расчет quality score
+        ev = self._extract_expected_value(signal)
+        # Подстраховка: если EV не найден (0.0), пересчитаем из SL/TP
+        if (
+            abs(ev) < 1e-9
+            and signal.suggested_stop_loss
+            and signal.suggested_take_profit
+            and signal.suggested_price
+        ):
+            try:
+                risk = (
+                    abs(signal.suggested_price - signal.suggested_stop_loss)
+                    / signal.suggested_price
+                )
+                reward = (
+                    abs(signal.suggested_take_profit - signal.suggested_price)
+                    / signal.suggested_price
+                )
+                ev = reward * signal.confidence - risk * (1 - signal.confidence)
+            except Exception:
+                ev = 0.0
+
+        quality_components = {
+            "confidence": signal.confidence,
+            "strength": signal.strength,
+            "risk_reward": self._calculate_risk_reward_ratio(signal),
+            "expected_value": ev,
+        }
+
+        # Комплексный quality score
+        quality_score = (
+            quality_components["confidence"] * 0.25
+            + quality_components["strength"] * 0.25
+            + min(quality_components["risk_reward"] / 3.0, 1.0) * 0.25
+            + min(abs(quality_components["expected_value"]) / 0.02, 1.0) * 0.25
+        )
+
+        # Логирование для анализа
         if signal.signal_type == SignalType.SHORT:
-            logger.warning(
-                f"🔴 Валидация SHORT сигнала {signal.symbol}: "
-                f"conf={signal.confidence:.2f} (min={self.min_confidence}), "
-                f"strength={signal.strength:.2f} (min={self.min_signal_strength})"
+            logger.info(
+                f"🔴 Валидация SHORT {signal.symbol}: quality={quality_score:.2f}, "
+                f"conf={signal.confidence:.2f}, EV={quality_components['expected_value']:.4f}, "
+                f"RR={quality_components['risk_reward']:.2f}"
             )
 
-        # Проверяем минимальную уверенность
-        if signal.confidence < self.min_confidence:
-            if signal.signal_type == SignalType.SHORT:
-                logger.error(
-                    f"❌🔴 SHORT сигнал {signal.symbol} отклонен: низкая уверенность "
-                    f"{signal.confidence:.2f} < {self.min_confidence}"
+        # Доп. правило: нейтральные сигналы принимаем только при высокой уверенности (конфигурируемо)
+        if signal.signal_type == SignalType.NEUTRAL and signal.confidence is not None:
+            if signal.confidence < self.neutral_min_confidence:
+                # Near-miss логирование (10% от порога)
+                if signal.confidence >= 0.9 * self.neutral_min_confidence:
+                    logger.info(
+                        f"🟨 Почти прошёл NEUTRAL {signal.symbol}: confidence={signal.confidence:.2f} ~> min {self.neutral_min_confidence:.2f}"
+                    )
+                # Убираем WARNING для нейтральных отклонений, логируем как INFO
+                logger.info(
+                    f"❌ NEUTRAL сигнал {signal.symbol} отклонен: уверенность {signal.confidence:.2f} < {self.neutral_min_confidence}"
+                )
+                return False
+
+        # Минимальный quality score (из конфигурации)
+        min_quality_score = self.min_quality_score
+        if quality_score < min_quality_score:
+            # Near-miss логирование (10% от порога)
+            if quality_score >= 0.9 * min_quality_score:
+                logger.info(
+                    f"🟨 Почти прошёл {signal.symbol}: quality={quality_score:.2f} ~> min {min_quality_score:.2f}"
+                )
+            logger.warning(
+                f"❌ Сигнал {signal.symbol} отклонен: quality score "
+                f"{quality_score:.2f} < {min_quality_score}"
+            )
+            return False
+
+        # Проверяем минимальную уверенность (персигнальный порог)
+        eff_min_conf = self.min_confidence
+        if signal.signal_type == SignalType.LONG:
+            eff_min_conf = self.min_confidence_long
+        elif signal.signal_type == SignalType.SHORT:
+            eff_min_conf = self.min_confidence_short
+        elif signal.signal_type == SignalType.NEUTRAL:
+            eff_min_conf = self.neutral_min_confidence
+
+        if signal.confidence < eff_min_conf:
+            # Near-miss логирование (10% от порога)
+            if signal.confidence >= 0.9 * eff_min_conf:
+                logger.info(
+                    f"🟨 Почти прошёл {signal.symbol}: confidence={signal.confidence:.2f} ~> min {eff_min_conf:.2f}"
+                )
+            # Для NEUTRAL уже выше логируем как INFO; для остальных оставляем WARNING
+            if signal.signal_type == SignalType.NEUTRAL:
+                logger.info(
+                    f"❌ Сигнал {signal.symbol} отклонен: уверенность {signal.confidence:.2f} < {eff_min_conf}"
+                )
+            else:
+                logger.warning(
+                    f"❌ Сигнал {signal.symbol} отклонен: уверенность {signal.confidence:.2f} < {eff_min_conf}"
                 )
             return False
 
         # Проверяем минимальную силу сигнала
         if signal.strength < self.min_signal_strength:
-            if signal.signal_type == SignalType.SHORT:
-                logger.error(
-                    f"❌🔴 SHORT сигнал {signal.symbol} отклонен: низкая сила "
-                    f"{signal.strength:.2f} < {self.min_signal_strength}"
+            # Near-miss логирование (10% от порога)
+            if signal.strength >= 0.9 * self.min_signal_strength:
+                logger.info(
+                    f"🟨 Почти прошёл {signal.symbol}: strength={signal.strength:.2f} ~> min {self.min_signal_strength:.2f}"
                 )
+            logger.warning(
+                f"❌ Сигнал {signal.symbol} отклонен: сила "
+                f"{signal.strength:.2f} < {self.min_signal_strength}"
+            )
             return False
 
-        # Здесь можно добавить дополнительные проверки
-        # Например, проверка на конфликт с другими сигналами,
-        # проверка рыночных условий и т.д.
+        # Проверка минимального Expected Value (из конфигурации)
+        # ВАЖНО: для LONG и для SHORT требуем положительный EV и не ниже порога
+        min_expected_value = self.min_expected_value
+        ev_val = quality_components["expected_value"]
+        if ev_val < min_expected_value:
+            # Near-miss логирование (10% от порога) — только если EV положительный и близок к порогу
+            if ev_val >= 0 and ev_val >= 0.9 * min_expected_value:
+                logger.info(
+                    f"🟨 Почти прошёл {signal.symbol}: EV={ev_val:.4f} ~> min {min_expected_value:.4f}"
+                )
+            logger.warning(
+                f"❌ Сигнал {signal.symbol} отклонен: Expected Value "
+                f"{ev_val:.4f} < {min_expected_value}"
+            )
+            return False
 
-        if signal.signal_type == SignalType.SHORT:
-            logger.warning(f"✅🔴 SHORT сигнал {signal.symbol} прошел валидацию!")
+        # Проверка Risk/Reward (из конфигурации)
+        min_risk_reward = self.min_risk_reward
+        rr_val = quality_components["risk_reward"]
+        if rr_val < min_risk_reward:
+            # Near-miss логирование (10% от порога)
+            if rr_val >= 0.9 * min_risk_reward:
+                logger.info(
+                    f"🟨 Почти прошёл {signal.symbol}: RR={rr_val:.2f} ~> min {min_risk_reward:.2f}"
+                )
+            logger.warning(
+                f"❌ Сигнал {signal.symbol} отклонен: Risk/Reward {rr_val:.2f} < {min_risk_reward}"
+            )
+            return False
+
+        logger.info(
+            f"✅ {signal.signal_type.value} сигнал {signal.symbol} прошел валидацию! "
+            f"Quality: {quality_score:.2f}, EV: {quality_components['expected_value']:.3%}"
+        )
 
         return True
+
+    def _calculate_risk_reward_ratio(self, signal: Signal) -> float:
+        """Расчет соотношения риск/прибыль"""
+        if not signal.suggested_stop_loss or not signal.suggested_take_profit:
+            return 0.0
+
+        risk = abs(signal.suggested_price - signal.suggested_stop_loss)
+        reward = abs(signal.suggested_take_profit - signal.suggested_price)
+
+        if risk == 0:
+            return 0.0
+
+        return reward / risk
+
+    def _extract_expected_value(self, signal: Signal) -> float:
+        """Извлекает Expected Value из сигнала"""
+        # Пытаемся найти expected_value в разных местах
+        if hasattr(signal, "expected_value"):
+            return signal.expected_value
+
+        if hasattr(signal, "indicators") and signal.indicators:
+            if "expected_value" in signal.indicators:
+                return signal.indicators["expected_value"]
+            elif "ml_predictions" in signal.indicators:
+                ml_pred = signal.indicators["ml_predictions"]
+                if isinstance(ml_pred, dict):
+                    if "expected_value" in ml_pred:
+                        return ml_pred["expected_value"]
+                    # Пытаемся вычислить из future_returns
+                    if "future_returns" in ml_pred:
+                        returns = ml_pred["future_returns"]
+                        if isinstance(returns, (list, np.ndarray)) and len(returns) >= 3:
+                            # Взвешенный расчет
+                            return 0.2 * returns[0] + 0.3 * returns[1] + 0.4 * returns[2]
+
+        # Fallback: оцениваем по TP/SL
+        if signal.suggested_stop_loss and signal.suggested_take_profit:
+            risk = abs(signal.suggested_price - signal.suggested_stop_loss) / signal.suggested_price
+            reward = (
+                abs(signal.suggested_take_profit - signal.suggested_price) / signal.suggested_price
+            )
+            # Простая оценка: EV = reward * confidence - risk * (1 - confidence)
+            return reward * signal.confidence - risk * (1 - signal.confidence)
+
+        return 0.0
 
     def update_config(self, config: dict[str, Any]):
         """Обновляет конфигурацию процессора"""
         ml_config = config.get("ml", {})
-        self.min_confidence = ml_config.get("min_confidence", self.min_confidence)
-        self.min_signal_strength = ml_config.get("min_signal_strength", self.min_signal_strength)
+        filters_cfg = ml_config.get("filters", {}) if isinstance(ml_config, dict) else {}
+        self.min_confidence = filters_cfg.get(
+            "min_confidence", ml_config.get("min_confidence", self.min_confidence)
+        )
+        self.min_signal_strength = filters_cfg.get(
+            "min_signal_strength", ml_config.get("min_signal_strength", self.min_signal_strength)
+        )
         self.risk_tolerance = ml_config.get("risk_tolerance", self.risk_tolerance)
+        self.min_quality_score = filters_cfg.get("min_quality_score", self.min_quality_score)
+        self.min_expected_value = filters_cfg.get("min_expected_value", self.min_expected_value)
+        self.min_risk_reward = filters_cfg.get("min_risk_reward", self.min_risk_reward)
 
         logger.info(
-            f"Config updated: confidence={self.min_confidence}, "
-            f"strength={self.min_signal_strength}, risk={self.risk_tolerance}"
+            f"Config updated: confidence={self.min_confidence}, strength={self.min_signal_strength}, "
+            f"risk={self.risk_tolerance}, qmin={self.min_quality_score}, evmin={self.min_expected_value}, rrmin={self.min_risk_reward}"
         )
 
     async def initialize(self):
@@ -746,15 +956,16 @@ class MLSignalProcessor:
         """
         # Если predictions это numpy array, конвертируем в dict (старый формат)
         if isinstance(predictions, np.ndarray):
+            # ВАЖНО: Модель выдает 20 значений, НЕ directions в позициях 4-8!
+            # Структура: [0-3]: returns, [4-15]: direction logits, [16-19]: risk metrics
             pred_dict = {
                 "future_returns": predictions[0:4].tolist(),
-                "directions": predictions[4:8].tolist(),
-                "profit_probabilities": {
-                    "long": predictions[8:12].tolist(),
-                    "short": predictions[12:16].tolist(),
-                },
+                "direction_logits": predictions[4:16].tolist(),  # 12 логитов для softmax
                 "risk_metrics": predictions[16:20].tolist(),
             }
+            logger.warning(
+                "⚠️ Получен numpy array вместо dict - используем старый формат интерпретации"
+            )
         else:
             pred_dict = predictions
 
@@ -777,6 +988,40 @@ class MLSignalProcessor:
             # Используем готовые значения от ml_manager
             confidence = pred_dict.get("confidence", 0.5)
             strength = pred_dict.get("signal_strength", 0.5)
+
+            # Получаем expected_value из новых полей
+            expected_value = pred_dict.get("expected_return", 0.0)
+            if expected_value == 0.0 and "primary_returns" in pred_dict:
+                # Вычисляем из primary_returns
+                returns = pred_dict["primary_returns"]
+                if isinstance(returns, dict):
+                    expected_value = (
+                        0.2 * returns.get("15m", 0.0)
+                        + 0.3 * returns.get("1h", 0.0)
+                        + 0.4 * returns.get("4h", 0.0)
+                        + 0.1 * returns.get("12h", 0.0)
+                    )
+
+            # Получаем дополнительные параметры для расчетов
+            risk_metrics = pred_dict.get("risk_metrics", {})
+            if isinstance(risk_metrics, dict):
+                max_drawdown_1h = risk_metrics.get("max_drawdown_1h", 0.02)
+                max_drawdown_4h = risk_metrics.get("max_drawdown_4h", 0.02)
+                implied_volatility = risk_metrics.get("volatility", 0.02)
+            else:
+                max_drawdown_1h = 0.02
+                max_drawdown_4h = 0.02
+                implied_volatility = 0.02
+
+            # Получаем future_returns для indicators
+            future_returns = pred_dict.get("primary_returns", {})
+            if isinstance(future_returns, dict):
+                future_returns = [
+                    future_returns.get("15m", 0.0),
+                    future_returns.get("1h", 0.0),
+                    future_returns.get("4h", 0.0),
+                    future_returns.get("12h", 0.0),
+                ]
 
             # ВАЖНО: Теперь ml_manager возвращает проценты, не абсолютные цены!
             stop_loss_pct = pred_dict.get("stop_loss_pct")
@@ -805,9 +1050,11 @@ class MLSignalProcessor:
                         f"🔵 NEUTRAL {symbol}: entry={current_price:.6f}, SL/TP не установлены"
                     )
             else:
-                # Если проценты не определены, используем дефолтные значения
-                stop_loss_pct = 0.02  # 2%
-                take_profit_pct = 0.05  # 5%
+                # Если проценты не определены, используем значения из enhanced_sltp
+                enhanced_sltp = self.config.get("enhanced_sltp", {})
+                initial_sltp = enhanced_sltp.get("initial", {})
+                stop_loss_pct = initial_sltp.get("stop_loss_percent_min", 1.5) / 100  # 1.5%
+                take_profit_pct = initial_sltp.get("take_profit_percent_min", 4.0) / 100  # 4%
 
                 if signal_type == SignalType.LONG:
                     stop_loss = current_price * (1 - stop_loss_pct)
@@ -818,10 +1065,36 @@ class MLSignalProcessor:
 
             risk_level = pred_dict.get("risk_level", "MEDIUM")
 
+            # Вычисляем Kelly fraction и другие параметры для consistency
+            win_probability = 1 / (1 + np.exp(-expected_value / 0.02))
+            avg_win = abs(expected_value) if expected_value > 0 else 0.015
+            avg_loss = max_drawdown_1h if signal_type == SignalType.LONG else max_drawdown_4h
+            kelly_fraction = (
+                (win_probability * avg_win - (1 - win_probability) * avg_loss) / avg_win
+                if avg_win > 0
+                else 0.01
+            )
+            kelly_fraction = max(0, min(kelly_fraction * 0.25, 0.02))
+
         else:
-            # СТАРАЯ ЛОГИКА для обратной совместимости
-            directions = np.array(pred_dict.get("directions", [2, 2, 2, 2]))
-            logger.info(f"🎯 Направления (старый формат): {directions}")
+            # СТАРАЯ ЛОГИКА - обрабатываем direction_logits если они есть
+            if "direction_logits" in pred_dict:
+                # Преобразуем логиты в направления через softmax
+                logits = np.array(pred_dict["direction_logits"]).reshape(
+                    4, 3
+                )  # 4 таймфрейма × 3 класса
+                directions = []
+                for tf_logits in logits:
+                    exp_logits = np.exp(tf_logits - np.max(tf_logits))
+                    probs = exp_logits / exp_logits.sum()
+                    directions.append(np.argmax(probs))
+                directions = np.array(directions)
+                logger.info(f"🎯 Направления из логитов: {directions} (0=LONG, 1=SHORT, 2=NEUTRAL)")
+            else:
+                # Fallback на дефолтные значения
+                directions = np.array(pred_dict.get("directions", [2, 2, 2, 2]))
+                logger.warning(f"⚠️ Нет direction_logits, используем fallback: {directions}")
+
             signal_type = await self._determine_signal_type(directions)
             logger.info(f"🎯 Определенный тип сигнала: {signal_type}")
 
@@ -829,9 +1102,41 @@ class MLSignalProcessor:
                 logger.info("🎯 Сигнал не определен (слишком много FLAT)")
                 return None
 
-            # Вычисляем уверенность и силу сигнала
-            long_probs = pred_dict.get("profit_probabilities", {}).get("long", [0.5] * 4)
-            short_probs = pred_dict.get("profit_probabilities", {}).get("short", [0.5] * 4)
+            # Вычисляем уверенность на основе логитов или используем дефолтные значения
+            if "direction_logits" in pred_dict:
+                # Рассчитываем вероятности из логитов
+                logits = np.array(pred_dict["direction_logits"]).reshape(4, 3)
+                all_probs = []
+                for tf_logits in logits:
+                    exp_logits = np.exp(tf_logits - np.max(tf_logits))
+                    probs = exp_logits / exp_logits.sum()
+                    all_probs.append(probs)
+                # Берем вероятности для LONG (0) и SHORT (1)
+                long_probs = [p[0] for p in all_probs]
+                short_probs = [p[1] for p in all_probs]
+            else:
+                # Используем profit_probabilities если есть, иначе дефолтные
+                long_probs = pred_dict.get("profit_probabilities", {}).get("long", [0.5] * 4)
+                short_probs = pred_dict.get("profit_probabilities", {}).get("short", [0.5] * 4)
+
+            # ВАЖНО: Рассчитываем Expected Value из future returns
+            future_returns = np.array(pred_dict.get("future_returns", [0.0] * 4))
+            # Взвешенный расчет ожидаемой доходности
+            expected_value = (
+                0.2 * future_returns[0]  # 15m - краткосрочный
+                + 0.3 * future_returns[1]  # 1h - среднесрочный
+                + 0.4 * future_returns[2]  # 4h - основной
+                + 0.1 * future_returns[3]  # 12h - долгосрочный
+            )
+
+            # Фильтрация по Expected Value
+            min_expected_value = 0.005  # Минимум 0.5% ожидаемой прибыли
+            # ВАЖНО: требуем положительную ожидаемую доходность и не ниже порога
+            if expected_value < min_expected_value:
+                logger.warning(
+                    f"⚠️ Сигнал отклонен: низкая ожидаемая доходность {expected_value:.4f} < {min_expected_value}"
+                )
+                return None
 
             if signal_type == SignalType.LONG:
                 confidence = np.mean(long_probs)
@@ -843,16 +1148,24 @@ class MLSignalProcessor:
                 directions == (0 if signal_type == SignalType.LONG else 1)
             ) / len(directions)
 
-            # Риск
+            # Риск метрики для динамических уровней
             risk_metrics = np.array(pred_dict.get("risk_metrics", [0.02] * 4))
+            max_drawdown_1h = risk_metrics[0] if len(risk_metrics) > 0 else 0.02
+            max_rally_1h = risk_metrics[1] if len(risk_metrics) > 1 else 0.02
+            max_drawdown_4h = risk_metrics[2] if len(risk_metrics) > 2 else 0.02
+            max_rally_4h = risk_metrics[3] if len(risk_metrics) > 3 else 0.02
+
+            # Оценка волатильности из risk metrics
+            implied_volatility = (max_rally_4h + max_drawdown_4h) / 2
             risk_level_num = np.mean(risk_metrics)
 
-            # Вычисляем силу сигнала
-            strength = await self._calculate_signal_strength(
+            # Вычисляем силу сигнала с учетом Expected Value
+            strength = await self._calculate_signal_strength_enhanced(
                 confidence=confidence,
                 direction_agreement=direction_agreement,
-                profit_probability=confidence,
+                expected_value=expected_value,
                 risk_level=risk_level_num,
+                implied_volatility=implied_volatility,
             )
 
             # Вычисляем уровни риска
@@ -871,11 +1184,34 @@ class MLSignalProcessor:
             else:
                 risk_level = "HIGH"
 
-        # ВАЖНО: Рассчитываем правильный размер позиции в единицах актива
-        position_size_usd = 10.0  # $10 на позицию (2% от $500 с плечом 5x)
+        # Kelly Criterion для оптимального размера позиции
+        win_probability = 1 / (1 + np.exp(-expected_value / 0.02))  # Sigmoid нормализация
+        avg_win = abs(expected_value) if expected_value > 0 else 0.015
+        avg_loss = max_drawdown_1h if signal_type == SignalType.LONG else max_drawdown_4h
+
+        # Формула Келли с 25% фракцией для безопасности
+        kelly_fraction = (
+            (win_probability * avg_win - (1 - win_probability) * avg_loss) / avg_win
+            if avg_win > 0
+            else 0.01
+        )
+        kelly_fraction = max(0, min(kelly_fraction * 0.25, 0.02))  # 25% Келли, макс 2% капитала
+
+        # Корректировка по волатильности
+        target_volatility = 0.02  # 2% целевая волатильность
+        volatility_multiplier = (
+            min(target_volatility / implied_volatility, 1.5) if implied_volatility > 0 else 1.0
+        )
+
+        # Финальный размер позиции
+        base_capital = 500.0  # Базовый капитал
+        position_size_usd = base_capital * kelly_fraction * volatility_multiplier * confidence
+        position_size_usd = max(5.0, min(position_size_usd, 50.0))  # От $5 до $50
         suggested_quantity = position_size_usd / current_price if current_price > 0 else 0.01
 
-        # Создаем сигнал
+        # Создаем сигнал с явным указанием временных меток
+        current_time = datetime.now(UTC)
+
         signal = Signal(
             symbol=symbol,
             exchange="bybit",  # Будет переопределено при необходимости
@@ -885,12 +1221,23 @@ class MLSignalProcessor:
             suggested_stop_loss=stop_loss,
             suggested_take_profit=take_profit,
             suggested_price=current_price,
-            suggested_quantity=suggested_quantity,  # ДОБАВЛЕНО: правильный размер в единицах
+            suggested_quantity=suggested_quantity,  # Оптимальный размер по Kelly
             strategy_name="PatchTST_ML",
+            created_at=current_time,
+            updated_at=current_time,
             indicators={
                 "ml_predictions": pred_dict.get("predictions", pred_dict),
                 "risk_level": risk_level,
-                "success_probability": pred_dict.get("success_probability", 0.5),
+                "success_probability": win_probability,
+                "expected_value": expected_value,  # Добавлено для валидации
+                "kelly_fraction": kelly_fraction,  # Для анализа
+                "implied_volatility": implied_volatility,  # Для мониторинга
+                "quality_score": strength,  # Предварительная оценка качества
+                "future_returns": (
+                    future_returns.tolist()
+                    if isinstance(future_returns, np.ndarray)
+                    else future_returns
+                ),
             },
         )
 
@@ -942,6 +1289,56 @@ class MLSignalProcessor:
 
         return min(max(strength, 0.0), 1.0)
 
+    async def _calculate_signal_strength_enhanced(
+        self,
+        confidence: float,
+        direction_agreement: float,
+        expected_value: float,
+        risk_level: float,
+        implied_volatility: float,
+    ) -> float:
+        """
+        Улучшенный расчет силы сигнала с учетом Expected Value.
+
+        Args:
+            confidence: Уверенность модели
+            direction_agreement: Согласованность направлений
+            expected_value: Ожидаемая доходность
+            risk_level: Уровень риска
+            implied_volatility: Подразумеваемая волатильность
+
+        Returns:
+            Сила сигнала (0.0-1.0)
+        """
+        # Нормализуем Expected Value (2% = отличный сигнал)
+        ev_score = min(abs(expected_value) / 0.02, 1.0)
+
+        # Инвертируем риск (низкий риск = высокий вклад)
+        risk_contribution = 1.0 - min(risk_level * 10, 1.0)
+
+        # Волатильность score (оптимальная волатильность = 2%)
+        vol_score = 1.0 - abs(implied_volatility - 0.02) / 0.02
+        vol_score = max(0, min(vol_score, 1.0))
+
+        # Веса для улучшенной формулы
+        weights = {
+            "expected_value": 0.35,  # Больший вес на доходность
+            "confidence": 0.25,
+            "direction": 0.20,
+            "risk": 0.10,
+            "volatility": 0.10,
+        }
+
+        strength = (
+            weights["expected_value"] * ev_score
+            + weights["confidence"] * confidence
+            + weights["direction"] * direction_agreement
+            + weights["risk"] * risk_contribution
+            + weights["volatility"] * vol_score
+        )
+
+        return min(max(strength, 0.0), 1.0)
+
     async def _determine_signal_type(self, directions: np.ndarray) -> SignalType | None:
         """
         Определяет тип сигнала на основе направлений.
@@ -977,40 +1374,111 @@ class MLSignalProcessor:
         profit_probabilities: list[float] | np.ndarray,
     ) -> tuple:
         """
-        Вычисляет уровни stop loss и take profit.
+        Динамический расчет уровней stop loss и take profit на основе risk metrics.
 
         Args:
             signal_type: Тип сигнала
             current_price: Текущая цена
-            risk_metrics: Метрики риска
+            risk_metrics: Метрики риска [max_drawdown_1h, max_rally_1h, max_drawdown_4h, max_rally_4h]
             profit_probabilities: Вероятности прибыли
 
         Returns:
             (stop_loss, take_profit)
         """
-        # Базовый риск из конфигурации
-        base_risk = self.config.get("trading", {}).get("default_stop_loss_pct", 0.02)
-        base_profit = self.config.get("trading", {}).get("default_take_profit_pct", 0.04)
-        risk_reward_ratio = self.config.get("trading", {}).get("risk_reward_ratio", 2.0)
+        # Извлекаем конкретные метрики
+        max_drawdown_1h = risk_metrics[0] if len(risk_metrics) > 0 else 0.02
+        max_rally_1h = risk_metrics[1] if len(risk_metrics) > 1 else 0.02
+        max_drawdown_4h = risk_metrics[2] if len(risk_metrics) > 2 else 0.02
+        max_rally_4h = risk_metrics[3] if len(risk_metrics) > 3 else 0.02
 
-        # Адаптивный риск на основе предсказаний
-        avg_risk = np.mean(risk_metrics)
-        risk_multiplier = 1.0 + avg_risk
+        # Получаем правильные уровни из enhanced_sltp конфигурации
+        enhanced_sltp = self.config.get("enhanced_sltp", {})
+        initial_sltp = enhanced_sltp.get("initial", {})
 
-        # Адаптивная прибыль на основе вероятностей
-        avg_profit_prob = np.mean(profit_probabilities)
-        profit_multiplier = avg_profit_prob * 1.5
+        # Используем правильные диапазоны из конфигурации
+        sl_min = initial_sltp.get("stop_loss_percent_min", 1.0) / 100  # 1% -> 0.01
+        sl_max = initial_sltp.get("stop_loss_percent_max", 2.0) / 100  # 2% -> 0.02
+        tp_min = initial_sltp.get("take_profit_percent_min", 3.6) / 100  # 3.6% -> 0.036
+        tp_max = initial_sltp.get("take_profit_percent_max", 6.0) / 100  # 6% -> 0.06
 
-        # Вычисляем уровни
-        stop_loss_pct = base_risk * risk_multiplier
-        take_profit_pct = max(stop_loss_pct * risk_reward_ratio, base_profit * profit_multiplier)
+        # Базовые уровни для обратной совместимости
+        base_risk = self.config.get("trading", {}).get("default_stop_loss_pct", 0.015)
+        base_profit = self.config.get("trading", {}).get("default_take_profit_pct", 0.045)
+        risk_reward_ratio = self.config.get("trading", {}).get("risk_reward_ratio", 3.0)
 
         if signal_type == SignalType.LONG:
+            # Для LONG: адаптивный SL на основе волатильности, но в пределах 1-2%
+            adaptive_sl = max_drawdown_1h * 1.2
+            stop_loss_pct = max(sl_min, min(adaptive_sl, sl_max))  # Ограничиваем 1-2%
+
+            # TP адаптивный на основе потенциала роста, но в пределах 3.6-6%
+            # Используем вероятности для выбора между минимальным и максимальным TP
+            avg_profit_prob = np.mean(profit_probabilities)
+
+            if avg_profit_prob > 0.7:
+                # Высокая вероятность - используем более амбициозный TP
+                take_profit_pct = tp_min + (tp_max - tp_min) * 0.8  # ~5.5%
+            elif avg_profit_prob > 0.5:
+                # Средняя вероятность - средний TP
+                take_profit_pct = tp_min + (tp_max - tp_min) * 0.5  # ~4.8%
+            else:
+                # Низкая вероятность - консервативный TP
+                take_profit_pct = tp_min + (tp_max - tp_min) * 0.2  # ~4%
+
+            # Учитываем потенциал движения
+            potential_tp = max_rally_4h * 0.9
+            if potential_tp > tp_min and potential_tp < tp_max:
+                # Если потенциал в правильном диапазоне, используем его
+                take_profit_pct = potential_tp
+            elif potential_tp < tp_min:
+                # Если потенциал слишком мал, используем минимум
+                take_profit_pct = tp_min
+            else:
+                # Если потенциал слишком велик, ограничиваем максимумом
+                take_profit_pct = min(potential_tp, tp_max)
+
+            # Финальные уровни
             stop_loss = current_price * (1 - stop_loss_pct)
             take_profit = current_price * (1 + take_profit_pct)
+
         else:  # SHORT
+            # Для SHORT: аналогичная логика с инверсией
+            adaptive_sl = max_rally_1h * 1.2
+            stop_loss_pct = max(sl_min, min(adaptive_sl, sl_max))  # Ограничиваем 1-2%
+
+            # TP для SHORT
+            avg_profit_prob = np.mean(profit_probabilities)
+
+            if avg_profit_prob > 0.7:
+                take_profit_pct = tp_min + (tp_max - tp_min) * 0.8  # ~5.5%
+            elif avg_profit_prob > 0.5:
+                take_profit_pct = tp_min + (tp_max - tp_min) * 0.5  # ~4.8%
+            else:
+                take_profit_pct = tp_min + (tp_max - tp_min) * 0.2  # ~4%
+
+            # Учитываем потенциал падения
+            potential_tp = max_drawdown_4h * 0.9
+            if potential_tp > tp_min and potential_tp < tp_max:
+                take_profit_pct = potential_tp
+            elif potential_tp < tp_min:
+                take_profit_pct = tp_min
+            else:
+                take_profit_pct = min(potential_tp, tp_max)
+
+            # Финальные уровни для SHORT
             stop_loss = current_price * (1 + stop_loss_pct)
             take_profit = current_price * (1 - take_profit_pct)
+
+        # Проверка минимального Risk/Reward
+        actual_risk = abs(current_price - stop_loss) / current_price
+        actual_reward = abs(take_profit - current_price) / current_price
+
+        if actual_reward / actual_risk < 1.5:  # Минимум 1.5:1
+            # Корректируем TP для достижения минимального RR
+            if signal_type == SignalType.LONG:
+                take_profit = current_price * (1 + actual_risk * 1.5)
+            else:
+                take_profit = current_price * (1 - actual_risk * 1.5)
 
         return stop_loss, take_profit
 
@@ -1038,42 +1506,50 @@ class MLSignalProcessor:
             True если успешно
         """
         try:
-            # Добавляем специальное логирование для SHORT сигналов
+            # Не сохраняем NEUTRAL, если БД может не поддерживать это значение enum
+            if signal.signal_type == SignalType.NEUTRAL:
+                logger.info(
+                    f"ℹ️ Пропуск сохранения NEUTRAL сигнала для {signal.symbol} (бессделочный сигнал)"
+                )
+                return False
+
+            # Дополнительное логирование для SHORT сигналов
             if signal.signal_type == SignalType.SHORT:
                 logger.warning(
                     f"🔴 Попытка сохранить SHORT сигнал для {signal.symbol}: "
                     f"strength={signal.strength:.2f}, confidence={signal.confidence:.2f}"
                 )
 
+            # Используем единый DBManager с asyncpg-репозиторием сигналов
             db_manager = await get_db()
-            async with db_manager.transaction() as db:
-                # Проверяем, существует ли уже такой сигнал
-                existing = await db.execute(
-                    select(Signal).where(
-                        and_(
-                            Signal.symbol == signal.symbol,
-                            Signal.signal_type == signal.signal_type,
-                            Signal.strength == signal.strength,
-                            Signal.confidence == signal.confidence,
-                        )
-                    )
-                )
-                if existing.scalar_one_or_none():
-                    logger.debug(f"Signal already exists for {signal.symbol}, skipping")
-                    if signal.signal_type == SignalType.SHORT:
-                        logger.warning(f"🔴 SHORT сигнал для {signal.symbol} уже существует в БД!")
-                    return False
+            if not getattr(db_manager, "signals", None):
+                logger.error("SignalRepository не инициализирован в DBManager")
+                return False
 
-                db.add(signal)
-                await db.commit()
-                self._stats["signals_saved"] += 1
+            # Сохранение через репозиторий (обеспечивает корректные типы для asyncpg)
+            await db_manager.signals.save_signal(signal)
 
-                # Особое логирование для SHORT сигналов
-                if signal.signal_type == SignalType.SHORT:
-                    logger.warning(f"✅🔴 SHORT сигнал УСПЕШНО сохранен для {signal.symbol}")
+            self._stats["signals_saved"] += 1
+
+            if signal.signal_type == SignalType.SHORT:
+                logger.warning(f"✅🔴 SHORT сигнал УСПЕШНО сохранен для {signal.symbol}")
+            else:
+                logger.info(f"✅ Signal saved for {signal.symbol}")
+            
+            # Отправляем сигнал в TradingEngine после успешного сохранения
+            try:
+                from core.shared_context import shared_context
+                orchestrator = shared_context.get_orchestrator()
+                if orchestrator and hasattr(orchestrator, "trading_engine") and orchestrator.trading_engine:
+                    logger.info(f"📤 Отправка сохраненного сигнала {signal.symbol} в TradingEngine")
+                    await orchestrator.trading_engine.receive_trading_signal(signal)
+                    logger.info(f"✅ Сохраненный сигнал {signal.symbol} успешно отправлен в TradingEngine")
                 else:
-                    logger.info(f"✅ Signal saved for {signal.symbol}")
-                return True
+                    logger.warning("⚠️ TradingEngine не доступен для отправки сохраненного сигнала")
+            except Exception as e:
+                logger.error(f"❌ Ошибка отправки сохраненного сигнала в TradingEngine: {e}")
+            
+            return True
         except Exception as e:
             logger.error(f"Error saving signal: {e}")
             return False
@@ -1295,8 +1771,8 @@ class MLSignalProcessor:
             # 3. Получаем предсказание от модели
             logger.info(f"📊 Отправляем на предсказание массив формы: {features_array.shape}")
             prediction = await self.ml_manager.predict(
-                features_array, symbol=symbol
-            )  # Передаем symbol
+                features_array, symbol=symbol, current_price=metadata["last_price"]
+            )  # Передаем symbol и текущую цену
             logger.info(f"📊 Получили предсказание: {type(prediction)}")
 
             # 🎨 КРАСИВАЯ ВИЗУАЛИЗАЦИЯ ML ВХОДНЫХ ДАННЫХ И ПРЕДСКАЗАНИЙ
@@ -1333,6 +1809,19 @@ class MLSignalProcessor:
                                 logger.error(f"❌🔴 SHORT сигнал для {symbol} НЕ БЫЛ сохранен!")
                             else:
                                 logger.warning(f"❌ Сигнал для {symbol} не был сохранен")
+                    
+                    # Отправляем сигнал в TradingEngine
+                    try:
+                        from core.shared_context import shared_context
+                        orchestrator = shared_context.get_orchestrator()
+                        if orchestrator and hasattr(orchestrator, "trading_engine") and orchestrator.trading_engine:
+                            logger.info(f"📤 Отправка сигнала {signal.symbol} в TradingEngine")
+                            await orchestrator.trading_engine.receive_trading_signal(signal)
+                            logger.info(f"✅ Сигнал {signal.symbol} успешно отправлен в TradingEngine")
+                        else:
+                            logger.warning("⚠️ TradingEngine не доступен для отправки сигнала")
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка отправки сигнала в TradingEngine: {e}")
 
                     logger.info(
                         f"✅ Сгенерирован {signal.signal_type.value} сигнал для {symbol} "
@@ -1356,7 +1845,7 @@ class MLSignalProcessor:
         self, symbol: str, exchange: str, lookback_minutes: int
     ) -> pd.DataFrame | None:
         """
-        Получает последние OHLCV данные из БД
+        Получает последние OHLCV данные из БД с retry логикой
 
         Args:
             symbol: Символ
@@ -1366,72 +1855,102 @@ class MLSignalProcessor:
         Returns:
             DataFrame с OHLCV данными или None
         """
-        try:
-            # Сначала пробуем получить из БД
-            end_date = datetime.utcnow()
-            start_date = end_date - timedelta(minutes=lookback_minutes)
+        max_retries = 3
+        retry_delay = 1.0
+        last_error = None
 
-            db_manager = await get_db()
-            async with db_manager.transaction() as session:
-                stmt = (
-                    select(RawMarketData)
-                    .where(
-                        and_(
-                            RawMarketData.symbol == symbol,
-                            RawMarketData.exchange == exchange,
-                            RawMarketData.datetime >= start_date,
-                            RawMarketData.interval_minutes == 15,  # 15-минутные свечи
-                        )
-                    )
-                    .order_by(RawMarketData.timestamp)
-                )
+        for attempt in range(max_retries):
+            try:
+                # Сначала пробуем получить из БД
+                end_date = datetime.utcnow()
+                start_date = end_date - timedelta(minutes=lookback_minutes)
 
-                result = await session.execute(stmt)
-                data = result.scalars().all()
+                db_manager = await get_db()
 
-                if not data or len(data) < 240:
-                    # Если данных мало - обновляем через data loader
-                    logger.info(f"Обновление данных для {symbol}: в БД только {len(data)} записей")
+                # Добавляем таймаут для транзакции
+                async with asyncio.timeout(10):
+                    async with db_manager.transaction() as conn:
+                        # Используем raw SQL вместо SQLAlchemy ORM
+                        query = """
+                            SELECT * FROM raw_market_data
+                            WHERE symbol = $1
+                              AND exchange = $2
+                              AND datetime >= $3
+                              AND interval_minutes = 15
+                            ORDER BY timestamp
+                        """
 
-                    # Обновляем данные
-                    await self.data_loader.update_latest_data(
-                        symbols=[symbol], interval_minutes=15, exchange=exchange
-                    )
+                        rows = await conn.fetch(query, symbol, exchange, start_date)
+                        data = [dict(row) for row in rows]
 
-                    # Повторно запрашиваем
-                    result = await session.execute(stmt)
-                    data = result.scalars().all()
+                        if not data or len(data) < 240:
+                            # Если данных мало - обновляем через data loader
+                            logger.info(
+                                f"Обновление данных для {symbol}: в БД только {len(data)} записей"
+                            )
 
-                if data:
-                    # Добавляем колонку symbol для правильной генерации признаков
-                    df = pd.DataFrame(
-                        [
-                            {
-                                "timestamp": d.timestamp,
-                                "datetime": d.datetime,
-                                "open": float(d.open),
-                                "high": float(d.high),
-                                "low": float(d.low),
-                                "close": float(d.close),
-                                "volume": float(d.volume),
-                                "turnover": float(d.turnover) if d.turnover else 0,
-                                "symbol": symbol,  # Добавляем symbol для уникальных признаков
-                            }
-                            for d in data
-                        ]
-                    )
+                            # Обновляем данные
+                            await self.data_loader.update_latest_data(
+                                symbols=[symbol], interval_minutes=15, exchange=exchange
+                            )
 
-                    df.set_index("datetime", inplace=True)
-                    df = df.sort_index()
+                            # Повторно запрашиваем
+                            rows = await conn.fetch(query, symbol, exchange, start_date)
+                            data = [dict(row) for row in rows]
 
-                    logger.info(f"Загружено {len(df)} свечей для {symbol} с колонкой symbol")
-                    return df
+                        if data:
+                            # Добавляем колонку symbol для правильной генерации признаков
+                            df = pd.DataFrame(
+                                [
+                                    {
+                                        "timestamp": d["timestamp"],
+                                        "datetime": d["datetime"],
+                                        "open": float(d["open"]),
+                                        "high": float(d["high"]),
+                                        "low": float(d["low"]),
+                                        "close": float(d["close"]),
+                                        "volume": float(d["volume"]),
+                                        "turnover": (
+                                            float(d.get("turnover", 0)) if d.get("turnover") else 0
+                                        ),
+                                        "symbol": symbol,  # Добавляем symbol для уникальных признаков
+                                    }
+                                    for d in data
+                                ]
+                            )
 
-                return None
+                            df.set_index("datetime", inplace=True)
+                            df = df.sort_index()
 
-        except Exception as e:
-            logger.error(f"Ошибка получения OHLCV для {symbol}: {e}")
-            return None
+                            logger.info(
+                                f"Загружено {len(df)} свечей для {symbol} с колонкой symbol"
+                            )
+                            return df
+
+                        return None
+
+            except asyncio.TimeoutError:
+                last_error = f"Timeout getting OHLCV data for {symbol}"
+                logger.warning(f"Attempt {attempt + 1}/{max_retries}: {last_error}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                    continue
+
+            except Exception as e:
+                last_error = str(e)
+                # Не логируем ошибку rollback, просто предупреждаем
+                if "rollback" in str(e).lower() and "connection" in str(e).lower():
+                    logger.warning(f"Connection issue for {symbol}: {e}")
+                else:
+                    logger.error(f"Error getting OHLCV for {symbol}: {e}")
+
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                    continue
+
+        # Все попытки исчерпаны
+        logger.error(f"Failed to get OHLCV for {symbol} after {max_retries} attempts: {last_error}")
+        return None
 
     async def generate_signals_for_symbols(
         self, symbols: list[str], exchange: str = "bybit"
@@ -1495,7 +2014,7 @@ class MLSignalProcessor:
         """
         # Получаем уникальные символы из кэша
         symbols_in_cache = set()
-        for key in self.prediction_cache.keys():
+        for key in self.prediction_cache:
             # Ключ кэша имеет формат: {exchange}:{symbol}:{time}:{data_hash}
             parts = key.split(":")
             if len(parts) >= 2:
@@ -1543,34 +2062,36 @@ class MLSignalProcessor:
                 f"║            ВХОДНЫЕ ПАРАМЕТРЫ МОДЕЛИ - {features_array.shape[-1]} ПРИЗНАКОВ             ║"
             )
             logger.info("╠══════════════════════════════════════════════════════════════════════╣")
-            logger.info("║ 🎯 КЛЮЧЕВЫЕ ИНДИКАТОРЫ:                                             ║")
+            logger.info("║ 🎯 ОБЗОР ПРИЗНАКОВ (без имен):                                     ║")
+            # Показываем первые 4 и последние 4 значения признаков как ориентир
+            if len(features_to_show) >= 8:
+                head_vals = ", ".join([f"{v:>+0.4f}" for v in features_to_show[:4]])
+                tail_vals = ", ".join([f"{v:>+0.4f}" for v in features_to_show[-4:]])
+                logger.info(f"║   • head: {head_vals:<48} ║")
+                logger.info(f"║   • tail: {tail_vals:<48} ║")
+            else:
+                seq_vals = ", ".join([f"{v:>+0.4f}" for v in features_to_show])
+                logger.info(f"║   • vals: {seq_vals:<48} ║")
 
-            # Отображаем ключевые признаки в красивом формате
-            feature_names = [
-                "returns",
-                "macd",
-                "atr_pct",
-                "adx",
-                "obv_trend",
-                "trend_1h",
-                "rsi",
-                "bb_position",
-                "stoch_k",
-                "volume_ratio",
-                "momentum_1h",
-                "signal_strength",
-            ]
-
-            for i in range(0, len(feature_names), 2):
-                left_name = feature_names[i] if i < len(feature_names) else ""
-                right_name = feature_names[i + 1] if i + 1 < len(feature_names) else ""
-
-                left_val = features_to_show[i % len(features_to_show)] if left_name else 0
-                right_val = features_to_show[(i + 1) % len(features_to_show)] if right_name else 0
-
-                logger.info(
-                    f"║   • {left_name:<15}: {left_val:>10.4f}  │  {right_name:<15}: {right_val:>8.4f}  ║"
-                )
+            # Дополнительно: Топ‑8 признаков по абсолютному значению с реальными именами
+            try:
+                if len(features_to_show) == len(REQUIRED_FEATURES_240):
+                    abs_vals = np.abs(features_to_show)
+                    top_k = min(8, len(abs_vals))
+                    top_idx = np.argsort(-abs_vals)[:top_k]
+                    logger.info(
+                        "╟──────────────────────────────────────────────────────────────────────╢"
+                    )
+                    logger.info(
+                        "║ 🔎 ТОП ПРИЗНАКОВ (по |значению|):                                   ║"
+                    )
+                    for idx in top_idx:
+                        name = REQUIRED_FEATURES_240[idx]
+                        val = features_to_show[idx]
+                        logger.info(f"║   • {idx:3d} {name:<32}: {val:>+12.6f}                 ║")
+            except Exception:
+                # Визуализация не должна ломать основной поток
+                pass
 
             # Статистика признаков
             nan_count = np.isnan(features_to_show).sum()
@@ -1613,7 +2134,7 @@ class MLSignalProcessor:
                         values = [
                             f"{prediction[j]:.4f}" for j in range(i, min(i + 5, len(prediction)))
                         ]
-                        range_str = f"[{i}-{min(i+4, len(prediction)-1)}]"
+                        range_str = f"[{i}-{min(i + 4, len(prediction) - 1)}]"
                         logger.info(f"║  {range_str:>6}:  {', '.join(values):<50} ║")
 
                     logger.info(

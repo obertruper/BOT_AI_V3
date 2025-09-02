@@ -3,6 +3,7 @@
 ## 📋 Обзор изменений
 
 ### Что изменилось
+
 - ✅ **Типизация**: Все параметры теперь типизированы через Pydantic
 - ✅ **Валидация**: Проверка при загрузке, а не в runtime
 - ✅ **Секреты**: Отделены от основной конфигурации
@@ -10,6 +11,7 @@
 - ✅ **API**: Новые типизированные методы доступа
 
 ### Обратная совместимость
+
 Старый код продолжит работать благодаря адаптеру. Миграция может быть постепенной.
 
 ## 🚀 Этапы миграции
@@ -17,11 +19,13 @@
 ### Этап 1: Подготовка (без изменения кода)
 
 #### 1.1 Установка зависимостей
+
 ```bash
 pip install pydantic python-dotenv cryptography
 ```
 
 #### 1.2 Создание .env файла
+
 ```bash
 # Скопируйте шаблон
 cp .env.example .env
@@ -31,6 +35,7 @@ nano .env
 ```
 
 #### 1.3 Проверка совместимости
+
 ```python
 # test_compatibility.py
 from core.config.config_manager import ConfigManager
@@ -51,6 +56,7 @@ print("New API:", config.trading.orders.default_leverage)
 #### 2.1 Миграция простого компонента
 
 **Было:**
+
 ```python
 # trading/some_component.py
 from core.config.config_manager import get_global_config_manager
@@ -58,12 +64,13 @@ from core.config.config_manager import get_global_config_manager
 class SomeComponent:
     def __init__(self):
         self.config_manager = get_global_config_manager()
-        
+
     def get_leverage(self):
         return self.config_manager.get_config("trading.orders.default_leverage", 5)
 ```
 
 **Стало:**
+
 ```python
 # trading/some_component.py
 from core.config.loader import ConfigLoader
@@ -73,7 +80,7 @@ class SomeComponent:
     def __init__(self):
         loader = ConfigLoader()
         self.config = loader.load()
-        
+
     def get_leverage(self) -> int:
         # Типизированный доступ
         return self.config.trading.orders.default_leverage
@@ -91,7 +98,7 @@ class ComplexComponent:
     def __init__(self):
         # Адаптер обеспечивает совместимость
         self.config = ConfigAdapter()
-        
+
     def old_method(self):
         # Старый API продолжает работать
         return self.config.get_config("some.nested.key")
@@ -109,7 +116,7 @@ class TradingEngine:
     def __init__(self, config: RootConfig):
         self.trading_config: TradingSettings = config.trading
         self.risk_config: RiskManagementSettings = config.risk_management
-        
+
         # Типизированный доступ
         self.leverage = self.trading_config.orders.default_leverage
         self.max_positions = self.risk_config.global_risk.max_open_positions
@@ -124,7 +131,7 @@ from core.config.models import RiskManagementSettings
 class RiskManager:
     def __init__(self, risk_config: RiskManagementSettings):
         self.config = risk_config
-        
+
         # Все параметры валидированы
         self.stop_loss = self.config.position.default_stop_loss
         self.take_profit = self.config.position.default_take_profit
@@ -140,7 +147,7 @@ class RiskManager:
 
 ## 📝 Чеклист миграции
 
-### Для каждого компонента:
+### Для каждого компонента
 
 - [ ] Идентифицировать использование ConfigManager
 - [ ] Определить необходимые параметры конфигурации
@@ -155,11 +162,13 @@ class RiskManager:
 ### Сценарий 1: Простое чтение параметра
 
 **Было:**
+
 ```python
 leverage = config_manager.get_config("trading.leverage", 5)
 ```
 
 **Стало:**
+
 ```python
 leverage = config.trading.orders.default_leverage
 ```
@@ -167,12 +176,14 @@ leverage = config.trading.orders.default_leverage
 ### Сценарий 2: Динамическое чтение
 
 **Было:**
+
 ```python
 def get_param(key: str):
     return config_manager.get_config(key)
 ```
 
 **Стало (с адаптером):**
+
 ```python
 def get_param(key: str):
     return adapter.get_config(key)  # Совместимость
@@ -181,12 +192,14 @@ def get_param(key: str):
 ### Сценарий 3: Проверка наличия
 
 **Было:**
+
 ```python
 if config_manager.get_config("ml.enabled"):
     # ML логика
 ```
 
 **Стало:**
+
 ```python
 if config.ml.enabled:
     # ML логика (с гарантией типа bool)
@@ -200,7 +213,8 @@ if config.ml.enabled:
 
 ### Проблема: Отсутствующие секреты
 
-**Решение:** 
+**Решение:**
+
 ```python
 from core.config.secrets import get_secrets_manager
 
@@ -211,6 +225,7 @@ print(manager.get_status_report())  # Покажет отсутствующие 
 ### Проблема: Несоответствие типов
 
 **Решение:** Используйте правильные типы из models.py:
+
 ```python
 from core.config.models import TradingSettings
 
@@ -229,7 +244,7 @@ class OrderManager:
         self.cm = get_global_config_manager()
         self.leverage = self.cm.get_config("trading.leverage")
         self.min_order = self.cm.get_config("trading.min_order_size")
-        
+
 # После миграции
 class OrderManager:
     def __init__(self, trading_config: TradingSettings):
@@ -245,7 +260,7 @@ class MLManager:
     def __init__(self):
         self.enabled = get_config("ml.enabled", False)
         self.model_path = get_config("ml.model.path")
-        
+
 # После миграции
 class MLManager:
     def __init__(self, ml_config: MLSettings):

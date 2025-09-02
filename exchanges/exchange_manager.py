@@ -143,6 +143,27 @@ class ExchangeManager:
             self.logger.error(f"Ошибка health check ExchangeManager: {e}")
             return False
 
+    async def get_positions(self, exchange_name: str, symbol: str | None = None) -> list:
+        """Получить позиции с конкретной биржи
+
+        Args:
+            exchange_name: Название биржи
+            symbol: Символ для фильтрации (опционально)
+
+        Returns:
+            Список позиций с биржи
+        """
+        try:
+            exchange = await self.get_exchange(exchange_name)
+            if exchange and hasattr(exchange, "get_positions"):
+                return await exchange.get_positions(symbol)
+            else:
+                self.logger.warning(f"Биржа {exchange_name} не поддерживает get_positions")
+                return []
+        except Exception as e:
+            self.logger.error(f"Ошибка получения позиций с {exchange_name}: {e}")
+            return []
+
     async def close(self):
         """Закрытие всех соединений с биржами"""
         self.logger.info("🔄 Закрытие Exchange Manager...")

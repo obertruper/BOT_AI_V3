@@ -147,8 +147,8 @@ class ExchangeFactory:
             if exchange_type not in ExchangeFactory._exchange_classes:
                 available = [e.value for e in ExchangeFactory._exchange_classes.keys()]
                 raise ExchangeError(
-                    exchange_type.value,
                     f"Exchange {exchange_type.value} not supported. Available: {available}",
+                    exchange_type.value,
                 )
 
             # Создаем ключ кеша
@@ -184,7 +184,7 @@ class ExchangeFactory:
         except Exception as e:
             error_msg = f"Failed to create {exchange_type} client: {e}"
             self.logger.error(error_msg)
-            raise ExchangeError(str(exchange_type), error_msg)
+            raise ExchangeError(error_msg, str(exchange_type))
 
     def create_exchange(self, exchange_type: str | ExchangeType, **kwargs) -> BaseExchangeInterface:
         """
@@ -246,14 +246,14 @@ class ExchangeFactory:
         try:
             connected = await client.connect()
             if not connected:
-                raise ExchangeError(client.name, "Failed to establish connection")
+                raise ExchangeError("Failed to establish connection", client.name)
 
             self.logger.info(f"Successfully connected to {client.name}")
             return client
 
         except Exception as e:
             self.logger.error(f"Failed to connect client: {e}")
-            raise ExchangeError(client.name, f"Connection failed: {e}")
+            raise ExchangeError(f"Connection failed: {e}", client.name)
 
     def get_supported_exchanges(self) -> list[str]:
         """Получение списка поддерживаемых бирж"""

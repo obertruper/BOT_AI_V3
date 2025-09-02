@@ -355,7 +355,9 @@ class TestPerformanceMonitoring:
                     "trend": (
                         "increasing"
                         if cpu_slope > 1
-                        else "decreasing" if cpu_slope < -1 else "stable"
+                        else "decreasing"
+                        if cpu_slope < -1
+                        else "stable"
                     ),
                     "slope": round(cpu_slope, 3),
                 },
@@ -364,7 +366,9 @@ class TestPerformanceMonitoring:
                     "trend": (
                         "increasing"
                         if memory_slope > 1
-                        else "decreasing" if memory_slope < -1 else "stable"
+                        else "decreasing"
+                        if memory_slope < -1
+                        else "stable"
                     ),
                     "slope": round(memory_slope, 3),
                 },

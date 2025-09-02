@@ -9,7 +9,7 @@
 ```
 Enhanced Testing System
 ├── 🚀 Высокопроизводительный AST анализатор
-├── 🏗️ Анализатор связей между классами  
+├── 🏗️ Анализатор связей между классами
 ├── 🧠 ML-генератор тестов
 ├── 📊 Анализатор покрытия
 ├── 🔍 Проверка совместимости импортов
@@ -32,22 +32,25 @@ Enhanced Testing System
 ## 🎯 План достижения 100% покрытия
 
 ### Фаза 1: Критические компоненты (Неделя 1)
+
 **Цель: 40% покрытия**
 
 #### Trading Core (250 функций)
+
 ```bash
 # Генерация тестов для trading
 python scripts/mass_test_generator.py --module trading --priority critical
 ```
 
 - [ ] `trading/engine.py` - 45 функций
-- [ ] `trading/orders/order_manager.py` - 38 функций  
+- [ ] `trading/orders/order_manager.py` - 38 функций
 - [ ] `trading/positions/position_manager.py` - 32 функции
 - [ ] `trading/risk/risk_manager.py` - 28 функций
 - [ ] `trading/signals/signal_processor.py` - 25 функций
 - [ ] `trading/execution/executor.py` - 22 функции
 
 #### ML System (180 функций)
+
 ```bash
 # Генерация тестов для ML
 python scripts/mass_test_generator.py --module ml --priority critical
@@ -60,9 +63,11 @@ python scripts/mass_test_generator.py --module ml --priority critical
 - [ ] `ml/realtime_indicator_calculator.py` - 30 функций
 
 ### Фаза 2: Exchanges & Strategies (Неделя 2)
+
 **Цель: 65% покрытия**
 
 #### Exchanges (320 функций)
+
 ```bash
 # Генерация тестов для exchanges
 python scripts/mass_test_generator.py --module exchanges --priority high
@@ -77,15 +82,18 @@ python scripts/mass_test_generator.py --module exchanges --priority high
 - [ ] `exchanges/bingx/` - 15 функций
 
 #### Strategies (120 функций)
+
 - [ ] `strategies/patchtst_strategy.py` - 35 функций
 - [ ] `strategies/base_strategy.py` - 25 функций
 - [ ] `strategies/momentum_strategy.py` - 30 функций
 - [ ] `strategies/arbitrage_strategy.py` - 30 функций
 
 ### Фаза 3: Database & Core (Неделя 3)
+
 **Цель: 85% покрытия**
 
 #### Database (200 функций)
+
 ```bash
 # Генерация тестов для database
 python scripts/mass_test_generator.py --module database --priority medium
@@ -96,20 +104,24 @@ python scripts/mass_test_generator.py --module database --priority medium
 - [ ] `database/connections/` - 30 функций
 
 #### Core System (150 функций)
+
 - [ ] `core/system/orchestrator.py` - 40 функций
 - [ ] `core/logger.py` - 20 функций
 - [ ] `main.py` - 25 функций
 - [ ] `unified_launcher.py` - 35 функций
 
 ### Фаза 4: Utilities & Web (Неделя 4)
+
 **Цель: 100% покрытия**
 
 #### Web API (180 функций)
+
 - [ ] `web/api/` - 80 функций
 - [ ] `web/websocket/` - 60 функций
 - [ ] `web/frontend/` - 40 функций
 
 #### Utilities (200+ функций)
+
 - [ ] `utils/` - все вспомогательные функции
 - [ ] `scripts/` - скрипты развёртывания
 
@@ -185,11 +197,13 @@ tests/
 ## 🚀 Автоматизация генерации тестов
 
 ### 1. Установка зависимостей
+
 ```bash
 pip install pytest pytest-cov pytest-asyncio pytest-mock hypothesis faker
 ```
 
 ### 2. Массовая генерация тестов
+
 ```bash
 # Генерация ВСЕХ недостающих тестов
 python scripts/mass_test_generator.py --all --workers 8
@@ -204,6 +218,7 @@ python scripts/mass_test_generator.py --priority critical
 ```
 
 ### 3. Обновление существующих тестов
+
 ```bash
 # Добавление недостающих сценариев
 python scripts/smart_test_manager.py update --enhance
@@ -213,6 +228,7 @@ python scripts/add_edge_cases.py
 ```
 
 ### 4. Генерация интеграционных тестов
+
 ```bash
 # Создание E2E сценариев
 python scripts/generate_integration_tests.py
@@ -221,6 +237,7 @@ python scripts/generate_integration_tests.py
 ## 📋 Типы тестов для каждой функции
 
 ### 1. Happy Path (Успешный сценарий)
+
 ```python
 def test_function_success():
     """Тест успешного выполнения"""
@@ -229,6 +246,7 @@ def test_function_success():
 ```
 
 ### 2. Edge Cases (Граничные случаи)
+
 ```python
 def test_function_edge_cases():
     """Тест граничных значений"""
@@ -238,6 +256,7 @@ def test_function_edge_cases():
 ```
 
 ### 3. Error Handling (Обработка ошибок)
+
 ```python
 def test_function_errors():
     """Тест обработки ошибок"""
@@ -246,6 +265,7 @@ def test_function_errors():
 ```
 
 ### 4. Performance (Производительность)
+
 ```python
 def test_function_performance():
     """Тест производительности"""
@@ -255,6 +275,7 @@ def test_function_performance():
 ```
 
 ### 5. Concurrency (Параллельность)
+
 ```python
 @pytest.mark.asyncio
 async def test_function_concurrent():
@@ -265,6 +286,7 @@ async def test_function_concurrent():
 ```
 
 ### 6. Mocking (Мокирование зависимостей)
+
 ```python
 def test_function_with_mock(mocker):
     """Тест с моками"""
@@ -276,13 +298,15 @@ def test_function_with_mock(mocker):
 
 ## 🎯 Метрики качества тестов
 
-### Обязательные метрики:
+### Обязательные метрики
+
 - **Line Coverage**: минимум 95%
 - **Branch Coverage**: минимум 90%
 - **Function Coverage**: 100%
 - **Mutation Testing Score**: минимум 80%
 
-### Команды проверки:
+### Команды проверки
+
 ```bash
 # Покрытие строк
 pytest --cov=. --cov-report=html
@@ -300,6 +324,7 @@ python scripts/test_quality_checker.py
 ## 📈 Мониторинг прогресса
 
 ### Dashboard
+
 ```bash
 # Генерация дашборда
 python scripts/smart_test_manager.py dashboard
@@ -309,6 +334,7 @@ open tests/test_dashboard.html
 ```
 
 ### Еженедельные отчёты
+
 ```bash
 # Генерация отчёта
 python scripts/generate_weekly_report.py
@@ -320,6 +346,7 @@ python scripts/send_report.py --channel testing
 ## 🔧 CI/CD интеграция
 
 ### GitHub Actions
+
 ```yaml
 # .github/workflows/test-coverage.yml
 name: Test Coverage Check
@@ -342,6 +369,7 @@ jobs:
 ```
 
 ### Pre-commit hooks
+
 ```yaml
 # .pre-commit-config.yaml
 - repo: local
@@ -356,7 +384,8 @@ jobs:
 
 ## 🚨 Блокировки при низком покрытии
 
-### Автоматические действия:
+### Автоматические действия
+
 1. **PR блокируется** если покрытие < 95%
 2. **Deploy отменяется** если тесты не проходят
 3. **Alert в Slack** при падении покрытия
@@ -390,6 +419,7 @@ jobs:
    - Timely (своевременные)
 
 4. **Именование тестов**
+
    ```python
    def test_<функция>_<сценарий>_<ожидаемый_результат>():
        pass

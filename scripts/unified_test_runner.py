@@ -65,7 +65,11 @@ class UnifiedTestRunner:
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=600, cwd=self.project_root  # 10 минут
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,
+                cwd=self.project_root,  # 10 минут
             )
 
             return {
@@ -101,7 +105,11 @@ class UnifiedTestRunner:
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300, cwd=self.project_root  # 5 минут
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                cwd=self.project_root,  # 5 минут
             )
 
             return {
@@ -136,7 +144,11 @@ class UnifiedTestRunner:
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=600, cwd=self.project_root  # 10 минут
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,
+                cwd=self.project_root,  # 10 минут
             )
 
             return {
@@ -169,7 +181,11 @@ class UnifiedTestRunner:
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300, cwd=self.project_root  # 5 минут
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                cwd=self.project_root,  # 5 минут
             )
 
             # Парсим вывод pytest для подсчета тестов
@@ -246,7 +262,11 @@ class UnifiedTestRunner:
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300, cwd=self.project_root  # 5 минут
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                cwd=self.project_root,  # 5 минут
             )
 
             # Читаем coverage.json если создался
@@ -306,52 +326,52 @@ class UnifiedTestRunner:
         """Генерирует Markdown отчет"""
         report = f"""# 🚀 Unified BOT_AI_V3 Test Report
 
-**Дата:** {time.strftime('%Y-%m-%d %H:%M:%S')}
+**Дата:** {time.strftime("%Y-%m-%d %H:%M:%S")}
 **Проект:** BOT_AI_V3
 **Версия системы тестирования:** 4.0.0
 
 ## 📊 Общие результаты
 
-- **Общее время выполнения:** {results.get('total_duration', 'N/A')}
-- **Успешных этапов:** {results.get('successful_components', 0)}/{results.get('total_components', 0)}
-- **Общая успешность:** {results.get('overall_success_rate', 0):.1f}%
+- **Общее время выполнения:** {results.get("total_duration", "N/A")}
+- **Успешных этапов:** {results.get("successful_components", 0)}/{results.get("total_components", 0)}
+- **Общая успешность:** {results.get("overall_success_rate", 0):.1f}%
 
 ## 🔥 Enhanced Analysis Results
 
-- **Статус:** {'✅ Успешно' if results.get('enhanced_analysis', {}).get('success') else '❌ Ошибка'}
-- **Файлов проанализировано:** {results.get('files_analyzed', 0)}
-- **Функций найдено:** {results.get('functions_found', 0)}
-- **Классов найдено:** {results.get('classes_found', 0)}
+- **Статус:** {"✅ Успешно" if results.get("enhanced_analysis", {}).get("success") else "❌ Ошибка"}
+- **Файлов проанализировано:** {results.get("files_analyzed", 0)}
+- **Функций найдено:** {results.get("functions_found", 0)}
+- **Классов найдено:** {results.get("classes_found", 0)}
 
 ## 🧪 Test Generation Results
 
-- **Статус:** {'✅ Успешно' if results.get('test_generation', {}).get('success') else '❌ Ошибка'}
-- **Unit тестов создано:** {results.get('unit_tests_generated', 0)}
-- **Integration тестов:** {results.get('integration_tests_generated', 0)}
-- **Performance тестов:** {results.get('performance_tests_generated', 0)}
+- **Статус:** {"✅ Успешно" if results.get("test_generation", {}).get("success") else "❌ Ошибка"}
+- **Unit тестов создано:** {results.get("unit_tests_generated", 0)}
+- **Integration тестов:** {results.get("integration_tests_generated", 0)}
+- **Performance тестов:** {results.get("performance_tests_generated", 0)}
 
 ## 📊 Coverage Analysis
 
-- **Покрытие:** {results.get('coverage_analysis', {}).get('coverage_percentage', 0):.1f}%
-- **Тестов собрано:** {results.get('pytest_results', {}).get('tests_collected', 0)}
-- **Тестов прошло:** {results.get('pytest_results', {}).get('tests_passed', 0)}
-- **Тестов упало:** {results.get('pytest_results', {}).get('tests_failed', 0)}
+- **Покрытие:** {results.get("coverage_analysis", {}).get("coverage_percentage", 0):.1f}%
+- **Тестов собрано:** {results.get("pytest_results", {}).get("tests_collected", 0)}
+- **Тестов прошло:** {results.get("pytest_results", {}).get("tests_passed", 0)}
+- **Тестов упало:** {results.get("pytest_results", {}).get("tests_failed", 0)}
 
 ## 🔍 Detailed Results
 
 ### Enhanced Analysis
 ```
-{results.get('enhanced_analysis', {}).get('output', 'No output')[:500]}...
+{results.get("enhanced_analysis", {}).get("output", "No output")[:500]}...
 ```
 
 ### Test Generation
 ```
-{results.get('test_generation', {}).get('output', 'No output')[:500]}...
+{results.get("test_generation", {}).get("output", "No output")[:500]}...
 ```
 
 ### Coverage Analysis
 ```
-{results.get('coverage_analysis', {}).get('output', 'No output')[:500]}...
+{results.get("coverage_analysis", {}).get("output", "No output")[:500]}...
 ```
 
 ## 📂 Generated Files
@@ -477,7 +497,7 @@ python3 scripts/unified_test_runner.py --mode=legacy
 ════════════════════════════════════════════════════════════════
 ⏱️  Общее время выполнения: {total_duration:.1f}с
 ✅ Успешных компонентов: {components_successful}/{components_run}
-📊 Общая успешность: {results['overall_success_rate']:.1f}%
+📊 Общая успешность: {results["overall_success_rate"]:.1f}%
 🚀 Режим выполнения: {mode}
 ════════════════════════════════════════════════════════════════
 🏆 UNIFIED СИСТЕМА ТЕСТИРОВАНИЯ ЗАВЕРШЕНА!
@@ -497,13 +517,13 @@ python3 scripts/unified_test_runner.py --mode=full
 # Только тесты
 python3 scripts/unified_test_runner.py --mode=tests
 
-# Только покрытие  
+# Только покрытие
 python3 scripts/unified_test_runner.py --mode=coverage
 
 # Enhanced анализ
 python3 scripts/unified_test_runner.py --mode=enhanced
 
-🎯 СТАТУС: {"🟢 ВСЁ ОТЛИЧНО!" if results['overall_success_rate'] >= 80 else "🟡 ТРЕБУЕТ ВНИМАНИЯ" if results['overall_success_rate'] >= 50 else "🔴 НУЖНЫ ИСПРАВЛЕНИЯ"}
+🎯 СТАТУС: {"🟢 ВСЁ ОТЛИЧНО!" if results["overall_success_rate"] >= 80 else "🟡 ТРЕБУЕТ ВНИМАНИЯ" if results["overall_success_rate"] >= 50 else "🔴 НУЖНЫ ИСПРАВЛЕНИЯ"}
 ════════════════════════════════════════════════════════════════
 """
         )
@@ -520,7 +540,7 @@ def main():
 Доступные режимы:
   full        - Полный анализ (enhanced + генерация + тесты + покрытие)
   enhanced    - Только enhanced анализ AST и ML генерация
-  generate    - Только генерация новых тестов  
+  generate    - Только генерация новых тестов
   tests       - Только запуск pytest тестов
   coverage    - Только анализ покрытия кода
   legacy      - Legacy master test runner (совместимость)

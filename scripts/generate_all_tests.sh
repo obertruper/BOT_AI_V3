@@ -79,7 +79,7 @@ import sys
 
 with open('coverage.json', 'r') as f:
     data = json.load(f)
-    
+
 total = data.get('totals', {})
 line_cov = total.get('percent_covered', 0)
 num_statements = total.get('num_statements', 0)

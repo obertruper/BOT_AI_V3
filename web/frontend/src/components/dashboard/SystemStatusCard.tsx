@@ -58,7 +58,7 @@ const SystemStatusCard: React.FC = () => {
           <Activity className="w-5 h-5 mr-2 text-blue-400" />
           System Status
         </h3>
-        
+
         <div className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBgColor(systemStatus.status)} ${getStatusColor(systemStatus.status)}`}>
           {systemStatus.status.toUpperCase()}
         </div>
@@ -70,12 +70,12 @@ const SystemStatusCard: React.FC = () => {
           <span className="text-gray-400">Uptime</span>
           <span className="text-white font-mono">{formatUptime(systemStatus.uptime)}</span>
         </div>
-        
+
         <div className="flex items-center justify-between mb-2">
           <span className="text-gray-400">CPU Usage</span>
           <span className="text-white font-mono">{systemStatus.metrics?.cpu_usage?.toFixed(1)}%</span>
         </div>
-        
+
         <div className="flex items-center justify-between">
           <span className="text-gray-400">Memory Usage</span>
           <span className="text-white font-mono">{systemStatus.metrics?.memory_usage?.toFixed(1)}%</span>
@@ -90,25 +90,25 @@ const SystemStatusCard: React.FC = () => {
             <span className="text-white">{systemStatus.metrics?.cpu_usage?.toFixed(0)}%</span>
           </div>
           <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
-            <div 
+            <div
               className={`h-3 rounded-full transition-all duration-500 relative overflow-hidden ${
-                (systemStatus.metrics?.cpu_usage || 0) > 80 ? 'bg-red-500' : 
+                (systemStatus.metrics?.cpu_usage || 0) > 80 ? 'bg-red-500' :
                 (systemStatus.metrics?.cpu_usage || 0) > 60 ? 'bg-yellow-500' : 'bg-green-500'
               }`}
               style={{ width: `${systemStatus.metrics?.cpu_usage || 0}%` }}
             ></div>
           </div>
         </div>
-        
+
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-gray-400">Memory</span>
             <span className="text-white">{systemStatus.metrics?.memory_usage?.toFixed(0)}%</span>
           </div>
           <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
-            <div 
+            <div
               className={`h-3 rounded-full transition-all duration-500 relative overflow-hidden ${
-                (systemStatus.metrics?.memory_usage || 0) > 80 ? 'bg-red-500' : 
+                (systemStatus.metrics?.memory_usage || 0) > 80 ? 'bg-red-500' :
                 (systemStatus.metrics?.memory_usage || 0) > 60 ? 'bg-yellow-500' : 'bg-green-500'
               }`}
               style={{ width: `${systemStatus.metrics?.memory_usage || 0}%` }}
