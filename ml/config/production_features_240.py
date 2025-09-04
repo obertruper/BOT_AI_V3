@@ -296,9 +296,9 @@ PRODUCTION_FEATURES_240 = [
 ]
 
 # Проверка что ровно 240 признаков
-assert len(PRODUCTION_FEATURES_240) == 240, (
-    f"Expected 240 features, got {len(PRODUCTION_FEATURES_240)}"
-)
+assert (
+    len(PRODUCTION_FEATURES_240) == 240
+), f"Expected 240 features, got {len(PRODUCTION_FEATURES_240)}"
 assert len(set(PRODUCTION_FEATURES_240)) == 240, "Duplicate features found!"
 
 # Для обратной совместимости

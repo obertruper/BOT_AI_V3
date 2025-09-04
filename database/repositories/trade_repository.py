@@ -185,7 +185,7 @@ class TradeRepository(BaseRepository[Trade]):
                 data.get("commission", 0),  # commission
                 data.get("fee_currency", "USDT"),  # commission_asset
                 data["realized_pnl"],
-                data["exchange_trade_id"],  # trade_id 
+                data["exchange_trade_id"],  # trade_id
                 data["executed_at"],
                 data["created_at"],
             )
@@ -214,7 +214,9 @@ class TradeRepository(BaseRepository[Trade]):
             Trading statistics dictionary
         """
         # Build WHERE clause
-        where_conditions = []  # В таблице trades нет колонки status, все записи считаются исполненными
+        where_conditions = (
+            []
+        )  # В таблице trades нет колонки status, все записи считаются исполненными
         args = []
         param_counter = 1
 
@@ -332,7 +334,9 @@ class TradeRepository(BaseRepository[Trade]):
         Returns:
             List of daily PnL data
         """
-        where_conditions = [f"executed_at >= NOW() - INTERVAL '{days} days'"]  # Все записи считаются исполненными
+        where_conditions = [
+            f"executed_at >= NOW() - INTERVAL '{days} days'"
+        ]  # Все записи считаются исполненными
         args = []
         param_counter = 1
 

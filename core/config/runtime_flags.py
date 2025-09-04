@@ -10,11 +10,10 @@ Runtime-флаги конфигурации с единым источником
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 from core.config.config_manager import get_global_config_manager
 
-_HEDGE_MODE_OVERRIDE: Optional[bool] = None
+_HEDGE_MODE_OVERRIDE: bool | None = None
 
 
 def set_hedge_mode(value: bool) -> None:
@@ -51,4 +50,3 @@ def get_hedge_mode() -> bool:
         return False
 
     return True
-

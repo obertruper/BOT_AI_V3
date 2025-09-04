@@ -1,8 +1,8 @@
 ⚠️ ВНИМАНИЕ: Обнаружены ошибки в анализе!
-Проверьте лог: data/logs/background_analysis_20250824_004428.log
+Проверьте лог: data/logs/background_analysis_20250902_122952.log
 
    ❌ Провалилось: 1 ошибок
-  ❌ ml_prediction_chain: 2/6 шагов, 0.904с
+  ❌ ml_prediction_chain: 2/6 шагов, 0.927с
 ==================================== ERRORS ====================================
 _________ ERROR collecting tests/integration/test_complete_trading.py __________
 _________ ERROR collecting tests/integration/test_dynamic_sltp_e2e.py __________

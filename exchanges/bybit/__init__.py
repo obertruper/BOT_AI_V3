@@ -20,7 +20,7 @@ Bybit Exchange Module для BOT_Trading v3.0
 from .adapter import BybitAPIClient, BybitLegacyAdapter
 from .bybit_exchange import BybitExchange, create_bybit_exchange
 from .client import BybitClient, clean_symbol
-from .singleton_client import get_bybit_client, BybitClientSingleton
+from .singleton_client import BybitClientSingleton, get_bybit_client
 
 # Экспорт всех публичных классов и функций
 __all__ = [

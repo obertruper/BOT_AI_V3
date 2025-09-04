@@ -13,7 +13,6 @@ import asyncio
 import hashlib
 import hmac
 import json
-import os
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -159,66 +158,76 @@ def format_quantity(
         ValueError: Если количество не соответствует требованиям
     """
     # Детальное логирование для отладки
-    logger.debug(f"format_quantity called with: quantity={quantity} (type={type(quantity)}), "
-                f"qty_step={qty_step} (type={type(qty_step)}), "
-                f"min_qty={min_qty} (type={type(min_qty)}), "
-                f"max_qty={max_qty} (type={type(max_qty)}), symbol={symbol}")
-    
+    logger.debug(
+        f"format_quantity called with: quantity={quantity} (type={type(quantity)}), "
+        f"qty_step={qty_step} (type={type(qty_step)}), "
+        f"min_qty={min_qty} (type={type(min_qty)}), "
+        f"max_qty={max_qty} (type={type(max_qty)}), symbol={symbol}"
+    )
+
     try:
         # Преобразуем все входные параметры в числа с обработкой Decimal
         from decimal import Decimal
-        
+
         # Обработка quantity
         if isinstance(quantity, Decimal):
             quantity = float(quantity)
         elif isinstance(quantity, str):
-            quantity = float(quantity) if quantity and quantity != 'None' else 0.0
+            quantity = float(quantity) if quantity and quantity != "None" else 0.0
         elif quantity is None:
             quantity = 0.0
         else:
             quantity = float(quantity)
-            
+
         # Обработка qty_step
         if isinstance(qty_step, Decimal):
             qty_step = float(qty_step)
         elif isinstance(qty_step, str):
-            qty_step = float(qty_step) if qty_step and qty_step != 'None' else 0.1
+            qty_step = float(qty_step) if qty_step and qty_step != "None" else 0.1
         elif qty_step is None:
             qty_step = 0.1
         else:
             qty_step = float(qty_step)
-            
+
         # Обработка min_qty
         if isinstance(min_qty, Decimal):
             min_qty = float(min_qty)
         elif isinstance(min_qty, str):
-            min_qty = float(min_qty) if min_qty and min_qty != 'None' else 0.0
+            min_qty = float(min_qty) if min_qty and min_qty != "None" else 0.0
         elif min_qty is None:
             min_qty = 0.0
         else:
             min_qty = float(min_qty)
-            
+
         # Обработка max_qty
         if isinstance(max_qty, Decimal):
             max_qty = float(max_qty)
         elif isinstance(max_qty, str):
-            max_qty = float(max_qty) if max_qty and max_qty != 'None' and max_qty != 'inf' else float("inf")
+            max_qty = (
+                float(max_qty)
+                if max_qty and max_qty != "None" and max_qty != "inf"
+                else float("inf")
+            )
         elif max_qty is None:
             max_qty = float("inf")
         else:
             max_qty = float(max_qty)
-            
-        logger.debug(f"After conversion: quantity={quantity}, qty_step={qty_step}, "
-                    f"min_qty={min_qty}, max_qty={max_qty}")
-        
+
+        logger.debug(
+            f"After conversion: quantity={quantity}, qty_step={qty_step}, "
+            f"min_qty={min_qty}, max_qty={max_qty}"
+        )
+
     except (ValueError, TypeError) as e:
         logger.error(f"Error converting parameters to float: {e}")
-        logger.error(f"Original values: quantity={quantity} (type={type(quantity)}), "
-                    f"qty_step={qty_step} (type={type(qty_step)}), "
-                    f"min_qty={min_qty} (type={type(min_qty)}), "
-                    f"max_qty={max_qty} (type={type(max_qty)})")
+        logger.error(
+            f"Original values: quantity={quantity} (type={type(quantity)}), "
+            f"qty_step={qty_step} (type={type(qty_step)}), "
+            f"min_qty={min_qty} (type={type(min_qty)}), "
+            f"max_qty={max_qty} (type={type(max_qty)})"
+        )
         raise ValueError(f"Cannot convert parameters to numbers: {e}")
-    
+
     # Если передан символ, используем InstrumentManager для точного округления
     if symbol:
         try:
@@ -278,15 +287,17 @@ def format_quantity(
             decimal_places = len(step_str.split(".")[1])
         else:
             decimal_places = 0
-        
+
         # Форматируем с точным количеством знаков после запятой
         # Используем format для Decimal чтобы сохранить точность
         formatted_qty = format(rounded_qty, f".{decimal_places}f")
-        
+
         # НЕ убираем десятичную часть, даже если все нули - некоторые биржи требуют точный формат
-    
+
     # Логирование для отладки
-    logger.debug(f"Format quantity: {quantity} -> {formatted_qty} (step={qty_step}, places={decimal_places if qty_step < 1 else 0})")
+    logger.debug(
+        f"Format quantity: {quantity} -> {formatted_qty} (step={qty_step}, places={decimal_places if qty_step < 1 else 0})"
+    )
 
     return formatted_qty
 
@@ -335,6 +346,7 @@ class BybitClient(BaseExchangeInterface):
         # Синхронизация времени и окно приёма
         self._server_time_offset_ms: int = 0  # server_ms - local_ms
         import os as _os
+
         try:
             self._recv_window_ms: int = int(_os.getenv("BYBIT_RECV_WINDOW_MS", "60000"))
         except Exception:
@@ -362,8 +374,8 @@ class BybitClient(BaseExchangeInterface):
         self.health_monitor.add_exchange("bybit")
 
         # Загружаем конфигурацию торговли (единый источник через ConfigManager/runtime_flags)
-        from core.config.runtime_flags import get_hedge_mode
         from core.config.config_manager import get_global_config_manager
+        from core.config.runtime_flags import get_hedge_mode
 
         self.hedge_mode = get_hedge_mode()
         self.default_leverage = 5
@@ -472,6 +484,7 @@ class BybitClient(BaseExchangeInterface):
             if resp.get("retCode") == 0:
                 server_sec = int(resp.get("result", {}).get("timeSecond", 0))
                 import time as _time
+
                 local_ms = int(_time.time() * 1000)
                 server_ms = server_sec * 1000
                 self._server_time_offset_ms = server_ms - local_ms
@@ -1204,20 +1217,24 @@ class BybitClient(BaseExchangeInterface):
                 "qty": formatted_qty,
                 "timeInForce": order_request.time_in_force.value,
             }
-            
+
             # Дополнительная проверка и логирование qty
-            self.logger.info(f"Formatted qty for {symbol}: '{formatted_qty}' (original: {order_request.quantity})")
+            self.logger.info(
+                f"Formatted qty for {symbol}: '{formatted_qty}' (original: {order_request.quantity})"
+            )
 
             # В Bybit hedge mode ВСЕГДА нужен positionIdx
             # Проверяем текущий режим позиций из единого флага
             is_hedge_mode = bool(getattr(self, "hedge_mode", True))
-            
+
             if is_hedge_mode:
                 # В hedge mode ВСЕГДА нужен positionIdx (1 или 2, никогда 0)
                 if position_idx == 0:
                     # Исправляем на основе стороны
                     position_idx = 1 if order_request.side.value.upper() in ["BUY", "LONG"] else 2
-                    self.logger.warning(f"   Hedge mode: position_idx was 0, corrected to {position_idx}")
+                    self.logger.warning(
+                        f"   Hedge mode: position_idx was 0, corrected to {position_idx}"
+                    )
                 params["positionIdx"] = position_idx
                 self.logger.info(f"   Using hedge mode with positionIdx={position_idx}")
             else:
@@ -1305,17 +1322,17 @@ class BybitClient(BaseExchangeInterface):
                 f"Placing order: {symbol} {order_request.side.value} {order_request.quantity} -> {formatted_qty} {order_request.order_type.value}"
             )
             self.logger.info(f"Order params: {params}")
-            
+
             # Финальная валидация qty перед отправкой
             final_qty = params.get("qty")
             if not final_qty:
                 raise ValueError("Qty is missing in order params")
-            
+
             # Проверяем, что qty это строка
             if not isinstance(final_qty, str):
                 self.logger.warning(f"Qty is not a string: {type(final_qty)}, converting...")
                 params["qty"] = str(final_qty)
-            
+
             self.logger.debug(f"Final qty to send: '{params['qty']}' (type: {type(params['qty'])})")
 
             # Выполнение запроса с высоким приоритетом для ордеров
@@ -1333,11 +1350,12 @@ class BybitClient(BaseExchangeInterface):
             except APIError as e:
                 # Обработка несоответствия positionIdx и режима позиций аккаунта
                 api_msg = (e.context.get("api_message") if hasattr(e, "context") else None) or ""
-                api_code = (e.context.get("api_error_code") if hasattr(e, "context") else None) or ""
-                mismatch = (
-                    "position idx not match position mode" in str(api_msg).lower()
-                    or str(api_code) in {"20025"}
-                )
+                api_code = (
+                    e.context.get("api_error_code") if hasattr(e, "context") else None
+                ) or ""
+                mismatch = "position idx not match position mode" in str(api_msg).lower() or str(
+                    api_code
+                ) in {"20025"}
                 if mismatch and "positionIdx" in params:
                     if getattr(self, "hedge_mode", True):
                         # Пытаемся принудительно включить hedge mode на аккаунте и повторить
@@ -1347,7 +1365,9 @@ class BybitClient(BaseExchangeInterface):
                             )
                             await self.set_position_mode(symbol, hedge_mode=True)
                             # Пересчёт positionIdx после смены режима
-                            position_idx = self._get_position_idx(order_request.side.value, symbol=symbol)
+                            position_idx = self._get_position_idx(
+                                order_request.side.value, symbol=symbol
+                            )
                             params["positionIdx"] = position_idx
                             response = await _send_create(params)
                         except Exception as se:
@@ -1410,6 +1430,7 @@ class BybitClient(BaseExchangeInterface):
 
         except Exception as e:
             import traceback
+
             self.logger.error(f"Failed to place order: {e}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             raise OrderError("bybit", "placement", symbol=order_request.symbol, reason=str(e))
@@ -1870,7 +1891,6 @@ class BybitClient(BaseExchangeInterface):
             OrderResponse с результатом операции
         """
         try:
-            import os
 
             symbol = clean_symbol(symbol)
 
@@ -1955,7 +1975,6 @@ class BybitClient(BaseExchangeInterface):
             OrderResponse с результатом операции
         """
         try:
-            import os
 
             symbol = clean_symbol(symbol)
 

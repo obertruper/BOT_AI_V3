@@ -248,9 +248,9 @@ class OrderManager:
                 # Создаем OrderRequest для Bybit
                 from exchanges.base.order_types import (
                     OrderRequest,
+                    OrderSide as ExchangeOrderSide,
+                    OrderType as ExchangeOrderType,
                 )
-                from exchanges.base.order_types import OrderSide as ExchangeOrderSide
-                from exchanges.base.order_types import OrderType as ExchangeOrderType
 
                 # Маппинг типов ордеров
                 order_type_map = {
@@ -299,6 +299,7 @@ class OrderManager:
                 # Если один из уровней отсутствует, заполним из конфигурации (гарантия SL/TP при открытии)
                 try:
                     from core.config.config_manager import ConfigManager
+
                     cm = ConfigManager()
                     cfg = cm.get_config()
                     enhanced_sltp = cfg.get("enhanced_sltp", {}) if isinstance(cfg, dict) else {}
@@ -378,7 +379,7 @@ class OrderManager:
                     try:
                         from exchanges.bybit.client import format_quantity
                         from exchanges.bybit.instrument_settings import get_instrument_settings
-                        
+
                         settings = get_instrument_settings(order.symbol)
                         # Преобразуем все параметры в числа
                         formatted_quantity_str = format_quantity(
@@ -386,11 +387,13 @@ class OrderManager:
                             qty_step=float(settings.get("qtyStep", 0.1)),
                             min_qty=float(settings.get("minOrderQty", 0.1)),
                             max_qty=float(settings.get("maxOrderQty", float("inf"))),
-                            symbol=order.symbol
+                            symbol=order.symbol,
                         )
                         # format_quantity возвращает строку, преобразуем обратно в float
                         formatted_quantity = float(formatted_quantity_str)
-                        self.logger.info(f"📏 Отформатировано количество: {order.quantity} -> {formatted_quantity}")
+                        self.logger.info(
+                            f"📏 Отформатировано количество: {order.quantity} -> {formatted_quantity}"
+                        )
                     except Exception as e:
                         self.logger.warning(f"⚠️ Не удалось отформатировать количество: {e}")
                         formatted_quantity = float(order.quantity)
@@ -656,7 +659,7 @@ class OrderManager:
             async with db_manager.transaction() as db:
                 # Используем UPDATE для обновления существующего ордера
                 # Получаем статус в правильном формате для БД
-                if hasattr(order.status, 'value'):
+                if hasattr(order.status, "value"):
                     # Используем enum напрямую для корректного маппинга
                     status_value = order.status.value
                 else:

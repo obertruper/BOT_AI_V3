@@ -2,7 +2,6 @@
 Database connections module 4;O BOT Trading v3
 """
 
-from .postgres import get_async_db  # DEPRECATED: Use get_db from database.db_manager instead
 from .postgres import (
     ASYNC_DATABASE_URL,
     SYNC_DATABASE_URL,
@@ -12,6 +11,7 @@ from .postgres import (
     SessionLocal,
     async_engine,
     engine,
+    get_async_db,  # DEPRECATED: Use get_db from database.db_manager instead
     get_db,
     init_async_db,
     init_db,

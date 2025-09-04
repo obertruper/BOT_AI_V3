@@ -163,7 +163,7 @@ class RealTimeIndicatorCalculator:
 
             # Структурируем результат
             result = self._structure_indicators(current_features, ohlcv_df)
-            
+
             # Добавляем все признаки для совместимости
             result["features"] = current_features
 
@@ -530,9 +530,9 @@ class RealTimeIndicatorCalculator:
                 logger.info(
                     f"🔧 get_features_for_ml: selected_features={len(selected_features)}, required={len(REQUIRED_FEATURES_240)}"
                 )
-                assert len(selected_features) == 240, (
-                    f"Должно быть 240 признаков, получено {len(selected_features)}"
-                )
+                assert (
+                    len(selected_features) == 240
+                ), f"Должно быть 240 признаков, получено {len(selected_features)}"
                 features_array = features_result[selected_features].values
                 logger.info(
                     f"🔧 get_features_for_ml: final features_array shape: {features_array.shape}"
@@ -551,9 +551,9 @@ class RealTimeIndicatorCalculator:
                 logger.info(
                     f"✅ get_features_for_ml: Extracted {len(last_features)} features for {symbol}"
                 )
-                assert len(last_features) == 240, (
-                    f"Ожидалось 240 признаков, получено {len(last_features)}"
-                )
+                assert (
+                    len(last_features) == 240
+                ), f"Ожидалось 240 признаков, получено {len(last_features)}"
                 return last_features
             else:
                 logger.error(f"Неожиданная форма features_array: {features_array.shape}")

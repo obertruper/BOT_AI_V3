@@ -48,9 +48,7 @@ class BybitExchange(BaseExchangeInterface):
             timeout: Таймаут соединения
         """
         # Используем синглтон для единого клиента
-        self.client = get_bybit_client(
-            api_key=api_key, api_secret=api_secret, sandbox=sandbox
-        )
+        self.client = get_bybit_client(api_key=api_key, api_secret=api_secret, sandbox=sandbox)
 
         # Для обратной совместимости создаем legacy адаптер
         self.legacy_adapter = BybitLegacyAdapter(

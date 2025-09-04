@@ -270,9 +270,9 @@ def expected_results_validator():
         if signal_type == "BUY":
             assert result["stop_loss_price"] < result["take_profit_price"], "BUY: SL should be < TP"
         elif signal_type == "SELL":
-            assert result["stop_loss_price"] > result["take_profit_price"], (
-                "SELL: SL should be > TP"
-            )
+            assert (
+                result["stop_loss_price"] > result["take_profit_price"]
+            ), "SELL: SL should be > TP"
 
         # Проверяем корреляцию с confidence
         if confidence >= 0.8:

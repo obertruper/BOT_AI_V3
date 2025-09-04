@@ -654,26 +654,26 @@ class TradingEngine:
                 if success:
                     self.metrics.orders_executed += 1
                     self.logger.info("✅ Ордер успешно исполнен")
-                    
+
                     # Обновляем статус в БД
-                    if hasattr(order, 'id') and order.id:
+                    if hasattr(order, "id") and order.id:
                         await self._update_order_status_in_db(order.id, OrderStatus.FILLED)
-                    elif hasattr(order, 'order_id'):
+                    elif hasattr(order, "order_id"):
                         await self._update_order_status_in_db(order.order_id, OrderStatus.FILLED)
-                    
+
                     # Создаём запись Trade
                     await self._create_trade_record(order)
-                    
+
                     # Отслеживаем позицию
                     if self.position_tracker:
-                        fill_price = Decimal(str(order.price)) if order.price else Decimal('0')
+                        fill_price = Decimal(str(order.price)) if order.price else Decimal("0")
                         await self.on_position_opened(order, fill_price)
                 else:
                     self.logger.warning("❌ Ошибка исполнения ордера")
                     self.metrics.errors_count += 1
-                    
+
                     # Обновляем статус в БД
-                    if hasattr(order, 'order_id'):
+                    if hasattr(order, "order_id"):
                         await self._update_order_status_in_db(order.order_id, OrderStatus.REJECTED)
 
             except Exception as e:
@@ -1665,7 +1665,7 @@ class TradingEngine:
             )
 
             orders.append(order)
-            
+
             # Сохраняем ордер в БД через репозиторий
             try:
                 if not self.order_repository:
@@ -1673,30 +1673,52 @@ class TradingEngine:
                 else:
                     # Создаём объект Order для репозитория
                     from database.repositories.order_repository import Order as RepoOrder
+
                     repo_order = RepoOrder(
                         symbol=order.symbol,
                         exchange=order.exchange,
-                        side=order.side.value if hasattr(order.side, 'value') else str(order.side).lower(),
-                        order_type=order.order_type.value if hasattr(order.order_type, 'value') else str(order.order_type).lower(),
+                        side=(
+                            order.side.value
+                            if hasattr(order.side, "value")
+                            else str(order.side).lower()
+                        ),
+                        order_type=(
+                            order.order_type.value
+                            if hasattr(order.order_type, "value")
+                            else str(order.order_type).lower()
+                        ),
                         quantity=Decimal(str(order.quantity)),
                         price=Decimal(str(order.price)) if order.price else None,
-                        status=order.status.value if hasattr(order.status, 'value') else str(order.status).lower(),
-                        stop_loss=Decimal(str(order.stop_loss)) if hasattr(order, 'stop_loss') and order.stop_loss else None,
-                        take_profit=Decimal(str(order.take_profit)) if hasattr(order, 'take_profit') and order.take_profit else None,
-                        exchange_order_id=order.order_id if hasattr(order, 'order_id') else None,
+                        status=(
+                            order.status.value
+                            if hasattr(order.status, "value")
+                            else str(order.status).lower()
+                        ),
+                        stop_loss=(
+                            Decimal(str(order.stop_loss))
+                            if hasattr(order, "stop_loss") and order.stop_loss
+                            else None
+                        ),
+                        take_profit=(
+                            Decimal(str(order.take_profit))
+                            if hasattr(order, "take_profit") and order.take_profit
+                            else None
+                        ),
+                        exchange_order_id=order.order_id if hasattr(order, "order_id") else None,
                         # leverage убран - нет в таблице
-                        metadata=order.order_metadata if hasattr(order, 'order_metadata') else {},
+                        metadata=order.order_metadata if hasattr(order, "order_metadata") else {},
                     )
-                    
+
                     # Сохраняем через метод create_order
                     saved_order_id = await self.order_repository.create_order(repo_order)
                     self.logger.info(f"✅ Ордер {order.symbol} сохранён в БД с ID {saved_order_id}")
-                    
+
                     # Сохраняем ID в оригинальном ордере для дальнейшего использования
                     order.id = saved_order_id
             except Exception as db_error:
                 self.logger.error(f"Ошибка сохранения ордера в БД: {db_error}")
                 import traceback
+
                 self.logger.error(traceback.format_exc())
                 # Продолжаем работу, даже если не удалось сохранить в БД
 
@@ -1720,72 +1742,91 @@ class TradingEngine:
             if not self.trade_repository:
                 self.logger.warning("⚠️ TradeRepository недоступен, пропускаем создание trade")
                 return
-            
+
             # Генерируем trade_id
             trade_id = f"TRADE_{uuid.uuid4().hex[:12]}_{order.symbol}"
-            order_id = str(order.order_id) if hasattr(order, 'order_id') else f"order_{uuid.uuid4().hex[:12]}"
-            
+            order_id = (
+                str(order.order_id)
+                if hasattr(order, "order_id")
+                else f"order_{uuid.uuid4().hex[:12]}"
+            )
+
             # Создаём объект Trade для репозитория
             from database.repositories.trade_repository import Trade as RepoTrade
-            
+
             # Получаем order_id (должен быть числом из БД)
-            if hasattr(order, 'id') and order.id:
+            if hasattr(order, "id") and order.id:
                 db_order_id = int(order.id)
             else:
                 db_order_id = None  # Или можно пропустить создание trade
-            
+
             repo_trade = RepoTrade(
                 exchange_trade_id=trade_id,  # Используем exchange_trade_id вместо trade_id
-                exchange=order.exchange if hasattr(order, 'exchange') else 'bybit',
+                exchange=order.exchange if hasattr(order, "exchange") else "bybit",
                 symbol=order.symbol,
                 order_id=db_order_id,  # Числовой ID из БД
-                side=order.side.value if hasattr(order.side, 'value') else str(order.side).lower(),
-                price=Decimal(str(order.price)) if order.price else Decimal('0'),
+                side=order.side.value if hasattr(order.side, "value") else str(order.side).lower(),
+                price=Decimal(str(order.price)) if order.price else Decimal("0"),
                 quantity=Decimal(str(order.quantity)),
                 # Убираем fee и commission, добавим позже если нужно
-                realized_pnl=Decimal('0'),
+                realized_pnl=Decimal("0"),
                 executed_at=datetime.now(),
                 metadata={
-                    'strategy': order.order_metadata.get('strategy', 'TradingEngine') if hasattr(order, 'order_metadata') else 'TradingEngine',
-                    'trader_id': order.order_metadata.get('created_by', 'TradingEngine') if hasattr(order, 'order_metadata') else 'TradingEngine'
-                }
+                    "strategy": (
+                        order.order_metadata.get("strategy", "TradingEngine")
+                        if hasattr(order, "order_metadata")
+                        else "TradingEngine"
+                    ),
+                    "trader_id": (
+                        order.order_metadata.get("created_by", "TradingEngine")
+                        if hasattr(order, "order_metadata")
+                        else "TradingEngine"
+                    ),
+                },
             )
-            
+
             # Сохраняем через репозиторий
             await self.trade_repository.create_trade(repo_trade)
             self.logger.info(f"📈 Trade {trade_id} создан в БД для {order.symbol}")
-            
+
             # Обновляем метрики
             self.metrics.total_trades += 1
-            
+
         except Exception as e:
             self.logger.error(f"❌ Ошибка создания trade в БД: {e}")
             import traceback
+
             self.logger.error(traceback.format_exc())
-    
+
     async def _update_order_status_in_db(self, order_id: str, status: OrderStatus):
         """Обновление статуса ордера в БД"""
         try:
             # Если order_id - это ID из базы (число)
             if isinstance(order_id, (int, str)) and str(order_id).isdigit():
                 if not self.order_repository:
-                    self.logger.warning("⚠️ OrderRepository недоступен, пропускаем обновление статуса")
+                    self.logger.warning(
+                        "⚠️ OrderRepository недоступен, пропускаем обновление статуса"
+                    )
                     return
                 # Обновляем статус по ID
                 success = await self.order_repository.update_order_status(
                     order_id=int(order_id),
-                    new_status=status.value if hasattr(status, 'value') else str(status).lower()
+                    new_status=status.value if hasattr(status, "value") else str(status).lower(),
                 )
                 if success:
-                    self.logger.debug(f"Статус ордера {order_id} обновлён на {status.value if hasattr(status, 'value') else status}")
+                    self.logger.debug(
+                        f"Статус ордера {order_id} обновлён на {status.value if hasattr(status, 'value') else status}"
+                    )
                 else:
                     self.logger.warning(f"Не удалось обновить статус ордера {order_id}")
             else:
                 # Если это exchange_order_id (строка)
-                self.logger.warning(f"Не могу обновить статус - используется exchange_order_id: {order_id}")
+                self.logger.warning(
+                    f"Не могу обновить статус - используется exchange_order_id: {order_id}"
+                )
         except Exception as e:
             self.logger.error(f"Ошибка обновления статуса ордера {order_id} в БД: {e}")
-    
+
     async def _balance_update_loop(self):
         """Цикл обновления балансов"""
         while self._running:

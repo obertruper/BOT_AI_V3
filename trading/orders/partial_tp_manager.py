@@ -159,9 +159,9 @@ class PartialTPManager:
             # Создаем запрос ордера
             from exchanges.base.order_types import (
                 OrderRequest,
+                OrderSide as ExchangeOrderSide,
+                OrderType as ExchangeOrderType,
             )
-            from exchanges.base.order_types import OrderSide as ExchangeOrderSide
-            from exchanges.base.order_types import OrderType as ExchangeOrderType
 
             order_request = OrderRequest(
                 symbol=order_data["symbol"],

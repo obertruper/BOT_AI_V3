@@ -4,8 +4,6 @@
 """
 
 import logging
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -13,27 +11,27 @@ logger = logging.getLogger(__name__)
 def round_price_to_tick(price: float, tick_size: float) -> float:
     """
     Округляет цену до ближайшего tick size
-    
+
     Args:
         price: Цена для округления
         tick_size: Минимальный шаг цены
-        
+
     Returns:
         Округленная цена
     """
     if tick_size == 0:
         return price
-    
+
     return round(price / tick_size) * tick_size
 
 
 def get_tick_size_for_symbol(symbol: str) -> float:
     """
     Возвращает tick size для символа
-    
+
     Args:
         symbol: Торговый символ
-        
+
     Returns:
         Tick size
     """
@@ -47,18 +45,19 @@ def get_tick_size_for_symbol(symbol: str) -> float:
         return 0.001
 
 
-def validate_price_levels(symbol: str, stop_loss: float, take_profit: float, 
-                         side: str, current_price: float) -> bool:
+def validate_price_levels(
+    symbol: str, stop_loss: float, take_profit: float, side: str, current_price: float
+) -> bool:
     """
     Валидирует уровни SL и TP
-    
+
     Args:
         symbol: Торговый символ
         stop_loss: Цена стоп-лосса
         take_profit: Цена тейк-профита
         side: Направление сделки (BUY/SELL)
         current_price: Текущая цена
-        
+
     Returns:
         True если уровни валидны
     """
@@ -79,9 +78,9 @@ def validate_price_levels(symbol: str, stop_loss: float, take_profit: float,
             if take_profit >= current_price:
                 logger.error(f"Invalid TP for SHORT: TP={take_profit} >= price={current_price}")
                 return False
-        
+
         return True
-        
+
     except Exception as e:
         logger.error(f"Error validating price levels: {e}")
         return False
@@ -90,11 +89,11 @@ def validate_price_levels(symbol: str, stop_loss: float, take_profit: float,
 def calculate_quantity_with_precision(quantity: float, symbol: str) -> float:
     """
     Рассчитывает количество с правильной точностью для биржи
-    
+
     Args:
         quantity: Количество
         symbol: Торговый символ
-        
+
     Returns:
         Количество с правильной точностью
     """
@@ -105,23 +104,24 @@ def calculate_quantity_with_precision(quantity: float, symbol: str) -> float:
         precision = 4  # 0.0001 ETH
     else:
         precision = 2  # Для остальных
-    
+
     # Округляем вниз для безопасности
-    multiplier = 10 ** precision
+    multiplier = 10**precision
     return int(quantity * multiplier) / multiplier
 
 
-def calculate_risk_reward_ratio(entry_price: float, stop_loss: float, 
-                               take_profit: float, side: str) -> float:
+def calculate_risk_reward_ratio(
+    entry_price: float, stop_loss: float, take_profit: float, side: str
+) -> float:
     """
     Рассчитывает соотношение риск/прибыль
-    
+
     Args:
         entry_price: Цена входа
         stop_loss: Цена стоп-лосса
         take_profit: Цена тейк-профита
         side: Направление сделки
-        
+
     Returns:
         Соотношение риск/прибыль
     """
@@ -132,12 +132,12 @@ def calculate_risk_reward_ratio(entry_price: float, stop_loss: float,
         else:
             risk = stop_loss - entry_price
             reward = entry_price - take_profit
-        
+
         if risk <= 0:
             return 0
-        
+
         return reward / risk
-        
+
     except Exception as e:
         logger.error(f"Error calculating risk/reward: {e}")
         return 0

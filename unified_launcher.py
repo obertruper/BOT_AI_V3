@@ -520,7 +520,11 @@ class UnifiedLauncher:
             if comp_name not in self.process_manager.processes:
                 logger.warning(f"⚠️ Компонент {comp_name} не зарегистрирован, попытка запуска")
                 # Если это API, пытаемся запустить через subprocess
-                if comp_name == "api" and "components" in self.config and comp_name in self.config["components"]:
+                if (
+                    comp_name == "api"
+                    and "components" in self.config
+                    and comp_name in self.config["components"]
+                ):
                     comp_config = self.config["components"][comp_name]
                     if comp_config.get("enabled", False):
                         await self.process_manager.start_component(

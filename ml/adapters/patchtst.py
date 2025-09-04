@@ -618,7 +618,7 @@ class PatchTSTAdapter(BaseModelAdapter):
                 "quality_weights": self.quality_analyzer.quality_weights,
             }
         return {}
-    
+
     async def cleanup(self) -> None:
         """Очистка ресурсов адаптера"""
         try:
@@ -626,19 +626,20 @@ class PatchTSTAdapter(BaseModelAdapter):
             if self.model:
                 del self.model
                 self.model = None
-                
+
             # Очищаем scaler
             if self.scaler:
                 del self.scaler
                 self.scaler = None
-                
+
             # Очищаем CUDA кэш если используем GPU
             if self.device.type == "cuda":
                 import torch
+
                 torch.cuda.empty_cache()
-                
+
             self._initialized = False
             logger.info("✅ PatchTSTAdapter cleanup completed")
-            
+
         except Exception as e:
             logger.error(f"❌ Error during PatchTSTAdapter cleanup: {e}")

@@ -93,9 +93,9 @@ class TestDynamicSLTPCalculator:
         # При высокой волатильности ATR должен быть большим
         assert atr > 1000, "ATR должен быть больше 1000 для высокой волатильности"
         assert atr < 3500, "ATR не должен быть слишком большим (увеличен порог до 3500)"
-        assert 0.5 <= volatility_factor <= 1, (
-            "Volatility factor должен быть высоким при высокой волатильности"
-        )
+        assert (
+            0.5 <= volatility_factor <= 1
+        ), "Volatility factor должен быть высоким при высокой волатильности"
 
     @pytest.mark.asyncio
     async def test_determine_volatility_regime_low(self, calculator, sample_candles_low_volatility):

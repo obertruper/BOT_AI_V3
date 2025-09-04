@@ -92,9 +92,9 @@ class TestPositionTrackerPerformance:
 
         assert len(positions) == num_positions
         assert all(p is not None for p in positions)
-        assert avg_time_per_position < 0.01, (
-            f"Average time per position: {avg_time_per_position:.4f}s"
-        )
+        assert (
+            avg_time_per_position < 0.01
+        ), f"Average time per position: {avg_time_per_position:.4f}s"
         assert total_time < 2.0, f"Total time: {total_time:.3f}s should be <2.0s"
 
     @pytest.mark.asyncio
@@ -127,9 +127,9 @@ class TestPositionTrackerPerformance:
         calculation_time = end_time - start_time
         avg_time_per_calculation = calculation_time / num_positions
 
-        assert avg_time_per_calculation < 0.005, (
-            f"Average calculation time: {avg_time_per_calculation:.4f}s"
-        )
+        assert (
+            avg_time_per_calculation < 0.005
+        ), f"Average calculation time: {avg_time_per_calculation:.4f}s"
         assert calculation_time < 0.5, f"Total calculation time: {calculation_time:.3f}s"
 
     @pytest.mark.asyncio

@@ -78,15 +78,9 @@ class MLSignalProcessor:
             "min_confidence", ml_config.get("min_confidence", 0.30)
         )
         # Порог уверенности по типам сигналов (кастомизируемые)
-        self.min_confidence_long = filters_cfg.get(
-            "min_confidence_long", self.min_confidence
-        )
-        self.min_confidence_short = filters_cfg.get(
-            "min_confidence_short", self.min_confidence
-        )
-        self.neutral_min_confidence = filters_cfg.get(
-            "neutral_min_confidence", 0.80
-        )
+        self.min_confidence_long = filters_cfg.get("min_confidence_long", self.min_confidence)
+        self.min_confidence_short = filters_cfg.get("min_confidence_short", self.min_confidence)
+        self.neutral_min_confidence = filters_cfg.get("neutral_min_confidence", 0.80)
         self.min_signal_strength = filters_cfg.get(
             "min_signal_strength", ml_config.get("min_signal_strength", 0.30)
         )
@@ -1535,20 +1529,27 @@ class MLSignalProcessor:
                 logger.warning(f"✅🔴 SHORT сигнал УСПЕШНО сохранен для {signal.symbol}")
             else:
                 logger.info(f"✅ Signal saved for {signal.symbol}")
-            
+
             # Отправляем сигнал в TradingEngine после успешного сохранения
             try:
                 from core.shared_context import shared_context
+
                 orchestrator = shared_context.get_orchestrator()
-                if orchestrator and hasattr(orchestrator, "trading_engine") and orchestrator.trading_engine:
+                if (
+                    orchestrator
+                    and hasattr(orchestrator, "trading_engine")
+                    and orchestrator.trading_engine
+                ):
                     logger.info(f"📤 Отправка сохраненного сигнала {signal.symbol} в TradingEngine")
                     await orchestrator.trading_engine.receive_trading_signal(signal)
-                    logger.info(f"✅ Сохраненный сигнал {signal.symbol} успешно отправлен в TradingEngine")
+                    logger.info(
+                        f"✅ Сохраненный сигнал {signal.symbol} успешно отправлен в TradingEngine"
+                    )
                 else:
                     logger.warning("⚠️ TradingEngine не доступен для отправки сохраненного сигнала")
             except Exception as e:
                 logger.error(f"❌ Ошибка отправки сохраненного сигнала в TradingEngine: {e}")
-            
+
             return True
         except Exception as e:
             logger.error(f"Error saving signal: {e}")
@@ -1809,15 +1810,22 @@ class MLSignalProcessor:
                                 logger.error(f"❌🔴 SHORT сигнал для {symbol} НЕ БЫЛ сохранен!")
                             else:
                                 logger.warning(f"❌ Сигнал для {symbol} не был сохранен")
-                    
+
                     # Отправляем сигнал в TradingEngine
                     try:
                         from core.shared_context import shared_context
+
                         orchestrator = shared_context.get_orchestrator()
-                        if orchestrator and hasattr(orchestrator, "trading_engine") and orchestrator.trading_engine:
+                        if (
+                            orchestrator
+                            and hasattr(orchestrator, "trading_engine")
+                            and orchestrator.trading_engine
+                        ):
                             logger.info(f"📤 Отправка сигнала {signal.symbol} в TradingEngine")
                             await orchestrator.trading_engine.receive_trading_signal(signal)
-                            logger.info(f"✅ Сигнал {signal.symbol} успешно отправлен в TradingEngine")
+                            logger.info(
+                                f"✅ Сигнал {signal.symbol} успешно отправлен в TradingEngine"
+                            )
                         else:
                             logger.warning("⚠️ TradingEngine не доступен для отправки сигнала")
                     except Exception as e:

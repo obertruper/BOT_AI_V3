@@ -91,9 +91,7 @@ async def check_ml_signals():
                     pnl_str = (
                         f"+${trade.pnl:.2f}"
                         if trade.pnl > 0
-                        else f"-${abs(trade.pnl):.2f}"
-                        if trade.pnl
-                        else "N/A"
+                        else f"-${abs(trade.pnl):.2f}" if trade.pnl else "N/A"
                     )
                     print(
                         f"  {trade.created_at.strftime('%H:%M:%S')} | "

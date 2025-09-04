@@ -185,7 +185,9 @@ class OrderRequest:
 
         # Ensure quantity is a number for comparison
         try:
-            qty_val = float(self.quantity) if isinstance(self.quantity, (str, int)) else self.quantity
+            qty_val = (
+                float(self.quantity) if isinstance(self.quantity, (str, int)) else self.quantity
+            )
             if qty_val <= 0:
                 errors.append("Quantity must be positive")
         except (TypeError, ValueError):
@@ -205,7 +207,11 @@ class OrderRequest:
 
         if self.order_type in [OrderType.STOP_MARKET, OrderType.STOP_LIMIT]:
             try:
-                stop_val = float(self.stop_price) if isinstance(self.stop_price, (str, int)) else self.stop_price
+                stop_val = (
+                    float(self.stop_price)
+                    if isinstance(self.stop_price, (str, int))
+                    else self.stop_price
+                )
                 if self.stop_price is None or stop_val <= 0:
                     errors.append(f"{self.order_type.value} order requires valid stop price")
             except (TypeError, ValueError):

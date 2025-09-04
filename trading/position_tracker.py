@@ -682,7 +682,11 @@ class EnhancedPositionTracker:
                         symbol = (
                             position_data.symbol
                             if hasattr(position_data, "symbol")
-                            else position_data.get("symbol") if isinstance(position_data, dict) else None
+                            else (
+                                position_data.get("symbol")
+                                if isinstance(position_data, dict)
+                                else None
+                            )
                         )
 
                         if not symbol:
@@ -692,7 +696,11 @@ class EnhancedPositionTracker:
                         size_val = (
                             getattr(position_data, "size", None)
                             if hasattr(position_data, "size")
-                            else position_data.get("contracts") if isinstance(position_data, dict) else None
+                            else (
+                                position_data.get("contracts")
+                                if isinstance(position_data, dict)
+                                else None
+                            )
                         )
                         try:
                             size_val = Decimal(str(size_val or 0))
@@ -737,17 +745,25 @@ class EnhancedPositionTracker:
                                 ),
                                 stop_loss=(
                                     Decimal(str(position_data.stop_loss))
-                                    if hasattr(position_data, "stop_loss") and position_data.stop_loss is not None
-                                    else Decimal(str(position_data.get("stop_loss")))
-                                    if isinstance(position_data, dict) and position_data.get("stop_loss") is not None
-                                    else None
+                                    if hasattr(position_data, "stop_loss")
+                                    and position_data.stop_loss is not None
+                                    else (
+                                        Decimal(str(position_data.get("stop_loss")))
+                                        if isinstance(position_data, dict)
+                                        and position_data.get("stop_loss") is not None
+                                        else None
+                                    )
                                 ),
                                 take_profit=(
                                     Decimal(str(position_data.take_profit))
-                                    if hasattr(position_data, "take_profit") and position_data.take_profit is not None
-                                    else Decimal(str(position_data.get("take_profit")))
-                                    if isinstance(position_data, dict) and position_data.get("take_profit") is not None
-                                    else None
+                                    if hasattr(position_data, "take_profit")
+                                    and position_data.take_profit is not None
+                                    else (
+                                        Decimal(str(position_data.get("take_profit")))
+                                        if isinstance(position_data, dict)
+                                        and position_data.get("take_profit") is not None
+                                        else None
+                                    )
                                 ),
                                 exchange=exchange_name,
                             )
@@ -771,19 +787,25 @@ class EnhancedPositionTracker:
                                     unreal = (
                                         getattr(position_data, "unrealised_pnl", None)
                                         if hasattr(position_data, "unrealised_pnl")
-                                        else position_data.get("unrealisedPnl")
-                                        if isinstance(position_data, dict)
-                                        else None
+                                        else (
+                                            position_data.get("unrealisedPnl")
+                                            if isinstance(position_data, dict)
+                                            else None
+                                        )
                                     )
                                     real = (
                                         getattr(position_data, "realised_pnl", None)
                                         if hasattr(position_data, "realised_pnl")
-                                        else position_data.get("realisedPnl")
-                                        if isinstance(position_data, dict)
-                                        else None
+                                        else (
+                                            position_data.get("realisedPnl")
+                                            if isinstance(position_data, dict)
+                                            else None
+                                        )
                                     )
                                     if unreal is not None:
-                                        tracked_position.metrics.unrealized_pnl = Decimal(str(unreal))
+                                        tracked_position.metrics.unrealized_pnl = Decimal(
+                                            str(unreal)
+                                        )
                                     if real is not None:
                                         tracked_position.metrics.realized_pnl = Decimal(str(real))
                                 except Exception:

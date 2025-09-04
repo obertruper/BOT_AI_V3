@@ -141,6 +141,7 @@ class OrderRepository(BaseRepository[Order]):
 
     def _to_dict(self, model: Order) -> dict[str, Any]:
         """Convert Order to dictionary for database."""
+
         # Нормализуем enum-поля к формату БД (Enum с UPPER_CASE)
         def _norm_order_type(value: str | OrderType) -> str:
             v = value.value if isinstance(value, OrderType) else str(value)
@@ -257,7 +258,9 @@ class OrderRepository(BaseRepository[Order]):
                     data["stop_loss"],
                     data["take_profit"],
                     data["created_at"],
-                    data.get("exchange_order_id", f"ORDER_{data['symbol']}_{datetime.now().timestamp()}"),  # order_id
+                    data.get(
+                        "exchange_order_id", f"ORDER_{data['symbol']}_{datetime.now().timestamp()}"
+                    ),  # order_id
                     data.get("metadata", {}),  # extra_data
                 )
 
@@ -284,7 +287,9 @@ class OrderRepository(BaseRepository[Order]):
                     data["stop_loss"],
                     data["take_profit"],
                     data["created_at"],
-                    data.get("exchange_order_id", f"ORDER_{data['symbol']}_{datetime.now().timestamp()}"),  # order_id
+                    data.get(
+                        "exchange_order_id", f"ORDER_{data['symbol']}_{datetime.now().timestamp()}"
+                    ),  # order_id
                     data.get("metadata", {}),  # extra_data
                 )
 

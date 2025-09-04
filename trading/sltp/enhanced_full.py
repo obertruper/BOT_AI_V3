@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Реализация улучшенного менеджера SL/TP для реструктурированной версии проекта.
 
@@ -9,82 +8,98 @@
 Автор: Claude
 """
 
-import logging
-import traceback
-import time
 import json
-from datetime import datetime
+import logging
+import math
+
 # sqlite3 не используется - только PostgreSQL
 import threading
-import math
-import inspect
-from typing import Dict, Any, Optional, Union, List, Tuple
+import time
+import traceback
+from datetime import datetime
+from typing import Any
 
 # Адаптированные импорты для BOT_AI_V3
 try:
     from trading.sltp.utils import (
-        round_price_to_tick, validate_price_levels,
-        get_tick_size_for_symbol
+        get_tick_size_for_symbol,
+        round_price_to_tick,
+        validate_price_levels,
     )
 except ImportError:
     # Заглушки если модуль еще не создан
     def round_price_to_tick(price, tick_size):
         return round(price / tick_size) * tick_size
+
     def validate_price_levels(symbol, sl, tp):
         return True
+
     def get_tick_size_for_symbol(symbol):
         return 0.01
+
     def round_to_tick(price, tick_size):
         return round_price_to_tick(price, tick_size)
+
     def get_tick_size(symbol):
         return get_tick_size_for_symbol(symbol)
+
     def get_last_price(symbol):
         return 0
+
     def validate_sltp_prices(symbol, sl, tp):
         return validate_price_levels(symbol, sl, tp)
+
     def set_trading_stop(symbol, sl, tp):
         return True
 
+
 # Импорты для работы с БД
-from database.db_manager import get_db
-from database.connections.postgres import AsyncPGPool
-from database.models.trades import Trade
-from database.models.orders import Order
+
 
 # Заглушки для недостающих модулей
 class SLTPRepositoryThreadSafe:
     pass
 
+
 def get_sltp_repository_thread_safe():
     return None
+
 
 def get_trade_repository_thread_safe():
     return None
 
+
 def get_sltp_db_helper():
     return None
+
 
 def get_instrument_info(symbol):
     return {}
 
+
 def round_qty(qty, symbol):
     return round(qty, 8)
+
 
 def round_price(price, symbol):
     return round(price, 2)
 
+
 def validate_order_params(symbol, qty, price):
     return True
+
 
 def set_api_client(client):
     pass
 
+
 # Настройка логирования
 try:
     from core.logger import setup_logger
-    logger = setup_logger('enhanced_sltp_manager')
+
+    logger = setup_logger("enhanced_sltp_manager")
 except ImportError:
-    logger = logging.getLogger('enhanced_sltp_manager')
+    logger = logging.getLogger("enhanced_sltp_manager")
 
 
 def log_info(message: str) -> None:
@@ -107,7 +122,7 @@ def log_debug(message: str) -> None:
     logger.debug(message)
 
 
-def log_exception(title: str, e: Exception, context: Dict[str, Any] = None) -> None:
+def log_exception(title: str, e: Exception, context: dict[str, Any] = None) -> None:
     """
     Расширенное логирование исключений с контекстом
 
@@ -135,16 +150,18 @@ def get_position_idx(side: str) -> int:
     """
     try:
         # Получаем конфигурацию из config_manager или используем дефолтную
-        if hasattr(self, 'config'):
-            trading_config = self.config.get('trading', {})
+        if hasattr(self, "config"):
+            trading_config = self.config.get("trading", {})
         else:
             trading_config = {}
-        hedge_mode = trading_config.get('hedge_mode', False)
+        hedge_mode = trading_config.get("hedge_mode", False)
 
         if hedge_mode:
             # В hedge режиме: 1=Long/Buy, 2=Short/Sell
             pos_idx = 1 if side.upper() in ["BUY", "LONG"] else 2
-            log_info(f"[get_position_idx] => Hedge режим активен для сделки - используем positionIdx={pos_idx}")
+            log_info(
+                f"[get_position_idx] => Hedge режим активен для сделки - используем positionIdx={pos_idx}"
+            )
         else:
             # В one-way режиме: всегда 0
             pos_idx = 0
@@ -157,6 +174,7 @@ def get_position_idx(side: str) -> int:
 
 
 # Функция get_instrument_settings перенесена в модуль instrument_settings
+
 
 class EnhancedSLTPManager:
     """
@@ -177,13 +195,16 @@ class EnhancedSLTPManager:
         "profit_protection": {"enabled": False},
         "partial_take_profit": {"enabled": False},
         "volatility_adjustment": {"enabled": False},
-        "time_based_adjustment": {"enabled": False}
+        "time_based_adjustment": {"enabled": False},
     }
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None,
-                 sltp_repository: Optional[SLTPRepositoryThreadSafe] = None,
-                 trade_repository=None,
-                 api_client=None):
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        sltp_repository: SLTPRepositoryThreadSafe | None = None,
+        trade_repository=None,
+        api_client=None,
+    ):
         """
         Инициализирует улучшенный менеджер SL/TP ордеров.
 
@@ -206,6 +227,7 @@ class EnhancedSLTPManager:
         except Exception as e:
             log_error(f"[__init__] => Ошибка при инициализации таблицы истории: {e}")
             import traceback
+
             log_error(traceback.format_exc())
         self.trade_repository = trade_repository or get_trade_repository_thread_safe()
         self.api_client = api_client
@@ -220,7 +242,7 @@ class EnhancedSLTPManager:
         # Логирование инициализации
         log_info("EnhancedSLTPManager инициализирован")
 
-    def _load_settings(self) -> Dict[str, Any]:
+    def _load_settings(self) -> dict[str, Any]:
         """
         Загружает настройки улучшенного SL/TP из конфигурации.
 
@@ -233,18 +255,19 @@ class EnhancedSLTPManager:
         # Попытка загрузить отдельный файл конфигурации enhanced_sltp_config.yaml
         try:
             import os
+
             import yaml
 
-            config_path = 'enhanced_sltp_config.yaml'
+            config_path = "enhanced_sltp_config.yaml"
             if os.path.exists(config_path):
                 log_info(f"Обнаружен файл конфигурации {config_path}, пытаемся загрузить")
-                with open(config_path, 'r', encoding='utf-8') as f:
+                with open(config_path, encoding="utf-8") as f:
                     enhanced_config = yaml.safe_load(f)
 
-                if enhanced_config and 'enhanced_sltp' in enhanced_config:
+                if enhanced_config and "enhanced_sltp" in enhanced_config:
                     log_info(f"Загружена конфигурация из файла {config_path}")
                     # Заменяем настройки из основного конфига настройками из enhanced_sltp_config.yaml
-                    settings = enhanced_config.get('enhanced_sltp', {})
+                    settings = enhanced_config.get("enhanced_sltp", {})
         except Exception as e:
             log_warn(f"Ошибка при загрузке файла enhanced_sltp_config.yaml: {e}")
 
@@ -256,28 +279,36 @@ class EnhancedSLTPManager:
             if "profit_protection" in settings:
                 profit_protection = settings.get("profit_protection", {})
                 log_info(
-                    f"Загружены настройки защиты прибыли: breakeven_percent={profit_protection.get('breakeven_percent')}, " +
-                    f"breakeven_offset={profit_protection.get('breakeven_offset')}")
+                    f"Загружены настройки защиты прибыли: breakeven_percent={profit_protection.get('breakeven_percent')}, "
+                    + f"breakeven_offset={profit_protection.get('breakeven_offset')}"
+                )
 
             if "trailing_stop" in settings:
                 trailing_stop = settings.get("trailing_stop", {})
                 log_info(
-                    f"Загружены настройки трейлинг-стопа: activation_percent={trailing_stop.get('activation_percent')}, " +
-                    f"step_percent={trailing_stop.get('step_percent')}")
+                    f"Загружены настройки трейлинг-стопа: activation_percent={trailing_stop.get('activation_percent')}, "
+                    + f"step_percent={trailing_stop.get('step_percent')}"
+                )
 
             if "partial_take_profit" in settings:
                 partial_tp = settings.get("partial_take_profit", {})
                 levels = partial_tp.get("levels", [])
                 enabled = partial_tp.get("enabled", False)
-                log_info(f"Загружены настройки частичного закрытия: enabled={enabled}, levels={len(levels)}")
+                log_info(
+                    f"Загружены настройки частичного закрытия: enabled={enabled}, levels={len(levels)}"
+                )
                 if levels:
                     for i, level in enumerate(levels):
                         log_info(
-                            f"Уровень {i + 1}: процент={level.get('percent')}%, доля закрытия={level.get('close_ratio') * 100}%")
+                            f"Уровень {i + 1}: процент={level.get('percent')}%, доля закрытия={level.get('close_ratio') * 100}%"
+                        )
                     log_info(
-                        f"Обновление SL после частичного закрытия: {partial_tp.get('update_sl_after_partial', False)}")
+                        f"Обновление SL после частичного закрытия: {partial_tp.get('update_sl_after_partial', False)}"
+                    )
         else:
-            log_warn("Настройки в конфигурационном файле не найдены, используются значения по умолчанию")
+            log_warn(
+                "Настройки в конфигурационном файле не найдены, используются значения по умолчанию"
+            )
 
         # КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: НЕ используем дефолты для торговых параметров!
         # Только базовые настройки enabled/disabled, никаких торговых значений
@@ -285,7 +316,9 @@ class EnhancedSLTPManager:
 
         for key, default_value in self.BASE_SETTINGS.items():
             if key not in settings:
-                log_error(f"КРИТИЧЕСКАЯ ОШИБКА: Раздел {key} НЕ НАЙДЕН в конфигурации! Торговая система ОСТАНОВЛЕНА!")
+                log_error(
+                    f"КРИТИЧЕСКАЯ ОШИБКА: Раздел {key} НЕ НАЙДЕН в конфигурации! Торговая система ОСТАНОВЛЕНА!"
+                )
                 if key in CRITICAL_SECTIONS:
                     raise ValueError(f"Отсутствует критически важная секция {key} в конфигурации")
                 log_warn(f"Раздел {key} не найден в конфигурации, используются базовые значения")
@@ -294,14 +327,24 @@ class EnhancedSLTPManager:
                 # Для НЕ-торговых настроек дополняем только базовые параметры
                 for sub_key, sub_value in default_value.items():
                     if sub_key not in settings[key] and sub_key in ["enabled", "max_updates"]:
-                        log_debug(f"Параметр {key}.{sub_key} не найден, используется базовое значение: {sub_value}")
+                        log_debug(
+                            f"Параметр {key}.{sub_key} не найден, используется базовое значение: {sub_value}"
+                        )
                         settings[key][sub_key] = sub_value
 
         return settings
 
-    def set_advanced_sltp(self, symbol: str, side: str, quantity: float, entry_price: float,
-                          stop_loss: Optional[float] = None, take_profit: Optional[float] = None,
-                          order_id: Optional[str] = None, settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def set_advanced_sltp(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        entry_price: float,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        order_id: str | None = None,
+        settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Устанавливает улучшенные SL/TP для позиции.
 
@@ -318,14 +361,11 @@ class EnhancedSLTPManager:
         Returns:
             Dict[str, Any]: Результат установки SL/TP
         """
-        log_info(f"[set_advanced_sltp] => Установка улучшенных SL/TP для {symbol} {side}, entry_price={entry_price}")
+        log_info(
+            f"[set_advanced_sltp] => Установка улучшенных SL/TP для {symbol} {side}, entry_price={entry_price}"
+        )
 
-        result = {
-            "success": False,
-            "message": "",
-            "sl_order_id": None,
-            "tp_order_id": None
-        }
+        result = {"success": False, "message": "", "sl_order_id": None, "tp_order_id": None}
 
         with self._creation_lock:
             try:
@@ -335,7 +375,9 @@ class EnhancedSLTPManager:
                 )
 
                 if not validation_result["valid"]:
-                    log_warn(f"[set_advanced_sltp] => Невалидные цены SL/TP: {validation_result['message']}")
+                    log_warn(
+                        f"[set_advanced_sltp] => Невалидные цены SL/TP: {validation_result['message']}"
+                    )
                     result["message"] = validation_result["message"]
                     return result
 
@@ -346,11 +388,15 @@ class EnhancedSLTPManager:
                 )
 
                 if api_response and api_response.get("retCode") == 0:
-                    log_info(f"[set_advanced_sltp] => Успешно установлены базовые SL/TP для {symbol} {side}")
+                    log_info(
+                        f"[set_advanced_sltp] => Успешно установлены базовые SL/TP для {symbol} {side}"
+                    )
 
                     # Получаем ID ордеров
                     sl_order_id = api_response.get("result", {}).get("stopLoss", {}).get("orderId")
-                    tp_order_id = api_response.get("result", {}).get("takeProfit", {}).get("orderId")
+                    tp_order_id = (
+                        api_response.get("result", {}).get("takeProfit", {}).get("orderId")
+                    )
 
                     # Сохраняем информацию о SL/TP в репозиторий
                     sltp_data = {
@@ -363,7 +409,7 @@ class EnhancedSLTPManager:
                         "tp_order_id": tp_order_id,
                         "status": "active",
                         "settings": settings or {},
-                        "quantity": quantity
+                        "quantity": quantity,
                     }
 
                     # Сохраняем в репозиторий
@@ -376,19 +422,20 @@ class EnhancedSLTPManager:
                     # Сохраняем информацию в репозиторий
                     # FIX: Используем подходящий метод в зависимости от доступности
                     try:
-                        if hasattr(self.sltp_repository, 'create_or_update'):
-                            self.sltp_repository.create_or_update(sltp_data, 'trade_id')
-                            log_info(f"[set_advanced_sltp] => Использован метод create_or_update")
-                        elif hasattr(self.sltp_repository, 'insert_or_update'):
+                        if hasattr(self.sltp_repository, "create_or_update"):
+                            self.sltp_repository.create_or_update(sltp_data, "trade_id")
+                            log_info("[set_advanced_sltp] => Использован метод create_or_update")
+                        elif hasattr(self.sltp_repository, "insert_or_update"):
                             self.sltp_repository.insert_or_update(sltp_data)
-                            log_info(f"[set_advanced_sltp] => Использован метод insert_or_update")
+                            log_info("[set_advanced_sltp] => Использован метод insert_or_update")
                         else:
                             # Если нет ни того, ни другого, пробуем просто создать запись
                             self.sltp_repository.create(sltp_data)
-                            log_info(f"[set_advanced_sltp] => Использован метод create")
+                            log_info("[set_advanced_sltp] => Использован метод create")
                     except Exception as repo_error:
                         log_error(
-                            f"[set_advanced_sltp] => Ошибка при создании/обновлении данных через репозиторий: {repo_error}")
+                            f"[set_advanced_sltp] => Ошибка при создании/обновлении данных через репозиторий: {repo_error}"
+                        )
 
                     result["success"] = True
                     result["message"] = "SL/TP ордера успешно установлены"
@@ -403,7 +450,7 @@ class EnhancedSLTPManager:
             except Exception as e:
                 log_error(f"[set_advanced_sltp] => Исключение при установке улучшенных SL/TP: {e}")
                 log_error(traceback.format_exc())
-                result["message"] = f"Исключение: {str(e)}"
+                result["message"] = f"Исключение: {e!s}"
                 return result
 
     def apply_trailing_stop(self, trade_id: int) -> bool:
@@ -429,7 +476,7 @@ class EnhancedSLTPManager:
                 # Получаем настройки трейлинг-стопа
                 settings = self.settings.get("trailing_stop", {})
                 if not settings.get("enabled", False):
-                    log_debug(f"[apply_trailing_stop] => Трейлинг-стоп отключен в настройках")
+                    log_debug("[apply_trailing_stop] => Трейлинг-стоп отключен в настройках")
                     return False
 
                 # Получаем текущую цену
@@ -439,7 +486,9 @@ class EnhancedSLTPManager:
                 current_price = get_last_price(symbol)
 
                 if current_price <= 0:
-                    log_error(f"[apply_trailing_stop] => Не удалось получить текущую цену для {symbol}")
+                    log_error(
+                        f"[apply_trailing_stop] => Не удалось получить текущую цену для {symbol}"
+                    )
                     return False
 
                 # Получаем профит в процентах
@@ -448,22 +497,28 @@ class EnhancedSLTPManager:
                 # Проверяем условие активации трейлинг-стопа
                 if profit_percent < settings.get("activation_percent", 0.5):
                     log_debug(
-                        f"[apply_trailing_stop] => Профит {profit_percent:.2f}% недостаточен для активации трейлинг-стопа")
+                        f"[apply_trailing_stop] => Профит {profit_percent:.2f}% недостаточен для активации трейлинг-стопа"
+                    )
                     return False
 
                 # Получаем текущий стоп-лосс
                 current_sl = trade.stop_loss
                 if not current_sl or current_sl <= 0:
-                    log_warn(f"[apply_trailing_stop] => Для сделки {trade_id} не установлен стоп-лосс")
+                    log_warn(
+                        f"[apply_trailing_stop] => Для сделки {trade_id} не установлен стоп-лосс"
+                    )
                     return False
 
                 # Проверяем ограничение на количество обновлений
                 sltp = self.sltp_repository.get_by_trade_id(trade_id)
                 update_count = 0
-                if sltp and hasattr(sltp, 'extra_data') and sltp.extra_data:
+                if sltp and hasattr(sltp, "extra_data") and sltp.extra_data:
                     try:
-                        extra_data = json.loads(sltp.extra_data) if isinstance(sltp.extra_data,
-                                                                               str) else sltp.extra_data
+                        extra_data = (
+                            json.loads(sltp.extra_data)
+                            if isinstance(sltp.extra_data, str)
+                            else sltp.extra_data
+                        )
                         update_count = extra_data.get("trailing_updates", 0)
                     except (json.JSONDecodeError, TypeError):
                         extra_data = {}
@@ -474,7 +529,8 @@ class EnhancedSLTPManager:
                 max_updates = settings.get("max_updates", 15)
                 if update_count >= max_updates:
                     log_debug(
-                        f"[apply_trailing_stop] => Достигнуто максимальное количество обновлений трейлинг-стопа ({max_updates}) для сделки {trade_id}")
+                        f"[apply_trailing_stop] => Достигнуто максимальное количество обновлений трейлинг-стопа ({max_updates}) для сделки {trade_id}"
+                    )
                     return False
 
                 # Рассчитываем новый уровень трейлинг-стопа с учетом символа инструмента
@@ -483,7 +539,9 @@ class EnhancedSLTPManager:
                 )
 
                 if not new_sl:
-                    log_debug(f"[apply_trailing_stop] => Не удалось рассчитать новый уровень трейлинг-стопа")
+                    log_debug(
+                        "[apply_trailing_stop] => Не удалось рассчитать новый уровень трейлинг-стопа"
+                    )
                     return False
 
                 # Проверяем, улучшает ли новый SL текущий
@@ -492,36 +550,46 @@ class EnhancedSLTPManager:
                 if side.upper() == "BUY":
                     if new_sl <= current_sl:
                         log_debug(
-                            f"[apply_trailing_stop] => Новый SL ({new_sl:.6f}) не лучше текущего ({current_sl:.6f}) для BUY")
+                            f"[apply_trailing_stop] => Новый SL ({new_sl:.6f}) не лучше текущего ({current_sl:.6f}) для BUY"
+                        )
                         return False
                 else:  # SELL
                     # Для SELL SL должен быть ВЫШЕ entry_price и ниже current_sl (если уже был установлен)
                     if new_sl >= current_sl and current_sl > entry_price:
                         log_debug(
-                            f"[apply_trailing_stop] => Новый SL ({new_sl:.6f}) не лучше текущего ({current_sl:.6f}) для SELL")
+                            f"[apply_trailing_stop] => Новый SL ({new_sl:.6f}) не лучше текущего ({current_sl:.6f}) для SELL"
+                        )
                         return False
 
                 # Округляем цену с использованием менеджера инструментов
                 new_sl = round_price(symbol, new_sl, round_up=False)
 
                 log_info(
-                    f"[apply_trailing_stop] => Обновление трейлинг-стопа {symbol} {side}: {current_sl:.4f} -> {new_sl:.4f}")
+                    f"[apply_trailing_stop] => Обновление трейлинг-стопа {symbol} {side}: {current_sl:.4f} -> {new_sl:.4f}"
+                )
 
                 # Устанавливаем новый стоп-лосс (ВАЖНО: нужно передать и текущий TP!)
                 current_tp = trade.take_profit
                 log_info(f"[apply_trailing_stop] => Передаем в API: SL={new_sl}, TP={current_tp}")
 
                 # Определяем positionIdx в зависимости от режима и стороны
-                from core.config import get_config
+
                 pos_idx = get_position_idx(side)
 
-                result = set_trading_stop(symbol=symbol, side=side, pos_idx=pos_idx, stop_loss=new_sl,
-                                          take_profit=current_tp, trade_id=trade_id)
+                result = set_trading_stop(
+                    symbol=symbol,
+                    side=side,
+                    pos_idx=pos_idx,
+                    stop_loss=new_sl,
+                    take_profit=current_tp,
+                    trade_id=trade_id,
+                )
 
                 # Проверяем результат
-                success = (result.get("retCode") == 0)
-                not_modified = (result.get("retCode") == 34040 or (
-                            result.get("retMsg") and "not modified" in result.get("retMsg", "")))
+                success = result.get("retCode") == 0
+                not_modified = result.get("retCode") == 34040 or (
+                    result.get("retMsg") and "not modified" in result.get("retMsg", "")
+                )
 
                 if success or not_modified:
                     # Обновляем информацию в БД
@@ -532,63 +600,75 @@ class EnhancedSLTPManager:
 
                         # Создаем словарь с обновленными данными
                         sltp_update = {
-                            'stop_loss_price': new_sl,  # Правильное имя поля для БД
-                            'trailing_stop_price': new_sl,
-                            'updated_at': datetime.now(),
-                            'extra_data': json.dumps(extra_data)
+                            "stop_loss_price": new_sl,  # Правильное имя поля для БД
+                            "trailing_stop_price": new_sl,
+                            "updated_at": datetime.now(),
+                            "extra_data": json.dumps(extra_data),
                         }
                         # Обновляем через репозиторий
                         # Добавляем trade_id в данные для использования insert_or_update
-                        sltp_update['trade_id'] = trade_id
+                        sltp_update["trade_id"] = trade_id
                         # Используем метод insert_or_update вместо update для совместимости с потокобезопасным репозиторием
                         # FIX: Используем подходящий метод в зависимости от доступности
                         try:
-                            if hasattr(self.sltp_repository, 'create_or_update'):
-                                result = self.sltp_repository.create_or_update(sltp_update, 'trade_id')
-                                log_info(f"[apply_trailing_stop] => Использован метод create_or_update")
-                            elif hasattr(self.sltp_repository, 'insert_or_update'):
+                            if hasattr(self.sltp_repository, "create_or_update"):
+                                result = self.sltp_repository.create_or_update(
+                                    sltp_update, "trade_id"
+                                )
+                                log_info(
+                                    "[apply_trailing_stop] => Использован метод create_or_update"
+                                )
+                            elif hasattr(self.sltp_repository, "insert_or_update"):
                                 result = self.sltp_repository.insert_or_update(sltp_update)
-                                log_info(f"[apply_trailing_stop] => Использован метод insert_or_update")
+                                log_info(
+                                    "[apply_trailing_stop] => Использован метод insert_or_update"
+                                )
                             else:
                                 # Если нет ни того, ни другого, пробуем обновить
-                                if hasattr(sltp, 'id') and sltp.id:
+                                if hasattr(sltp, "id") and sltp.id:
                                     # Обновляем поля в объекте sltp
                                     for key, value in sltp_update.items():
                                         if hasattr(sltp, key):
                                             setattr(sltp, key, value)
                                     result = self.sltp_repository.update(sltp)
-                                    log_info(f"[apply_trailing_stop] => Использован метод update")
+                                    log_info("[apply_trailing_stop] => Использован метод update")
                                 else:
                                     log_error(
-                                        f"[apply_trailing_stop] => Не удалось найти подходящий метод для обновления")
+                                        "[apply_trailing_stop] => Не удалось найти подходящий метод для обновления"
+                                    )
                                     result = False
                         except Exception as repo_error:
                             log_error(
-                                f"[apply_trailing_stop] => Ошибка при обновлении данных через репозиторий: {repo_error}")
+                                f"[apply_trailing_stop] => Ошибка при обновлении данных через репозиторий: {repo_error}"
+                            )
                             result = False
 
                         if not result:
-                            log_error(f"[apply_trailing_stop] => Ошибка при обновлении SL через репозиторий")
+                            log_error(
+                                "[apply_trailing_stop] => Ошибка при обновлении SL через репозиторий"
+                            )
 
                     # Обновляем сделку
-                    trade_data = {
-                        'stop_loss': new_sl
-                    }
+                    trade_data = {"stop_loss": new_sl}
                     self.trade_repository.update(trade.id, trade_data)
 
                     log_info(
-                        f"[apply_trailing_stop] => Успешно обновлен трейлинг-стоп: {new_sl:.4f} (обновление #{update_count + 1}/{max_updates})")
+                        f"[apply_trailing_stop] => Успешно обновлен трейлинг-стоп: {new_sl:.4f} (обновление #{update_count + 1}/{max_updates})"
+                    )
                     return True
                 else:
                     log_error(
-                        f"[apply_trailing_stop] => Ошибка при установке трейлинг-стопа: {result.get('retMsg', 'Unknown error')}")
+                        f"[apply_trailing_stop] => Ошибка при установке трейлинг-стопа: {result.get('retMsg', 'Unknown error')}"
+                    )
                     return False
             except Exception as e:
                 log_error(f"[apply_trailing_stop] => Ошибка: {e}")
                 log_error(traceback.format_exc())
                 return False
 
-    def _calculate_profit_percent(self, entry_price: float, current_price: float, side: str) -> float:
+    def _calculate_profit_percent(
+        self, entry_price: float, current_price: float, side: str
+    ) -> float:
         """
         Рассчитывает текущий процент прибыли/убытка для позиции.
 
@@ -608,8 +688,14 @@ class EnhancedSLTPManager:
         else:  # SELL
             return ((entry_price - current_price) / entry_price) * 100.0
 
-    def _calculate_trailing_stop(self, side: str, current_price: float, current_sl: float,
-                                 settings: Dict[str, Any], symbol: Optional[str] = None) -> Optional[float]:
+    def _calculate_trailing_stop(
+        self,
+        side: str,
+        current_price: float,
+        current_sl: float,
+        settings: dict[str, Any],
+        symbol: str | None = None,
+    ) -> float | None:
         """
         Рассчитывает новый уровень трейлинг-стопа с учетом настроек инструмента.
 
@@ -651,7 +737,8 @@ class EnhancedSLTPManager:
             min_allowed_sl = current_price * (1 - max_sl_change_percent / 100)
             if new_sl < min_allowed_sl:
                 log_warn(
-                    f"[_calculate_trailing_stop] => Новый SL {new_sl} слишком низок для {symbol}! Ограничиваем до {min_allowed_sl}")
+                    f"[_calculate_trailing_stop] => Новый SL {new_sl} слишком низок для {symbol}! Ограничиваем до {min_allowed_sl}"
+                )
                 ticks_min = math.floor(min_allowed_sl / tick_size)
                 new_sl = ticks_min * tick_size
 
@@ -667,7 +754,8 @@ class EnhancedSLTPManager:
             max_allowed_sl = current_price * (1 + max_sl_change_percent / 100)
             if new_sl > max_allowed_sl:
                 log_warn(
-                    f"[_calculate_trailing_stop] => Новый SL {new_sl} слишком высок для {symbol}! Ограничиваем до {max_allowed_sl}")
+                    f"[_calculate_trailing_stop] => Новый SL {new_sl} слишком высок для {symbol}! Ограничиваем до {max_allowed_sl}"
+                )
                 ticks_max = math.ceil(max_allowed_sl / tick_size)
                 new_sl = ticks_max * tick_size
 
@@ -698,7 +786,9 @@ class EnhancedSLTPManager:
         # Округляем цену с использованием правильного менеджера инструментов
         new_sl = round_price(symbol, new_sl, round_up=(side.upper() == "SELL"))
 
-        log_info(f"[_calculate_trailing_stop] => Для {symbol} SL округлен с тиком {tick_size}: {new_sl}")
+        log_info(
+            f"[_calculate_trailing_stop] => Для {symbol} SL округлен с тиком {tick_size}: {new_sl}"
+        )
         return new_sl
 
     def apply_profit_protection(self, trade_id: int) -> bool:
@@ -715,14 +805,15 @@ class EnhancedSLTPManager:
 
         # Получаем настройки hedge режима для правильной работы с positionIdx
         # Получаем конфигурацию из config_manager или используем дефолтную
-        if hasattr(self, 'config'):
-            trading_config = self.config.get('trading', {})
+        if hasattr(self, "config"):
+            trading_config = self.config.get("trading", {})
         else:
             trading_config = {}
-        hedge_mode = trading_config.get('hedge_mode', False)
+        hedge_mode = trading_config.get("hedge_mode", False)
         if hedge_mode:
             log_info(
-                f"[apply_profit_protection] => Hedge режим активен для сделки {trade_id} - используем positionIdx=1")
+                f"[apply_profit_protection] => Hedge режим активен для сделки {trade_id} - используем positionIdx=1"
+            )
 
         with self._lock:
             try:
@@ -735,7 +826,7 @@ class EnhancedSLTPManager:
                 # Получаем настройки защиты прибыли
                 settings = self.settings.get("profit_protection", {})
                 if not settings.get("enabled", False):
-                    log_debug(f"[apply_profit_protection] => Защита прибыли отключена в настройках")
+                    log_debug("[apply_profit_protection] => Защита прибыли отключена в настройках")
                     return False
 
                 # Получаем текущую цену
@@ -745,7 +836,9 @@ class EnhancedSLTPManager:
                 current_price = get_last_price(symbol)
 
                 if current_price <= 0:
-                    log_error(f"[apply_profit_protection] => Не удалось получить текущую цену для {symbol}")
+                    log_error(
+                        f"[apply_profit_protection] => Не удалось получить текущую цену для {symbol}"
+                    )
                     return False
 
                 # Получаем профит в процентах
@@ -757,37 +850,51 @@ class EnhancedSLTPManager:
 
                 if not current_sl or current_sl <= 0:
                     log_warn(
-                        f"[apply_profit_protection] => Для сделки {trade_id} не установлен стоп-лосс, пытаемся восстановить")
+                        f"[apply_profit_protection] => Для сделки {trade_id} не установлен стоп-лосс, пытаемся восстановить"
+                    )
 
                     # Пытаемся восстановить SL из истории попыток
                     try:
                         from db.thread_safe_postgres import get_thread_safe_db
+
                         # Получаем последнюю успешную попытку установки SL
                         db = get_thread_safe_db()
-                        result = db.execute_query("""
+                        result = db.execute_query(
+                            """
                                                   SELECT message
                                                   FROM sltp_attempts
                                                   WHERE trade_id = %s
                                                     AND status = 'success'
                                                     AND message LIKE '%SL=%'
                                                   ORDER BY created_at DESC LIMIT 1
-                                                  """, (trade_id,), fetch=True, as_dict=True)
+                                                  """,
+                            (trade_id,),
+                            fetch=True,
+                            as_dict=True,
+                        )
 
                         if result and len(result) > 0:
                             # Извлекаем SL из сообщения формата "SL/TP установлен: SL=0.2801, TP=..."
                             import re
+
                             try:
-                                message = result[0].get('message', '') if isinstance(result[0], dict) else str(
-                                    result[0])
+                                message = (
+                                    result[0].get("message", "")
+                                    if isinstance(result[0], dict)
+                                    else str(result[0])
+                                )
                             except (IndexError, AttributeError, TypeError):
                                 message = str(result)
-                            sl_match = re.search(r'SL=([0-9.]+)', message)
+                            sl_match = re.search(r"SL=([0-9.]+)", message)
                             if sl_match:
                                 original_sl = float(sl_match.group(1))
-                                log_info(f"[apply_profit_protection] => Найден исходный SL: {original_sl}")
+                                log_info(
+                                    f"[apply_profit_protection] => Найден исходный SL: {original_sl}"
+                                )
 
                                 # Пересчитываем SL с правильным округлением
                                 from trading.instrument_manager import round_price
+
                                 if side.upper() == "SELL":
                                     # Для SELL округляем вверх
                                     corrected_sl = round_price(symbol, original_sl, round_up=True)
@@ -796,43 +903,57 @@ class EnhancedSLTPManager:
                                     corrected_sl = round_price(symbol, original_sl, round_up=False)
 
                                 log_info(
-                                    f"[apply_profit_protection] => Пересчитанный SL с правильным округлением: {original_sl} -> {corrected_sl}")
+                                    f"[apply_profit_protection] => Пересчитанный SL с правильным округлением: {original_sl} -> {corrected_sl}"
+                                )
 
                                 # Устанавливаем исправленный SL
-                                current_tp = getattr(trade, 'take_profit', None)
+                                current_tp = getattr(trade, "take_profit", None)
 
                                 # Определяем правильный positionIdx для hedge режима
                                 pos_idx = get_position_idx(side)
 
-                                restore_result = set_trading_stop(symbol=symbol, side=side, pos_idx=pos_idx,
-                                                                  stop_loss=corrected_sl, take_profit=current_tp,
-                                                                  trade_id=trade_id)
+                                restore_result = set_trading_stop(
+                                    symbol=symbol,
+                                    side=side,
+                                    pos_idx=pos_idx,
+                                    stop_loss=corrected_sl,
+                                    take_profit=current_tp,
+                                    trade_id=trade_id,
+                                )
 
                                 if restore_result.get("retCode") == 0:
                                     log_info(
-                                        f"[apply_profit_protection] => Успешно восстановлен SL с правильным округлением: {corrected_sl}")
+                                        f"[apply_profit_protection] => Успешно восстановлен SL с правильным округлением: {corrected_sl}"
+                                    )
                                     # Обновляем current_sl для дальнейших расчетов
                                     current_sl = corrected_sl
 
                                     # Обновляем в БД
-                                    self.trade_repository.update(trade_id, {'stop_loss': corrected_sl})
+                                    self.trade_repository.update(
+                                        trade_id, {"stop_loss": corrected_sl}
+                                    )
                                 else:
                                     log_error(
-                                        f"[apply_profit_protection] => Ошибка восстановления SL: {restore_result.get('retMsg')}")
+                                        f"[apply_profit_protection] => Ошибка восстановления SL: {restore_result.get('retMsg')}"
+                                    )
                                     return False
                             else:
-                                log_warn(f"[apply_profit_protection] => Не удалось извлечь SL из сообщения: {message}")
+                                log_warn(
+                                    f"[apply_profit_protection] => Не удалось извлечь SL из сообщения: {message}"
+                                )
                                 return False
                         else:
                             log_warn(
-                                f"[apply_profit_protection] => Не найдено записей об установке SL для trade_id={trade_id}")
+                                f"[apply_profit_protection] => Не найдено записей об установке SL для trade_id={trade_id}"
+                            )
                             return False
 
                     except Exception as e:
                         log_error(f"[apply_profit_protection] => Ошибка при восстановлении SL: {e}")
                         # НЕ возвращаем False - продолжаем работу и устанавливаем SL при достижении уровней
                         log_info(
-                            f"[apply_profit_protection] => Продолжаем без восстановления - установим SL при достижении уровня безубытка")
+                            "[apply_profit_protection] => Продолжаем без восстановления - установим SL при достижении уровня безубытка"
+                        )
                         current_sl = 0.0
 
                 # Если SL до сих пор не установлен (0.0) и достигнут уровень безубытка
@@ -840,7 +961,8 @@ class EnhancedSLTPManager:
                     breakeven_trigger = settings["breakeven_percent"]
                     if profit_percent >= breakeven_trigger:
                         log_info(
-                            f"[apply_profit_protection] => Достигнут уровень безубытка {breakeven_trigger}% при профите {profit_percent}%")
+                            f"[apply_profit_protection] => Достигнут уровень безубытка {breakeven_trigger}% при профите {profit_percent}%"
+                        )
 
                         # Рассчитываем безубыток с учетом смещения
                         breakeven_offset = settings.get("breakeven_offset", 0.0)
@@ -852,22 +974,34 @@ class EnhancedSLTPManager:
                             new_sl = entry_price * (1 - breakeven_offset / 100)
 
                         log_info(
-                            f"[apply_profit_protection] => Устанавливаем SL в безубыток: {new_sl} (смещение {breakeven_offset}%)")
+                            f"[apply_profit_protection] => Устанавливаем SL в безубыток: {new_sl} (смещение {breakeven_offset}%)"
+                        )
 
                         # Устанавливаем SL
-                        current_tp = getattr(trade, 'take_profit', None)  # Получаем текущий TP из сделки
+                        current_tp = getattr(
+                            trade, "take_profit", None
+                        )  # Получаем текущий TP из сделки
                         pos_idx = get_position_idx(side)
-                        result = set_trading_stop(symbol=symbol, side=side, pos_idx=pos_idx, stop_loss=new_sl,
-                                                  take_profit=current_tp, trade_id=trade_id)
+                        result = set_trading_stop(
+                            symbol=symbol,
+                            side=side,
+                            pos_idx=pos_idx,
+                            stop_loss=new_sl,
+                            take_profit=current_tp,
+                            trade_id=trade_id,
+                        )
 
                         if result.get("retCode") == 0:
-                            log_info(f"[apply_profit_protection] => ✅ Успешно установлен SL в безубыток: {new_sl}")
+                            log_info(
+                                f"[apply_profit_protection] => ✅ Успешно установлен SL в безубыток: {new_sl}"
+                            )
                             current_sl = new_sl
                             # Обновляем в БД
-                            self.trade_repository.update(trade_id, {'stop_loss': new_sl})
+                            self.trade_repository.update(trade_id, {"stop_loss": new_sl})
                         else:
                             log_error(
-                                f"[apply_profit_protection] => ❌ Ошибка установки SL в безубыток: {result.get('retMsg')}")
+                                f"[apply_profit_protection] => ❌ Ошибка установки SL в безубыток: {result.get('retMsg')}"
+                            )
                             return False
 
                 # Новый стоп-лосс для дальнейших уровней (если будем обновлять)
@@ -876,7 +1010,9 @@ class EnhancedSLTPManager:
                 # Проверяем уровни защиты прибыли (от большего к меньшему)
                 if "lock_percent" in settings:
                     # Сортируем уровни по убыванию триггера
-                    levels = sorted(settings["lock_percent"], key=lambda x: x["trigger"], reverse=True)
+                    levels = sorted(
+                        settings["lock_percent"], key=lambda x: x["trigger"], reverse=True
+                    )
 
                     for level in levels:
                         trigger = level["trigger"]
@@ -884,32 +1020,49 @@ class EnhancedSLTPManager:
 
                         if profit_percent >= trigger:
                             log_info(
-                                f"[apply_profit_protection] => Активирован уровень защиты: {trigger}% -> фиксация {lock}%")
+                                f"[apply_profit_protection] => Активирован уровень защиты: {trigger}% -> фиксация {lock}%"
+                            )
 
                             # Рассчитываем новый стоп-лосс на основе уровня фиксации прибыли
                             log_info(
-                                f"[apply_profit_protection] => Расчет SL: entry={entry_price}, current={current_price}, lock={lock}%, profit={profit_percent}%")
+                                f"[apply_profit_protection] => Расчет SL: entry={entry_price}, current={current_price}, lock={lock}%, profit={profit_percent}%"
+                            )
 
                             if side.upper() == "BUY":
-                                lock_amount = (current_price - entry_price) * (lock / profit_percent)
-                                new_sl = entry_price + lock_amount  # Для BUY позиций SL устанавливается ВЫШЕ цены входа
+                                lock_amount = (current_price - entry_price) * (
+                                    lock / profit_percent
+                                )
+                                new_sl = (
+                                    entry_price + lock_amount
+                                )  # Для BUY позиций SL устанавливается ВЫШЕ цены входа
                                 log_info(
-                                    f"[apply_profit_protection] => BUY: lock_amount={lock_amount:.6f}, new_sl={new_sl:.6f}")
+                                    f"[apply_profit_protection] => BUY: lock_amount={lock_amount:.6f}, new_sl={new_sl:.6f}"
+                                )
                             else:  # SELL
-                                lock_amount = (entry_price - current_price) * (lock / profit_percent)
-                                new_sl = entry_price - lock_amount  # Для SELL позиций SL устанавливается НИЖЕ цены входа
+                                lock_amount = (entry_price - current_price) * (
+                                    lock / profit_percent
+                                )
+                                new_sl = (
+                                    entry_price - lock_amount
+                                )  # Для SELL позиций SL устанавливается НИЖЕ цены входа
                                 log_info(
-                                    f"[apply_profit_protection] => SELL: lock_amount={lock_amount:.6f}, new_sl={new_sl:.6f}")
+                                    f"[apply_profit_protection] => SELL: lock_amount={lock_amount:.6f}, new_sl={new_sl:.6f}"
+                                )
 
                             log_warn(
-                                f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 1: new_sl={new_sl}, продолжаем выполнение...")
+                                f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 1: new_sl={new_sl}, продолжаем выполнение..."
+                            )
                             break  # Используем самый высокий подходящий уровень
 
-                log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 2: После цикла уровней, new_sl={new_sl}")
+                log_warn(
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 2: После цикла уровней, new_sl={new_sl}"
+                )
 
                 # Проверяем условие безубытка, если не нашли уровень защиты
                 if new_sl is None and profit_percent >= settings.get("breakeven_percent", 1.0):
-                    log_info(f"[apply_profit_protection] => Активирован безубыток (профит: {profit_percent:.2f}%)")
+                    log_info(
+                        f"[apply_profit_protection] => Активирован безубыток (профит: {profit_percent:.2f}%)"
+                    )
 
                     # Получаем смещение от цены входа (в %)
                     offset_percent = settings.get("breakeven_offset", 0.2)
@@ -925,17 +1078,24 @@ class EnhancedSLTPManager:
                         offset_amount = entry_price * (offset_percent / 100.0)
                         new_sl = entry_price - offset_amount
 
-                    log_info(f"[apply_profit_protection] => Безубыток со смещением {offset_percent}% = {new_sl:.4f}")
+                    log_info(
+                        f"[apply_profit_protection] => Безубыток со смещением {offset_percent}% = {new_sl:.4f}"
+                    )
 
-                log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 3: После безубытка, new_sl={new_sl}")
+                log_warn(
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 3: После безубытка, new_sl={new_sl}"
+                )
 
                 # Если не нашли подходящий уровень защиты
                 if new_sl is None:
                     log_warn(
-                        f"[apply_profit_protection] => Не найден подходящий уровень защиты для профита {profit_percent:.2f}%, settings={settings}")
+                        f"[apply_profit_protection] => Не найден подходящий уровень защиты для профита {profit_percent:.2f}%, settings={settings}"
+                    )
                     return False
 
-                log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 4: Начинаем работу с SLTP репозиторием")
+                log_warn(
+                    "[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 4: Начинаем работу с SLTP репозиторием"
+                )
 
                 # Получаем информацию о SLTP из репозитория
                 sltp = self.sltp_repository.get_by_trade_id(trade_id)
@@ -943,19 +1103,27 @@ class EnhancedSLTPManager:
                 last_applied_level = None
                 current_level_name = "breakeven"  # По умолчанию безубыток
 
-                log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 5: SLTP получен, sltp={sltp is not None}")
+                log_warn(
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 5: SLTP получен, sltp={sltp is not None}"
+                )
 
                 # Определяем, какой уровень защиты сейчас достигнут согласно конфигурации
                 # Проверяем уровни lock_percent (от большего к меньшему)
-                if "lock_percent" in settings and profit_percent >= settings.get("breakeven_percent", 1.0):
-                    levels = sorted(settings["lock_percent"], key=lambda x: x["trigger"], reverse=True)
+                if "lock_percent" in settings and profit_percent >= settings.get(
+                    "breakeven_percent", 1.0
+                ):
+                    levels = sorted(
+                        settings["lock_percent"], key=lambda x: x["trigger"], reverse=True
+                    )
                     for level in levels:
                         if profit_percent >= level["trigger"]:
                             current_level_name = f"lock_{level['trigger']}"
                             break
                 # Если профит меньше минимального trigger, но больше breakeven_percent - остается "breakeven"
 
-                log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 6: current_level_name={current_level_name}")
+                log_warn(
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 6: current_level_name={current_level_name}"
+                )
 
                 if sltp:
                     # Получаем информацию о количестве обновлений стоп-лосса
@@ -965,17 +1133,20 @@ class EnhancedSLTPManager:
                     last_applied_level = extra_data.get("last_applied_level")
 
                     log_warn(
-                        f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 7: already_applied_levels={already_applied_levels}")
+                        f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 7: already_applied_levels={already_applied_levels}"
+                    )
 
                     # Если этот уровень уже был применен, логируем это для отладки
                     if current_level_name in already_applied_levels:
                         log_info(
-                            f"[apply_profit_protection] => Уровень {current_level_name} уже был применен ранее (отладочная информация)")
+                            f"[apply_profit_protection] => Уровень {current_level_name} уже был применен ранее (отладочная информация)"
+                        )
 
                         # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Для уже примененных уровней проверяем наличие записи в sltp_updates_history
                         # и создаем её через потокобезопасное соединение, если отсутствует (обратная совместимость)
                         try:
                             from db.thread_safe_postgres import get_thread_safe_db
+
                             db = get_thread_safe_db()
 
                             # Проверяем наличие записи для данного уровня
@@ -985,9 +1156,11 @@ class EnhancedSLTPManager:
                                           WHERE trade_id = %s \
                                             AND level_name = %s \
                                           """
-                            check_result = db.execute_query(check_query, (trade_id, current_level_name), fetch=True)
+                            check_result = db.execute_query(
+                                check_query, (trade_id, current_level_name), fetch=True
+                            )
 
-                            if check_result and check_result[0]['count'] == 0:
+                            if check_result and check_result[0]["count"] == 0:
                                 # Записи нет, создаем её
                                 history_query = """
                                                 INSERT INTO sltp_updates_history
@@ -997,42 +1170,51 @@ class EnhancedSLTPManager:
                                 history_result = db.execute_query(
                                     history_query,
                                     (trade_id, current_level_name, new_sl, profit_percent),
-                                    fetch=False
+                                    fetch=False,
                                 )
                                 if history_result is not False:
                                     log_info(
-                                        f"[apply_profit_protection] => Создана недостающая запись в sltp_updates_history (обратная совместимость): trade_id={trade_id}, level={current_level_name}")
+                                        f"[apply_profit_protection] => Создана недостающая запись в sltp_updates_history (обратная совместимость): trade_id={trade_id}, level={current_level_name}"
+                                    )
                                 else:
                                     log_error(
-                                        f"[apply_profit_protection] => Не удалось создать недостающую запись в sltp_updates_history для trade_id={trade_id}")
+                                        f"[apply_profit_protection] => Не удалось создать недостающую запись в sltp_updates_history для trade_id={trade_id}"
+                                    )
                             else:
                                 log_info(
-                                    f"[apply_profit_protection] => Запись для уровня {current_level_name} уже существует в sltp_updates_history")
+                                    f"[apply_profit_protection] => Запись для уровня {current_level_name} уже существует в sltp_updates_history"
+                                )
                         except Exception as hist_error:
                             log_error(
-                                f"[apply_profit_protection] => Ошибка при проверке/создании записи в sltp_updates_history (обратная совместимость): {hist_error}")
+                                f"[apply_profit_protection] => Ошибка при проверке/создании записи в sltp_updates_history (обратная совместимость): {hist_error}"
+                            )
 
                 log_warn(
-                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 8: Проверки пройдены, продолжаем к проверкам SL")
+                    "[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 8: Проверки пройдены, продолжаем к проверкам SL"
+                )
 
                 # Безопасное логирование переменных
                 log_warn(
-                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 8.1: new_sl TYPE={type(new_sl)} VALUE={repr(new_sl)}")
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 8.1: new_sl TYPE={type(new_sl)} VALUE={new_sl!r}"
+                )
                 log_warn(
-                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 8.2: current_sl TYPE={type(current_sl)} VALUE={repr(current_sl)}")
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 8.2: current_sl TYPE={type(current_sl)} VALUE={current_sl!r}"
+                )
                 log_warn(
-                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 8.3: side TYPE={type(side)} VALUE={repr(side)}")
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 8.3: side TYPE={type(side)} VALUE={side!r}"
+                )
 
                 # Проверяем значения на None
                 if new_sl is None:
                     log_error(
-                        f"[apply_profit_protection] => ОШИБКА: new_sl is None! Функция должна была завершиться раньше")
+                        "[apply_profit_protection] => ОШИБКА: new_sl is None! Функция должна была завершиться раньше"
+                    )
                     return False
                 if current_sl is None:
-                    log_error(f"[apply_profit_protection] => ОШИБКА: current_sl is None!")
+                    log_error("[apply_profit_protection] => ОШИБКА: current_sl is None!")
                     return False
                 if side is None:
-                    log_error(f"[apply_profit_protection] => ОШИБКА: side is None!")
+                    log_error("[apply_profit_protection] => ОШИБКА: side is None!")
                     return False
 
                 # Проверяем ограничение на максимальное количество обновлений
@@ -1040,39 +1222,50 @@ class EnhancedSLTPManager:
                 max_updates = settings.get("max_updates", 5)
                 if sltp and update_count >= max_updates:
                     # Проверяем, является ли текущий уровень новым (более высоким)
-                    already_applied_levels = sltp.extra_data.get("applied_levels", []) if sltp.extra_data else []
+                    already_applied_levels = (
+                        sltp.extra_data.get("applied_levels", []) if sltp.extra_data else []
+                    )
                     if current_level_name in already_applied_levels:
                         log_warn(
-                            f"[apply_profit_protection] => Достигнуто максимальное количество обновлений ({max_updates}) и уровень {current_level_name} уже применялся")
+                            f"[apply_profit_protection] => Достигнуто максимальное количество обновлений ({max_updates}) и уровень {current_level_name} уже применялся"
+                        )
                         return False
                     else:
                         log_info(
-                            f"[apply_profit_protection] => Разрешаем обновление до нового уровня {current_level_name} несмотря на {update_count} обновлений")
+                            f"[apply_profit_protection] => Разрешаем обновление до нового уровня {current_level_name} несмотря на {update_count} обновлений"
+                        )
 
-                log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 10: Проверка обновлений пройдена")
+                log_warn(
+                    "[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 10: Проверка обновлений пройдена"
+                )
 
                 # Проверяем ограничения на цену SL относительно текущей цены рынка
                 if side.upper() == "BUY":
                     # Проверяем, что стоп не выше текущей цены для BUY
                     if new_sl >= current_price:
                         log_warn(
-                            f"[apply_profit_protection] => Рассчитанный SL ({new_sl:.6f}) выше текущей цены ({current_price:.6f})")
+                            f"[apply_profit_protection] => Рассчитанный SL ({new_sl:.6f}) выше текущей цены ({current_price:.6f})"
+                        )
                         # Устанавливаем SL немного ниже текущей цены
                         new_sl = current_price * 0.995
                         log_info(
-                            f"[apply_profit_protection] => Скорректирован SL до {new_sl:.6f} (0.5% ниже текущей цены)")
+                            f"[apply_profit_protection] => Скорректирован SL до {new_sl:.6f} (0.5% ниже текущей цены)"
+                        )
                 else:  # SELL
                     # Проверяем, что стоп не ниже текущей цены для SELL
                     if new_sl <= current_price:
                         log_warn(
-                            f"[apply_profit_protection] => Рассчитанный SL ({new_sl:.6f}) ниже текущей цены ({current_price:.6f})")
+                            f"[apply_profit_protection] => Рассчитанный SL ({new_sl:.6f}) ниже текущей цены ({current_price:.6f})"
+                        )
                         # Устанавливаем SL немного выше текущей цены
                         new_sl = current_price * 1.005
                         log_info(
-                            f"[apply_profit_protection] => Скорректирован SL до {new_sl:.6f} (0.5% выше текущей цены)")
+                            f"[apply_profit_protection] => Скорректирован SL до {new_sl:.6f} (0.5% выше текущей цены)"
+                        )
 
                 log_info(
-                    f"[apply_profit_protection] => Обновление SL: {current_sl:.6f} -> {new_sl:.6f} (профит: {profit_percent:.2f}%)")
+                    f"[apply_profit_protection] => Обновление SL: {current_sl:.6f} -> {new_sl:.6f} (профит: {profit_percent:.2f}%)"
+                )
 
                 # Используем универсальный метод округления цен
                 from trading.instrument_manager import round_price
@@ -1086,7 +1279,8 @@ class EnhancedSLTPManager:
                     max_allowed_sl = current_price * (1 + max_sl_change_percent / 100)
                     if new_sl > max_allowed_sl:
                         log_warn(
-                            f"[apply_profit_protection] => Новый SL {new_sl} слишком высок! Ограничиваем до {max_allowed_sl}")
+                            f"[apply_profit_protection] => Новый SL {new_sl} слишком высок! Ограничиваем до {max_allowed_sl}"
+                        )
                         new_sl = max_allowed_sl
                     # Округляем вверх для SELL
                     new_sl = round_price(symbol, new_sl, round_up=True)
@@ -1095,12 +1289,15 @@ class EnhancedSLTPManager:
                     min_allowed_sl = current_price * (1 - max_sl_change_percent / 100)
                     if new_sl < min_allowed_sl:
                         log_warn(
-                            f"[apply_profit_protection] => Новый SL {new_sl} слишком низок! Ограничиваем до {min_allowed_sl}")
+                            f"[apply_profit_protection] => Новый SL {new_sl} слишком низок! Ограничиваем до {min_allowed_sl}"
+                        )
                         new_sl = min_allowed_sl
                     # Округляем вниз для BUY
                     new_sl = round_price(symbol, new_sl, round_up=False)
 
-                log_info(f"[apply_profit_protection] => Для {symbol} SL округлен универсальным методом: {new_sl}")
+                log_info(
+                    f"[apply_profit_protection] => Для {symbol} SL округлен универсальным методом: {new_sl}"
+                )
 
                 # Важная проверка: новый SL должен улучшать защиту прибыли
                 sl_improved = False
@@ -1108,47 +1305,70 @@ class EnhancedSLTPManager:
                     # Для BUY новый SL должен быть ВЫШЕ текущего (защищает больше прибыли)
                     sl_improved = new_sl > current_sl
                     log_info(
-                        f"[apply_profit_protection] => BUY: новый SL {new_sl:.6f} {'>' if sl_improved else '<='} текущий SL {current_sl:.6f}")
+                        f"[apply_profit_protection] => BUY: новый SL {new_sl:.6f} {'>' if sl_improved else '<='} текущий SL {current_sl:.6f}"
+                    )
                 else:  # SELL
                     # Для SELL новый SL должен быть НИЖЕ текущего (защищает больше прибыли)
                     sl_improved = new_sl < current_sl
                     log_info(
-                        f"[apply_profit_protection] => SELL: новый SL {new_sl:.6f} {'<' if sl_improved else '>='} текущий SL {current_sl:.6f}")
+                        f"[apply_profit_protection] => SELL: новый SL {new_sl:.6f} {'<' if sl_improved else '>='} текущий SL {current_sl:.6f}"
+                    )
 
                 if not sl_improved:
                     log_warn(
-                        f"[apply_profit_protection] => Новый SL {new_sl:.6f} не улучшает текущий {current_sl:.6f} для {side}, пропускаем обновление")
+                        f"[apply_profit_protection] => Новый SL {new_sl:.6f} не улучшает текущий {current_sl:.6f} для {side}, пропускаем обновление"
+                    )
                     return False
 
                 log_info(
-                    f"[apply_profit_protection] => Обновляем SL для защиты прибыли: {current_sl:.4f} -> {new_sl:.4f}")
+                    f"[apply_profit_protection] => Обновляем SL для защиты прибыли: {current_sl:.4f} -> {new_sl:.4f}"
+                )
 
-                log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 9: Вызываем set_trading_stop с SL={new_sl}")
+                log_warn(
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 9: Вызываем set_trading_stop с SL={new_sl}"
+                )
 
                 # Устанавливаем новый стоп-лосс (ВАЖНО: нужно передать и текущий TP!)
                 current_tp = trade.take_profit
-                log_info(f"[apply_profit_protection] => Передаем в API: SL={new_sl}, TP={current_tp}")
+                log_info(
+                    f"[apply_profit_protection] => Передаем в API: SL={new_sl}, TP={current_tp}"
+                )
 
                 # Определяем правильный positionIdx для hedge режима
                 pos_idx = get_position_idx(side)
 
-                result = set_trading_stop(symbol=symbol, side=side, pos_idx=pos_idx, stop_loss=new_sl,
-                                          take_profit=current_tp, trade_id=trade_id)
+                result = set_trading_stop(
+                    symbol=symbol,
+                    side=side,
+                    pos_idx=pos_idx,
+                    stop_loss=new_sl,
+                    take_profit=current_tp,
+                    trade_id=trade_id,
+                )
 
-                log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 10: set_trading_stop вернул: {result}")
+                log_warn(
+                    f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 10: set_trading_stop вернул: {result}"
+                )
 
                 # Проверяем результат (добавляем дополнительное логирование)
                 import json
-                log_info(f"[apply_profit_protection] => Результат API запроса: {json.dumps(result, default=str)}")
-                success = (result.get("retCode") == 0)
-                not_modified = (result.get("retCode") == 34040 or (
-                            result.get("retMsg") and "not modified" in result.get("retMsg", "")))
+
+                log_info(
+                    f"[apply_profit_protection] => Результат API запроса: {json.dumps(result, default=str)}"
+                )
+                success = result.get("retCode") == 0
+                not_modified = result.get("retCode") == 34040 or (
+                    result.get("retMsg") and "not modified" in result.get("retMsg", "")
+                )
 
                 if success:
-                    log_info(f"[apply_profit_protection] => API успешно обновил SL: {result.get('retMsg', 'OK')}")
+                    log_info(
+                        f"[apply_profit_protection] => API успешно обновил SL: {result.get('retMsg', 'OK')}"
+                    )
                 elif not_modified:
                     log_info(
-                        f"[apply_profit_protection] => SL не изменен (уже установлен такой же): {result.get('retMsg', 'Not modified')}")
+                        f"[apply_profit_protection] => SL не изменен (уже установлен такой же): {result.get('retMsg', 'Not modified')}"
+                    )
 
                 # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем БД только при РЕАЛЬНОМ успехе API
                 if success:
@@ -1162,12 +1382,16 @@ class EnhancedSLTPManager:
 
                         # Сохраняем историю обновлений стоп-лосса
                         updates_history = extra_data.get("sl_updates_history", [])
-                        updates_history.append({
-                            "timestamp": time.time(),
-                            "price": new_sl,
-                            "profit_percent": float(profit_percent),  # Убедимся, что это float для JSON
-                            "level": current_level_name
-                        })
+                        updates_history.append(
+                            {
+                                "timestamp": time.time(),
+                                "price": new_sl,
+                                "profit_percent": float(
+                                    profit_percent
+                                ),  # Убедимся, что это float для JSON
+                                "level": current_level_name,
+                            }
+                        )
                         extra_data["sl_updates_history"] = updates_history
 
                         # Добавляем текущий уровень в список примененных уровней
@@ -1179,44 +1403,61 @@ class EnhancedSLTPManager:
 
                         # Логируем содержимое extra_data перед сохранением для отладки
                         log_info(
-                            f"[apply_profit_protection] => Подготовленные extra_data: {json.dumps(extra_data, default=str)}")
+                            f"[apply_profit_protection] => Подготовленные extra_data: {json.dumps(extra_data, default=str)}"
+                        )
 
                         # Создаем словарь с обновленными данными
                         sltp_update = {
-                            'stop_loss_price': new_sl,  # Правильное имя поля для БД
-                            'updated_at': datetime.now(),
-                            'extra_data': json.dumps(extra_data)  # Явно конвертируем в JSON строку
+                            "stop_loss_price": new_sl,  # Правильное имя поля для БД
+                            "updated_at": datetime.now(),
+                            "extra_data": json.dumps(extra_data),  # Явно конвертируем в JSON строку
                         }
                         # Обновляем через репозиторий
                         # Добавляем trade_id в данные для использования в репозитории
-                        sltp_update['trade_id'] = trade_id
+                        sltp_update["trade_id"] = trade_id
                         # Добавляем подробное логирование
                         log_info(
-                            f"[apply_profit_protection] => Детали обновления: {json.dumps(sltp_update, default=str)}")
+                            f"[apply_profit_protection] => Детали обновления: {json.dumps(sltp_update, default=str)}"
+                        )
 
                         # FIX: Используем метод create_or_update вместо insert_or_update - так как в PostgreSQL репозитории нет insert_or_update
                         try:
                             # Проверяем наличие метода create_or_update в репозитории
-                            if hasattr(self.sltp_repository, 'create_or_update'):
-                                result = self.sltp_repository.create_or_update(sltp_update, 'trade_id')
-                                log_info(f"[apply_profit_protection] => Использован метод create_or_update")
-                            elif hasattr(self.sltp_repository, 'insert_or_update'):
+                            if hasattr(self.sltp_repository, "create_or_update"):
+                                result = self.sltp_repository.create_or_update(
+                                    sltp_update, "trade_id"
+                                )
+                                log_info(
+                                    "[apply_profit_protection] => Использован метод create_or_update"
+                                )
+                            elif hasattr(self.sltp_repository, "insert_or_update"):
                                 # Использовать метод create_or_update, так как он есть в PostgresRepository
-                                if hasattr(self.sltp_repository, 'create_or_update'):
-                                    result = self.sltp_repository.create_or_update(sltp_update, 'trade_id')
-                                    log_info(f"[apply_profit_protection] => Использован метод create_or_update")
+                                if hasattr(self.sltp_repository, "create_or_update"):
+                                    result = self.sltp_repository.create_or_update(
+                                        sltp_update, "trade_id"
+                                    )
+                                    log_info(
+                                        "[apply_profit_protection] => Использован метод create_or_update"
+                                    )
                                 # Запасной вариант, если у репозитория есть insert_or_update
-                                elif hasattr(self.sltp_repository, 'insert_or_update'):
+                                elif hasattr(self.sltp_repository, "insert_or_update"):
                                     result = self.sltp_repository.insert_or_update(sltp_update)
-                                    log_info(f"[apply_profit_protection] => Использован метод insert_or_update")
+                                    log_info(
+                                        "[apply_profit_protection] => Использован метод insert_or_update"
+                                    )
                                 else:
-                                    log_error(f"[apply_profit_protection] => Методы update/insert_or_update не найдены")
+                                    log_error(
+                                        "[apply_profit_protection] => Методы update/insert_or_update не найдены"
+                                    )
                                     result = False
-                                log_info(f"[apply_profit_protection] => Использован метод insert_or_update")
+                                log_info(
+                                    "[apply_profit_protection] => Использован метод insert_or_update"
+                                )
                             else:
                                 # Если нет ни того, ни другого, пробуем обновить
                                 log_info(
-                                    f"[apply_profit_protection] => Методы create_or_update/insert_or_update не найдены, пробуем update")
+                                    "[apply_profit_protection] => Методы create_or_update/insert_or_update не найдены, пробуем update"
+                                )
                                 # Обновляем поля в объекте sltp
                                 for key, value in sltp_update.items():
                                     if hasattr(sltp, key):
@@ -1224,7 +1465,8 @@ class EnhancedSLTPManager:
                                 result = self.sltp_repository.update(sltp)
                         except Exception as repo_error:
                             log_error(
-                                f"[apply_profit_protection] => Ошибка при обновлении данных через репозиторий: {repo_error}")
+                                f"[apply_profit_protection] => Ошибка при обновлении данных через репозиторий: {repo_error}"
+                            )
                             result = False
 
                         # Используем потокобезопасное подключение к БД
@@ -1232,10 +1474,12 @@ class EnhancedSLTPManager:
                             log_info("ОБНОВЛЕНИЕ SLTP ЧЕРЕЗ ПОТОКОБЕЗОПАСНЫЙ РЕПОЗИТОРИЙ")
 
                             from db.thread_safe_postgres import get_thread_safe_db
+
                             db = get_thread_safe_db()
 
                             # Обновляем extra_data в sltp_orders через потокобезопасное соединение
                             import json
+
                             update_query = """
                                            UPDATE sltp_orders
                                            SET extra_data = %s, \
@@ -1244,11 +1488,14 @@ class EnhancedSLTPManager:
                                            """
 
                             # Выполняем обновление
-                            result = db.execute_query(update_query, (json.dumps(extra_data), trade_id), fetch=False)
+                            result = db.execute_query(
+                                update_query, (json.dumps(extra_data), trade_id), fetch=False
+                            )
 
                             if result is not False:  # execute_query возвращает False при ошибке
                                 log_info(
-                                    f"[apply_profit_protection] => SLTP запись обновлена через потокобезопасное соединение для trade_id={trade_id}")
+                                    f"[apply_profit_protection] => SLTP запись обновлена через потокобезопасное соединение для trade_id={trade_id}"
+                                )
 
                                 # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Создаем запись в sltp_updates_history через потокобезопасное соединение
                                 try:
@@ -1260,30 +1507,39 @@ class EnhancedSLTPManager:
                                     history_result = db.execute_query(
                                         history_query,
                                         (trade_id, current_level_name, new_sl, profit_percent),
-                                        fetch=False
+                                        fetch=False,
                                     )
                                     if history_result is not False:
                                         log_info(
-                                            f"[apply_profit_protection] => Создана запись в sltp_updates_history через потокобезопасное соединение: trade_id={trade_id}, level={current_level_name}")
+                                            f"[apply_profit_protection] => Создана запись в sltp_updates_history через потокобезопасное соединение: trade_id={trade_id}, level={current_level_name}"
+                                        )
                                     else:
                                         log_error(
-                                            f"[apply_profit_protection] => Не удалось создать запись в sltp_updates_history для trade_id={trade_id}")
+                                            f"[apply_profit_protection] => Не удалось создать запись в sltp_updates_history для trade_id={trade_id}"
+                                        )
                                 except Exception as hist_error:
                                     log_error(
-                                        f"[apply_profit_protection] => Ошибка при создании записи в sltp_updates_history: {hist_error}")
+                                        f"[apply_profit_protection] => Ошибка при создании записи в sltp_updates_history: {hist_error}"
+                                    )
                             else:
                                 log_error(
-                                    f"[apply_profit_protection] => Не удалось обновить SLTP запись для trade_id={trade_id}")
+                                    f"[apply_profit_protection] => Не удалось обновить SLTP запись для trade_id={trade_id}"
+                                )
 
                         except Exception as e:
                             log_error(
-                                f"[apply_profit_protection] => Ошибка при обновлении SLTP через потокобезопасное соединение: {e}")
+                                f"[apply_profit_protection] => Ошибка при обновлении SLTP через потокобезопасное соединение: {e}"
+                            )
                             import traceback
-                            log_error(f"[apply_profit_protection] => Трассировка: {traceback.format_exc()}")
+
+                            log_error(
+                                f"[apply_profit_protection] => Трассировка: {traceback.format_exc()}"
+                            )
 
                         if result:
                             log_info(
-                                f"[apply_profit_protection] => Обновление #{update_count} для уровня {current_level_name} (макс. {settings.get('max_updates', 5)})")
+                                f"[apply_profit_protection] => Обновление #{update_count} для уровня {current_level_name} (макс. {settings.get('max_updates', 5)})"
+                            )
                             # Проверяем, что данные действительно обновились
                             check_sltp = self.sltp_repository.get_by_trade_id(trade_id)
                             if check_sltp:
@@ -1291,40 +1547,54 @@ class EnhancedSLTPManager:
                                     # Проверяем, является ли extra_data строкой JSON или словарем
                                     if isinstance(check_sltp.extra_data, str):
                                         try:
-                                            json.loads(check_sltp.extra_data)  # Проверяем валидность JSON
+                                            json.loads(
+                                                check_sltp.extra_data
+                                            )  # Проверяем валидность JSON
                                             log_info(
-                                                f"[apply_profit_protection] => Проверка обновления (extra_data как строка): {check_sltp.extra_data[:200]}...")
+                                                f"[apply_profit_protection] => Проверка обновления (extra_data как строка): {check_sltp.extra_data[:200]}..."
+                                            )
                                         except json.JSONDecodeError:
                                             log_error(
-                                                f"[apply_profit_protection] => extra_data не является валидным JSON: {check_sltp.extra_data[:200]}")
+                                                f"[apply_profit_protection] => extra_data не является валидным JSON: {check_sltp.extra_data[:200]}"
+                                            )
                                     else:
                                         log_info(
-                                            f"[apply_profit_protection] => Проверка обновления (extra_data как объект): {json.dumps(check_sltp.extra_data, default=str)}")
+                                            f"[apply_profit_protection] => Проверка обновления (extra_data как объект): {json.dumps(check_sltp.extra_data, default=str)}"
+                                        )
                                 else:
-                                    log_error(f"[apply_profit_protection] => Данные обновились, но extra_data пусто")
+                                    log_error(
+                                        "[apply_profit_protection] => Данные обновились, но extra_data пусто"
+                                    )
                             else:
                                 log_error(
-                                    f"[apply_profit_protection] => Не удалось получить данные SLTP после обновления")
+                                    "[apply_profit_protection] => Не удалось получить данные SLTP после обновления"
+                                )
                         else:
                             log_error(
-                                f"[apply_profit_protection] => Ошибка при обновлении SL для уровня {current_level_name}")
+                                f"[apply_profit_protection] => Ошибка при обновлении SL для уровня {current_level_name}"
+                            )
                     else:
                         # Если запись SLTP не существует, создаем новую
                         extra_data = {
                             "protection_updates": 1,
-                            "sl_updates_history": [{
-                                "timestamp": time.time(),
-                                "price": new_sl,
-                                "profit_percent": float(profit_percent),  # Убедимся, что это float для JSON
-                                "level": current_level_name
-                            }],
+                            "sl_updates_history": [
+                                {
+                                    "timestamp": time.time(),
+                                    "price": new_sl,
+                                    "profit_percent": float(
+                                        profit_percent
+                                    ),  # Убедимся, что это float для JSON
+                                    "level": current_level_name,
+                                }
+                            ],
                             "applied_levels": [current_level_name],
-                            "last_applied_level": current_level_name
+                            "last_applied_level": current_level_name,
                         }
 
                         # Логируем содержимое extra_data перед сохранением для отладки
                         log_info(
-                            f"[apply_profit_protection] => Подготовленные extra_data для новой записи: {json.dumps(extra_data, default=str)}")
+                            f"[apply_profit_protection] => Подготовленные extra_data для новой записи: {json.dumps(extra_data, default=str)}"
+                        )
 
                         sltp_data = {
                             "trade_id": trade_id,
@@ -1335,59 +1605,76 @@ class EnhancedSLTPManager:
                             "take_profit_price": trade.take_profit,  # Правильное имя поля для БД
                             "extra_data": json.dumps(extra_data),  # Явно конвертируем в JSON строку
                             "created_at": datetime.now(),
-                            "updated_at": datetime.now()
+                            "updated_at": datetime.now(),
                         }
 
                         # В PostgreSQL репозитории метод называется create() вместо insert()
                         try:
                             from db.models import SLTPOrder
+
                             sltp_order = SLTPOrder.from_dict(sltp_data)
                             result_id = self.sltp_repository.create(sltp_order)
                             if result_id:
-                                log_info(f"[apply_profit_protection] => Создана новая запись SLTP с ID {result_id}")
+                                log_info(
+                                    f"[apply_profit_protection] => Создана новая запись SLTP с ID {result_id}"
+                                )
                             else:
                                 log_error(
-                                    f"[apply_profit_protection] => Не удалось создать запись SLTP (ID не получен)")
+                                    "[apply_profit_protection] => Не удалось создать запись SLTP (ID не получен)"
+                                )
                         except Exception as e:
                             log_error(f"[apply_profit_protection] => Ошибка при создании SLTP: {e}")
                             import traceback
-                            log_error(f"[apply_profit_protection] => Трассировка ошибки: {traceback.format_exc()}")
+
+                            log_error(
+                                f"[apply_profit_protection] => Трассировка ошибки: {traceback.format_exc()}"
+                            )
 
                     # Обновляем сделку
-                    trade_data = {
-                        'stop_loss': new_sl
-                    }
+                    trade_data = {"stop_loss": new_sl}
                     self.trade_repository.update(trade.id, trade_data)
 
                     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Создаем запись в таблице sltp_updates_history
                     try:
                         db_helper = get_sltp_db_helper()
-                        db_helper.log_sl_update(trade_id, current_level_name, new_sl, profit_percent)
+                        db_helper.log_sl_update(
+                            trade_id, current_level_name, new_sl, profit_percent
+                        )
                         log_info(
-                            f"[apply_profit_protection] => Создана запись в sltp_updates_history: trade_id={trade_id}, level={current_level_name}")
+                            f"[apply_profit_protection] => Создана запись в sltp_updates_history: trade_id={trade_id}, level={current_level_name}"
+                        )
                     except Exception as hist_error:
                         log_error(
-                            f"[apply_profit_protection] => Ошибка при создании записи в sltp_updates_history: {hist_error}")
+                            f"[apply_profit_protection] => Ошибка при создании записи в sltp_updates_history: {hist_error}"
+                        )
 
                     log_info(
-                        f"[apply_profit_protection] => Успешно обновлен SL для защиты прибыли: {new_sl:.4f} (профит: {profit_percent:.2f}%)")
-                    log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 11: УСПЕШНОЕ ЗАВЕРШЕНИЕ! Возвращаем True")
+                        f"[apply_profit_protection] => Успешно обновлен SL для защиты прибыли: {new_sl:.4f} (профит: {profit_percent:.2f}%)"
+                    )
+                    log_warn(
+                        "[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 11: УСПЕШНОЕ ЗАВЕРШЕНИЕ! Возвращаем True"
+                    )
                     return True
                 elif not_modified:
                     # Если SL не изменился (код 34040), НЕ обновляем БД и НЕ считаем это успехом
                     log_warn(
-                        f"[apply_profit_protection] => SL не был изменен на бирже (код 34040) - НЕ обновляем applied_levels")
+                        "[apply_profit_protection] => SL не был изменен на бирже (код 34040) - НЕ обновляем applied_levels"
+                    )
                     return False  # Возвращаем False чтобы система попробует снова позже
                 else:
-                    error_code = result.get('retCode', 'Unknown')
-                    error_msg = result.get('retMsg', 'Unknown error')
+                    error_code = result.get("retCode", "Unknown")
+                    error_msg = result.get("retMsg", "Unknown error")
                     log_error(
-                        f"[apply_profit_protection] => Ошибка при установке SL: код {error_code}, сообщение: {error_msg}")
-                    log_warn(f"[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 12: КРИТИЧНАЯ ОШИБКА! Возвращаем False")
+                        f"[apply_profit_protection] => Ошибка при установке SL: код {error_code}, сообщение: {error_msg}"
+                    )
+                    log_warn(
+                        "[apply_profit_protection] => КРИТИЧЕСКАЯ ТОЧКА 12: КРИТИЧНАЯ ОШИБКА! Возвращаем False"
+                    )
                     return False
 
             except Exception as e:
                 import traceback
+
                 log_error(f"[apply_profit_protection] => Ошибка: {e}")
                 log_error(traceback.format_exc())
                 return False
@@ -1409,9 +1696,10 @@ class EnhancedSLTPManager:
 
             # Используем PostgreSQL коннектор
             from db.postgres_connector import get_postgres_connector
+
             db = get_postgres_connector()
             result = db.execute_query(check_query, fetch=True)
-            table_exists = result[0]['exists'] if result else False
+            table_exists = result[0]["exists"] if result else False
 
             if not table_exists:
                 # Создаем таблицу
@@ -1446,11 +1734,14 @@ class EnhancedSLTPManager:
 
                 db.execute_query(create_table_query, fetch=False)
 
-                log_info(f"[_ensure_partial_tp_history_table] => Создана таблица partial_tp_history")
+                log_info(
+                    "[_ensure_partial_tp_history_table] => Создана таблица partial_tp_history"
+                )
 
         except Exception as e:
             log_error(f"[_ensure_partial_tp_history_table] => Ошибка при проверке таблицы: {e}")
             import traceback
+
             log_error(traceback.format_exc())
 
     def _save_partial_tp_history(self, history_entry):
@@ -1476,17 +1767,18 @@ class EnhancedSLTPManager:
                           """
 
             from db.thread_safe_postgres import get_thread_safe_db
+
             db = get_thread_safe_db()
 
             # Проверяем наличие дубликата
-            check_result = db.execute_query(check_query, (
-                history_entry.get("trade_id"),
-                history_entry.get("level_percent")
-            ))
+            check_result = db.execute_query(
+                check_query, (history_entry.get("trade_id"), history_entry.get("level_percent"))
+            )
 
             if check_result and len(check_result) > 0:
                 log_warn(
-                    f"[_save_partial_tp_history] => Найдена недавняя запись для trade_id={history_entry.get('trade_id')}, level={history_entry.get('level_percent')}%, пропускаем вставку")
+                    f"[_save_partial_tp_history] => Найдена недавняя запись для trade_id={history_entry.get('trade_id')}, level={history_entry.get('level_percent')}%, пропускаем вставку"
+                )
                 return -1
 
             # Формируем SQL запрос для вставки
@@ -1517,44 +1809,53 @@ class EnhancedSLTPManager:
                 datetime.fromtimestamp(history_entry.get("timestamp")),
                 history_entry.get("status"),
                 history_entry.get("order_id"),
-                history_entry.get("error")
+                history_entry.get("error"),
             )
 
             # Выполняем запрос к базе данных
             record_id = None
             try:
                 from db.thread_safe_postgres import get_thread_safe_db
+
                 db = get_thread_safe_db()
 
                 # Используем execute_query для выполнения запроса
                 result = db.execute_query(query, params)
                 if result and len(result) > 0:
-                    record_id = result[0].get('id', 0)
+                    record_id = result[0].get("id", 0)
 
                 log_info(
-                    f"[_save_partial_tp_history] => Запись сохранена в историю частичных закрытий, ID: {record_id}")
+                    f"[_save_partial_tp_history] => Запись сохранена в историю частичных закрытий, ID: {record_id}"
+                )
 
             except Exception as e:
                 error_str = str(e).lower()
                 # Проверяем, является ли это ошибкой дубликата
                 if "duplicate key" in error_str or "unique constraint" in error_str:
                     log_warn(
-                        f"[_save_partial_tp_history] => Попытка сохранить дубликат частичного закрытия для trade_id={history_entry.get('trade_id')}, level={history_entry.get('level_percent')}%")
+                        f"[_save_partial_tp_history] => Попытка сохранить дубликат частичного закрытия для trade_id={history_entry.get('trade_id')}, level={history_entry.get('level_percent')}%"
+                    )
                     # Это не критичная ошибка, возвращаем -1 как индикатор дубликата
                     record_id = -1
                 else:
                     log_error(f"[_save_partial_tp_history] => Ошибка при сохранении в историю: {e}")
                     import traceback
+
                     log_error(traceback.format_exc())
                     # Возвращаем 0 в случае ошибки
                     record_id = 0
 
-            log_info(f"[_save_partial_tp_history] => Сохранена запись в историю частичных закрытий, ID: {record_id}")
+            log_info(
+                f"[_save_partial_tp_history] => Сохранена запись в историю частичных закрытий, ID: {record_id}"
+            )
             return record_id
 
         except Exception as e:
-            log_error(f"[_save_partial_tp_history] => Ошибка при сохранении в историю частичных закрытий: {e}")
+            log_error(
+                f"[_save_partial_tp_history] => Ошибка при сохранении в историю частичных закрытий: {e}"
+            )
             import traceback
+
             log_error(traceback.format_exc())
             return None
 
@@ -1594,11 +1895,12 @@ class EnhancedSLTPManager:
                 history_entry.get("trade_id"),
                 history_entry.get("level_percent"),
                 history_entry.get("trade_id"),  # Для подзапроса
-                history_entry.get("level_percent")  # Для подзапроса
+                history_entry.get("level_percent"),  # Для подзапроса
             )
 
             # Выполняем запрос
             from db.thread_safe_postgres import get_thread_safe_db
+
             db = get_thread_safe_db()
             db.execute_query(query, params, fetch=False)
 
@@ -1608,9 +1910,10 @@ class EnhancedSLTPManager:
             order_id = history_entry.get("order_id")
 
             log_info(
-                f"[_update_partial_tp_history] => Обновление записи в partial_tp_history: trade_id={history_entry.get('trade_id')}, " +
-                f"level={history_entry.get('level_percent')}, status={status}, " +
-                f"order_id={order_id}")
+                f"[_update_partial_tp_history] => Обновление записи в partial_tp_history: trade_id={history_entry.get('trade_id')}, "
+                + f"level={history_entry.get('level_percent')}, status={status}, "
+                + f"order_id={order_id}"
+            )
 
             # Проверяем, действительно ли запись обновлена
             check_query = """
@@ -1627,14 +1930,19 @@ class EnhancedSLTPManager:
                 actual_status = check_result[0].get("status")
                 actual_order_id = check_result[0].get("order_id")
                 log_info(
-                    f"[_update_partial_tp_history] => Проверка после обновления: status={actual_status}, order_id={actual_order_id}")
+                    f"[_update_partial_tp_history] => Проверка после обновления: status={actual_status}, order_id={actual_order_id}"
+                )
 
             log_info(
-                f"[_update_partial_tp_history] => Успешно обновлена запись в partial_tp_history для trade_id={history_entry.get('trade_id')}")
+                f"[_update_partial_tp_history] => Успешно обновлена запись в partial_tp_history для trade_id={history_entry.get('trade_id')}"
+            )
 
         except Exception as e:
-            log_error(f"[_update_partial_tp_history] => Ошибка при обновлении истории частичных закрытий: {e}")
+            log_error(
+                f"[_update_partial_tp_history] => Ошибка при обновлении истории частичных закрытий: {e}"
+            )
             import traceback
+
             log_error(traceback.format_exc())
 
     def get_position(self, symbol, positions_from_exchange=None):
@@ -1665,7 +1973,8 @@ class EnhancedSLTPManager:
                         pos_size = pos.get("size", "N/A")
                         pos_idx = pos.get("positionIdx", pos.get("position_idx", "N/A"))
                         log_info(
-                            f"[get_position] => Позиция #{i + 1}: {pos_symbol} {pos_side} size={pos_size} idx={pos_idx}")
+                            f"[get_position] => Позиция #{i + 1}: {pos_symbol} {pos_side} size={pos_size} idx={pos_idx}"
+                        )
                     else:
                         # Для объектов Position показываем реальные атрибуты
                         pos_symbol = getattr(pos, "symbol", "N/A")
@@ -1673,7 +1982,8 @@ class EnhancedSLTPManager:
                         pos_size = getattr(pos, "size", "N/A")
                         pos_idx = getattr(pos, "position_idx", "N/A")
                         log_info(
-                            f"[get_position] => Позиция #{i + 1}: {pos_symbol} {pos_side} size={pos_size} idx={pos_idx}")
+                            f"[get_position] => Позиция #{i + 1}: {pos_symbol} {pos_side} size={pos_size} idx={pos_idx}"
+                        )
             else:
                 log_warn(f"[get_position] => Список позиций пуст для {symbol}")
 
@@ -1683,8 +1993,9 @@ class EnhancedSLTPManager:
 
             # Получаем настройки hedge режима
             from core.config import get_config
-            trading_config = get_config('trading', {})
-            hedge_mode = trading_config.get('hedge_mode', False)
+
+            trading_config = get_config("trading", {})
+            hedge_mode = trading_config.get("hedge_mode", False)
 
             # Ищем позицию по нужному символу
             for position in positions:
@@ -1702,18 +2013,22 @@ class EnhancedSLTPManager:
                             if hedge_mode:
                                 if (position_idx == 1 or position_idx == 2) and size > 0 and side:
                                     log_info(
-                                        f"[get_position] => Найдена hedge позиция {symbol} idx={position_idx} side={side}: {position}")
+                                        f"[get_position] => Найдена hedge позиция {symbol} idx={position_idx} side={side}: {position}"
+                                    )
                                     return position
                             else:
                                 # В one-way режиме просто проверяем размер
                                 if size > 0:
-                                    log_info(f"[get_position] => Найдена one-way позиция {symbol}: {position}")
+                                    log_info(
+                                        f"[get_position] => Найдена one-way позиция {symbol}: {position}"
+                                    )
                                     return position
                     else:
                         # Если это объект, используем getattr (правильные имена атрибутов для Position)
                         position_symbol = getattr(position, "symbol", "")
-                        position_idx = getattr(position, "position_idx",
-                                               0)  # Исправлено: position_idx вместо positionIdx
+                        position_idx = getattr(
+                            position, "position_idx", 0
+                        )  # Исправлено: position_idx вместо positionIdx
                         size = float(getattr(position, "size", 0))
                         side = getattr(position, "side", "")
 
@@ -1722,12 +2037,15 @@ class EnhancedSLTPManager:
                             if hedge_mode:
                                 if (position_idx == 1 or position_idx == 2) and size > 0 and side:
                                     log_info(
-                                        f"[get_position] => Найдена hedge позиция {symbol} idx={position_idx} side={side}: объект")
+                                        f"[get_position] => Найдена hedge позиция {symbol} idx={position_idx} side={side}: объект"
+                                    )
                                     return position
                             else:
                                 # В one-way режиме просто проверяем размер
                                 if size > 0:
-                                    log_info(f"[get_position] => Найдена one-way позиция {symbol}: объект")
+                                    log_info(
+                                        f"[get_position] => Найдена one-way позиция {symbol}: объект"
+                                    )
                                     return position
                 except Exception as e:
                     log_error(f"[get_position] => Ошибка при обработке позиции: {e}")
@@ -1752,17 +2070,19 @@ class EnhancedSLTPManager:
         """
         log_info(f"[check_partial_tp] => Проверка частичного закрытия для сделки {trade_id}")
         log_info(
-            f"[check_partial_tp] => ВНИМАНИЕ: Используются ТОЛЬКО значения из config.yaml - никаких хардкод значений!")
+            "[check_partial_tp] => ВНИМАНИЕ: Используются ТОЛЬКО значения из config.yaml - никаких хардкод значений!"
+        )
 
         # Проверяем hedge режим - в hedge режиме частичное закрытие может работать по-другому
         # Получаем конфигурацию из config_manager или используем дефолтную
-        if hasattr(self, 'config'):
-            trading_config = self.config.get('trading', {})
+        if hasattr(self, "config"):
+            trading_config = self.config.get("trading", {})
         else:
             trading_config = {}
-        if trading_config.get('hedge_mode', False):
+        if trading_config.get("hedge_mode", False):
             log_info(
-                f"[check_partial_tp] => Режим hedge активен для сделки {trade_id} - используем адаптированную логику")
+                f"[check_partial_tp] => Режим hedge активен для сделки {trade_id} - используем адаптированную логику"
+            )
 
         with self._lock:
             try:
@@ -1775,7 +2095,8 @@ class EnhancedSLTPManager:
                 # НОВЫЙ КОД: Проверяем статус сделки
                 if trade.status not in ["OPEN", "open"]:
                     log_info(
-                        f"[check_partial_tp] => Сделка {trade_id} уже закрыта (статус: {trade.status}), пропускаем")
+                        f"[check_partial_tp] => Сделка {trade_id} уже закрыта (статус: {trade.status}), пропускаем"
+                    )
                     return False
 
                 # Получаем настройки частичного закрытия из config.yaml
@@ -1787,12 +2108,16 @@ class EnhancedSLTPManager:
 
                 # Включен ли функционал частичного закрытия
                 if not settings.get("enabled", False):
-                    log_debug(f"[check_partial_tp] => Частичное закрытие отключено в настройках (enabled: false)")
+                    log_debug(
+                        "[check_partial_tp] => Частичное закрытие отключено в настройках (enabled: false)"
+                    )
                     return False
 
                 # Проверяем, что настроены уровни частичного закрытия
                 if not settings.get("levels"):
-                    log_debug(f"[check_partial_tp] => Не настроены уровни частичного закрытия (levels: [])")
+                    log_debug(
+                        "[check_partial_tp] => Не настроены уровни частичного закрытия (levels: [])"
+                    )
                     return False
 
                 # Получаем текущую цену
@@ -1802,20 +2127,24 @@ class EnhancedSLTPManager:
                 current_price = get_last_price(symbol)
 
                 if current_price <= 0:
-                    log_error(f"[check_partial_tp] => Не удалось получить текущую цену для {symbol}")
+                    log_error(
+                        f"[check_partial_tp] => Не удалось получить текущую цену для {symbol}"
+                    )
                     return False
 
                 # НОВЫЙ КОД: Проверяем позицию на бирже перед попыткой закрытия
                 if self.api_client is None:
                     log_error(
-                        f"[check_partial_tp] => API клиент не инициализирован. Невозможно проверить позицию на бирже")
+                        "[check_partial_tp] => API клиент не инициализирован. Невозможно проверить позицию на бирже"
+                    )
                     return False
 
                 # Получаем позицию с биржи (используем переданные позиции)
                 exchange_position = self.get_position(symbol, exchange_positions)
                 if not exchange_position:
                     log_warn(
-                        f"[check_partial_tp] => Позиция {symbol} не найдена на бирже, пропускаем частичное закрытие")
+                        f"[check_partial_tp] => Позиция {symbol} не найдена на бирже, пропускаем частичное закрытие"
+                    )
                     return False
 
                 # Безопасное получение size и side, поддерживает как словари, так и объекты
@@ -1831,24 +2160,28 @@ class EnhancedSLTPManager:
                 except Exception as e:
                     log_error(f"[check_partial_tp] => Ошибка при получении данных из позиции: {e}")
                     log_warn(
-                        f"[check_partial_tp] => Позиция {symbol} имеет неверный формат, пропускаем частичное закрытие")
+                        f"[check_partial_tp] => Позиция {symbol} имеет неверный формат, пропускаем частичное закрытие"
+                    )
                     return False
 
                 # Проверяем размер позиции на бирже
                 if exchange_qty <= 0:
                     log_warn(
-                        f"[check_partial_tp] => Позиция {symbol} на бирже имеет нулевой размер: {exchange_qty}, пропускаем")
+                        f"[check_partial_tp] => Позиция {symbol} на бирже имеет нулевой размер: {exchange_qty}, пропускаем"
+                    )
                     return False
 
                 # Проверяем совпадение стороны позиции
                 expected_exchange_side = "Buy" if side.upper() == "BUY" else "Sell"
                 if exchange_side != expected_exchange_side:
                     log_warn(
-                        f"[check_partial_tp] => Несоответствие сторон позиции: в БД {side}, на бирже {exchange_side}")
+                        f"[check_partial_tp] => Несоответствие сторон позиции: в БД {side}, на бирже {exchange_side}"
+                    )
                     return False
 
                 log_info(
-                    f"[check_partial_tp] => Позиция {symbol} существует на бирже: сторона {exchange_side}, размер {exchange_qty}")
+                    f"[check_partial_tp] => Позиция {symbol} существует на бирже: сторона {exchange_side}, размер {exchange_qty}"
+                )
 
                 # Получаем текущее количество из БД и проверяем с биржей
                 current_qty = trade.quantity
@@ -1859,7 +2192,8 @@ class EnhancedSLTPManager:
                 # НОВЫЙ КОД: Используем минимальное из количества в БД и на бирже
                 if exchange_qty < current_qty:
                     log_warn(
-                        f"[check_partial_tp] => Количество на бирже ({exchange_qty}) меньше чем в БД ({current_qty}), используем биржевое")
+                        f"[check_partial_tp] => Количество на бирже ({exchange_qty}) меньше чем в БД ({current_qty}), используем биржевое"
+                    )
                     current_qty = exchange_qty
 
                 # Получаем профит в процентах
@@ -1870,28 +2204,40 @@ class EnhancedSLTPManager:
                 if not sltp:
                     executed_levels = []
                     log_info(
-                        f"[check_partial_tp] => Не найдены данные SLTP для сделки {trade_id}, начинаем с пустого списка выполненных уровней")
+                        f"[check_partial_tp] => Не найдены данные SLTP для сделки {trade_id}, начинаем с пустого списка выполненных уровней"
+                    )
                 else:
                     try:
                         extra_data = sltp.extra_data or {}
                         partial_tp_executed_str = extra_data.get("partial_tp_executed", "[]")
-                        executed_levels = json.loads(partial_tp_executed_str) if isinstance(partial_tp_executed_str,
-                                                                                            str) else partial_tp_executed_str
-                        log_info(f"[check_partial_tp] => Загружены выполненные уровни: {partial_tp_executed_str}")
+                        executed_levels = (
+                            json.loads(partial_tp_executed_str)
+                            if isinstance(partial_tp_executed_str, str)
+                            else partial_tp_executed_str
+                        )
+                        log_info(
+                            f"[check_partial_tp] => Загружены выполненные уровни: {partial_tp_executed_str}"
+                        )
 
                         if not isinstance(executed_levels, list):
                             log_warn(
-                                f"[check_partial_tp] => Некорректный формат выполненных уровней: {type(executed_levels)}, сбрасываем в пустой список")
+                                f"[check_partial_tp] => Некорректный формат выполненных уровней: {type(executed_levels)}, сбрасываем в пустой список"
+                            )
                             executed_levels = []
 
                         # НОВЫЙ КОД: Проверяем и исправляем статусы уровней при необходимости
                         for level in executed_levels:
-                            if 'status' not in level:
-                                level['status'] = 'executed'  # Считаем все записи без статуса выполненными
+                            if "status" not in level:
+                                level["status"] = (
+                                    "executed"  # Считаем все записи без статуса выполненными
+                                )
                                 log_info(
-                                    f"[check_partial_tp] => Добавлен статус 'executed' для уровня {level.get('percent')}%")
+                                    f"[check_partial_tp] => Добавлен статус 'executed' для уровня {level.get('percent')}%"
+                                )
                     except (json.JSONDecodeError, AttributeError) as e:
-                        log_error(f"[check_partial_tp] => Ошибка при загрузке выполненных уровней: {e}, {type(e)}")
+                        log_error(
+                            f"[check_partial_tp] => Ошибка при загрузке выполненных уровней: {e}, {type(e)}"
+                        )
                         executed_levels = []
 
                 # Получаем уровни частичного закрытия из конфигурации
@@ -1905,7 +2251,9 @@ class EnhancedSLTPManager:
                 #       - percent: 3.5
                 #         close_ratio: 0.25
                 levels = settings.get("levels", [])
-                log_debug(f"[check_partial_tp] => Уровни частичного закрытия из конфигурации: {levels}")
+                log_debug(
+                    f"[check_partial_tp] => Уровни частичного закрытия из конфигурации: {levels}"
+                )
                 triggered_level = None
 
                 # Сортируем уровни по убыванию процента, чтобы проверять сначала самые высокие уровни
@@ -1917,7 +2265,8 @@ class EnhancedSLTPManager:
                 log_info(f"[check_partial_tp] => Всего выполненных уровней: {len(executed_levels)}")
                 for i, executed in enumerate(executed_levels):
                     log_info(
-                        f"[check_partial_tp] => Выполненный уровень #{i + 1}: {executed.get('percent')}%, статус: {executed.get('status')}")
+                        f"[check_partial_tp] => Выполненный уровень #{i + 1}: {executed.get('percent')}%, статус: {executed.get('status')}"
+                    )
 
                 # Проверяем каждый уровень (от большего к меньшему)
                 for level in sorted_levels:
@@ -1935,19 +2284,22 @@ class EnhancedSLTPManager:
                             if status == "executed":
                                 level_executed = True
                                 log_info(
-                                    f"[check_partial_tp] => Уровень {level_percent}% уже ИСПОЛНЕН на бирже, пропускаем")
+                                    f"[check_partial_tp] => Уровень {level_percent}% уже ИСПОЛНЕН на бирже, пропускаем"
+                                )
                                 break
                             elif status == "recorded":
                                 # Записано в БД, но НЕ исполнено - нужно исполнить!
                                 log_info(
-                                    f"[check_partial_tp] => Уровень {level_percent}% записан но НЕ исполнен, продолжаем исполнение")
+                                    f"[check_partial_tp] => Уровень {level_percent}% записан но НЕ исполнен, продолжаем исполнение"
+                                )
                                 # НЕ устанавливаем level_executed = True
                                 break
                             else:
                                 # Неизвестный статус - пропускаем для безопасности
                                 level_executed = True
                                 log_warn(
-                                    f"[check_partial_tp] => Уровень {level_percent}% имеет неизвестный статус '{status}', пропускаем")
+                                    f"[check_partial_tp] => Уровень {level_percent}% имеет неизвестный статус '{status}', пропускаем"
+                                )
                                 break
 
                     if level_executed:
@@ -1963,13 +2315,16 @@ class EnhancedSLTPManager:
                     #         close_ratio: 0.25
                     if profit_percent >= level_percent:
                         log_info(
-                            f"[check_partial_tp] => Достигнут уровень {level_percent}% (текущий профит: {profit_percent:.2f}%)")
+                            f"[check_partial_tp] => Достигнут уровень {level_percent}% (текущий профит: {profit_percent:.2f}%)"
+                        )
                         triggered_level = level
                         break  # Используем самый высокий достигнутый уровень (сортировка по убыванию)
 
                 # Если нет достигнутых уровней или все уже выполнены
                 if triggered_level is None:
-                    log_debug(f"[check_partial_tp] => Нет новых достигнутых уровней частичного закрытия")
+                    log_debug(
+                        "[check_partial_tp] => Нет новых достигнутых уровней частичного закрытия"
+                    )
                     return False
 
                 # Рассчитываем количество для частичного закрытия
@@ -1982,19 +2337,26 @@ class EnhancedSLTPManager:
                 close_qty = original_position_qty * close_ratio
 
                 log_info(
-                    f"[check_partial_tp] => Частичное закрытие от ИЗНАЧАЛЬНОГО размера: {close_qty:.4f} = {original_position_qty:.4f} * {close_ratio:.2f}")
-                log_info(f"[check_partial_tp] => Текущий размер на бирже: {exchange_qty:.4f} (для сравнения)")
+                    f"[check_partial_tp] => Частичное закрытие от ИЗНАЧАЛЬНОГО размера: {close_qty:.4f} = {original_position_qty:.4f} * {close_ratio:.2f}"
+                )
+                log_info(
+                    f"[check_partial_tp] => Текущий размер на бирже: {exchange_qty:.4f} (для сравнения)"
+                )
 
                 # Добавляем пояснение в лог
                 log_debug(
-                    f"[check_partial_tp] => Рассчитано количество для закрытия: {close_qty} ({close_ratio * 100:.0f}% от изначального объема {original_position_qty})")
+                    f"[check_partial_tp] => Рассчитано количество для закрытия: {close_qty} ({close_ratio * 100:.0f}% от изначального объема {original_position_qty})"
+                )
 
                 if close_qty <= 0:
-                    log_warn(f"[check_partial_tp] => Слишком малое количество для частичного закрытия: {close_qty}")
+                    log_warn(
+                        f"[check_partial_tp] => Слишком малое количество для частичного закрытия: {close_qty}"
+                    )
                     return False
 
                 log_info(
-                    f"[check_partial_tp] => Активирован уровень {triggered_level['percent']}% -> закрытие {close_ratio * 100:.0f}% позиции")
+                    f"[check_partial_tp] => Активирован уровень {triggered_level['percent']}% -> закрытие {close_ratio * 100:.0f}% позиции"
+                )
 
                 # Определяем противоположную сторону для закрытия позиции
                 close_side = "Sell" if side.upper() == "BUY" else "Buy"
@@ -2005,13 +2367,16 @@ class EnhancedSLTPManager:
                     # Проверяем инициализацию API клиента
                     if self.api_client is None:
                         log_error(
-                            f"[check_partial_tp] => API клиент не инициализирован. Невозможно получить информацию об инструменте {symbol}")
+                            f"[check_partial_tp] => API клиент не инициализирован. Невозможно получить информацию об инструменте {symbol}"
+                        )
                         return False
 
                     # Получаем информацию об инструменте для определения минимального шага и размера ордера
                     instrument_info = self.api_client.get_instrument_info(symbol)
                     if not instrument_info:
-                        log_error(f"[check_partial_tp] => Не удалось получить информацию об инструменте {symbol}")
+                        log_error(
+                            f"[check_partial_tp] => Не удалось получить информацию об инструменте {symbol}"
+                        )
                         return False
 
                     # Получаем правильные настройки шага и минимального количества напрямую из API
@@ -2020,12 +2385,14 @@ class EnhancedSLTPManager:
                         qty_step = float(lot_size_filter.get("qtyStep", "0.001"))
                         min_order_qty = float(lot_size_filter.get("minOrderQty", "0.001"))
                         log_info(
-                            f"[check_partial_tp] => Получены настройки напрямую из API: шаг={qty_step}, мин={min_order_qty}")
+                            f"[check_partial_tp] => Получены настройки напрямую из API: шаг={qty_step}, мин={min_order_qty}"
+                        )
 
                         # Проверяем минимальную стоимость ордера
                         min_notional_value = float(lot_size_filter.get("minNotionalValue", "5.0"))
                         log_info(
-                            f"[check_partial_tp] => Минимальная стоимость ордера для {symbol}: {min_notional_value} USDT")
+                            f"[check_partial_tp] => Минимальная стоимость ордера для {symbol}: {min_notional_value} USDT"
+                        )
                     else:
                         # Если API не вернул информацию, используем предустановленные настройки
                         instrument_info = get_instrument_info(symbol)
@@ -2033,13 +2400,16 @@ class EnhancedSLTPManager:
                         min_order_qty = instrument_info.get("min_qty", 0.001)
                         min_notional_value = instrument_info.get("min_notional", 5.0)
                         log_info(
-                            f"[check_partial_tp] => Используем настройки из функции get_instrument_info: шаг={qty_step}, мин={min_order_qty}")
+                            f"[check_partial_tp] => Используем настройки из функции get_instrument_info: шаг={qty_step}, мин={min_order_qty}"
+                        )
 
                     # Определяем, требуется ли целочисленное значение
                     requires_whole_number = qty_step >= 1.0
 
                     # Логируем полученные настройки для отладки
-                    log_info(f"[check_partial_tp] => Настройки инструмента {symbol} (исправленные):")
+                    log_info(
+                        f"[check_partial_tp] => Настройки инструмента {symbol} (исправленные):"
+                    )
                     log_info(f"    Шаг количества: {qty_step}, Мин. количество: {min_order_qty}")
                     log_info(f"    Требует целые числа: {requires_whole_number}")
                     log_info(f"    Исходное количество для закрытия: {close_qty}")
@@ -2056,15 +2426,19 @@ class EnhancedSLTPManager:
                     # Проверяем и адаптируем для инструментов, требующих целых чисел
                     if requires_whole_number or symbol in ["GALAUSDT", "WIFUSDT", "ENAUSDT"]:
                         close_qty = max(int(min_order_qty), int(close_qty))
-                        log_info(f"[check_partial_tp] => {symbol} требует целое число: {original_qty} -> {close_qty}")
+                        log_info(
+                            f"[check_partial_tp] => {symbol} требует целое число: {original_qty} -> {close_qty}"
+                        )
 
                     # Проверяем, не превышает ли количество максимально допустимое
                     # Для рыночных ордеров используем maxMktOrderQty, который обычно меньше
-                    max_allowed_qty = instrument_info.get("max_market_qty",
-                                                          50000)  # Используем лимит для рыночных ордеров
+                    max_allowed_qty = instrument_info.get(
+                        "max_market_qty", 50000
+                    )  # Используем лимит для рыночных ордеров
                     if close_qty > max_allowed_qty:
                         log_warn(
-                            f"[check_partial_tp] => Количество {close_qty} превышает максимально допустимое {max_allowed_qty}, ограничиваем")
+                            f"[check_partial_tp] => Количество {close_qty} превышает максимально допустимое {max_allowed_qty}, ограничиваем"
+                        )
                         close_qty = max_allowed_qty
 
                     # Специальная обработка для ALGO
@@ -2072,38 +2446,48 @@ class EnhancedSLTPManager:
                         old_qty = close_qty
                         close_qty = math.floor(close_qty * 10) / 10  # Округляем до 0.1 для ALGO
                         if old_qty != close_qty:
-                            log_warn(f"[check_partial_tp] => ALGO требует шаг 0.1: {old_qty} -> {close_qty}")
+                            log_warn(
+                                f"[check_partial_tp] => ALGO требует шаг 0.1: {old_qty} -> {close_qty}"
+                            )
 
                     log_info(
-                        f"[check_partial_tp] => Финальное округленное количество: {original_qty} -> {close_qty} (шаг: {qty_step})")
+                        f"[check_partial_tp] => Финальное округленное количество: {original_qty} -> {close_qty} (шаг: {qty_step})"
+                    )
 
                     # Проверяем минимальную стоимость ордера (minNotionalValue)
                     min_notional_value = instrument_info.get("min_notional", 5.0)
                     log_info(
-                        f"[check_partial_tp] => Минимальная стоимость ордера для {symbol}: {min_notional_value} USDT")
+                        f"[check_partial_tp] => Минимальная стоимость ордера для {symbol}: {min_notional_value} USDT"
+                    )
 
                     # Рассчитываем стоимость ордера
                     order_value = close_qty * current_price
                     log_info(
-                        f"[check_partial_tp] => Стоимость ордера: {order_value} USDT (минимум: {min_notional_value} USDT)")
+                        f"[check_partial_tp] => Стоимость ордера: {order_value} USDT (минимум: {min_notional_value} USDT)"
+                    )
 
                     if order_value < min_notional_value:
                         # Если стоимость меньше минимальной, пробуем увеличить количество
-                        adjusted_qty = math.ceil(min_notional_value / current_price / qty_step) * qty_step
+                        adjusted_qty = (
+                            math.ceil(min_notional_value / current_price / qty_step) * qty_step
+                        )
                         decimal_places = -int(math.log10(qty_step)) if qty_step < 1 else 0
                         adjusted_qty = round(adjusted_qty, decimal_places)
 
                         log_info(
-                            f"[check_partial_tp] => Стоимость ордера меньше минимальной, увеличиваем количество до {adjusted_qty}")
+                            f"[check_partial_tp] => Стоимость ордера меньше минимальной, увеличиваем количество до {adjusted_qty}"
+                        )
                         close_qty = adjusted_qty
 
                     # Дополнительно проверяем, что количество соответствует требованиям биржи
                     log_info(
-                        f"[check_partial_tp] => Окончательное количество для закрытия: {close_qty} (шаг: {qty_step}, мин.: {min_order_qty})")
+                        f"[check_partial_tp] => Окончательное количество для закрытия: {close_qty} (шаг: {qty_step}, мин.: {min_order_qty})"
+                    )
 
                     if close_qty <= 0 or close_qty < min_order_qty:
                         log_warn(
-                            f"[check_partial_tp] => Рассчитанное количество {close_qty} меньше минимального {min_order_qty}")
+                            f"[check_partial_tp] => Рассчитанное количество {close_qty} меньше минимального {min_order_qty}"
+                        )
                         return False
 
                     # Дополнительная проверка минимального количества
@@ -2117,10 +2501,13 @@ class EnhancedSLTPManager:
                         min_order_qty = 0.01
                         # Если текущее количество меньше минимального
                         if close_qty < min_order_qty:
-                            log_warn(f"[check_partial_tp] => ETH требует минимум 0.01: {close_qty} -> {min_order_qty}")
+                            log_warn(
+                                f"[check_partial_tp] => ETH требует минимум 0.01: {close_qty} -> {min_order_qty}"
+                            )
                             close_qty = min_order_qty
                         log_warn(
-                            f"[check_partial_tp] => Для {symbol} используем минимум 0.01 (вместо {old_min} из API)")
+                            f"[check_partial_tp] => Для {symbol} используем минимум 0.01 (вместо {old_min} из API)"
+                        )
 
                     # ALGO требует шаг строго 0.1
                     if "ALGO" in symbol:
@@ -2131,11 +2518,13 @@ class EnhancedSLTPManager:
                             # Округляем до ближайшего 0.1 вниз
                             close_qty = math.floor(close_qty * 10) / 10
                             log_warn(
-                                f"[check_partial_tp] => ALGO требует строгого шага 0.1: корректируем {old_qty} -> {close_qty}")
+                                f"[check_partial_tp] => ALGO требует строгого шага 0.1: корректируем {old_qty} -> {close_qty}"
+                            )
 
                     if close_qty < min_order_qty:
                         log_warn(
-                            f"[check_partial_tp] => Рассчитанное количество {close_qty} меньше минимального {min_order_qty}, увеличиваем")
+                            f"[check_partial_tp] => Рассчитанное количество {close_qty} меньше минимального {min_order_qty}, увеличиваем"
+                        )
                         close_qty = min_order_qty
 
                     # Специальная обработка для ETH контрактов, где API возвращает ошибку
@@ -2143,19 +2532,22 @@ class EnhancedSLTPManager:
                     # хотя количество соответствует минимальному требованию
                     if symbol == "ETHUSDT" and close_qty < 0.01:
                         log_warn(
-                            f"[check_partial_tp] => ETH требует минимум 0.01 контракта несмотря на minOrderQty={min_order_qty}")
+                            f"[check_partial_tp] => ETH требует минимум 0.01 контракта несмотря на minOrderQty={min_order_qty}"
+                        )
                         close_qty = 0.01  # Установить минимум для ETH на 0.01 контракта
 
                     # НОВЫЙ КОД: Проверка, что мы не пытаемся закрыть больше, чем доступно
                     if close_qty > exchange_qty:
                         log_warn(
-                            f"[check_partial_tp] => Рассчитанное количество {close_qty} больше доступного {exchange_qty}, корректируем")
+                            f"[check_partial_tp] => Рассчитанное количество {close_qty} больше доступного {exchange_qty}, корректируем"
+                        )
                         close_qty = math.floor(exchange_qty / qty_step) * qty_step
 
                         # Проверяем, что после округления количество все еще корректное
                         if close_qty < min_order_qty:
                             log_warn(
-                                f"[check_partial_tp] => После коррекции количество слишком мало: {close_qty} < {min_order_qty}, отменяем закрытие")
+                                f"[check_partial_tp] => После коррекции количество слишком мало: {close_qty} < {min_order_qty}, отменяем закрытие"
+                            )
                             return False
 
                     # Уникальный индекс idx_partial_tp_unique_simple автоматически предотвратит дубликаты
@@ -2175,24 +2567,29 @@ class EnhancedSLTPManager:
                         "entry_price": float(entry_price),
                         "exchange_qty_before": float(exchange_qty),
                         "timestamp": time.time(),
-                        "status": "pending"
+                        "status": "pending",
                     }
 
                     # Сохраняем данные в таблицу partial_tp_history
-                    log_info(f"[check_partial_tp] => Сохраняем данные в историю частичных закрытий")
+                    log_info("[check_partial_tp] => Сохраняем данные в историю частичных закрытий")
                     history_id = None
                     try:
                         history_id = self._save_partial_tp_history(history_entry)
                         if history_id == -1:
                             log_info(
-                                f"[check_partial_tp] => Уровень {triggered_level['percent']}% уже записан для trade_id={trade_id}, но продолжаем исполнение ордера")
+                                f"[check_partial_tp] => Уровень {triggered_level['percent']}% уже записан для trade_id={trade_id}, но продолжаем исполнение ордера"
+                            )
                             # НЕ возвращаем False - продолжаем исполнение ордера
                         else:
                             log_info(
-                                f"[check_partial_tp] => Данные успешно сохранены в таблицу partial_tp_history, ID: {history_id}")
+                                f"[check_partial_tp] => Данные успешно сохранены в таблицу partial_tp_history, ID: {history_id}"
+                            )
                     except Exception as history_error:
-                        log_error(f"[check_partial_tp] => Ошибка при сохранении в историю: {history_error}")
+                        log_error(
+                            f"[check_partial_tp] => Ошибка при сохранении в историю: {history_error}"
+                        )
                         import traceback
+
                         log_error(f"[check_partial_tp] => Трассировка: {traceback.format_exc()}")
                         return False  # Если не можем сохранить в историю, не создаем ордер
 
@@ -2200,7 +2597,8 @@ class EnhancedSLTPManager:
                     order_id = None
 
                     log_info(
-                        f"[check_partial_tp] => Создаем ордер для частичного закрытия: {close_side} {close_qty} {symbol}")
+                        f"[check_partial_tp] => Создаем ордер для частичного закрытия: {close_side} {close_qty} {symbol}"
+                    )
 
                     # Проверяем корректность параметров для инструмента
                     # и коррекция для всех монет перед отправкой на биржу
@@ -2213,63 +2611,75 @@ class EnhancedSLTPManager:
                             api_min_qty = float(lot_size_filter.get("minOrderQty", "0.001"))
 
                             log_info(
-                                f"[check_partial_tp] => Параметры {symbol} из API: шаг={api_qty_step}, мин.={api_min_qty}")
+                                f"[check_partial_tp] => Параметры {symbol} из API: шаг={api_qty_step}, мин.={api_min_qty}"
+                            )
 
                             # Округляем в соответствии с шагом инструмента
                             original_qty = close_qty
                             close_qty = math.floor(close_qty / api_qty_step) * api_qty_step
 
                             # Округляем до правильного количества десятичных знаков
-                            decimal_places = -int(math.log10(api_qty_step)) if api_qty_step < 1 else 0
+                            decimal_places = (
+                                -int(math.log10(api_qty_step)) if api_qty_step < 1 else 0
+                            )
                             close_qty = round(close_qty, decimal_places)
 
                             # Проверяем минимальное количество
                             if close_qty < api_min_qty:
                                 log_warn(
-                                    f"[check_partial_tp] => Количество {close_qty} меньше минимального {api_min_qty}, устанавливаем минимальное")
+                                    f"[check_partial_tp] => Количество {close_qty} меньше минимального {api_min_qty}, устанавливаем минимальное"
+                                )
                                 close_qty = api_min_qty
 
                             log_info(
-                                f"[check_partial_tp] => Скорректированное количество {symbol}: {original_qty} -> {close_qty}")
+                                f"[check_partial_tp] => Скорректированное количество {symbol}: {original_qty} -> {close_qty}"
+                            )
                     except Exception as api_error:
-                        log_error(f"[check_partial_tp] => Ошибка при получении API данных: {api_error}")
+                        log_error(
+                            f"[check_partial_tp] => Ошибка при получении API данных: {api_error}"
+                        )
 
                     # Создаем реальный ордер для частичного закрытия
                     log_info(
-                        f"[check_partial_tp] => Создаем рыночный ордер: {close_side} {close_qty} {symbol} (reduce_only=True)")
+                        f"[check_partial_tp] => Создаем рыночный ордер: {close_side} {close_qty} {symbol} (reduce_only=True)"
+                    )
 
                     # ИСПРАВЛЕНИЕ: Используем правильный вызов API в зависимости от типа клиента
                     client_type = type(self.api_client).__name__
                     log_info(f"[check_partial_tp] => Используется API клиент: {client_type}")
 
-                    if hasattr(self.api_client, 'place_order'):
+                    if hasattr(self.api_client, "place_order"):
                         # Для BybitAPIClient - используем place_order с hedge_mode
                         # КРИТИЧЕСКИ ВАЖНО: При частичном закрытии в hedge mode
                         # нужно использовать positionIdx исходной позиции!
                         original_pos_idx = get_position_idx(side)  # positionIdx исходной позиции
                         log_info(
-                            f"[check_partial_tp] => Создание ордера через BybitAPIClient.place_order с hedge_mode=True, positionIdx={original_pos_idx}")
+                            f"[check_partial_tp] => Создание ордера через BybitAPIClient.place_order с hedge_mode=True, positionIdx={original_pos_idx}"
+                        )
 
                         # Создаем ордер напрямую через API с правильным positionIdx
-                        order_result = self.api_client._make_request("POST", "/v5/order/create", {
-                            "category": "linear",
-                            "symbol": symbol,
-                            "side": close_side,
-                            "orderType": "Market",
-                            "qty": str(close_qty),
-                            "timeInForce": "IOC",
-                            "reduceOnly": True,
-                            "positionIdx": original_pos_idx  # Используем positionIdx исходной позиции!
-                        }, auth=True)
+                        order_result = self.api_client._make_request(
+                            "POST",
+                            "/v5/order/create",
+                            {
+                                "category": "linear",
+                                "symbol": symbol,
+                                "side": close_side,
+                                "orderType": "Market",
+                                "qty": str(close_qty),
+                                "timeInForce": "IOC",
+                                "reduceOnly": True,
+                                "positionIdx": original_pos_idx,  # Используем positionIdx исходной позиции!
+                            },
+                            auth=True,
+                        )
                     else:
                         # Для ApiClient - используем create_market_order без hedge_mode
                         log_info(
-                            f"[check_partial_tp] => Создание ордера через ApiClient.create_market_order БЕЗ hedge_mode")
+                            "[check_partial_tp] => Создание ордера через ApiClient.create_market_order БЕЗ hedge_mode"
+                        )
                         order_result = self.api_client.create_market_order(
-                            symbol=symbol,
-                            side=close_side,
-                            quantity=close_qty,
-                            reduce_only=True
+                            symbol=symbol, side=close_side, quantity=close_qty, reduce_only=True
                         )
 
                     # Проверяем результат ордера (учитываем что теперь используем сырой API ответ)
@@ -2279,12 +2689,15 @@ class EnhancedSLTPManager:
 
                     if not order_id:
                         log_error(
-                            f"[check_partial_tp] => Ошибка при создании ордера для частичного закрытия: {order_result}")
+                            f"[check_partial_tp] => Ошибка при создании ордера для частичного закрытия: {order_result}"
+                        )
 
                         # НОВЫЙ КОД: Обновляем историю частичных закрытий с ошибкой
                         if "history_entry" in locals() and "history_id" in locals() and history_id:
                             history_entry["status"] = "error"
-                            history_entry["error"] = str(order_result) if order_result else "Unknown error"
+                            history_entry["error"] = (
+                                str(order_result) if order_result else "Unknown error"
+                            )
                             history_entry["id"] = history_id  # Добавляем ID для обновления
                             self._update_partial_tp_history(history_entry)
 
@@ -2292,18 +2705,25 @@ class EnhancedSLTPManager:
                         error_msg = str(order_result).lower() if order_result else ""
 
                         # Особая обработка ошибки для ETH
-                        eth_min_limit_error = isinstance(error_msg,
-                                                         str) and "the number of contracts exceeds minimum limit allowed" in error_msg.lower() and "ETH" in symbol
+                        eth_min_limit_error = (
+                            isinstance(error_msg, str)
+                            and "the number of contracts exceeds minimum limit allowed"
+                            in error_msg.lower()
+                            and "ETH" in symbol
+                        )
 
                         # Новая обработка для ошибки Qty invalid - повторяем с исправленным округлением
                         qty_invalid_error = "qty invalid" in error_msg.lower()
 
                         if eth_min_limit_error:
                             log_warn(
-                                f"[check_partial_tp] => Получена ошибка превышения минимального лимита для ETH, продолжаем операцию как успешную")
+                                "[check_partial_tp] => Получена ошибка превышения минимального лимита для ETH, продолжаем операцию как успешную"
+                            )
                             # В этом особом случае мы продолжим с установкой SL в безубыток
                         elif qty_invalid_error:
-                            log_warn(f"[check_partial_tp] => Получена ошибка Qty invalid, пробуем исправить округление")
+                            log_warn(
+                                "[check_partial_tp] => Получена ошибка Qty invalid, пробуем исправить округление"
+                            )
 
                             # Определяем правильное округление на основе информации из API
                             adjusted_qty = close_qty
@@ -2315,22 +2735,29 @@ class EnhancedSLTPManager:
                                 if direct_info and "lotSizeFilter" in direct_info:
                                     lot_size_filter = direct_info["lotSizeFilter"]
                                     real_qty_step = float(lot_size_filter.get("qtyStep", "0.001"))
-                                    real_min_qty = float(lot_size_filter.get("minOrderQty", "0.001"))
+                                    real_min_qty = float(
+                                        lot_size_filter.get("minOrderQty", "0.001")
+                                    )
 
                                     log_warn(
-                                        f"[check_partial_tp] => При ошибке получены параметры напрямую из API: шаг={real_qty_step}, мин={real_min_qty}")
+                                        f"[check_partial_tp] => При ошибке получены параметры напрямую из API: шаг={real_qty_step}, мин={real_min_qty}"
+                                    )
 
                                     # Округляем до правильного шага (ВСЕГДА берем значения из API)
-                                    adjusted_qty = math.floor(close_qty / real_qty_step) * real_qty_step
+                                    adjusted_qty = (
+                                        math.floor(close_qty / real_qty_step) * real_qty_step
+                                    )
 
                                     # Проверяем минимум
                                     if adjusted_qty < real_min_qty:
                                         log_warn(
-                                            f"[check_partial_tp] => Исправляем количество до минимального: {adjusted_qty} -> {real_min_qty}")
+                                            f"[check_partial_tp] => Исправляем количество до минимального: {adjusted_qty} -> {real_min_qty}"
+                                        )
                                         adjusted_qty = real_min_qty
 
                                     log_warn(
-                                        f"[check_partial_tp] => Точное исправление из API для {symbol}: {close_qty} -> {adjusted_qty} (шаг: {real_qty_step})")
+                                        f"[check_partial_tp] => Точное исправление из API для {symbol}: {close_qty} -> {adjusted_qty} (шаг: {real_qty_step})"
+                                    )
                                 else:
                                     # Если не удалось получить данные из API, обращаемся к предустановленным настройкам
                                     # для известных монет
@@ -2339,56 +2766,75 @@ class EnhancedSLTPManager:
                                         adjusted_qty = math.floor(close_qty / 0.01) * 0.01
                                         adjusted_qty = max(adjusted_qty, 0.01)
                                         log_warn(
-                                            f"[check_partial_tp] => Для ETH используем фиксированное значение шага 0.01: {close_qty} -> {adjusted_qty}")
+                                            f"[check_partial_tp] => Для ETH используем фиксированное значение шага 0.01: {close_qty} -> {adjusted_qty}"
+                                        )
                                     elif "LTC" in symbol:
                                         # LTC имеет шаг 0.1 и минимум 0.1
                                         adjusted_qty = math.floor(close_qty / 0.1) * 0.1
                                         adjusted_qty = max(adjusted_qty, 0.1)
                                         log_warn(
-                                            f"[check_partial_tp] => Для LTC используем фиксированное значение шага 0.1: {close_qty} -> {adjusted_qty}")
+                                            f"[check_partial_tp] => Для LTC используем фиксированное значение шага 0.1: {close_qty} -> {adjusted_qty}"
+                                        )
                                     elif "ALGO" in symbol:
                                         # ALGO имеет шаг 0.1 и минимум 0.1
                                         adjusted_qty = math.floor(close_qty / 0.1) * 0.1
                                         adjusted_qty = max(adjusted_qty, 0.1)
                                         log_warn(
-                                            f"[check_partial_tp] => Для ALGO используем фиксированное значение шага 0.1: {close_qty} -> {adjusted_qty}")
+                                            f"[check_partial_tp] => Для ALGO используем фиксированное значение шага 0.1: {close_qty} -> {adjusted_qty}"
+                                        )
                                     else:
                                         # Для остальных монет используем безопасное значение
-                                        adjusted_qty = math.floor(close_qty)  # Целое число всегда безопасно
+                                        adjusted_qty = math.floor(
+                                            close_qty
+                                        )  # Целое число всегда безопасно
                                         log_warn(
-                                            f"[check_partial_tp] => Используем целое число для неизвестной монеты: {close_qty} -> {adjusted_qty}")
+                                            f"[check_partial_tp] => Используем целое число для неизвестной монеты: {close_qty} -> {adjusted_qty}"
+                                        )
                             except Exception as api_error:
                                 log_error(
-                                    f"[check_partial_tp] => Ошибка при получении информации из модуля instrument_settings: {api_error}")
+                                    f"[check_partial_tp] => Ошибка при получении информации из модуля instrument_settings: {api_error}"
+                                )
                                 # Попытка исправить, используя известные значения из INSTRUMENT_SETTINGS
                                 try:
                                     # Пытаемся получить настройки из предустановленной таблицы
-                                    from trading.instrument_settings import INSTRUMENT_SETTINGS, \
-                                        DEFAULT_INSTRUMENT_SETTINGS
-                                    backup_settings = INSTRUMENT_SETTINGS.get(symbol, DEFAULT_INSTRUMENT_SETTINGS)
+                                    from trading.instrument_settings import (
+                                        DEFAULT_INSTRUMENT_SETTINGS,
+                                        INSTRUMENT_SETTINGS,
+                                    )
+
+                                    backup_settings = INSTRUMENT_SETTINGS.get(
+                                        symbol, DEFAULT_INSTRUMENT_SETTINGS
+                                    )
                                     backup_qty_step = backup_settings.get("qtyStep", 0.001)
 
                                     log_warn(
-                                        f"[check_partial_tp] => Используем резервные настройки из таблицы: шаг={backup_qty_step}")
+                                        f"[check_partial_tp] => Используем резервные настройки из таблицы: шаг={backup_qty_step}"
+                                    )
                                     adjusted_qty = round_qty(symbol, close_qty, round_up=False)
                                     log_warn(
-                                        f"[check_partial_tp] => Резервное исправление: {close_qty} -> {adjusted_qty}")
+                                        f"[check_partial_tp] => Резервное исправление: {close_qty} -> {adjusted_qty}"
+                                    )
                                 except Exception:
                                     # Если не удалось получить из таблицы, используем известные правила для монет
                                     if "ALGO" in symbol:
                                         adjusted_qty = math.floor(close_qty * 10) / 10  # Шаг 0.1
                                         log_warn(
-                                            f"[check_partial_tp] => Для ALGO используем аварийный шаг 0.1: {close_qty} -> {adjusted_qty}")
+                                            f"[check_partial_tp] => Для ALGO используем аварийный шаг 0.1: {close_qty} -> {adjusted_qty}"
+                                        )
                                     elif "ETH" in symbol:
                                         adjusted_qty = math.floor(close_qty * 100) / 100  # Шаг 0.01
                                         adjusted_qty = max(adjusted_qty, 0.01)  # Минимум 0.01
                                         log_warn(
-                                            f"[check_partial_tp] => Для ETH используем аварийный шаг 0.01: {close_qty} -> {adjusted_qty}")
+                                            f"[check_partial_tp] => Для ETH используем аварийный шаг 0.01: {close_qty} -> {adjusted_qty}"
+                                        )
                                     else:
                                         # Для остальных монет более агрессивно округляем вниз
-                                        adjusted_qty = math.floor(close_qty * 100) / 100  # Округляем до сотых
+                                        adjusted_qty = (
+                                            math.floor(close_qty * 100) / 100
+                                        )  # Округляем до сотых
                                         log_warn(
-                                            f"[check_partial_tp] => Аварийное округление до сотых: {close_qty} -> {adjusted_qty}")
+                                            f"[check_partial_tp] => Аварийное округление до сотых: {close_qty} -> {adjusted_qty}"
+                                        )
 
                             # Пробуем ещё раз с исправленным количеством, если оно не меньше минимального
                             order_id_found = False  # Флаг успешного создания ордера
@@ -2402,31 +2848,35 @@ class EnhancedSLTPManager:
                                             old_qty = adjusted_qty
                                             adjusted_qty = math.floor(adjusted_qty * 10) / 10
                                             log_warn(
-                                                f"[check_partial_tp] => ФИНАЛЬНАЯ проверка перед retry для ALGO: {old_qty} -> {adjusted_qty}")
+                                                f"[check_partial_tp] => ФИНАЛЬНАЯ проверка перед retry для ALGO: {old_qty} -> {adjusted_qty}"
+                                            )
 
                                     log_info(
-                                        f"[check_partial_tp] => Повторная попытка с исправленным количеством: {close_side} {adjusted_qty} {symbol}")
+                                        f"[check_partial_tp] => Повторная попытка с исправленным количеством: {close_side} {adjusted_qty} {symbol}"
+                                    )
                                     # ИСПРАВЛЕНИЕ: Используем правильный вызов API для retry
-                                    if hasattr(self.api_client, 'place_order'):
+                                    if hasattr(self.api_client, "place_order"):
                                         retry_result = self.api_client.place_order(
                                             symbol=symbol,
                                             side=close_side,
                                             qty=adjusted_qty,
                                             order_type="Market",
                                             reduce_only=True,
-                                            hedge_mode=True
+                                            hedge_mode=True,
                                         )
                                     else:
                                         retry_result = self.api_client.create_market_order(
                                             symbol=symbol,
                                             side=close_side,
                                             quantity=adjusted_qty,
-                                            reduce_only=True
+                                            reduce_only=True,
                                         )
 
                                     if retry_result and retry_result.get("order_id"):
                                         order_id = retry_result.get("order_id")
-                                        log_info(f"[check_partial_tp] => Успех после корректировки! Ордер: {order_id}")
+                                        log_info(
+                                            f"[check_partial_tp] => Успех после корректировки! Ордер: {order_id}"
+                                        )
 
                                         # Обновляем запись в истории
                                         if "history_entry" in locals():
@@ -2439,26 +2889,34 @@ class EnhancedSLTPManager:
                                         close_qty = adjusted_qty
                                         order_id_found = True
                                 except Exception as retry_error:
-                                    log_error(f"[check_partial_tp] => Ошибка при повторной попытке: {retry_error}")
+                                    log_error(
+                                        f"[check_partial_tp] => Ошибка при повторной попытке: {retry_error}"
+                                    )
 
                             # Проверяем результат повторной попытки
                             if not order_id_found:
                                 log_warn(
-                                    f"[check_partial_tp] => Не удалось исправить ошибку Qty invalid, отменяем операцию")
+                                    "[check_partial_tp] => Не удалось исправить ошибку Qty invalid, отменяем операцию"
+                                )
                                 return False
                         elif "exceeds" in error_msg or "zero position" in error_msg:
                             log_warn(
-                                f"[check_partial_tp] => Критическая ошибка API при частичном закрытии, отменяем операцию")
+                                "[check_partial_tp] => Критическая ошибка API при частичном закрытии, отменяем операцию"
+                            )
                             return False
 
                         # Даже если API запрос не удался, мы продолжим и запишем событие в историю
                         log_info(
-                            f"[check_partial_tp] => Записываем информацию о частичном закрытии в историю, несмотря на ошибку API")
+                            "[check_partial_tp] => Записываем информацию о частичном закрытии в историю, несмотря на ошибку API"
+                        )
                     else:
                         # Ордер успешно создан
-                        log_info(f"[check_partial_tp] => ✅ УСПЕШНО создан ордер для частичного закрытия: {order_id}")
                         log_info(
-                            f"[check_partial_tp] => ✅ Частичное закрытие выполнено: {close_side} {close_qty} {symbol} (positionIdx={original_pos_idx})")
+                            f"[check_partial_tp] => ✅ УСПЕШНО создан ордер для частичного закрытия: {order_id}"
+                        )
+                        log_info(
+                            f"[check_partial_tp] => ✅ Частичное закрытие выполнено: {close_side} {close_qty} {symbol} (positionIdx={original_pos_idx})"
+                        )
 
                         # НОВЫЙ КОД: Обновляем историю частичных закрытий со статусом успеха
                         if "history_entry" in locals():
@@ -2467,7 +2925,9 @@ class EnhancedSLTPManager:
                             self._update_partial_tp_history(history_entry)
 
                 except Exception as e:
-                    log_error(f"[check_partial_tp] => Ошибка при выполнении частичного закрытия: {e}")
+                    log_error(
+                        f"[check_partial_tp] => Ошибка при выполнении частичного закрытия: {e}"
+                    )
                     log_error(traceback.format_exc())
 
                     # НОВЫЙ КОД: Обновляем историю частичных закрытий с ошибкой
@@ -2487,7 +2947,7 @@ class EnhancedSLTPManager:
                     "price": current_price,
                     "timestamp": time.time(),
                     "order_id": order_id if "order_id" in locals() and order_id else None,
-                    "status": "executed" if "order_id" in locals() and order_id else "recorded"
+                    "status": "executed" if "order_id" in locals() and order_id else "recorded",
                 }
 
                 # Добавляем выполненный уровень в историю
@@ -2498,8 +2958,9 @@ class EnhancedSLTPManager:
                 unique_levels = {}
                 for level in executed_levels:
                     percent = level.get("percent")
-                    if percent not in unique_levels or level.get("timestamp", 0) > unique_levels[percent].get(
-                            "timestamp", 0):
+                    if percent not in unique_levels or level.get("timestamp", 0) > unique_levels[
+                        percent
+                    ].get("timestamp", 0):
                         unique_levels[percent] = level
                 executed_levels = list(unique_levels.values())
 
@@ -2512,43 +2973,56 @@ class EnhancedSLTPManager:
                     sltp.updated_at = time.time()
                     # Преобразовываем объект sltp в словарь для передачи в метод update
                     sltp_data = sltp.to_dict()
-                    sltp_id = sltp_data.pop('id', None)
+                    sltp_id = sltp_data.pop("id", None)
                     if sltp_id:
                         # Добавляем trade_id обратно в данные для использования insert_or_update
                         # trade_id содержится в sltp.trade_id
-                        sltp_data['trade_id'] = sltp.trade_id
+                        sltp_data["trade_id"] = sltp.trade_id
                         # Используем метод insert_or_update вместо update для совместимости с потокобезопасным репозиторием
                         # FIX: Используем подходящий метод в зависимости от доступности
                         try:
-                            if hasattr(self.sltp_repository, 'create_or_update'):
-                                result = self.sltp_repository.create_or_update(sltp_data, 'trade_id')
-                                log_info(f"[check_partial_tp] => Использован метод create_or_update")
-                            elif hasattr(self.sltp_repository, 'insert_or_update'):
+                            if hasattr(self.sltp_repository, "create_or_update"):
+                                result = self.sltp_repository.create_or_update(
+                                    sltp_data, "trade_id"
+                                )
+                                log_info(
+                                    "[check_partial_tp] => Использован метод create_or_update"
+                                )
+                            elif hasattr(self.sltp_repository, "insert_or_update"):
                                 result = self.sltp_repository.insert_or_update(sltp_data)
-                                log_info(f"[check_partial_tp] => Использован метод insert_or_update")
+                                log_info(
+                                    "[check_partial_tp] => Использован метод insert_or_update"
+                                )
                             else:
                                 # Если нет ни того, ни другого, пробуем обновить
-                                if hasattr(sltp, 'id') and sltp.id:
+                                if hasattr(sltp, "id") and sltp.id:
                                     # Обновляем поля в объекте sltp
                                     for key, value in sltp_data.items():
                                         if hasattr(sltp, key):
                                             setattr(sltp, key, value)
                                     result = self.sltp_repository.update(sltp)
-                                    log_info(f"[check_partial_tp] => Использован метод update")
+                                    log_info("[check_partial_tp] => Использован метод update")
                                 else:
                                     result = False
-                                    log_error(f"[check_partial_tp] => Не удалось найти подходящий метод для обновления")
+                                    log_error(
+                                        "[check_partial_tp] => Не удалось найти подходящий метод для обновления"
+                                    )
                         except Exception as repo_error:
                             log_error(
-                                f"[check_partial_tp] => Ошибка при обновлении данных через репозиторий: {repo_error}")
+                                f"[check_partial_tp] => Ошибка при обновлении данных через репозиторий: {repo_error}"
+                            )
                             result = False
                         if not result:
-                            log_error(f"[check_partial_tp] => Ошибка при обновлении данных о частичном закрытии")
+                            log_error(
+                                "[check_partial_tp] => Ошибка при обновлении данных о частичном закрытии"
+                            )
                         log_info(
-                            f"[check_partial_tp] => Данные о частичном закрытии сохранены: {json.dumps(executed_levels)}")
+                            f"[check_partial_tp] => Данные о частичном закрытии сохранены: {json.dumps(executed_levels)}"
+                        )
                     else:
                         log_error(
-                            f"[check_partial_tp] => Не удалось сохранить данные о частичном закрытии: отсутствует ID")
+                            "[check_partial_tp] => Не удалось сохранить данные о частичном закрытии: отсутствует ID"
+                        )
                 else:
                     # Если записи SLTP не существует, создаем новую
                     sltp_data = {
@@ -2559,17 +3033,18 @@ class EnhancedSLTPManager:
                         "stop_loss_price": None,  # Добавляем правильные имена полей для PostgreSQL
                         "take_profit_price": None,  # Добавляем правильные имена полей для PostgreSQL
                         # НЕ сериализуем executed_levels - храним как список
-                        "extra_data": {
-                            "partial_tp_executed": executed_levels
-                        },
+                        "extra_data": {"partial_tp_executed": executed_levels},
                         "created_at": datetime.now(),
-                        "updated_at": datetime.now()
+                        "updated_at": datetime.now(),
                     }
                     # В PostgreSQL репозитории метод называется create() вместо insert()
                     from db.models import SLTPOrder
+
                     sltp_order = SLTPOrder.from_dict(sltp_data)
                     self.sltp_repository.create(sltp_order)
-                    log_info(f"[check_partial_tp] => Создана новая запись SLTP с данными о частичном закрытии")
+                    log_info(
+                        "[check_partial_tp] => Создана новая запись SLTP с данными о частичном закрытии"
+                    )
 
                 # Если нужно обновить SL после частичного закрытия
                 if settings.get("update_sl_after_partial", False):
@@ -2584,22 +3059,30 @@ class EnhancedSLTPManager:
                         # Проверяем, не лучше ли текущий SL (для SELL меньший SL лучше)
                         if current_sl and current_sl < breakeven_price:
                             log_info(
-                                f"[check_partial_tp] => Текущий SL {current_sl} лучше безубытка {breakeven_price}, пропускаем обновление")
-                            return True  # Возвращаем True, так как частичное закрытие было выполнено
+                                f"[check_partial_tp] => Текущий SL {current_sl} лучше безубытка {breakeven_price}, пропускаем обновление"
+                            )
+                            return (
+                                True  # Возвращаем True, так как частичное закрытие было выполнено
+                            )
                     else:  # BUY
                         # Для Buy позиций безубыток на 0.1% выше entry_price
                         breakeven_price = entry_price * 1.001
                         # Проверяем, не лучше ли текущий SL (для BUY больший SL лучше)
                         if current_sl and current_sl > breakeven_price:
                             log_info(
-                                f"[check_partial_tp] => Текущий SL {current_sl} лучше безубытка {breakeven_price}, пропускаем обновление")
-                            return True  # Возвращаем True, так как частичное закрытие было выполнено
+                                f"[check_partial_tp] => Текущий SL {current_sl} лучше безубытка {breakeven_price}, пропускаем обновление"
+                            )
+                            return (
+                                True  # Возвращаем True, так как частичное закрытие было выполнено
+                            )
 
                     # Получаем настройки инструмента и размер тика для корректного округления стоп-лосса
                     instrument_info = get_instrument_info(symbol)
                     tick_size = instrument_info.get("tick_size", 0.001)
 
-                    log_info(f"[check_partial_tp] => Настройки инструмента {symbol} для SL: tick_size={tick_size}")
+                    log_info(
+                        f"[check_partial_tp] => Настройки инструмента {symbol} для SL: tick_size={tick_size}"
+                    )
 
                     # Устанавливаем максимальный процент изменения SL от текущей цены
                     max_sl_change_percent = 5.0
@@ -2617,7 +3100,8 @@ class EnhancedSLTPManager:
                             max_ticks = math.ceil(max_allowed_sl / tick_size)
                             if ticks > max_ticks:
                                 log_warn(
-                                    f"[check_partial_tp] => Новый SL {breakeven_price} слишком высок для {symbol}! Ограничиваем")
+                                    f"[check_partial_tp] => Новый SL {breakeven_price} слишком высок для {symbol}! Ограничиваем"
+                                )
                                 ticks = max_ticks
                         else:  # BUY
                             ticks = math.floor(breakeven_price / tick_size)
@@ -2626,7 +3110,8 @@ class EnhancedSLTPManager:
                             min_ticks = math.floor(min_allowed_sl / tick_size)
                             if ticks < min_ticks:
                                 log_warn(
-                                    f"[check_partial_tp] => Новый SL {breakeven_price} слишком низок для {symbol}! Ограничиваем")
+                                    f"[check_partial_tp] => Новый SL {breakeven_price} слишком низок для {symbol}! Ограничиваем"
+                                )
                                 ticks = min_ticks
 
                         # Преобразуем обратно в цену, кратную тику
@@ -2640,7 +3125,8 @@ class EnhancedSLTPManager:
                             max_allowed_sl = current_price * (1 + max_sl_change_percent / 100)
                             if breakeven_price > max_allowed_sl:
                                 log_warn(
-                                    f"[check_partial_tp] => Новый SL {breakeven_price} слишком высок! Ограничиваем до {max_allowed_sl}")
+                                    f"[check_partial_tp] => Новый SL {breakeven_price} слишком высок! Ограничиваем до {max_allowed_sl}"
+                                )
                                 breakeven_price = math.ceil(max_allowed_sl / tick_size) * tick_size
                         else:  # BUY
                             # Для BUY округляем вниз для безопасности (SL должен быть ниже текущей цены)
@@ -2649,75 +3135,100 @@ class EnhancedSLTPManager:
                             min_allowed_sl = current_price * (1 - max_sl_change_percent / 100)
                             if breakeven_price < min_allowed_sl:
                                 log_warn(
-                                    f"[check_partial_tp] => Новый SL {breakeven_price} слишком низок! Ограничиваем до {min_allowed_sl}")
+                                    f"[check_partial_tp] => Новый SL {breakeven_price} слишком низок! Ограничиваем до {min_allowed_sl}"
+                                )
                                 breakeven_price = math.floor(min_allowed_sl / tick_size) * tick_size
 
                     # Округляем цену с использованием правильного менеджера инструментов
-                    breakeven_price = round_price(symbol, breakeven_price, round_up=(side.upper() == "SELL"))
+                    breakeven_price = round_price(
+                        symbol, breakeven_price, round_up=(side.upper() == "SELL")
+                    )
 
                     log_info(
-                        f"[check_partial_tp] => Установка SL в безубыток после частичного закрытия: {breakeven_price} (тик: {tick_size})")
+                        f"[check_partial_tp] => Установка SL в безубыток после частичного закрытия: {breakeven_price} (тик: {tick_size})"
+                    )
 
                     # Определяем правильный positionIdx для hedge режима
                     pos_idx = get_position_idx(side)
 
                     # Устанавливаем новый SL
-                    result = set_trading_stop(symbol=symbol, side=side, pos_idx=pos_idx, stop_loss=breakeven_price,
-                                              trade_id=trade_id)
+                    result = set_trading_stop(
+                        symbol=symbol,
+                        side=side,
+                        pos_idx=pos_idx,
+                        stop_loss=breakeven_price,
+                        trade_id=trade_id,
+                    )
 
                     # Проверяем результат (добавляем дополнительное логирование)
-                    log_info(f"[apply_profit_protection] => Результат API запроса: {json.dumps(result, default=str)}")
-                    success = (result.get("retCode") == 0)
-                    not_modified = (result.get("retCode") == 34040 or (
-                                result.get("retMsg") and "not modified" in result.get("retMsg", "")))
+                    log_info(
+                        f"[apply_profit_protection] => Результат API запроса: {json.dumps(result, default=str)}"
+                    )
+                    success = result.get("retCode") == 0
+                    not_modified = result.get("retCode") == 34040 or (
+                        result.get("retMsg") and "not modified" in result.get("retMsg", "")
+                    )
 
                     if success or not_modified:
                         # Обновляем информацию в БД
                         if sltp:
                             # Создаем словарь с обновленными данными
                             sltp_update = {
-                                'stop_loss_price': breakeven_price,  # Правильное имя поля для БД
-                                'updated_at': datetime.now()
+                                "stop_loss_price": breakeven_price,  # Правильное имя поля для БД
+                                "updated_at": datetime.now(),
                             }
                             # Обновляем через репозиторий
                             # Добавляем trade_id в данные для использования insert_or_update
-                            sltp_update['trade_id'] = trade_id
+                            sltp_update["trade_id"] = trade_id
                             # FIX: Используем подходящий метод в зависимости от доступности
                             try:
-                                if hasattr(self.sltp_repository, 'create_or_update'):
-                                    result = self.sltp_repository.create_or_update(sltp_update, 'trade_id')
-                                    log_info(f"[check_partial_tp] => Использован метод create_or_update")
-                                elif hasattr(self.sltp_repository, 'insert_or_update'):
+                                if hasattr(self.sltp_repository, "create_or_update"):
+                                    result = self.sltp_repository.create_or_update(
+                                        sltp_update, "trade_id"
+                                    )
+                                    log_info(
+                                        "[check_partial_tp] => Использован метод create_or_update"
+                                    )
+                                elif hasattr(self.sltp_repository, "insert_or_update"):
                                     result = self.sltp_repository.insert_or_update(sltp_update)
-                                    log_info(f"[check_partial_tp] => Использован метод insert_or_update")
+                                    log_info(
+                                        "[check_partial_tp] => Использован метод insert_or_update"
+                                    )
                                 else:
                                     # Если нет ни того, ни другого, пробуем обновить
                                     result = False
-                                    log_error(f"[check_partial_tp] => Не удалось найти подходящий метод для обновления")
+                                    log_error(
+                                        "[check_partial_tp] => Не удалось найти подходящий метод для обновления"
+                                    )
                             except Exception as repo_error:
                                 log_error(
-                                    f"[check_partial_tp] => Ошибка при обновлении данных через репозиторий: {repo_error}")
+                                    f"[check_partial_tp] => Ошибка при обновлении данных через репозиторий: {repo_error}"
+                                )
                                 result = False
 
                             if not result:
-                                log_error(f"[check_partial_tp] => Ошибка при обновлении SL после частичного закрытия")
+                                log_error(
+                                    "[check_partial_tp] => Ошибка при обновлении SL после частичного закрытия"
+                                )
 
                         # Обновляем сделку
-                        trade_data = {
-                            'stop_loss': breakeven_price
-                        }
+                        trade_data = {"stop_loss": breakeven_price}
                         self.trade_repository.update(trade.id, trade_data)
 
-                        log_info(f"[check_partial_tp] => SL успешно перемещен в безубыток: {breakeven_price:.6f}")
+                        log_info(
+                            f"[check_partial_tp] => SL успешно перемещен в безубыток: {breakeven_price:.6f}"
+                        )
                     else:
                         log_error(
-                            f"[check_partial_tp] => Ошибка при установке SL в безубыток: {result.get('retMsg', 'Unknown error')}")
+                            f"[check_partial_tp] => Ошибка при установке SL в безубыток: {result.get('retMsg', 'Unknown error')}"
+                        )
 
                 return True
 
             except Exception as e:
                 log_error(f"[check_partial_tp] => Ошибка: {e}")
                 import traceback
+
                 log_error(traceback.format_exc())
                 return False
 
@@ -2731,7 +3242,9 @@ class EnhancedSLTPManager:
         Returns:
             bool: True, если были применены какие-либо улучшения, False в противном случае
         """
-        log_info(f"[apply_enhanced_sltp] => Применение улучшенных функций SL/TP к сделке {trade_id}")
+        log_info(
+            f"[apply_enhanced_sltp] => Применение улучшенных функций SL/TP к сделке {trade_id}"
+        )
 
         with self._lock:
             try:
@@ -2748,7 +3261,9 @@ class EnhancedSLTPManager:
                 partial_tp_result = self.check_partial_tp(trade_id, exchange_positions)
                 if partial_tp_result:
                     changes_made = True
-                    log_info(f"[apply_enhanced_sltp] => Частичный тейк-профит применен для {trade_id}")
+                    log_info(
+                        f"[apply_enhanced_sltp] => Частичный тейк-профит применен для {trade_id}"
+                    )
 
                 # 3. Применяем защиту прибыли ПОСЛЕ частичного закрытия (более приоритетна)
                 protection_result = self.apply_profit_protection(trade_id)
@@ -2759,7 +3274,9 @@ class EnhancedSLTPManager:
                 return changes_made
 
             except Exception as e:
-                log_error(f"[apply_enhanced_sltp] => Ошибка при применении улучшенных функций SL/TP: {e}")
+                log_error(
+                    f"[apply_enhanced_sltp] => Ошибка при применении улучшенных функций SL/TP: {e}"
+                )
                 log_error(traceback.format_exc())
                 return False
 
@@ -2768,7 +3285,9 @@ class EnhancedSLTPManager:
 _enhanced_sltp_manager = None
 
 
-def get_enhanced_sltp_manager(config: Optional[Dict[str, Any]] = None, api_client=None) -> EnhancedSLTPManager:
+def get_enhanced_sltp_manager(
+    config: dict[str, Any] | None = None, api_client=None
+) -> EnhancedSLTPManager:
     """
     Возвращает глобальный экземпляр EnhancedSLTPManager.
 

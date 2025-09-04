@@ -1659,11 +1659,11 @@ class ProductionFeatureEngineer:
         for col in numeric_cols:
             if result_df[col].isna().any():
                 # Пробуем интерполяцию
-                result_df[col] = result_df[col].interpolate(method='linear', limit_direction='both')
+                result_df[col] = result_df[col].interpolate(method="linear", limit_direction="both")
                 # Если остались NaN, используем прямое/обратное заполнение
                 if result_df[col].isna().any():
                     result_df[col] = result_df[col].ffill().bfill()
-        
+
         # Финальная проверка
         nan_count = result_df.isna().sum().sum()
         if nan_count > 0:

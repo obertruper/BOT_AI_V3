@@ -79,9 +79,9 @@ class TestCodeAnalyzerValidation:
         for critical_file in critical_files:
             critical_path = project_root / critical_file
             if critical_path.exists():
-                assert critical_file not in unused_files, (
-                    f"Critical file {critical_file} should not be unused"
-                )
+                assert (
+                    critical_file not in unused_files
+                ), f"Critical file {critical_file} should not be unused"
 
     def test_validate_stale_file_detection(self):
         """Проверяем правильность определения устаревших файлов"""
@@ -116,9 +116,9 @@ class TestCodeAnalyzerValidation:
 
         # Валидация статистики
         assert stats["total_files"] > 0, "Should have some files"
-        assert stats["total_files"] == len(analyzer.python_files), (
-            "Total files should match scan result"
-        )
+        assert stats["total_files"] == len(
+            analyzer.python_files
+        ), "Total files should match scan result"
 
         # Проверяем что количества логичны
         assert stats["entry_points"] <= stats["total_files"], "Entry points <= total files"
@@ -191,9 +191,9 @@ class TestCodeAnalysisAccuracy:
             expected_file = project_root / expected_path
             if expected_file.exists():
                 resolved = analyzer._resolve_import_to_file(import_name)
-                assert resolved == expected_path, (
-                    f"Import {import_name} should resolve to {expected_path}, got {resolved}"
-                )
+                assert (
+                    resolved == expected_path
+                ), f"Import {import_name} should resolve to {expected_path}, got {resolved}"
 
     def test_false_positive_detection(self):
         """Проверяем на ложные срабатывания"""

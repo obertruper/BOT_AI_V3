@@ -528,9 +528,9 @@ class WebTestAgent:
                 ".lg:grid-cols-4",
             ]
             for grid_class in grid_classes:
-                responsive_checks[
-                    f"grid_{grid_class.replace(':', '_').replace('.', '')}"
-                ] = await self._element_exists(grid_class)
+                responsive_checks[f"grid_{grid_class.replace(':', '_').replace('.', '')}"] = (
+                    await self._element_exists(grid_class)
+                )
 
             # Проверка контейнера
             responsive_checks["responsive_container"] = await self._element_exists(".container")
@@ -1172,9 +1172,7 @@ class WebTestAgent:
         success_rate_class = (
             "success"
             if summary["success_rate"] > 0.8
-            else "warning"
-            if summary["success_rate"] > 0.5
-            else "danger"
+            else "warning" if summary["success_rate"] > 0.5 else "danger"
         )
         success_class = "success" if summary["success_rate"] > 0.8 else "warning"
 

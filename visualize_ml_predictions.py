@@ -248,9 +248,7 @@ def create_predictions_chart(symbol, prediction, df):
                     "color": (
                         "green"
                         if prediction.get("signal_type") == "LONG"
-                        else "red"
-                        if prediction.get("signal_type") == "SHORT"
-                        else "yellow"
+                        else "red" if prediction.get("signal_type") == "SHORT" else "yellow"
                     )
                 },
                 "steps": [

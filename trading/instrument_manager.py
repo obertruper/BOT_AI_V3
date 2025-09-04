@@ -251,7 +251,7 @@ class InstrumentManager:
             if field not in data:
                 logger.warning(f"Missing {field} for {symbol}")
                 return False
-            
+
             field_value = data[field]
             # Convert to float for comparison
             if isinstance(field_value, str):
@@ -263,15 +263,19 @@ class InstrumentManager:
             elif field_value is None:
                 logger.warning(f"None value for {field} for {symbol}")
                 return False
-            
+
             if float(field_value) <= 0:
                 logger.warning(f"Invalid {field} for {symbol}: {field_value}")
                 return False
 
         # Специальные проверки для известных инструментов
         if symbol == "ETHUSDT":
-            qty_step_val = float(data["qty_step"]) if isinstance(data["qty_step"], str) else data["qty_step"]
-            min_qty_val = float(data["min_qty"]) if isinstance(data["min_qty"], str) else data["min_qty"]
+            qty_step_val = (
+                float(data["qty_step"]) if isinstance(data["qty_step"], str) else data["qty_step"]
+            )
+            min_qty_val = (
+                float(data["min_qty"]) if isinstance(data["min_qty"], str) else data["min_qty"]
+            )
             if qty_step_val < 0.01 or min_qty_val < 0.01:
                 logger.warning(
                     f"Suspicious values for ETHUSDT: qty_step={data['qty_step']}, min_qty={data['min_qty']}"
@@ -351,7 +355,7 @@ class InstrumentManager:
             Отформатированная строка количества
         """
         qty_step = self.get_qty_step(symbol)
-        
+
         # Ensure qty_step is float
         if isinstance(qty_step, str):
             qty_step = float(qty_step)
@@ -392,18 +396,18 @@ class InstrumentManager:
         """
         # Ensure qty is float
         if isinstance(qty, str):
-            qty = float(qty) if qty and qty != 'None' else 0.0
+            qty = float(qty) if qty and qty != "None" else 0.0
         elif qty is None:
             qty = 0.0
-        
+
         qty_step = self.get_qty_step(symbol)
-        
+
         # Ensure qty_step is float
         if isinstance(qty_step, str):
             qty_step = float(qty_step)
         elif qty_step is None:
             qty_step = DEFAULT_SETTINGS["qty_step"]
-        
+
         rounded_qty = self._round_to_step(qty, qty_step, round_up)
 
         logger.info(
@@ -413,13 +417,13 @@ class InstrumentManager:
         # Проверяем минимальное количество только если enforce_min=True
         if enforce_min:
             min_qty = self.get_min_qty(symbol)
-            
+
             # Ensure min_qty is float
             if isinstance(min_qty, str):
                 min_qty = float(min_qty)
             elif min_qty is None:
                 min_qty = DEFAULT_SETTINGS["min_qty"]
-            
+
             if float(rounded_qty) < float(min_qty):
                 logger.warning(
                     f"Rounded quantity {rounded_qty} is below minimum {min_qty} for {symbol}"
@@ -443,15 +447,15 @@ class InstrumentManager:
         """
         # Ensure value and step are floats
         if isinstance(value, str):
-            value = float(value) if value and value != 'None' else 0.0
+            value = float(value) if value and value != "None" else 0.0
         elif value is None:
             value = 0.0
-        
+
         if isinstance(step, str):
-            step = float(step) if step and step != 'None' else DEFAULT_SETTINGS["qty_step"]
+            step = float(step) if step and step != "None" else DEFAULT_SETTINGS["qty_step"]
         elif step is None:
             step = DEFAULT_SETTINGS["qty_step"]
-        
+
         if float(step) <= 0:
             return float(value)
 

@@ -603,9 +603,7 @@ class DatabaseMonitoringService:
                 trend = (
                     "increasing"
                     if recent_avg > older_avg * 1.1
-                    else "decreasing"
-                    if recent_avg < older_avg * 0.9
-                    else "stable"
+                    else "decreasing" if recent_avg < older_avg * 0.9 else "stable"
                 )
                 trends[key] = {"trend": trend, "recent_avg": recent_avg, "older_avg": older_avg}
 

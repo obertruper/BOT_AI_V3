@@ -516,9 +516,7 @@ class SignalQualityAnalyzer:
         risk_level = (
             "LOW"
             if quality_metrics.risk_score < 0.3
-            else "MEDIUM"
-            if quality_metrics.risk_score < 0.7
-            else "HIGH"
+            else "MEDIUM" if quality_metrics.risk_score < 0.7 else "HIGH"
         )
         max_risk_level = params["max_risk_level"]
 
